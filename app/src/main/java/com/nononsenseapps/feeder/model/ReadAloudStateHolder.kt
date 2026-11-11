@@ -302,7 +302,14 @@ class TTSStateHolder(
         try {
             // Neural engines can take a while to load their model the first time.
             check(withTimeout(60_000) { initialized.await() } == TextToSpeech.SUCCESS) { "Speech engine initialization failed" }
-            val available = engine.availableLanguages.orEmpty().sortedBy { it.getDisplayName(it) }
+            // Some engines list nothing in availableLanguages but do list voices.
+            val voiceLocales = runCatching { engine.voices.orEmpty().map { it.locale } }.getOrDefault(emptyList())
+            val defaultVoiceLocale = runCatching { engine.defaultVoice?.locale }.getOrNull()
+            val available =
+                engine.availableLanguages
+                    .orEmpty()
+                    .ifEmpty { voiceLocales.toSet() }
+                    .sortedBy { it.getDisplayName(it) }
             _availableLanguages.value = available
             val preferredLocale =
                 when (val selected = _language.value) {
@@ -319,11 +326,21 @@ class TTSStateHolder(
                 if (_language.value is ForcedLocale) {
                     sequenceOf(preferredLocale, Locale.forLanguageTag(preferredLocale.language))
                 } else {
-                    sequenceOf(preferredLocale).plus(context.getLocales()).plus(available)
+                    sequenceOf(preferredLocale, Locale.forLanguageTag(preferredLocale.language))
+                        .plus(context.getLocales())
+                        .plus(listOfNotNull(defaultVoiceLocale))
+                        .plus(available)
                 }
             val locale =
-                candidates.firstOrNull { engine.setLanguage(it) >= TextToSpeech.LANG_AVAILABLE }
-                    ?: error("Speech language is not available")
+                candidates.firstOrNull { runCatching { engine.setLanguage(it) }.getOrDefault(TextToSpeech.ERROR) >= TextToSpeech.LANG_AVAILABLE }
+                    ?: run {
+                        // A language the user picked explicitly should fail visibly rather than be read in another one.
+                        check(_language.value !is ForcedLocale) { "Speech language is not available" }
+                        // Some engines reject every language check yet speak fine with their own voice.
+                        Log.w(LOG_TAG, "Speech engine rejected all languages; using its default voice")
+                        runCatching { engine.defaultVoice?.let { engine.voice = it } }
+                        defaultVoiceLocale ?: preferredLocale
+                    }
             val parts = speechSegments(current.text, locale, minOf(TextToSpeech.getMaxSpeechInputLength(), 700), firstChunkMaxLength = 180)
             return withContext(Dispatchers.IO) {
                 SpeechWaveFile(audio).use { wave ->
