@@ -334,6 +334,8 @@ class TTSStateHolder(
             val locale =
                 candidates.firstOrNull { runCatching { engine.setLanguage(it) }.getOrDefault(TextToSpeech.ERROR) >= TextToSpeech.LANG_AVAILABLE }
                     ?: run {
+                        // A language the user picked explicitly should fail visibly rather than be read in another one.
+                        check(_language.value !is ForcedLocale) { "Speech language is not available" }
                         // Some engines reject every language check yet speak fine with their own voice.
                         Log.w(LOG_TAG, "Speech engine rejected all languages; using its default voice")
                         runCatching { engine.defaultVoice?.let { engine.voice = it } }
