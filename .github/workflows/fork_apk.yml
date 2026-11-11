@@ -1,0 +1,44 @@
+# Builds an installable APK for this fork. Upstream's ci_build.yml release
+# jobs need the upstream signing secrets, so this workflow builds the F-Droid
+# flavor in debug mode, signed with the repo's shared debug keystore.
+name: Fork APK
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  debug-apk:
+    if: github.repository != 'spacecowboy/feeder'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: "recursive"
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: setup JDK
+        uses: actions/setup-java@v6
+        with:
+          java-version: "25"
+          distribution: "temurin"
+
+      - name: gradle setup
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: build debug apk
+        run: ./gradlew assembleFdroidDebug
+
+      - name: upload apk
+        uses: actions/upload-artifact@v7
+        with:
+          name: feeder-fdroid-debug-apk
+          path: app/build/outputs/apk/fdroid/debug/*.apk
+          if-no-files-found: error
