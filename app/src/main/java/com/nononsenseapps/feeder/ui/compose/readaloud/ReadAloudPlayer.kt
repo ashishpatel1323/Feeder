@@ -198,8 +198,9 @@ fun TTSPlayer(
         PaddedBottomAppBar(
             floatingActionButton = floatingActionButton,
             actions = {
+                // With a FAB, the app bar adds its own weighted spacer; sharing weight with it would squeeze the controls.
                 Row(
-                    modifier = Modifier.weight(1f),
+                    modifier = if (floatingActionButton == null) Modifier.weight(1f) else Modifier,
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
