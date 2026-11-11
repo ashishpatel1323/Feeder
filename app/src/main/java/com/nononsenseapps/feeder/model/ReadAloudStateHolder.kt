@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.media.AudioFormat
 import android.os.Build
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
@@ -301,7 +300,8 @@ class TTSStateHolder(
         val initialized = CompletableDeferred<Int>()
         val engine = TextToSpeech(context) { initialized.complete(it) }
         try {
-            check(withTimeout(15_000) { initialized.await() } == TextToSpeech.SUCCESS) { "Speech engine initialization failed" }
+            // Neural engines can take a while to load their model the first time.
+            check(withTimeout(60_000) { initialized.await() } == TextToSpeech.SUCCESS) { "Speech engine initialization failed" }
             val available = engine.availableLanguages.orEmpty().sortedBy { it.getDisplayName(it) }
             _availableLanguages.value = available
             val preferredLocale =
@@ -334,6 +334,8 @@ class TTSStateHolder(
                         for ((index, part) in parts.withIndex()) {
                             val done = CompletableDeferred<Unit>()
                             val id = UUID.randomUUID().toString()
+                            var pcm: EnginePcm? = null
+                            var receivedAudio = false
                             engine.setOnUtteranceProgressListener(
                                 object : UtteranceProgressListener() {
                                     override fun onStart(utteranceId: String?) = Unit
@@ -355,14 +357,9 @@ class TTSStateHolder(
                                     ) {
                                         if (utteranceId != id || !done.isActive) return
                                         try {
-                                            val bits =
-                                                when (audioFormat) {
-                                                    AudioFormat.ENCODING_PCM_8BIT -> 8
-                                                    AudioFormat.ENCODING_PCM_16BIT -> 16
-                                                    AudioFormat.ENCODING_PCM_FLOAT -> 32
-                                                    else -> error("Unsupported speech audio format")
-                                                }
-                                            wave.setFormat(sampleRateInHz, channelCount, bits, audioFormat == AudioFormat.ENCODING_PCM_FLOAT)
+                                            val engineFormat = EnginePcm.forAudioFormat(audioFormat)
+                                            wave.setFormat(sampleRateInHz, channelCount, engineFormat.bits, engineFormat.floatingPoint)
+                                            pcm = engineFormat
                                         } catch (e: Exception) {
                                             done.completeExceptionally(e)
                                         }
@@ -374,7 +371,12 @@ class TTSStateHolder(
                                     ) {
                                         if (utteranceId != id || !done.isActive || bytes == null) return
                                         try {
-                                            wave.append(bytes)
+                                            val engineFormat = pcm ?: error("Speech engine sent audio before its format")
+                                            val converted = engineFormat.convert(bytes)
+                                            if (converted.isNotEmpty()) {
+                                                wave.append(converted)
+                                                receivedAudio = true
+                                            }
                                         } catch (e: Exception) {
                                             done.completeExceptionally(e)
                                         }
@@ -385,7 +387,8 @@ class TTSStateHolder(
                             val temporary = File(directory, "segment.wav")
                             try {
                                 check(engine.synthesizeToFile(current.text.substring(part.start, part.end), Bundle(), temporary, id) == TextToSpeech.SUCCESS)
-                                withTimeout(45_000) { done.await() }
+                                withTimeout(120_000) { done.await() }
+                                if (!receivedAudio) appendWrittenFile(wave, temporary)
                             } finally {
                                 done.cancel()
                                 temporary.delete()
@@ -421,6 +424,26 @@ class TTSStateHolder(
         } finally {
             engine.stop()
             engine.shutdown()
+        }
+    }
+
+    private fun appendWrittenFile(
+        wave: SpeechWaveFile,
+        file: File,
+    ) {
+        val data = readWavePcm(file) ?: return
+        val engineFormat = EnginePcm.forWave(data.floatingPoint, data.bitsPerSample)
+        wave.setFormat(data.sampleRate, data.channels, engineFormat.bits, engineFormat.floatingPoint)
+        java.io.RandomAccessFile(file, "r").use { input ->
+            input.seek(data.dataOffset)
+            val chunk = ByteArray(64 * 1024)
+            var remaining = data.dataLength
+            while (remaining > 0) {
+                val read = input.read(chunk, 0, minOf(chunk.size.toLong(), remaining).toInt())
+                if (read <= 0) break
+                wave.append(engineFormat.convert(chunk.copyOf(read)))
+                remaining -= read
+            }
         }
     }
 
@@ -526,7 +549,7 @@ class TTSStateHolder(
         Log.e(LOG_TAG, "Read-aloud failed", error)
         player?.pause()
         _ttsState.value = PlaybackStatus.PAUSED
-        _progress.value = _progress.value.copy(preparationProgress = null, error = context.getString(R.string.audio_playback_failed), segment = null)
+        _progress.value = _progress.value.copy(preparationProgress = null, error = context.getString(R.string.read_aloud_failed_reason, error.message ?: error.javaClass.simpleName), segment = null)
         service?.stopForeground(android.app.Service.STOP_FOREGROUND_REMOVE)
     }
 

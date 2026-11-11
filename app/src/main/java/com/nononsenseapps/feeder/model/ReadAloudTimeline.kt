@@ -129,3 +129,117 @@ internal class SpeechWaveFile(
     @Synchronized
     override fun close() = output.close()
 }
+
+/** How an engine's PCM encoding is stored: as is, or reduced to 16-bit when the player can't take it directly. */
+internal class EnginePcm private constructor(
+    val bits: Int,
+    val floatingPoint: Boolean,
+    private val inputWidth: Int,
+) {
+    private var remainder = ByteArray(0)
+
+    /** Returns bytes in the stored format; keeps partial samples split across callbacks. */
+    fun convert(bytes: ByteArray): ByteArray {
+        if (inputWidth * 8 == bits) return bytes
+        val input = if (remainder.isEmpty()) bytes else remainder + bytes
+        val samples = input.size / inputWidth
+        remainder = input.copyOfRange(samples * inputWidth, input.size)
+        val output = ByteArray(samples * 2)
+        for (i in 0 until samples) {
+            // Little endian: the two most significant bytes are the last two of each sample.
+            output[i * 2] = input[i * inputWidth + inputWidth - 2]
+            output[i * 2 + 1] = input[i * inputWidth + inputWidth - 1]
+        }
+        return output
+    }
+
+    companion object {
+        // AudioFormat.ENCODING_PCM_24BIT_PACKED and ENCODING_PCM_32BIT (API 31), inlined as values.
+        private const val ENCODING_PCM_24BIT_PACKED = 21
+        private const val ENCODING_PCM_32BIT = 22
+
+        fun forAudioFormat(audioFormat: Int): EnginePcm =
+            when (audioFormat) {
+                android.media.AudioFormat.ENCODING_PCM_8BIT -> EnginePcm(8, false, 1)
+                android.media.AudioFormat.ENCODING_PCM_16BIT -> EnginePcm(16, false, 2)
+                android.media.AudioFormat.ENCODING_PCM_FLOAT -> EnginePcm(32, true, 4)
+                ENCODING_PCM_24BIT_PACKED -> EnginePcm(16, false, 3)
+                ENCODING_PCM_32BIT -> EnginePcm(16, false, 4)
+                else -> error("Unsupported speech audio format $audioFormat")
+            }
+
+        fun forWave(
+            floatingPoint: Boolean,
+            bitsPerSample: Int,
+        ): EnginePcm =
+            when {
+                floatingPoint && bitsPerSample == 32 -> EnginePcm(32, true, 4)
+                floatingPoint -> error("Unsupported speech audio format float$bitsPerSample")
+                bitsPerSample == 8 -> EnginePcm(8, false, 1)
+                bitsPerSample == 16 -> EnginePcm(16, false, 2)
+                bitsPerSample == 24 -> EnginePcm(16, false, 3)
+                bitsPerSample == 32 -> EnginePcm(16, false, 4)
+                else -> error("Unsupported speech audio format pcm$bitsPerSample")
+            }
+    }
+}
+
+internal data class WavePcmData(
+    val sampleRate: Int,
+    val channels: Int,
+    val bitsPerSample: Int,
+    val floatingPoint: Boolean,
+    val dataOffset: Long,
+    val dataLength: Long,
+)
+
+/**
+ * Some engines write the requested file without reporting audio through the progress callbacks.
+ * Reads the PCM layout of such a file so its samples can be used instead.
+ */
+internal fun readWavePcm(file: File): WavePcmData? {
+    if (!file.isFile || file.length() < 44) return null
+    RandomAccessFile(file, "r").use { input ->
+        fun intLe(): Int = Integer.reverseBytes(input.readInt())
+
+        fun shortLe(): Int =
+            java.lang.Short
+                .reverseBytes(input.readShort())
+                .toInt() and 0xFFFF
+
+        fun tag(): String = ByteArray(4).also { input.readFully(it) }.toString(Charsets.US_ASCII)
+        if (tag() != "RIFF") return null
+        input.readInt()
+        if (tag() != "WAVE") return null
+        var format: IntArray? = null
+        while (input.filePointer + 8 <= input.length()) {
+            val id = tag()
+            val size = intLe().toLong() and 0xFFFFFFFFL
+            val body = input.filePointer
+            when (id) {
+                "fmt " -> {
+                    var code = shortLe()
+                    val channels = shortLe()
+                    val rate = intLe()
+                    input.readInt()
+                    input.readShort()
+                    val bits = shortLe()
+                    if (code == 0xFFFE && size >= 26) {
+                        input.seek(body + 24)
+                        code = shortLe()
+                    }
+                    format = intArrayOf(code, channels, rate, bits)
+                }
+                "data" -> {
+                    val (code, channels, rate, bits) = format ?: return null
+                    if (code != 1 && code != 3) return null
+                    val available = input.length() - body
+                    val length = if (size == 0L || size > available) available else size
+                    return WavePcmData(rate, channels, bits, code == 3, body, length)
+                }
+            }
+            input.seek(body + size + (size and 1))
+        }
+    }
+    return null
+}
