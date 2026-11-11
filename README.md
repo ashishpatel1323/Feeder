@@ -1,5 +1,11 @@
 Feeder
 =====
+
+> **About this fork:** this is a personal fork of [Feeder](https://github.com/spacecowboy/Feeder)
+> by Jonas Kalderstam and contributors, licensed under GPLv3 (see *LICENSE*). To get an
+> installable APK, open the **Actions** tab, pick the **Fork APK** workflow, and download the
+> `feeder-fdroid-debug-apk` artifact from the latest run (or use **Run workflow** to start one).
+
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/Y8Y44OYQL)
 
 <a href="https://f-droid.org/repository/browse/?fdid=com.nononsenseapps.feeder" target="_blank">
