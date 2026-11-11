@@ -50,4 +50,12 @@ class SpeechHighlightTest {
         assertEquals("3:05", formatSpeechTime(185000))
         assertEquals("1:01:01", formatSpeechTime(3661000))
     }
+
+    @Test fun formattedSpeedsWithoutTrailingZeros() {
+        assertEquals("1\u00D7", formatSpeed(1f))
+        assertEquals("0.75\u00D7", formatSpeed(0.75f))
+        assertEquals("1.25\u00D7", formatSpeed(1.25f))
+        assertEquals("1.5\u00D7", formatSpeed(1.5f))
+        assertEquals("2\u00D7", formatSpeed(2f))
+    }
 }

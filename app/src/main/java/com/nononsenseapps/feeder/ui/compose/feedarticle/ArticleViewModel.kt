@@ -93,6 +93,8 @@ class ArticleViewModel(
 
     fun ttsSeekTo(positionMillis: Long) = ttsStateHolder.seekTo(positionMillis)
 
+    fun ttsSetSpeed(speed: Float) = ttsStateHolder.setSpeed(speed)
+
     fun ttsFocusSpokenText(): Long? = ttsStateHolder.requestSpokenTextFocus()
 
     fun ttsStopFollowing() = ttsStateHolder.stopFollowingSpokenText()
