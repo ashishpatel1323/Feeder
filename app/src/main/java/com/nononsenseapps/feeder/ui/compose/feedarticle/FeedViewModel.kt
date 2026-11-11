@@ -68,6 +68,8 @@ class FeedViewModel(
 
     fun ttsSeekTo(positionMillis: Long) = ttsStateHolder.seekTo(positionMillis)
 
+    fun ttsSetSpeed(speed: Float) = ttsStateHolder.setSpeed(speed)
+
     private val podcastPlayerStateHolder: PodcastPlayerStateHolder by instance()
     private val filePathProvider: FilePathProvider by instance()
     private val translationManager: TranslationManager by instance()

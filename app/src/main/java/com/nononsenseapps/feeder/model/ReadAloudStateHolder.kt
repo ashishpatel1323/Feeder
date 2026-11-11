@@ -16,9 +16,11 @@ import androidx.annotation.RequiresApi
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.text.AnnotatedString
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.nononsenseapps.feeder.R
@@ -55,7 +57,11 @@ data class ReadAloudProgress(
     val synthesisProgress: Float = 0f,
     val focusRequestId: Long = 0,
     val followSpokenText: Boolean = false,
+    val speed: Float = 1f,
 )
+
+/** Speeds offered by the read-aloud player. Playback speed changes keep the highlight in sync. */
+val READ_ALOUD_SPEEDS = listOf(0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
 
 /** Application facade; the foreground service owns the player and its lifetime. */
 class TTSStateHolder(
@@ -81,6 +87,32 @@ class TTSStateHolder(
     private var pendingServiceStart = false
     private var audioBuffer: SpeechAudioBuffer? = null
     private var focusSequence = 0L
+    private val preferences by lazy { context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE) }
+    private var playbackSpeed = 1f
+
+    init {
+        coroutineScope.launch(Dispatchers.IO) {
+            val saved = preferences.getFloat(PREF_SPEED, 1f).coerceIn(MIN_SPEED, MAX_SPEED)
+            withContext(Dispatchers.Main.immediate) {
+                playbackSpeed = saved
+                player?.playbackParameters = PlaybackParameters(saved)
+                _progress.value = _progress.value.copy(speed = saved)
+            }
+        }
+    }
+
+    /** Changes speed in the player, not the engine, so the synthesized timeline stays valid. */
+    fun setSpeed(speed: Float) {
+        val value = speed.coerceIn(MIN_SPEED, MAX_SPEED)
+        coroutineScope.launch(Dispatchers.Main.immediate) {
+            playbackSpeed = value
+            player?.playbackParameters = PlaybackParameters(value)
+            _progress.value = _progress.value.copy(speed = value)
+        }
+        coroutineScope.launch(Dispatchers.IO) {
+            preferences.edit { putFloat(PREF_SPEED, value) }
+        }
+    }
 
     fun requestSpokenTextFocus(): Long? {
         val current = _progress.value
@@ -126,7 +158,7 @@ class TTSStateHolder(
             request = SpeechRequest(articleId, text, useDetectLanguage, title, author, feedTitle)
             playWhenReady = true
             _ttsState.value = PlaybackStatus.PLAYING
-            _progress.value = ReadAloudProgress(articleId = articleId, text = text, preparationProgress = 0f, followSpokenText = true, focusRequestId = ++focusSequence)
+            _progress.value = ReadAloudProgress(articleId = articleId, text = text, preparationProgress = 0f, followSpokenText = true, focusRequestId = ++focusSequence, speed = playbackSpeed)
             try {
                 pendingServiceStart = true
                 ContextCompat.startForegroundService(context, Intent(context, ReadAloudService::class.java).setAction(ReadAloudService.ACTION_PREPARE))
@@ -144,6 +176,7 @@ class TTSStateHolder(
         ticker?.cancel()
         this.service = service
         this.player = player
+        player.playbackParameters = PlaybackParameters(playbackSpeed)
         player.addListener(
             object : Player.Listener {
                 override fun onPlayWhenReadyChanged(
@@ -254,6 +287,7 @@ class TTSStateHolder(
         _progress.value = _progress.value.copy(preparationProgress = null)
         player?.apply {
             setMediaSource(speechMediaSource(buffer, item))
+            playbackParameters = PlaybackParameters(playbackSpeed)
             prepare()
             playWhenReady = this@TTSStateHolder.playWhenReady
         }
@@ -462,7 +496,7 @@ class TTSStateHolder(
             player?.stop()
             player?.clearMediaItems()
             _ttsState.value = PlaybackStatus.STOPPED
-            _progress.value = ReadAloudProgress()
+            _progress.value = ReadAloudProgress(speed = playbackSpeed)
             segments = emptyList()
             val directory = cacheDirectory
             cacheDirectory = null
@@ -510,7 +544,7 @@ class TTSStateHolder(
         if (!pendingServiceStart) {
             request = null
             _ttsState.value = PlaybackStatus.STOPPED
-            _progress.value = ReadAloudProgress()
+            _progress.value = ReadAloudProgress(speed = playbackSpeed)
         }
         val directory = cacheDirectory
         cacheDirectory = null
@@ -533,6 +567,10 @@ class TTSStateHolder(
 
     companion object {
         private const val LOG_TAG = "FEEDER_READ_ALOUD"
+        private const val PREFERENCES_NAME = "read_aloud"
+        private const val PREF_SPEED = "playback_speed"
+        private const val MIN_SPEED = 0.5f
+        private const val MAX_SPEED = 3f
     }
 }
 

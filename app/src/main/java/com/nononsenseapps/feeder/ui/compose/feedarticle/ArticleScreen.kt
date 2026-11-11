@@ -207,6 +207,7 @@ fun ArticleScreen(
         readAloudProgress = readAloudProgress,
         speechHighlight = speechHighlight,
         ttsOnSeekTo = viewModel::ttsSeekTo,
+        ttsOnSetSpeed = viewModel::ttsSetSpeed,
         ttsOnUserScroll = viewModel::ttsStopFollowing,
         ttsOnGoToSpokenText = {
             viewModel.ttsFocusSpokenText()?.let { articleId ->
@@ -283,6 +284,7 @@ fun ArticleScreen(
     readAloudProgress: StateFlow<ReadAloudProgress>? = null,
     speechHighlight: SpeechHighlight? = null,
     ttsOnSeekTo: (Long) -> Unit = {},
+    ttsOnSetSpeed: (Float) -> Unit = {},
     ttsOnGoToSpokenText: () -> Unit = {},
     ttsOnUserScroll: () -> Unit = {},
     isPagingMode: Boolean = false,
@@ -527,6 +529,7 @@ fun ArticleScreen(
                     onSelectLanguage = ttsOnSelectLanguage,
                     progress = readAloudProgress,
                     onSeekTo = ttsOnSeekTo,
+                    onSelectSpeed = ttsOnSetSpeed,
                     onGoToSpokenText = ttsOnGoToSpokenText,
                     displayedArticleId = viewState.articleId,
                 )
