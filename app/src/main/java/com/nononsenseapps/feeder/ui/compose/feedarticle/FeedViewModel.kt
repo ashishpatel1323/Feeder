@@ -7,6 +7,7 @@ import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.nononsenseapps.feeder.ApplicationCoroutineScope
 import com.nononsenseapps.feeder.archmodel.FeedItemStyle
+import com.nononsenseapps.feeder.archmodel.FeedListGrouping
 import com.nononsenseapps.feeder.archmodel.FeedType
 import com.nononsenseapps.feeder.archmodel.ItemOpener
 import com.nononsenseapps.feeder.archmodel.OpenAISettings
@@ -362,6 +363,10 @@ class FeedViewModel(
 
     val filterCallback: FeedListFilterCallback = this
 
+    fun setFeedListGrouping(value: FeedListGrouping) {
+        repository.setFeedListGrouping(value)
+    }
+
     private val searchBarVisible: MutableStateFlow<Boolean> =
         MutableStateFlow(state["searchBarVisible"] ?: false)
 
@@ -501,6 +506,7 @@ class FeedViewModel(
             renameTagDialogVisible,
             podcastPlayerStateHolder.playerState,
             repository.forceSingleColumn,
+            repository.feedListGrouping,
         ) { params: Array<Any?> ->
             val haveVisibleFeedItems = (params[7] as Int) > 0
             val currentFeedOrTag = params[13] as FeedOrTag
@@ -544,6 +550,7 @@ class FeedViewModel(
                 isOpenDrawerOnFab = params[27] as Boolean,
                 translationModelDownloadProgress = params[28] as BergamotModelDownloadProgress?,
                 forceSingleColumn = params[31] as Boolean,
+                feedListGrouping = params[32] as FeedListGrouping,
             )
         }.stateIn(
             viewModelScope,
@@ -700,6 +707,7 @@ data class FeedState(
     override val isOpenDrawerOnFab: Boolean = false,
     override val translationModelDownloadProgress: BergamotModelDownloadProgress? = null,
     override val forceSingleColumn: Boolean = false,
+    override val feedListGrouping: FeedListGrouping = FeedListGrouping.NONE,
 ) : FeedScreenViewState
 
 @Immutable
@@ -735,6 +743,8 @@ interface FeedScreenViewState {
     val isOpenDrawerOnFab: Boolean
     val translationModelDownloadProgress: BergamotModelDownloadProgress?
     val forceSingleColumn: Boolean
+    val feedListGrouping: FeedListGrouping
+        get() = FeedListGrouping.NONE
 }
 
 private data class FeedCardTranslationConfig(

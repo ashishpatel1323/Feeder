@@ -94,6 +94,7 @@ class FeedItemStore(
         newestFirst: Boolean,
         filter: FeedListFilter,
         search: String,
+        groupByFeed: Boolean = false,
     ): Flow<PagingData<FeedListItem>> =
         Pager(
             config =
@@ -114,9 +115,14 @@ class FeedItemStore(
 
                 rawQueryFilter(filter, search, args, minReadTime, feedId, tag)
 
+                append("ORDER BY ")
+                if (groupByFeed) {
+                    // Feeds alphabetically, then each feed's articles in the chosen date order
+                    append("$FEED_GROUP_SORT_KEY ASC, $FEED_GROUP_ID ASC, ")
+                }
                 when (newestFirst) {
-                    true -> append("ORDER BY $FEED_ITEM_LIST_SORT_ORDER_DESC\n")
-                    else -> append("ORDER BY $FEED_ITEM_LIST_SORT_ORDER_ASC\n")
+                    true -> append("$FEED_ITEM_LIST_SORT_ORDER_DESC\n")
+                    else -> append("$FEED_ITEM_LIST_SORT_ORDER_ASC\n")
                 }
             }
 
@@ -187,6 +193,10 @@ class FeedItemStore(
         minReadTime: Instant,
         descending: Boolean,
         cursor: FeedItemCursor,
+        // Non-null when the list is grouped by feed: true marks the feeds sorted before the
+        // cursor's feed, false the feeds after it. Within the cursor's own feed the date order
+        // still decides.
+        feedsBefore: Boolean? = null,
     ) {
         val queryString = StringBuilder()
         val args = mutableListOf<Any?>()
@@ -203,6 +213,21 @@ class FeedItemStore(
             rawQueryFilter(filter, search, args, minReadTime, feedId, tag)
             // this version of sqlite doesn't seem to support tuple comparisons
             append("and (\n")
+
+            if (feedsBefore != null) {
+                val cmp = if (feedsBefore) "<" else ">"
+                // Articles without a feed (imported saved articles) form one group keyed
+                // by an empty name and id 0, matching the list order.
+                val cursorFeedId = "(SELECT IFNULL(feed_id, 0) FROM feed_items WHERE id = ?)"
+                val cursorFeedKey =
+                    "IFNULL((SELECT $FEED_GROUP_SORT_KEY FROM feeds WHERE feeds.id = $cursorFeedId), '')"
+                append("$FEED_GROUP_SORT_KEY $cmp $cursorFeedKey\n").also { args.add(cursor.id) }
+                append("or $FEED_GROUP_SORT_KEY = $cursorFeedKey and $FEED_GROUP_ID $cmp $cursorFeedId\n").also {
+                    args.add(cursor.id)
+                    args.add(cursor.id)
+                }
+                append("or $FEED_GROUP_ID = $cursorFeedId and (\n").also { args.add(cursor.id) }
+            }
 
             append(
                 when (descending) {
@@ -232,6 +257,11 @@ class FeedItemStore(
             }
 
             append(")\n")
+
+            if (feedsBefore != null) {
+                // feeds.id = cursor feed and (
+                append(")\n")
+            }
 
             // where id in (
             append(")\n")
@@ -359,12 +389,24 @@ class FeedItemStore(
     suspend fun getArticle(id: Long): FeedItemWithFeed? = dao.getFeedItem(id)
 }
 
+/**
+ * Sort key for grouping the list by feed: the name shown for the feed, ignoring case.
+ */
+private const val FEED_GROUP_SORT_KEY =
+    "(COALESCE(NULLIF(TRIM(feeds.custom_title), ''), feeds.title, '') COLLATE NOCASE)"
+
+/**
+ * Feed id for grouping, with articles that have no feed sharing id 0.
+ */
+private const val FEED_GROUP_ID = "IFNULL(feeds.id, 0)"
+
 private fun PreviewItem.toFeedListItem(context: Context) =
     FeedListItem(
         id = id,
         title = plainTitle,
         snippet = plainSnippet,
         feedTitle = feedDisplayTitle,
+        feedId = feedId ?: ID_UNSET,
         unread = readTime == null,
         pubDate = pubDate.formatForFeed(context),
         image = image,

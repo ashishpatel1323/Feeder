@@ -187,6 +187,24 @@ class SettingsStoreTest : DIAware {
     }
 
     @Test
+    fun feedListGrouping() {
+        store.setFeedListGrouping(FeedListGrouping.FEED)
+
+        verify {
+            sp.edit().putString(PREF_FEED_LIST_GROUPING, "feed").apply()
+        }
+
+        assertEquals(FeedListGrouping.FEED, store.feedListGrouping.value)
+    }
+
+    @Test
+    fun feedListGroupingFromUnknownStringIsNone() {
+        assertEquals(FeedListGrouping.NONE, feedListGroupingFromString(""))
+        assertEquals(FeedListGrouping.NONE, feedListGroupingFromString("bogus"))
+        assertEquals(FeedListGrouping.DATE, feedListGroupingFromString("date"))
+    }
+
+    @Test
     fun currentSorting() {
         store.setCurrentSorting(SortingOptions.OLDEST_FIRST)
 
