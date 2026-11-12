@@ -83,6 +83,18 @@ class SpeechHighlightTest {
         assertEquals(null, article.speechOffsetOf(text("Not in the article."), 0))
     }
 
+    @Test fun tappedWordFoundWithoutPunctuation() {
+        val text = "Hello, \"big\" world."
+        assertEquals("Hello", text.substring(checkNotNull(wordRangeAt(text, 2))))
+        // Just after a word's last letter still means that word
+        assertEquals("Hello", text.substring(checkNotNull(wordRangeAt(text, 6))))
+        assertEquals("big", text.substring(checkNotNull(wordRangeAt(text, 9))))
+        assertEquals("world", text.substring(checkNotNull(wordRangeAt(text, text.length))))
+        assertEquals(null, wordRangeAt("a  b", 2))
+        assertEquals(null, wordRangeAt("", 0))
+        assertEquals("--", "--".substring(checkNotNull(wordRangeAt("--", 0))))
+    }
+
     @Test fun formattedMinutesAndHours() {
         assertEquals("0:00", formatSpeechTime(-1))
         assertEquals("3:05", formatSpeechTime(185000))

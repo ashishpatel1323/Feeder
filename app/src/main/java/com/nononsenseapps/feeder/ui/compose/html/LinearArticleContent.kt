@@ -14,23 +14,29 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.DisableSelection
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.PlayCircleOutline
 import androidx.compose.material.icons.outlined.Terrain
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProvideTextStyle
@@ -50,6 +56,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -72,8 +79,14 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewLightDark
-import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.size.Precision
@@ -126,6 +139,7 @@ import com.nononsenseapps.feeder.ui.compose.readaloud.ReadAloudTapHandler
 import com.nononsenseapps.feeder.ui.compose.readaloud.SpeechHighlight
 import com.nononsenseapps.feeder.ui.compose.readaloud.SpeechHighlightIndex
 import com.nononsenseapps.feeder.ui.compose.readaloud.speechOffsetOf
+import com.nononsenseapps.feeder.ui.compose.readaloud.wordRangeAt
 import com.nononsenseapps.feeder.ui.compose.text.WithBidiDeterminedLayoutDirection
 import com.nononsenseapps.feeder.ui.compose.text.WithTooltipIfNotBlank
 import com.nononsenseapps.feeder.ui.compose.text.asFontFamily
@@ -712,9 +726,11 @@ fun LinearTextContent(
                 )
             val wordBackground = MaterialTheme.colorScheme.primaryContainer
             val wordForeground = MaterialTheme.colorScheme.onPrimaryContainer
+            // The word tapped to offer "Read from here"
+            var tappedWord by remember(linearText) { mutableStateOf<IntRange?>(null) }
             val annotatedString =
-                remember(original, range, wordRange, highlightColor, wordBackground, wordForeground) {
-                    if (range == null && wordRange == null) {
+                remember(original, range, wordRange, highlightColor, wordBackground, wordForeground, tappedWord) {
+                    if (range == null && wordRange == null && tappedWord == null) {
                         original
                     } else {
                         AnnotatedString
@@ -729,6 +745,13 @@ fun LinearTextContent(
                                         (it.last + 1).coerceAtMost(original.length),
                                     )
                                 }
+                                tappedWord?.let {
+                                    addStyle(
+                                        SpanStyle(background = TAPPED_WORD_BACKGROUND, color = TAPPED_WORD_FOREGROUND),
+                                        it.first,
+                                        (it.last + 1).coerceAtMost(original.length),
+                                    )
+                                }
                             }.toAnnotatedString()
                     }
                 }
@@ -736,8 +759,6 @@ fun LinearTextContent(
             val tapHandler = LocalReadAloudTapHandler.current
             // Not state: reading the layout on tap must not cause recomposition
             val layoutHolder = remember { arrayOfNulls<TextLayoutResult>(1) }
-            var readFromHereMenu by remember { mutableStateOf<Pair<Int, Offset>?>(null) }
-            val density = LocalDensity.current
             val onTextTap by rememberUpdatedState { position: Offset ->
                 val layout = layoutHolder[0]
                 val handler = tapHandler
@@ -746,7 +767,7 @@ fun LinearTextContent(
                     if (handler.isReading) {
                         handler.onReadFrom(linearText, offset)
                     } else {
-                        readFromHereMenu = offset to position
+                        tappedWord = wordRangeAt(linearText.text, offset)
                     }
                 }
             }
@@ -786,25 +807,87 @@ fun LinearTextContent(
                                 },
                             ),
                 )
-                readFromHereMenu?.let { (offset, position) ->
-                    val height = layoutHolder[0]?.size?.height ?: 0
-                    DropdownMenu(
-                        expanded = true,
-                        onDismissRequest = { readFromHereMenu = null },
-                        offset =
-                            with(density) {
-                                DpOffset(position.x.toDp(), (position.y - height).toDp())
+                tappedWord?.let { word ->
+                    val layout = layoutHolder[0]
+                    if (layout != null && word.last < layout.layoutInput.text.length) {
+                        val first = layout.getBoundingBox(word.first)
+                        val last = layout.getBoundingBox(word.last)
+                        val wordBounds = if (first.top == last.top) Rect(first.left, first.top, last.right, first.bottom) else first
+                        ReadFromHerePill(
+                            wordBounds = wordBounds,
+                            onReadFromHere = {
+                                tappedWord = null
+                                tapHandler?.onReadFrom(linearText, word.first)
                             },
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.read_aloud_from_here)) },
-                            leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null) },
-                            onClick = {
-                                readFromHereMenu = null
-                                tapHandler?.onReadFrom(linearText, offset)
-                            },
+                            onDismiss = { tappedWord = null },
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+// Amber like a marker pen, readable with dark text in both light and dark themes
+private val TAPPED_WORD_BACKGROUND = Color(0xFFFFD970)
+private val TAPPED_WORD_FOREGROUND = Color(0xFF1B1B1F)
+
+/** A small floating pill above the tapped word, offering to start reading aloud there. */
+@Composable
+private fun ReadFromHerePill(
+    wordBounds: Rect,
+    onReadFromHere: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val gap = with(LocalDensity.current) { 10.dp.roundToPx() }
+    val positionProvider =
+        remember(wordBounds, gap) {
+            object : PopupPositionProvider {
+                override fun calculatePosition(
+                    anchorBounds: IntRect,
+                    windowSize: IntSize,
+                    layoutDirection: LayoutDirection,
+                    popupContentSize: IntSize,
+                ): IntOffset {
+                    val centerX = anchorBounds.left + wordBounds.center.x
+                    val x = (centerX - popupContentSize.width / 2f).toInt().coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0))
+                    val above = anchorBounds.top + wordBounds.top.toInt() - popupContentSize.height - gap
+                    // Below the word when there is no room above it
+                    val y = if (above >= 0) above else anchorBounds.top + wordBounds.bottom.toInt() + gap
+                    return IntOffset(x, y)
+                }
+            }
+        }
+    Popup(
+        popupPositionProvider = positionProvider,
+        onDismissRequest = onDismiss,
+        properties = PopupProperties(focusable = true),
+    ) {
+        Surface(
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.inverseSurface,
+            contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+            shadowElevation = 6.dp,
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(4.dp),
+            ) {
+                Button(
+                    onClick = onReadFromHere,
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                        ),
+                    contentPadding = PaddingValues(start = 12.dp, end = 16.dp),
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(text = stringResource(R.string.read_aloud_from_here))
+                }
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, contentDescription = stringResource(android.R.string.cancel))
                 }
             }
         }
