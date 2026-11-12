@@ -207,6 +207,29 @@ internal fun LinearArticle.speechOffsetOf(
     return null
 }
 
+/**
+ * The word around [offset] in [text], without surrounding punctuation, or null for whitespace.
+ * A tap on the right half of a word's last letter reports the offset just after it.
+ */
+internal fun wordRangeAt(
+    text: String,
+    offset: Int,
+): IntRange? {
+    if (text.isEmpty()) return null
+    var index = offset.coerceIn(0, text.length - 1)
+    if (text[index].isWhitespace() && index > 0 && !text[index - 1].isWhitespace() && offset >= 1) index--
+    if (text[index].isWhitespace()) return null
+    var start = index
+    var end = index
+    while (start > 0 && !text[start - 1].isWhitespace()) start--
+    while (end < text.length - 1 && !text[end + 1].isWhitespace()) end++
+    var first = start
+    var last = end
+    while (first < last && !text[first].isLetterOrDigit()) first++
+    while (last > first && !text[last].isLetterOrDigit()) last--
+    return if (text[first].isLetterOrDigit()) first..last else start..end
+}
+
 /** Lets a tap on article text start read aloud from that point. */
 internal class ReadAloudTapHandler(
     // While reading, a tap jumps straight there; otherwise it offers to start reading
