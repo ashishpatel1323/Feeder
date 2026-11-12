@@ -39,6 +39,8 @@ data class SpeechHighlight(
     val segment: SpeechSegment,
     val focusRequestId: Long = 0,
     val followSpokenText: Boolean = false,
+    // The word being spoken, highlighted more strongly on top of its sentence
+    val word: SpeechSegment? = null,
 )
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -136,6 +138,9 @@ internal fun speechHighlightColor(
 // A document-scoped rendering attribute, including nested quotes, lists, and table cells.
 @Suppress("ktlint:compose:compositionlocal-allowlist")
 internal val LocalSpeechHighlights = compositionLocalOf<Map<LinearText, IntRange>> { emptyMap() }
+
+@Suppress("ktlint:compose:compositionlocal-allowlist")
+internal val LocalSpeechWordHighlights = compositionLocalOf<Map<LinearText, IntRange>> { emptyMap() }
 
 internal class SpeechFocusTarget(
     val text: LinearText,

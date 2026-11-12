@@ -121,6 +121,7 @@ import com.nononsenseapps.feeder.ui.compose.layouts.TableData
 import com.nononsenseapps.feeder.ui.compose.readaloud.LocalReadAloudTapHandler
 import com.nononsenseapps.feeder.ui.compose.readaloud.LocalSpeechFocusTarget
 import com.nononsenseapps.feeder.ui.compose.readaloud.LocalSpeechHighlights
+import com.nononsenseapps.feeder.ui.compose.readaloud.LocalSpeechWordHighlights
 import com.nononsenseapps.feeder.ui.compose.readaloud.ReadAloudTapHandler
 import com.nononsenseapps.feeder.ui.compose.readaloud.SpeechHighlight
 import com.nononsenseapps.feeder.ui.compose.readaloud.SpeechHighlightIndex
@@ -194,6 +195,10 @@ fun ColumnArticleContent(
         remember(speechIndex, speechHighlight?.segment) {
             speechHighlight?.let { speechIndex?.highlights(it.segment) } ?: emptyMap()
         }
+    val wordHighlights =
+        remember(speechIndex, speechHighlight?.word) {
+            speechHighlight?.word?.let { speechIndex?.highlights(it) } ?: emptyMap()
+        }
     val focusTarget =
         remember(speechIndex, speechHighlight) {
             speechHighlight?.takeIf { it.followSpokenText }?.let { speechIndex?.focusTarget(it.segment, it.focusRequestId) }
@@ -211,6 +216,7 @@ fun ColumnArticleContent(
         }
     CompositionLocalProvider(
         LocalSpeechHighlights provides highlights,
+        LocalSpeechWordHighlights provides wordHighlights,
         LocalSpeechFocusTarget provides focusTarget,
         LocalReadAloudTapHandler provides tapHandler,
     ) {
@@ -684,6 +690,7 @@ fun LinearTextContent(
             val interactionSource = remember { MutableInteractionSource() }
             val original = linearText.toAnnotatedString(idToIndex = idToIndex, onLinkClick = onLinkClick)
             val range = LocalSpeechHighlights.current[linearText]
+            val wordRange = LocalSpeechWordHighlights.current[linearText]
             val focusTarget = LocalSpeechFocusTarget.current?.takeIf { it.text === linearText }
             val bringIntoView = remember { BringIntoViewRequester() }
             var speechLines by remember { mutableStateOf<List<Pair<Int, Rect>>>(emptyList()) }
@@ -703,15 +710,25 @@ fun LinearTextContent(
                     MaterialTheme.colorScheme.onSurface,
                     MaterialTheme.colorScheme.primary,
                 )
+            val wordBackground = MaterialTheme.colorScheme.primaryContainer
+            val wordForeground = MaterialTheme.colorScheme.onPrimaryContainer
             val annotatedString =
-                remember(original, range, highlightColor) {
-                    if (range == null) {
+                remember(original, range, wordRange, highlightColor, wordBackground, wordForeground) {
+                    if (range == null && wordRange == null) {
                         original
                     } else {
                         AnnotatedString
                             .Builder(original)
                             .apply {
-                                addStyle(SpanStyle(background = highlightColor), range.first, (range.last + 1).coerceAtMost(original.length))
+                                range?.let { addStyle(SpanStyle(background = highlightColor), it.first, (it.last + 1).coerceAtMost(original.length)) }
+                                // The spoken word stands out on top of its sentence, as in Speechify
+                                wordRange?.let {
+                                    addStyle(
+                                        SpanStyle(background = wordBackground, color = wordForeground),
+                                        it.first,
+                                        (it.last + 1).coerceAtMost(original.length),
+                                    )
+                                }
                             }.toAnnotatedString()
                     }
                 }

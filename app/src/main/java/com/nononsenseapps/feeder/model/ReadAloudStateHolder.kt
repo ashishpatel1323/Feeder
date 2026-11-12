@@ -50,6 +50,8 @@ data class ReadAloudProgress(
     val durationMillis: Long = 0,
     val preparationProgress: Float? = null,
     val segment: SpeechSegment? = null,
+    // The word being spoken within segment, for word-by-word highlighting
+    val word: SpeechSegment? = null,
     val error: String? = null,
     val generatedMillis: Long = 0,
     val isDurationEstimated: Boolean = false,
@@ -80,6 +82,7 @@ class TTSStateHolder(
     private var preparation: Job? = null
     private var ticker: Job? = null
     private var segments = emptyList<SpeechSegment>()
+    private var words = emptyList<SpeechSegment>()
     private var playWhenReady = true
     private var cacheDirectory: File? = null
     private var service: ReadAloudService? = null
@@ -235,6 +238,7 @@ class TTSStateHolder(
         player?.clearMediaItems()
         player?.playWhenReady = playWhenReady
         segments = emptyList()
+        words = emptyList()
         preparation =
             coroutineScope.launch(Dispatchers.Main.immediate) {
                 try {
@@ -353,11 +357,14 @@ class TTSStateHolder(
                     var finished = false
                     try {
                         val timeline = mutableListOf<SpeechSegment>()
+                        val wordTimeline = mutableListOf<SpeechSegment>()
                         for ((index, part) in parts.withIndex()) {
                             val done = CompletableDeferred<Unit>()
                             val id = UUID.randomUUID().toString()
                             var pcm: EnginePcm? = null
                             var receivedAudio = false
+                            var sampleRate = 0
+                            val engineWords = mutableListOf<EngineWord>()
                             engine.setOnUtteranceProgressListener(
                                 object : UtteranceProgressListener() {
                                     override fun onStart(utteranceId: String?) = Unit
@@ -382,9 +389,20 @@ class TTSStateHolder(
                                             val engineFormat = EnginePcm.forAudioFormat(audioFormat)
                                             wave.setFormat(sampleRateInHz, channelCount, engineFormat.bits, engineFormat.floatingPoint)
                                             pcm = engineFormat
+                                            sampleRate = sampleRateInHz
                                         } catch (e: Exception) {
                                             done.completeExceptionally(e)
                                         }
+                                    }
+
+                                    override fun onRangeStart(
+                                        utteranceId: String?,
+                                        start: Int,
+                                        end: Int,
+                                        frame: Int,
+                                    ) {
+                                        if (utteranceId != id || !done.isActive) return
+                                        synchronized(engineWords) { engineWords += EngineWord(part.start + start, part.start + end, frame.toLong()) }
                                     }
 
                                     override fun onAudioAvailable(
@@ -417,12 +435,17 @@ class TTSStateHolder(
                             }
                             val end = wave.durationMillis()
                             check(end > start) { "Speech engine produced no audio" }
-                            timeline += part.copy(startMillis = start, endMillis = end)
+                            val timed = part.copy(startMillis = start, endMillis = end)
+                            timeline += timed
+                            // Audio from a written file has no streamed format, so its word reports cannot be timed
+                            val reported = if (receivedAudio) synchronized(engineWords) { engineWords.toList() } else emptyList()
+                            wordTimeline += speechWords(current.text, timed, reported, sampleRate)
                             val streaming = buffer ?: SpeechAudioBuffer(audio, wave.audioFormat()).also { buffer = it }
                             streaming.publish(wave.sizeBytes(), finished = index == parts.lastIndex)
                             withContext(Dispatchers.Main.immediate) {
                                 if (request === current) {
                                     segments = timeline.toList()
+                                    words = wordTimeline.toList()
                                     val fraction = (part.end - readStart).toDouble() / (current.text.length - readStart)
                                     _progress.value =
                                         _progress.value.copy(
@@ -565,6 +588,7 @@ class TTSStateHolder(
             _ttsState.value = PlaybackStatus.STOPPED
             _progress.value = ReadAloudProgress(speed = playbackSpeed)
             segments = emptyList()
+            words = emptyList()
             val directory = cacheDirectory
             cacheDirectory = null
             coroutineScope.launch(Dispatchers.IO) {
@@ -583,7 +607,7 @@ class TTSStateHolder(
         val player = player ?: return
         if (_progress.value.preparationProgress != null || _progress.value.error != null || request == null) return
         val position = player.currentPosition.coerceAtLeast(0)
-        _progress.value = _progress.value.copy(positionMillis = position, segment = segments.segmentAt(position))
+        _progress.value = _progress.value.copy(positionMillis = position, segment = segments.segmentAt(position), word = words.segmentAt(position))
     }
 
     private fun fail(error: Exception) {
@@ -593,7 +617,8 @@ class TTSStateHolder(
         Log.e(LOG_TAG, "Read-aloud failed", error)
         player?.pause()
         _ttsState.value = PlaybackStatus.PAUSED
-        _progress.value = _progress.value.copy(preparationProgress = null, error = context.getString(R.string.read_aloud_failed_reason, error.message ?: error.javaClass.simpleName), segment = null)
+        _progress.value =
+            _progress.value.copy(preparationProgress = null, error = context.getString(R.string.read_aloud_failed_reason, error.message ?: error.javaClass.simpleName), segment = null, word = null)
         service?.stopForeground(android.app.Service.STOP_FOREGROUND_REMOVE)
     }
 
@@ -607,6 +632,7 @@ class TTSStateHolder(
         player = null
         service = null
         segments = emptyList()
+        words = emptyList()
         // A new user request may already be starting a replacement service instance.
         if (!pendingServiceStart) {
             request = null
