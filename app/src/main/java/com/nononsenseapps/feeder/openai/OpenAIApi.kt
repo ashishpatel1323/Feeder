@@ -11,6 +11,7 @@ import com.nononsenseapps.feeder.archmodel.OpenAISettings
 import io.ktor.http.URLBuilder
 import io.ktor.http.appendPathSegments
 import io.ktor.http.takeFrom
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -24,6 +25,7 @@ import java.util.concurrent.TimeUnit
 class OpenAIApi(
     private val appLang: String,
     private val openAIClientFactory: (OpenAISettings) -> OpenAIClient,
+    private val onDeviceSummarizer: OnDeviceSummarizer = GeminiNanoSummarizer(),
 ) {
     private val json =
         Json {
@@ -114,6 +116,7 @@ class OpenAIApi(
 
     companion object {
         private val LANG_REGEX = Regex("^Lang: \"?([a-zA-Z_-]+)\"?$")
+        private const val SUMMARY_USER_PROMPT = "Summarize:"
     }
 
     private fun okHttpClient(timeoutSeconds: Int): OkHttpClient =
@@ -125,6 +128,13 @@ class OpenAIApi(
     suspend fun listModelIds(settings: OpenAISettings): ModelsResult {
         if (settings.isLocalTranslation) {
             return ModelsResult.Success(ids = emptyList())
+        }
+        if (settings.isOnDeviceSummary) {
+            return when (val status = onDeviceSummarizer.checkStatus()) {
+                is OnDeviceStatus.Ready -> ModelsResult.Success(ids = listOf(status.modelName))
+                OnDeviceStatus.NeedsDownload -> ModelsResult.Success(ids = listOf(ON_DEVICE_MODEL_NAME))
+                is OnDeviceStatus.Unavailable -> ModelsResult.Error(message = status.message)
+            }
         }
         if (settings.key.isEmpty()) {
             return ModelsResult.MissingToken
@@ -187,6 +197,9 @@ class OpenAIApi(
         }
         if (settings.isLocalTranslation) {
             return SummaryResult.Error(content = "Summarization is not supported for this translation-only provider")
+        }
+        if (settings.isOnDeviceSummary) {
+            return summarizeOnDevice(content)
         }
         try {
             val response =
@@ -269,13 +282,58 @@ class OpenAIApi(
     }
 
     private fun parseSummaryResponse(content: String): SummaryResponse {
-        val firstLine = content.lineSequence().firstOrNull() ?: ""
-        val result = LANG_REGEX.find(firstLine)
+        val trimmed = content.trim()
+        val firstLine = trimmed.lineSequence().firstOrNull() ?: ""
+        val result =
+            LANG_REGEX.find(firstLine.trim())
+                ?: return SummaryResponse(
+                    // Smaller (local) models often skip the "Lang:" line, so keep the whole text
+                    lang = "",
+                    content = trimmed,
+                )
         return SummaryResponse(
-            lang = result?.groupValues?.getOrNull(1) ?: "",
-            content = content.replaceFirst(firstLine, "").trim(),
+            lang = result.groupValues.getOrNull(1) ?: "",
+            content = trimmed.removePrefix(firstLine).trim(),
         )
     }
+
+    private fun summarySystemPrompt(): String =
+        listOf(
+            "You are an assistant in an RSS reader app, summarizing article content.",
+            "The app language is '$appLang'.",
+            "Provide summaries in the article's language if 99% recognizable; otherwise, use the app language.",
+            "First line must be exactly: 'Lang: \"ISO code\"' with NO markdown formatting around the Lang line whatsoever.",
+            "Keep summaries up to 100 words, 3 paragraphs, with up to 3 bullet points per paragraph.",
+            "For readability use markdown formatting: **bold** for emphasis, *italics* for quotes, bullet points (-) for lists, # headers for sections, and > for block quotes.",
+            "Use markdown to structure content and improve readability.",
+            "Use only single language.",
+            "Keep full quotes if any.",
+        ).joinToString(separator = " ")
+
+    private suspend fun summarizeOnDevice(content: String): SummaryResult =
+        try {
+            val text =
+                onDeviceSummarizer.generate(
+                    systemPrompt = summarySystemPrompt(),
+                    userPrompt = SUMMARY_USER_PROMPT,
+                    content = content,
+                )
+            val summaryResponse = parseSummaryResponse(text)
+            SummaryResult.Success(
+                id = "",
+                created = System.currentTimeMillis() / 1000,
+                model = ON_DEVICE_MODEL_NAME,
+                content = summaryResponse.content,
+                promptTokens = 0,
+                completeTokens = 0,
+                totalTokens = 0,
+                detectedLanguage = summaryResponse.lang,
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            SummaryResult.Error(content = e.message ?: e.cause?.message ?: "")
+        }
 
     private fun summaryRequest(
         content: String,
@@ -287,24 +345,11 @@ class OpenAIApi(
                 listOf(
                     ChatMessage(
                         role = ChatRole.System,
-                        messageContent =
-                            TextContent(
-                                listOf(
-                                    "You are an assistant in an RSS reader app, summarizing article content.",
-                                    "The app language is '$appLang'.",
-                                    "Provide summaries in the article's language if 99% recognizable; otherwise, use the app language.",
-                                    "First line must be exactly: 'Lang: \"ISO code\"' with NO markdown formatting around the Lang line whatsoever.",
-                                    "Keep summaries up to 100 words, 3 paragraphs, with up to 3 bullet points per paragraph.",
-                                    "For readability use markdown formatting: **bold** for emphasis, *italics* for quotes, bullet points (-) for lists, # headers for sections, and > for block quotes.",
-                                    "Use markdown to structure content and improve readability.",
-                                    "Use only single language.",
-                                    "Keep full quotes if any.",
-                                ).joinToString(separator = " "),
-                            ),
+                        messageContent = TextContent(summarySystemPrompt()),
                     ),
                     ChatMessage(
                         role = ChatRole.User,
-                        messageContent = TextContent("Summarize:\n\n$content"),
+                        messageContent = TextContent("$SUMMARY_USER_PROMPT\n\n$content"),
                     ),
                 ),
             responseFormat = ChatResponseFormat.Text,
@@ -376,9 +421,12 @@ val OpenAISettings.isDeepL: Boolean
 val OpenAISettings.isLocalTranslation: Boolean
     get() = baseUrl == LOCAL_TRANSLATION_PROVIDER_URL
 
+val OpenAISettings.isOnDeviceSummary: Boolean
+    get() = baseUrl == ON_DEVICE_SUMMARY_PROVIDER_URL
+
 val OpenAISettings.isValid: Boolean
     get() =
-        if (isLocalTranslation) {
+        if (isLocalTranslation || isOnDeviceSummary) {
             true
         } else if (isDeepL) {
             key.isNotEmpty()
@@ -392,7 +440,7 @@ val OpenAISettings.canSummarize: Boolean
     get() = isValid && !isDeepL && !isLocalTranslation
 
 val OpenAISettings.canTranslate: Boolean
-    get() = isValid
+    get() = isValid && !isOnDeviceSummary
 
 val OpenAISettings.canUseAsTranslationApi: Boolean
     get() = canTranslate && (isDeepL || isLocalTranslation)
@@ -409,6 +457,11 @@ fun OpenAISettings.toOpenAIHost(withAzureDeploymentId: Boolean): OpenAIHost =
     baseUrl.let { baseUrl ->
         if (baseUrl.isEmpty()) {
             OpenAIHost.OpenAI
+        } else if (!isAzure) {
+            // OpenAI-compatible servers (Ollama, LM Studio, llama.cpp, OpenRouter...) expect
+            // requests relative to the base URL as typed, e.g. http://192.168.1.10:11434/v1/.
+            // Only Azure needs the extra "openai/deployments/..." path segments.
+            OpenAIHost(baseUrl = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/")
         } else {
             OpenAIHost(
                 baseUrl =
@@ -501,3 +554,5 @@ private fun OpenAISettings.normalizedDeepLBaseUrl(): String {
 }
 
 const val LOCAL_TRANSLATION_PROVIDER_URL = "local://translation"
+const val ON_DEVICE_SUMMARY_PROVIDER_URL = "local://gemini-nano"
+const val ON_DEVICE_MODEL_NAME = "Gemini Nano"
