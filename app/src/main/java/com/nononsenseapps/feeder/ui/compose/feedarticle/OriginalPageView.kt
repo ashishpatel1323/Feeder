@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -57,7 +58,7 @@ fun OriginalPageView(
         }
     val readFromHereLabel = stringResource(R.string.read_aloud_from_here)
     var pageText by remember { mutableStateOf<String?>(null) }
-    var progress by remember { mutableStateOf(0) }
+    var progress by remember { mutableIntStateOf(0) }
     val currentOnPageText by rememberUpdatedState(onPageText)
     val currentOnReadFrom by rememberUpdatedState(onReadFrom)
     val currentOnUserScroll by rememberUpdatedState(onUserScroll)

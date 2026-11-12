@@ -70,13 +70,18 @@
           if (SKIP[node.nodeName] || node.id === 'feeder-read-aloud-overlay' || node.id === 'feeder-read-aloud-pill') {
             return NodeFilter.FILTER_REJECT;
           }
-          return NodeFilter.FILTER_SKIP;
+          return node.nodeName === 'BR' ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
         }
         return NodeFilter.FILTER_ACCEPT;
       },
     });
     var node;
     while ((node = walker.nextNode())) {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        // A line break separates words even without whitespace around it
+        if (text.length && !/\s$/.test(text)) text += '\n';
+        continue;
+      }
       var raw = node.nodeValue;
       if (!raw) continue;
       // Spaces between inline elements matter, but not at the start of a block
@@ -92,7 +97,7 @@
       var block = blockOf(parent);
       var box = boxOf(parent);
       if (block !== lastBlock && text.length) {
-        text = text.replace(/ +$/, '');
+        text = text.replace(/\s+$/, '');
         if (!/\n\n$/.test(text)) text += '\n\n';
       } else if (box !== lastBox && text.length && !/\s$/.test(text)) {
         text += ' ';
@@ -119,8 +124,56 @@
       text += collapsed;
     }
     text = text.replace(/\s+$/, '');
+    dirty = false;
     var app = bridge();
-    if (app) app.onText(text);
+    if (app && text !== reportedText) {
+      reportedText = text;
+      app.onText(text);
+    }
+  }
+
+  // Pages that render or reveal their text after loading are extracted again once they settle.
+  // Never while reading, so the offsets being spoken stay valid; that waits until reading stops.
+  var dirty = false;
+  var reportedText = null;
+  var refreshTimer = null;
+  function ours(node) {
+    var element = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+    return !!(element && element.closest && element.closest('#feeder-read-aloud-overlay, #feeder-read-aloud-pill, #feeder-read-aloud-style'));
+  }
+  function scheduleRefresh() {
+    dirty = true;
+    if (reading) return;
+    if (refreshTimer) return;
+    refreshTimer = setTimeout(function () {
+      refreshTimer = null;
+      if (!reading && dirty) extract();
+    }, 1000);
+  }
+  if (typeof MutationObserver !== 'undefined') {
+    new MutationObserver(function (mutations) {
+      for (var i = 0; i < mutations.length; i++) {
+        var mutation = mutations[i];
+        if (ours(mutation.target)) continue;
+        var relevant = mutation.type === 'characterData';
+        for (var j = 0; !relevant && j < mutation.addedNodes.length; j++) relevant = !ours(mutation.addedNodes[j]);
+        for (var k = 0; !relevant && k < mutation.removedNodes.length; k++) {
+          var removed = mutation.removedNodes[k];
+          relevant = !(removed.id === 'feeder-read-aloud-overlay' || removed.id === 'feeder-read-aloud-pill');
+        }
+        if (mutation.type === 'attributes') relevant = true;
+        if (relevant) {
+          scheduleRefresh();
+          return;
+        }
+      }
+    }).observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ['class', 'hidden', 'open'],
+    });
   }
 
   // Finds the entry holding spoken offset [offset], by binary search
@@ -397,6 +450,7 @@
     setReading: function (value) {
       reading = !!value;
       if (reading) hidePill();
+      else if (dirty) scheduleRefresh();
     },
   };
   extract();

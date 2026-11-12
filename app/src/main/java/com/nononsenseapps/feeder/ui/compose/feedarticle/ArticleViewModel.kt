@@ -103,16 +103,26 @@ class ArticleViewModel(
     val showOriginalPage: StateFlow<Boolean> = _showOriginalPage.asStateFlow()
     private var originalPageText: String? = null
 
+    // Play was pressed before the original page reported its text; reading starts once it does
+    private var playWhenOriginalPageReady = false
+
     fun toggleOriginalPage() {
         val show = !_showOriginalPage.value
         state["showOriginalPage"] = show
         _showOriginalPage.value = show
-        if (!show) originalPageText = null
+        originalPageText = null
+        playWhenOriginalPageReady = false
     }
 
     /** The visible text of the original page, in the order the page script reports offsets in. */
     fun setOriginalPageText(text: String) {
         originalPageText = text.takeIf { it.isNotBlank() }
+        if (playWhenOriginalPageReady && _showOriginalPage.value) {
+            originalPageText?.let {
+                playWhenOriginalPageReady = false
+                readAloud(it)
+            }
+        }
     }
 
     fun ttsSeekTo(positionMillis: Long) = ttsStateHolder.seekTo(positionMillis)
@@ -517,7 +527,7 @@ class ArticleViewModel(
 
     // Read exactly what is on screen (feed text, full text, translation or original page) so highlights match it
     private fun displayedSpeechText(): String? {
-        if (_showOriginalPage.value) originalPageText?.let { return it }
+        if (_showOriginalPage.value) return originalPageText
         return viewState.value
             .takeIf { it.textToDisplay == TextToDisplay.CONTENT }
             ?.articleContent
@@ -557,6 +567,11 @@ class ArticleViewModel(
         // A session started from another screen is resumed; one started here only if the same version is shown
         val sameVersion = spokenVersion == null || spokenVersion == displayedVersion
         if (sameVersion && ttsStateHolder.resumeIfPausedOn(itemId)) {
+            return
+        }
+        if (_showOriginalPage.value && displayedText == null) {
+            // Reading the reader text here would match nothing on the page
+            playWhenOriginalPageReady = true
             return
         }
         if (displayedText != null) {
