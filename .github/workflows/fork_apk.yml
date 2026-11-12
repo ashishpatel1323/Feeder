@@ -1,6 +1,11 @@
-# Builds an installable APK for this fork. Upstream's ci_build.yml release
-# jobs need the upstream signing secrets, so this workflow builds the F-Droid
-# flavor in debug mode, signed with the repo's shared debug keystore.
+# Builds an installable APK for this fork and, on pushes to master, publishes
+# it as the Latest GitHub Release.
+#
+# Upstream's release jobs need the upstream signing secrets, so this builds the
+# minified F-Droid release variant signed with the repo's shared debug keystore.
+# That key is stable, so each new APK installs over the previous one. The
+# ".debug" application id suffix keeps the same package as the old debug APKs,
+# so existing installs update in place and keep their feeds and settings.
 name: Fork APK
 
 on:
@@ -9,20 +14,24 @@ on:
       - master
   workflow_dispatch:
 
+concurrency:
+  group: fork-apk-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  debug-apk:
+  apk:
     if: github.repository != 'spacecowboy/feeder'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      contents: read
+      contents: write
     steps:
       - name: checkout
         uses: actions/checkout@v7
         with:
           submodules: "recursive"
+          # Full history: versionCode-related tasks count commits
           fetch-depth: 0
-          fetch-tags: true
 
       - name: setup JDK
         uses: actions/setup-java@v6
@@ -33,12 +42,45 @@ jobs:
       - name: gradle setup
         uses: gradle/actions/setup-gradle@v6
 
-      - name: build debug apk
-        run: ./gradlew assembleFdroidDebug
+      - name: build release apk
+        # lintVital adds minutes and is already covered by upstream CI
+        run: >
+          ./gradlew assembleFdroidRelease
+          -x lintVitalFdroidRelease
+          -PSTORE_FILE="$GITHUB_WORKSPACE/shareddebug.keystore"
+          -PSTORE_PASSWORD=android
+          -PKEY_ALIAS=AndroidDebugKey
+          -PKEY_PASSWORD=android
+          -PAPP_ID_SUFFIX=.debug
+
+      - name: rename apk
+        id: apk
+        run: |
+          short_sha="${GITHUB_SHA::8}"
+          name="feeder-fork-${GITHUB_RUN_NUMBER}-${short_sha}.apk"
+          mv app/build/outputs/apk/fdroid/release/app-fdroid-release.apk "$name"
+          echo "path=$name" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$short_sha" >> "$GITHUB_OUTPUT"
+          ls -lh "$name"
 
       - name: upload apk
         uses: actions/upload-artifact@v7
         with:
-          name: feeder-fdroid-debug-apk
-          path: app/build/outputs/apk/fdroid/debug/*.apk
+          name: feeder-fork-apk
+          path: ${{ steps.apk.outputs.path }}
           if-no-files-found: error
+
+      - name: publish release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: build-${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          name: "Android build · #${{ github.run_number }} · ${{ steps.apk.outputs.short_sha }}"
+          body: |
+            Automatic build of `${{ github.sha }}` on master.
+
+            Install the attached APK; it updates over the previous fork build.
+          make_latest: "true"
+          fail_on_unmatched_files: true
+          files: ${{ steps.apk.outputs.path }}
