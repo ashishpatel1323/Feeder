@@ -1,6 +1,8 @@
 package com.nononsenseapps.feeder.openai
 
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.util.Log
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.mlkit.genai.common.DownloadStatus
@@ -128,13 +130,16 @@ class GeminiNanoSummarizer(
     // AICore often reports it until it has fetched its configuration after an update.
     private var chosen: Backend? = null
 
+    // What each check answered last time, shown to the user when nothing works.
+    private val details = mutableListOf<String>()
+
     override suspend fun checkStatus(): OnDeviceStatus =
         try {
-            val backend = lock.withLock { findBackend(refresh = true) }
+            val (backend, diagnostic) = lock.withLock { findBackend(refresh = true) to diagnostics() }
             when (backend?.status) {
                 FeatureStatus.AVAILABLE -> OnDeviceStatus.Ready(modelName = backend.displayName())
                 FeatureStatus.DOWNLOADABLE, FeatureStatus.DOWNLOADING -> OnDeviceStatus.NeedsDownload
-                else -> OnDeviceStatus.Unavailable(UNSUPPORTED_MESSAGE)
+                else -> OnDeviceStatus.Unavailable(UNSUPPORTED_MESSAGE + "\n\n" + diagnostic)
             }
         } catch (e: CancellationException) {
             throw e
@@ -174,6 +179,7 @@ class GeminiNanoSummarizer(
                 return previous.withStatus(status).also { chosen = it }
             }
         }
+        details.clear()
         for (candidate in promptCandidates) {
             val status =
                 try {
@@ -182,9 +188,11 @@ class GeminiNanoSummarizer(
                     throw e
                 } catch (e: Exception) {
                     Log.w(LOG_TAG, "Prompt API (${candidate.label}) status check failed", e)
-                    FeatureStatus.UNAVAILABLE
-                }
+                    details += "Prompt ${candidate.label}: ${e.describe()}"
+                    null
+                } ?: continue
             Log.i(LOG_TAG, "Prompt API (${candidate.label}): ${statusName(status)}")
+            details += "Prompt ${candidate.label}: ${statusName(status)}"
             if (status != FeatureStatus.UNAVAILABLE) {
                 return Backend.Prompt(candidate.model, candidate.label, status).also { chosen = it }
             }
@@ -196,9 +204,13 @@ class GeminiNanoSummarizer(
                 throw e
             } catch (e: Exception) {
                 Log.w(LOG_TAG, "Summarization API status check failed", e)
+                details += "Summarization: ${e.describe()}"
                 FeatureStatus.UNAVAILABLE
             }
         Log.i(LOG_TAG, "Summarization API: ${statusName(summaryStatus)}")
+        if (details.none { it.startsWith("Summarization") }) {
+            details += "Summarization: ${statusName(summaryStatus)}"
+        }
         if (summaryStatus != FeatureStatus.UNAVAILABLE) {
             return Backend.Summary(summarizer, summaryStatus).also { chosen = it }
         }
@@ -207,7 +219,9 @@ class GeminiNanoSummarizer(
     }
 
     private suspend fun ensureDownloaded(): Backend {
-        val backend = findBackend(refresh = true) ?: throw IllegalStateException(UNSUPPORTED_MESSAGE)
+        val backend =
+            findBackend(refresh = true)
+                ?: throw IllegalStateException(UNSUPPORTED_MESSAGE + "\n\n" + diagnostics())
         if (backend is Backend.Prompt &&
             (backend.status == FeatureStatus.DOWNLOADABLE || backend.status == FeatureStatus.DOWNLOADING)
         ) {
@@ -307,6 +321,29 @@ class GeminiNanoSummarizer(
             is Backend.Summary -> "Gemini Nano (summaries in English only)"
         }
 
+    private fun diagnostics(): String =
+        buildList {
+            add("Details:")
+            addAll(details)
+            add("AICore app: ${packageVersion(AICORE_PACKAGE)}")
+            add("Private Compute Services: ${packageVersion(PCS_PACKAGE)}")
+            add("Device: ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE}")
+        }.joinToString("\n")
+
+    private fun packageVersion(packageName: String): String =
+        try {
+            val info = context.packageManager.getPackageInfo(packageName, 0)
+            val enabled = info.applicationInfo?.enabled != false
+            (info.versionName ?: "installed") + if (enabled) "" else " (disabled)"
+        } catch (e: PackageManager.NameNotFoundException) {
+            "not installed"
+        }
+
+    private fun Exception.describe(): String {
+        val code = (this as? GenAiException)?.errorCode?.let { " (code $it)" } ?: ""
+        return "${javaClass.simpleName}$code: ${message ?: cause?.message ?: "no message"}"
+    }
+
     private fun statusName(status: Int): String =
         when (status) {
             FeatureStatus.AVAILABLE -> "AVAILABLE"
@@ -335,6 +372,8 @@ class GeminiNanoSummarizer(
         private const val CHARS_PER_TOKEN_GUESS = 4
         private const val SUMMARY_API_MAX_CHARS = 12_000
         private const val SUMMARY_API_MIN_CHARS = 400
+        private const val AICORE_PACKAGE = "com.google.android.aicore"
+        private const val PCS_PACKAGE = "com.google.android.as.oss"
         const val UNSUPPORTED_MESSAGE =
             "Android's AICore says Gemini Nano isn't ready on this phone yet. Update \"AICore\" and " +
                 "\"Private Compute Services\" in the Play Store, leave the phone on Wi-Fi and charging for " +

@@ -30,6 +30,9 @@
   <queries>
     <!-- So a barcode scanner can be invoked -->
     <package android:name="com.google.zxing.client.android" />
+    <!-- So Gemini Nano diagnostics can show the AICore and Private Compute Services versions -->
+    <package android:name="com.google.android.aicore" />
+    <package android:name="com.google.android.as.oss" />
     <intent>
       <action android:name="android.intent.action.TTS_SERVICE" />
     </intent>
