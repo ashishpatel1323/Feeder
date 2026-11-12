@@ -50,6 +50,7 @@ import com.nononsenseapps.feeder.openai.canSummarize
 import com.nononsenseapps.feeder.openai.canUseAsTranslationApi
 import com.nononsenseapps.feeder.openai.isLocalTranslation
 import com.nononsenseapps.feeder.ui.compose.readaloud.SpeechHighlight
+import com.nononsenseapps.feeder.ui.compose.readaloud.speechText
 import com.nononsenseapps.feeder.ui.compose.text.htmlToAnnotatedString
 import com.nononsenseapps.feeder.ui.text.MarkdownToHtmlConverter
 import com.nononsenseapps.feeder.util.Either
@@ -342,6 +343,10 @@ class ArticleViewModel(
         // Using as general loading text
         textToDisplay.update { TextToDisplay.LOADING_FULLTEXT }
         displayFullTextOverride.value = displayFullTextOverride.value?.not() ?: articleFlow.value?.fullTextByDefault?.not() ?: true
+        // Audio prepared for the other version of the text would no longer match what is shown
+        if (readAloudProgress.value.articleId == itemId) {
+            ttsStateHolder.stop()
+        }
         if (showTranslatedContent.value) {
             translateCurrentArticle()
         }
@@ -482,9 +487,34 @@ class ArticleViewModel(
         toolbarVisible.update { visible }
     }
 
+    // Which version of the article (full text, translated) read aloud was last started with from here
+    private var spokenVersion: Pair<Boolean, Boolean>? = null
+
     fun ttsPlay() {
         stopPodcastPlayback()
-        if (ttsStateHolder.resumeIfPausedOn(itemId)) {
+        // Read exactly what is on screen (feed text, full text or translation) so highlights match it
+        val displayedText =
+            viewState.value
+                .takeIf { it.textToDisplay == TextToDisplay.CONTENT }
+                ?.articleContent
+                ?.speechText()
+                ?.takeIf { it.isNotBlank() }
+        val displayedVersion = isFullText to viewState.value.isShowingTranslated
+        // A session started from another screen is resumed; one started here only if the same version is shown
+        val sameVersion = spokenVersion == null || spokenVersion == displayedVersion
+        if (sameVersion && ttsStateHolder.resumeIfPausedOn(itemId)) {
+            return
+        }
+        spokenVersion = displayedVersion
+        if (displayedText != null) {
+            ttsStateHolder.tts(
+                textArray = listOf(AnnotatedString(displayedText)),
+                useDetectLanguage = repository.useDetectLanguage.value,
+                articleId = itemId,
+                title = viewState.value.articleTitle,
+                author = viewState.value.author.orEmpty(),
+                feedTitle = viewState.value.feedDisplayTitle,
+            )
             return
         }
         viewModelScope.launch(Dispatchers.IO) {
