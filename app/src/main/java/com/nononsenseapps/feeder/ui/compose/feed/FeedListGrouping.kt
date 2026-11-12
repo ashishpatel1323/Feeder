@@ -28,6 +28,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -57,13 +59,14 @@ private val FeedListGrouping.icon: ImageVector
 fun FeedListGroupingButton(
     current: FeedListGrouping,
     onSelect: (FeedListGrouping) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
     val label = stringResource(R.string.group_by)
     val selectedString = stringResource(androidx.compose.ui.R.string.selected)
     val notSelectedString = stringResource(androidx.compose.ui.R.string.not_selected)
 
-    PlainTooltipBox(tooltip = { Text(label) }) {
+    PlainTooltipBox(tooltip = { Text(label) }, modifier = modifier) {
         Box {
             IconButton(onClick = { expanded = true }) {
                 Icon(
