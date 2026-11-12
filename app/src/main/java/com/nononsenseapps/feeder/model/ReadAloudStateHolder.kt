@@ -474,12 +474,8 @@ class TTSStateHolder(
             null
         }
 
-    fun resumeIfPausedOn(
-        articleId: Long,
-        text: String? = null,
-    ): Boolean {
+    fun resumeIfPausedOn(articleId: Long): Boolean {
         if (_ttsState.value != PlaybackStatus.PAUSED || _progress.value.articleId != articleId) return false
-        if (text != null && text != _progress.value.text) return false
         play()
         return true
     }

@@ -487,6 +487,9 @@ class ArticleViewModel(
         toolbarVisible.update { visible }
     }
 
+    // Which version of the article (full text, translated) read aloud was last started with from here
+    private var spokenVersion: Pair<Boolean, Boolean>? = null
+
     fun ttsPlay() {
         stopPodcastPlayback()
         // Read exactly what is on screen (feed text, full text or translation) so highlights match it
@@ -496,9 +499,13 @@ class ArticleViewModel(
                 ?.articleContent
                 ?.speechText()
                 ?.takeIf { it.isNotBlank() }
-        if (ttsStateHolder.resumeIfPausedOn(itemId, displayedText)) {
+        val displayedVersion = isFullText to viewState.value.isShowingTranslated
+        // A session started from another screen is resumed; one started here only if the same version is shown
+        val sameVersion = spokenVersion == null || spokenVersion == displayedVersion
+        if (sameVersion && ttsStateHolder.resumeIfPausedOn(itemId)) {
             return
         }
+        spokenVersion = displayedVersion
         if (displayedText != null) {
             ttsStateHolder.tts(
                 textArray = listOf(AnnotatedString(displayedText)),
