@@ -1551,10 +1551,6 @@ fun FeedListContent(
                     // observable would dirty the snapshot on every scroll frame.
                     val itemScrolledOffTop = remember(previewItem.id) { AtomicBoolean(false) }
 
-                    LaunchedEffect(loadedItem.id, loadedItem.title, loadedItem.snippet, translatedFeedCards.generation, onTranslateFeedCard) {
-                        onTranslateFeedCard(loadedItem)
-                    }
-
                     // Marks items which have been visible long enough as read once they leave
                     // composition, which happens when they scroll out of the viewport
                     DisposableEffect(previewItem.id, markAsUnread) {
@@ -1595,6 +1591,11 @@ fun FeedListContent(
                     }
 
                     if (!collapsed) {
+                        // Only articles that are shown get their preview translated
+                        LaunchedEffect(loadedItem.id, loadedItem.title, loadedItem.snippet, translatedFeedCards.generation, onTranslateFeedCard) {
+                            onTranslateFeedCard(loadedItem)
+                        }
+
                         if (cardStyle && grouping != FeedListGrouping.NONE) {
                             Spacer(modifier = Modifier.height(LocalDimens.current.margin))
                         }
