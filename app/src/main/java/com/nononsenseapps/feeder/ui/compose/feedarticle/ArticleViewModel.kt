@@ -89,7 +89,7 @@ class ArticleViewModel(
             .map { progress ->
                 progress.segment
                     ?.takeIf { progress.articleId == itemId && progress.error == null }
-                    ?.let { SpeechHighlight(progress.text, it, progress.focusRequestId, progress.followSpokenText) }
+                    ?.let { SpeechHighlight(progress.text, it, progress.focusRequestId, progress.followSpokenText, progress.word) }
             }.distinctUntilChanged()
 
     val isReadingAloudHere =

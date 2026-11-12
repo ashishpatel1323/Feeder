@@ -45,6 +45,53 @@ internal fun speechSegments(
     }
 }
 
+/** A word the engine reported while synthesizing, [frame] counted in audio frames from the sentence start. */
+internal data class EngineWord(
+    val start: Int,
+    val end: Int,
+    val frame: Long,
+)
+
+/**
+ * Word timings within one synthesized [segment]. Uses the engine's word reports when they are
+ * usable; otherwise spreads the segment's duration over its words by length, which keeps the
+ * highlight close to the voice for engines that report nothing.
+ */
+internal fun speechWords(
+    text: String,
+    segment: SpeechSegment,
+    engineWords: List<EngineWord> = emptyList(),
+    sampleRate: Int = 0,
+): List<SpeechSegment> {
+    val duration = segment.endMillis - segment.startMillis
+    if (duration <= 0) return emptyList()
+    val reported =
+        engineWords
+            .filter { it.start >= segment.start && it.end <= segment.end && it.end > it.start }
+            .sortedBy { it.start }
+    if (sampleRate > 0 && reported.size >= 2) {
+        val starts = reported.map { segment.startMillis + it.frame * 1000 / sampleRate }
+        val monotonic = starts.zipWithNext().all { (a, b) -> b >= a }
+        if (monotonic && starts.last() < segment.endMillis) {
+            return reported.mapIndexed { index, word ->
+                SpeechSegment(word.start, word.end, starts[index], starts.getOrNull(index + 1) ?: segment.endMillis)
+            }
+        }
+    }
+    val words = Regex("\\S+").findAll(text.substring(segment.start, segment.end)).toList()
+    if (words.isEmpty()) return emptyList()
+    // Weight by length plus one for the pause after each word
+    val weights = words.map { it.value.length + 1 }
+    val total = weights.sum().toDouble()
+    var elapsed = 0
+    return words.mapIndexed { index, match ->
+        val startMillis = segment.startMillis + (duration * elapsed / total).toLong()
+        elapsed += weights[index]
+        val endMillis = segment.startMillis + (duration * elapsed / total).toLong()
+        SpeechSegment(segment.start + match.range.first, segment.start + match.range.last + 1, startMillis, endMillis)
+    }
+}
+
 /** Drops the segments before [offset], keeping the sentence that contains it. */
 internal fun List<SpeechSegment>.startingAt(offset: Int): List<SpeechSegment> = if (offset <= 0) this else dropWhile { it.end <= offset }
 

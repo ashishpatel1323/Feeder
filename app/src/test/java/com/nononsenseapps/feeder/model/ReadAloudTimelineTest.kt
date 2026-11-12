@@ -51,6 +51,34 @@ class ReadAloudTimelineTest {
         assertTrue(segments.startingAt(text.length).isEmpty())
     }
 
+    @Test fun estimatedWordTimesCoveredTheSentenceInOrder() {
+        val text = "Hi there. Big world."
+        val segment = SpeechSegment(10, 20, startMillis = 1000, endMillis = 2000)
+        val words = speechWords(text, segment)
+        assertEquals(listOf("Big", "world."), words.map { text.substring(it.start, it.end) })
+        assertEquals(1000L, words.first().startMillis)
+        assertEquals(2000L, words.last().endMillis)
+        assertEquals(words[0].endMillis, words[1].startMillis)
+        assertTrue(words[1].endMillis - words[1].startMillis > words[0].endMillis - words[0].startMillis)
+    }
+
+    @Test fun engineWordReportsWereTimedFromAudioFrames() {
+        val text = "Big world."
+        val segment = SpeechSegment(0, 10, startMillis = 500, endMillis = 1500)
+        val words = speechWords(text, segment, listOf(EngineWord(0, 3, 0), EngineWord(4, 10, 8000)), sampleRate = 16000)
+        assertEquals(listOf(500L, 1000L), words.map { it.startMillis })
+        assertEquals(listOf(1000L, 1500L), words.map { it.endMillis })
+    }
+
+    @Test fun unusableEngineReportsFellBackToEstimates() {
+        val text = "Big world."
+        val segment = SpeechSegment(0, 10, startMillis = 0, endMillis = 1000)
+        // Frames running past the sentence's audio are wrong
+        val words = speechWords(text, segment, listOf(EngineWord(0, 3, 0), EngineWord(4, 10, 99_000)), sampleRate = 16000)
+        assertEquals(2, words.size)
+        assertTrue(words[1].startMillis < 1000)
+    }
+
     @Test fun wrotePlayablePcmWaveHeaderAndExactDuration() {
         val file = folder.newFile()
         SpeechWaveFile(file).use {
