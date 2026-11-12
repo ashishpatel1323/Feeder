@@ -108,8 +108,7 @@ internal fun SortingOptions.orderTerms(): List<OrderTerm> {
     }
 }
 
-internal fun List<OrderTerm>.toOrderBy(): String =
-    joinToString(", ") { "${it.expr} ${if (it.ascending) "ASC" else "DESC"}" }
+internal fun List<OrderTerm>.toOrderBy(): String = joinToString(", ") { "${it.expr} ${if (it.ascending) "ASC" else "DESC"}" }
 
 /**
  * Appends a condition that is true for the articles placed before ([before] = true) or after

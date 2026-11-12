@@ -495,24 +495,23 @@ data class ListOrder(
 private fun PreviewItem.toFeedListItem(
     context: Context,
     groupKey: String = "",
-) =
-    FeedListItem(
-        id = id,
-        title = plainTitle,
-        snippet = plainSnippet,
-        feedTitle = feedDisplayTitle,
-        feedId = feedId ?: ID_UNSET,
-        groupKey = groupKey,
-        unread = readTime == null,
-        pubDate = pubDate.formatForFeed(context),
-        image = image,
-        link = link,
-        bookmarked = bookmarked,
-        feedImageUrl = feedImageUrl,
-        rawPubDate = pubDate,
-        primarySortTime = primarySortTime,
-        wordCount = bestWordCount,
-    )
+) = FeedListItem(
+    id = id,
+    title = plainTitle,
+    snippet = plainSnippet,
+    feedTitle = feedDisplayTitle,
+    feedId = feedId ?: ID_UNSET,
+    groupKey = groupKey,
+    unread = readTime == null,
+    pubDate = pubDate.formatForFeed(context),
+    image = image,
+    link = link,
+    bookmarked = bookmarked,
+    feedImageUrl = feedImageUrl,
+    rawPubDate = pubDate,
+    primarySortTime = primarySortTime,
+    wordCount = bestWordCount,
+)
 
 internal fun ZonedDateTime?.formatForFeed(
     context: Context,
