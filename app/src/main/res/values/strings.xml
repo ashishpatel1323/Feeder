@@ -51,6 +51,11 @@
   <string name="seek_back_10_seconds">Seek back 10 seconds</string>
   <string name="seek_forward_10_seconds">Seek forward 10 seconds</string>
   <string name="read_article">Read aloud</string>
+  <string name="action_unread">Unread</string>
+  <string name="action_save">Save</string>
+  <string name="action_saved">Saved</string>
+  <string name="action_translate">Translate</string>
+  <string name="action_original">Original</string>
   <string name="text_to_speech">Text to speech</string>
   <string name="pause_reading">Pause reading</string>
   <string name="resume_reading">Resume reading</string>

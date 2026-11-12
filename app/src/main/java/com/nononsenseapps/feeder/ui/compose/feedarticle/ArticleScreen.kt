@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -28,24 +29,25 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Article
-import androidx.compose.material.icons.filled.AutoFixHigh
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.OpenInBrowser
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Translate
-import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
@@ -55,17 +57,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nononsenseapps.feeder.R
@@ -77,7 +79,6 @@ import com.nononsenseapps.feeder.model.ReadAloudProgress
 import com.nononsenseapps.feeder.ui.MainActivityViewModel
 import com.nononsenseapps.feeder.ui.ScrollDirection
 import com.nononsenseapps.feeder.ui.compose.components.TranslationProgressContent
-import com.nononsenseapps.feeder.ui.compose.components.safeSemantics
 import com.nononsenseapps.feeder.ui.compose.feed.PlainTooltipBox
 import com.nononsenseapps.feeder.ui.compose.html.ColumnArticleContent
 import com.nononsenseapps.feeder.ui.compose.icons.CustomFilled
@@ -90,7 +91,6 @@ import com.nononsenseapps.feeder.ui.compose.readaloud.stopSpeechFollowingOnUserS
 import com.nononsenseapps.feeder.ui.compose.theme.SensibleTopAppBar
 import com.nononsenseapps.feeder.ui.compose.utils.ImmutableHolder
 import com.nononsenseapps.feeder.ui.compose.utils.ScreenType
-import com.nononsenseapps.feeder.ui.compose.utils.onKeyEventLikeEscape
 import com.nononsenseapps.feeder.util.ActivityLauncher
 import com.nononsenseapps.feeder.util.stripTrackingParameters
 import com.nononsenseapps.feeder.util.unicodeWrap
@@ -198,7 +198,6 @@ fun ArticleScreen(
             onNavigateToFeed(viewState.articleFeedId)
         },
         onOpenAudioPlayer = viewModel::openPodcastPlayer,
-        onShowToolbarMenu = viewModel::setToolbarMenuVisible,
         ttsOnPlay = viewModel::ttsPlay,
         ttsOnPause = viewModel::ttsPause,
         ttsOnStop = viewModel::ttsStop,
@@ -259,7 +258,6 @@ fun ArticleScreen(
     onOpenInCustomTab: () -> Unit,
     onFeedTitleClick: () -> Unit,
     onOpenAudioPlayer: (url: String) -> Unit,
-    onShowToolbarMenu: (Boolean) -> Unit,
     ttsOnPlay: () -> Unit,
     ttsOnPause: () -> Unit,
     ttsOnStop: () -> Unit,
@@ -300,8 +298,6 @@ fun ArticleScreen(
     val focusArticle = remember { FocusRequester() }
     val focusTopBar = remember { FocusRequester() }
 
-    val closeMenuText = stringResource(id = R.string.close_menu)
-
     Scaffold(
         modifier =
             modifier
@@ -339,6 +335,23 @@ fun ArticleScreen(
                         }
                     }
 
+                    val readAloudLabel =
+                        stringResource(
+                            if (viewState.isTTSPlaying) R.string.pause_reading else R.string.read_article,
+                        )
+                    PlainTooltipBox(tooltip = { Text(readAloudLabel) }) {
+                        IconButton(
+                            onClick = {
+                                if (viewState.isTTSPlaying) ttsOnPause() else ttsOnPlay()
+                            },
+                        ) {
+                            Icon(
+                                if (viewState.isTTSPlaying) Icons.Default.Pause else Icons.CustomFilled.TextToSpeech,
+                                contentDescription = readAloudLabel,
+                            )
+                        }
+                    }
+
                     PlainTooltipBox(tooltip = { Text(stringResource(id = R.string.open_in_web_view)) }) {
                         IconButton(
                             onClick = onOpenInCustomTab,
@@ -349,189 +362,52 @@ fun ArticleScreen(
                             )
                         }
                     }
-
-                    PlainTooltipBox(tooltip = { Text(stringResource(id = R.string.open_menu)) }) {
-                        Box {
-                            IconButton(
-                                onClick = { onShowToolbarMenu(true) },
-                            ) {
-                                Icon(
-                                    Icons.Default.MoreVert,
-                                    contentDescription = stringResource(id = R.string.open_menu),
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = viewState.showToolbarMenu,
-                                onDismissRequest = { onShowToolbarMenu(false) },
-                                modifier =
-                                    Modifier
-                                        .onKeyEventLikeEscape {
-                                            onShowToolbarMenu(false)
-                                        },
-                            ) {
-                                DropdownMenuItem(
-                                    onClick = {
-                                        onShowToolbarMenu(false)
-                                        onShare()
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Default.Share,
-                                            contentDescription = null,
-                                        )
-                                    },
-                                    text = {
-                                        Text(stringResource(id = R.string.share))
-                                    },
-                                )
-
-                                if (viewState.showSummarize) {
-                                    DropdownMenuItem(
-                                        onClick = {
-                                            onShowToolbarMenu(false)
-                                            onSummarize()
-                                        },
-                                        leadingIcon = {
-                                            Icon(
-                                                Icons.Default.AutoFixHigh,
-                                                contentDescription = null,
-                                            )
-                                        },
-                                        text = {
-                                            Text(stringResource(id = R.string.summarize))
-                                        },
-                                    )
-                                }
-
-                                if (viewState.showTranslate) {
-                                    DropdownMenuItem(
-                                        onClick = {
-                                            onShowToolbarMenu(false)
-                                            onTranslate()
-                                        },
-                                        leadingIcon = {
-                                            Icon(
-                                                Icons.Default.Translate,
-                                                contentDescription = null,
-                                            )
-                                        },
-                                        text = {
-                                            Text(
-                                                stringResource(
-                                                    if (viewState.isShowingTranslated) {
-                                                        R.string.show_original_language
-                                                    } else {
-                                                        R.string.translate_article
-                                                    },
-                                                    viewState.translationSourceLanguage.ifBlank {
-                                                        stringResource(R.string.original_article)
-                                                    },
-                                                ),
-                                            )
-                                        },
-                                    )
-                                }
-
-                                DropdownMenuItem(
-                                    onClick = {
-                                        onShowToolbarMenu(false)
-                                        onMarkAsUnread()
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Default.VisibilityOff,
-                                            contentDescription = null,
-                                        )
-                                    },
-                                    text = {
-                                        Text(stringResource(id = R.string.mark_as_unread))
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    onClick = {
-                                        onShowToolbarMenu(false)
-                                        onToggleBookmark()
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Default.Star,
-                                            contentDescription = null,
-                                        )
-                                    },
-                                    text = {
-                                        Text(
-                                            stringResource(
-                                                if (viewState.isBookmarked) {
-                                                    R.string.unsave_article
-                                                } else {
-                                                    R.string.save_article
-                                                },
-                                            ),
-                                        )
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    onClick = {
-                                        onShowToolbarMenu(false)
-                                        ttsOnPlay()
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.CustomFilled.TextToSpeech,
-                                            contentDescription = null,
-                                        )
-                                    },
-                                    text = {
-                                        Text(stringResource(id = R.string.read_article))
-                                    },
-                                )
-                                // Hidden button for TalkBack
-                                DropdownMenuItem(
-                                    onClick = {
-                                        onShowToolbarMenu(false)
-                                    },
-                                    text = {},
-                                    modifier =
-                                        Modifier
-                                            .height(0.dp)
-                                            .safeSemantics {
-                                                contentDescription = closeMenuText
-                                                role = Role.Button
-                                            },
-                                )
-                            }
-                        }
-                    }
                 },
             )
         },
         bottomBar = {
-            if (viewState.podcastPlayerState.isVisible) {
-                HideablePodcastPlayer(
-                    visibleState = bottomBarVisibleState,
-                    viewState = viewState.podcastPlayerState,
-                    onPlay = podcastOnPlay,
-                    onPause = podcastOnPause,
-                    onStop = podcastOnStop,
-                    onSeekBack = podcastOnSeekBack,
-                    onSeekForward = podcastOnSeekForward,
-                    onSeekTo = podcastOnSeekTo,
-                )
-            } else {
-                HideableTTSPlayer(
-                    visibleState = bottomBarVisibleState,
-                    currentlyPlaying = viewState.isTTSPlaying,
-                    onPlay = ttsOnPlay,
-                    onPause = ttsOnPause,
-                    onStop = ttsOnStop,
-                    onSkipNext = ttsOnSkipNext,
-                    languages = ImmutableHolder(viewState.ttsLanguages),
-                    onSelectLanguage = ttsOnSelectLanguage,
-                    progress = readAloudProgress,
-                    onSeekTo = ttsOnSeekTo,
-                    onSelectSpeed = ttsOnSetSpeed,
-                    onGoToSpokenText = ttsOnGoToSpokenText,
-                    displayedArticleId = viewState.articleId,
+            Column {
+                // The action bar below takes the navigation bar inset, so the player must not add it again
+                Box(modifier = Modifier.consumeWindowInsets(WindowInsets.navigationBars)) {
+                    if (viewState.podcastPlayerState.isVisible) {
+                        HideablePodcastPlayer(
+                            visibleState = bottomBarVisibleState,
+                            viewState = viewState.podcastPlayerState,
+                            onPlay = podcastOnPlay,
+                            onPause = podcastOnPause,
+                            onStop = podcastOnStop,
+                            onSeekBack = podcastOnSeekBack,
+                            onSeekForward = podcastOnSeekForward,
+                            onSeekTo = podcastOnSeekTo,
+                        )
+                    } else {
+                        HideableTTSPlayer(
+                            visibleState = bottomBarVisibleState,
+                            currentlyPlaying = viewState.isTTSPlaying,
+                            onPlay = ttsOnPlay,
+                            onPause = ttsOnPause,
+                            onStop = ttsOnStop,
+                            onSkipNext = ttsOnSkipNext,
+                            languages = ImmutableHolder(viewState.ttsLanguages),
+                            onSelectLanguage = ttsOnSelectLanguage,
+                            progress = readAloudProgress,
+                            onSeekTo = ttsOnSeekTo,
+                            onSelectSpeed = ttsOnSetSpeed,
+                            onGoToSpokenText = ttsOnGoToSpokenText,
+                            displayedArticleId = viewState.articleId,
+                        )
+                    }
+                }
+                ArticleActionBar(
+                    isBookmarked = viewState.isBookmarked,
+                    showSummarize = viewState.showSummarize,
+                    showTranslate = viewState.showTranslate,
+                    isShowingTranslated = viewState.isShowingTranslated,
+                    onShare = onShare,
+                    onMarkAsUnread = onMarkAsUnread,
+                    onSummarize = onSummarize,
+                    onToggleBookmark = onToggleBookmark,
+                    onTranslate = onTranslate,
                 )
             }
         },
@@ -877,5 +753,98 @@ private fun SummarySection(summary: OpenAISummaryState) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ArticleActionBar(
+    isBookmarked: Boolean,
+    showSummarize: Boolean,
+    showTranslate: Boolean,
+    isShowingTranslated: Boolean,
+    onShare: () -> Unit,
+    onMarkAsUnread: () -> Unit,
+    onSummarize: () -> Unit,
+    onToggleBookmark: () -> Unit,
+    onTranslate: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+    ) {
+        Column(
+            modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)),
+        ) {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+            ) {
+                ArticleAction(
+                    icon = Icons.Default.Share,
+                    label = stringResource(R.string.share),
+                    onClick = onShare,
+                    modifier = Modifier.weight(1f),
+                )
+                ArticleAction(
+                    icon = Icons.Outlined.VisibilityOff,
+                    label = stringResource(R.string.action_unread),
+                    onClick = onMarkAsUnread,
+                    modifier = Modifier.weight(1f),
+                )
+                if (showSummarize) {
+                    ArticleAction(
+                        icon = Icons.Outlined.AutoAwesome,
+                        label = stringResource(R.string.summarize),
+                        onClick = onSummarize,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                ArticleAction(
+                    icon = if (isBookmarked) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+                    label = stringResource(if (isBookmarked) R.string.action_saved else R.string.action_save),
+                    onClick = onToggleBookmark,
+                    modifier = Modifier.weight(1f),
+                )
+                if (showTranslate) {
+                    ArticleAction(
+                        icon = Icons.Default.Translate,
+                        label =
+                            stringResource(
+                                if (isShowingTranslated) R.string.action_original else R.string.action_translate,
+                            ),
+                        onClick = onTranslate,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArticleAction(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier =
+            modifier
+                .clickable(role = Role.Button, onClick = onClick)
+                .padding(vertical = 8.dp),
+    ) {
+        Icon(icon, contentDescription = null)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+        )
     }
 }
