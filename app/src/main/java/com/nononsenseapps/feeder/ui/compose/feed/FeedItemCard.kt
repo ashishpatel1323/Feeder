@@ -38,9 +38,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.testTag
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
@@ -195,22 +193,15 @@ fun RowScope.FeedItemText(
     modifier: Modifier = Modifier,
 ) {
     val snippetStyle = FeedListItemSnippetTextStyle()
-    val joinedText =
-        remember(item, showOnlyTitle) {
-            buildAnnotatedString {
-                if (item.title.isNotBlank()) {
-                    append(item.title)
-                    if (!showOnlyTitle && item.snippet.isNotBlank()) {
-                        withStyle(snippetStyle.toSpanStyle()) {
-                            append('\n')
-                            append(item.snippet)
-                        }
-                    }
-                } else {
-                    // Heard of one feed which did not have titles. If so always include snippet
-                    append(item.snippet)
-                }
-            }
+    // The title is always shown in full, wrapping onto as many lines as it needs.
+    // The "max lines" setting only limits the snippet shown below it.
+    val titleText = item.title.ifBlank { null }
+    val snippetText =
+        when {
+            // Heard of one feed which did not have titles. If so always include snippet
+            titleText == null -> item.snippet
+            !showOnlyTitle -> item.snippet
+            else -> ""
         }
     val closeMenuText = stringResource(id = R.string.close_menu)
     Column(
@@ -219,17 +210,31 @@ fun RowScope.FeedItemText(
             modifier
                 .weight(1f),
     ) {
-        WithBidiDeterminedLayoutDirection(paragraph = joinedText.text) {
-            Text(
-                text = joinedText,
-                style = FeedListItemTitleTextStyle(),
-                fontWeight = titleFontWeight(item.unread),
-                overflow = TextOverflow.Ellipsis,
-                maxLines = maxLines,
-                modifier =
-                    Modifier
-                        .fillMaxWidth(),
-            )
+        if (titleText != null) {
+            WithBidiDeterminedLayoutDirection(paragraph = titleText) {
+                Text(
+                    text = titleText,
+                    style = FeedListItemTitleTextStyle(),
+                    fontWeight = titleFontWeight(item.unread),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth(),
+                )
+            }
+        }
+        if (snippetText.isNotBlank()) {
+            WithBidiDeterminedLayoutDirection(paragraph = snippetText) {
+                Text(
+                    text = snippetText,
+                    style = if (titleText == null) FeedListItemTitleTextStyle() else snippetStyle,
+                    fontWeight = if (titleText == null) titleFontWeight(item.unread) else null,
+                    overflow = TextOverflow.Ellipsis,
+                    maxLines = maxLines,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth(),
+                )
+            }
         }
         // Want the dropdown to center on the middle text row
         Box {
