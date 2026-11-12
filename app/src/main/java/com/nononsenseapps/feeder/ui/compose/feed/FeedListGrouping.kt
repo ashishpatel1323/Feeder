@@ -24,7 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -143,9 +143,7 @@ fun rememberGroupHeaderText(
 ): String {
     val today = stringResource(R.string.today)
     val yesterday = stringResource(R.string.yesterday)
-    val locale =
-        LocalContext.current.resources.configuration.locales
-            .get(0)
+    val locale = LocalConfiguration.current.locales.get(0)
     return when (grouping) {
         FeedListGrouping.NONE -> ""
         FeedListGrouping.FEED -> item.feedTitle
