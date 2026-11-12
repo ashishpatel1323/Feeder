@@ -41,6 +41,16 @@ class ReadAloudTimelineTest {
         assertNull(parts.segmentAt(-1))
     }
 
+    @Test fun startingAtKeptTheSentenceContainingTheOffset() {
+        val text = "First sentence. Second sentence. Third sentence."
+        val segments = speechSegments(text, Locale.ENGLISH, 100)
+        assertEquals(segments, segments.startingAt(0))
+        val fromSecond = segments.startingAt(text.indexOf("cond"))
+        assertEquals("Second sentence. ", text.substring(fromSecond.first().start, fromSecond.first().end))
+        assertEquals(2, fromSecond.size)
+        assertTrue(segments.startingAt(text.length).isEmpty())
+    }
+
     @Test fun wrotePlayablePcmWaveHeaderAndExactDuration() {
         val file = folder.newFile()
         SpeechWaveFile(file).use {

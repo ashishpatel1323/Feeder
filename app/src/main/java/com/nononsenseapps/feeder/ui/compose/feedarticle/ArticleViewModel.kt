@@ -92,6 +92,11 @@ class ArticleViewModel(
                     ?.let { SpeechHighlight(progress.text, it, progress.focusRequestId, progress.followSpokenText) }
             }.distinctUntilChanged()
 
+    val isReadingAloudHere =
+        readAloudProgress
+            .map { it.articleId == itemId && it.error == null }
+            .distinctUntilChanged()
+
     fun ttsSeekTo(positionMillis: Long) = ttsStateHolder.seekTo(positionMillis)
 
     fun ttsSetSpeed(speed: Float) = ttsStateHolder.setSpeed(speed)
@@ -490,33 +495,53 @@ class ArticleViewModel(
     // Which version of the article (full text, translated) read aloud was last started with from here
     private var spokenVersion: Pair<Boolean, Boolean>? = null
 
+    // Read exactly what is on screen (feed text, full text or translation) so highlights match it
+    private fun displayedSpeechText(): String? =
+        viewState.value
+            .takeIf { it.textToDisplay == TextToDisplay.CONTENT }
+            ?.articleContent
+            ?.speechText()
+            ?.takeIf { it.isNotBlank() }
+
+    private fun readAloud(
+        text: String,
+        startOffset: Int = 0,
+    ) {
+        spokenVersion = isFullText to viewState.value.isShowingTranslated
+        ttsStateHolder.tts(
+            textArray = listOf(AnnotatedString(text)),
+            useDetectLanguage = repository.useDetectLanguage.value,
+            articleId = itemId,
+            title = viewState.value.articleTitle,
+            author = viewState.value.author.orEmpty(),
+            feedTitle = viewState.value.feedDisplayTitle,
+            startOffset = startOffset,
+        )
+    }
+
+    /** Starts or moves read aloud to [speechOffset] in the text shown on screen. */
+    fun ttsReadFrom(speechOffset: Int) {
+        val text = displayedSpeechText() ?: return
+        stopPodcastPlayback()
+        if (!ttsStateHolder.playFromPreparedText(itemId, text, speechOffset)) {
+            readAloud(text, speechOffset)
+        }
+    }
+
     fun ttsPlay() {
         stopPodcastPlayback()
-        // Read exactly what is on screen (feed text, full text or translation) so highlights match it
-        val displayedText =
-            viewState.value
-                .takeIf { it.textToDisplay == TextToDisplay.CONTENT }
-                ?.articleContent
-                ?.speechText()
-                ?.takeIf { it.isNotBlank() }
+        val displayedText = displayedSpeechText()
         val displayedVersion = isFullText to viewState.value.isShowingTranslated
         // A session started from another screen is resumed; one started here only if the same version is shown
         val sameVersion = spokenVersion == null || spokenVersion == displayedVersion
         if (sameVersion && ttsStateHolder.resumeIfPausedOn(itemId)) {
             return
         }
-        spokenVersion = displayedVersion
         if (displayedText != null) {
-            ttsStateHolder.tts(
-                textArray = listOf(AnnotatedString(displayedText)),
-                useDetectLanguage = repository.useDetectLanguage.value,
-                articleId = itemId,
-                title = viewState.value.articleTitle,
-                author = viewState.value.author.orEmpty(),
-                feedTitle = viewState.value.feedDisplayTitle,
-            )
+            readAloud(displayedText)
             return
         }
+        spokenVersion = displayedVersion
         viewModelScope.launch(Dispatchers.IO) {
             val feedItem = repository.getCurrentArticle() ?: return@launch
             val article = Article(feedItem)

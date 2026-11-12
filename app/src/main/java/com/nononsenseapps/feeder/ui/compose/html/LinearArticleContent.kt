@@ -4,6 +4,9 @@ import androidx.collection.ArrayMap
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -21,9 +24,13 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.DisableSelection
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.PlayCircleOutline
 import androidx.compose.material.icons.outlined.Terrain
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProvideTextStyle
@@ -35,6 +42,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,6 +51,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
@@ -51,6 +60,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -62,6 +72,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewLightDark
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
@@ -107,10 +118,13 @@ import com.nononsenseapps.feeder.ui.compose.coil.rememberTintedVectorPainter
 import com.nononsenseapps.feeder.ui.compose.layouts.Table
 import com.nononsenseapps.feeder.ui.compose.layouts.TableCell
 import com.nononsenseapps.feeder.ui.compose.layouts.TableData
+import com.nononsenseapps.feeder.ui.compose.readaloud.LocalReadAloudTapHandler
 import com.nononsenseapps.feeder.ui.compose.readaloud.LocalSpeechFocusTarget
 import com.nononsenseapps.feeder.ui.compose.readaloud.LocalSpeechHighlights
+import com.nononsenseapps.feeder.ui.compose.readaloud.ReadAloudTapHandler
 import com.nononsenseapps.feeder.ui.compose.readaloud.SpeechHighlight
 import com.nononsenseapps.feeder.ui.compose.readaloud.SpeechHighlightIndex
+import com.nononsenseapps.feeder.ui.compose.readaloud.speechOffsetOf
 import com.nononsenseapps.feeder.ui.compose.text.WithBidiDeterminedLayoutDirection
 import com.nononsenseapps.feeder.ui.compose.text.WithTooltipIfNotBlank
 import com.nononsenseapps.feeder.ui.compose.text.asFontFamily
@@ -169,6 +183,8 @@ fun ColumnArticleContent(
     modifier: Modifier = Modifier,
     onElementPosition: (index: Int, yPosition: Float) -> Unit = { _, _ -> },
     speechHighlight: SpeechHighlight? = null,
+    isReadingAloud: Boolean = false,
+    onReadAloudFrom: ((speechOffset: Int) -> Unit)? = null,
 ) {
     val speechIndex =
         remember(articleContent, speechHighlight?.text) {
@@ -182,7 +198,22 @@ fun ColumnArticleContent(
         remember(speechIndex, speechHighlight) {
             speechHighlight?.takeIf { it.followSpokenText }?.let { speechIndex?.focusTarget(it.segment, it.focusRequestId) }
         }
-    CompositionLocalProvider(LocalSpeechHighlights provides highlights, LocalSpeechFocusTarget provides focusTarget) {
+    val currentOnReadAloudFrom by rememberUpdatedState(onReadAloudFrom)
+    val tapHandler =
+        remember(articleContent, isReadingAloud, onReadAloudFrom != null) {
+            if (onReadAloudFrom == null) {
+                null
+            } else {
+                ReadAloudTapHandler(isReadingAloud) { text, index ->
+                    articleContent.speechOffsetOf(text, index)?.let { currentOnReadAloudFrom?.invoke(it) }
+                }
+            }
+        }
+    CompositionLocalProvider(
+        LocalSpeechHighlights provides highlights,
+        LocalSpeechFocusTarget provides focusTarget,
+        LocalReadAloudTapHandler provides tapHandler,
+    ) {
         articleContent.elements.forEachIndexed { index, element ->
             ProvideTextStyle(
                 MaterialTheme.typography.bodyLarge.merge(
@@ -685,33 +716,99 @@ fun LinearTextContent(
                     }
                 }
             val typographySettings = LocalTypographySettings.current
-
-            Text(
-                text = annotatedString,
-                onTextLayout = { layout ->
-                    // Link listeners are recreated during composition. Retain geometry only,
-                    // so changing listener identities cannot trigger a layout feedback loop.
-                    speechLines =
-                        List(layout.lineCount) { line ->
-                            layout.getLineEnd(line) to Rect(0f, layout.getLineTop(line), layout.size.width.toFloat(), layout.getLineBottom(line))
-                        }
-                },
-                softWrap = softWrap,
-                textAlign =
-                    if (typographySettings.justifyText) {
-                        TextAlign.Justify
+            val tapHandler = LocalReadAloudTapHandler.current
+            // Not state: reading the layout on tap must not cause recomposition
+            val layoutHolder = remember { arrayOfNulls<TextLayoutResult>(1) }
+            var readFromHereMenu by remember { mutableStateOf<Pair<Int, Offset>?>(null) }
+            val density = LocalDensity.current
+            val onTextTap by rememberUpdatedState { position: Offset ->
+                val layout = layoutHolder[0]
+                val handler = tapHandler
+                if (layout != null && handler != null) {
+                    val offset = layout.getOffsetForPosition(position)
+                    if (handler.isReading) {
+                        handler.onReadFrom(linearText, offset)
                     } else {
-                        null
+                        readFromHereMenu = offset to position
+                    }
+                }
+            }
+
+            Box(
+                modifier = modifier,
+                propagateMinConstraints = true,
+            ) {
+                Text(
+                    text = annotatedString,
+                    onTextLayout = { layout ->
+                        layoutHolder[0] = layout
+                        // Link listeners are recreated during composition. Retain geometry only,
+                        // so changing listener identities cannot trigger a layout feedback loop.
+                        speechLines =
+                            List(layout.lineCount) { line ->
+                                layout.getLineEnd(line) to Rect(0f, layout.getLineTop(line), layout.size.width.toFloat(), layout.getLineBottom(line))
+                            }
                     },
-                modifier =
-                    modifier
-                        .bringIntoViewRequester(bringIntoView)
-                        .indication(interactionSource, LocalIndication.current)
-                        .focusableInNonTouchMode(interactionSource = interactionSource),
-            )
+                    softWrap = softWrap,
+                    textAlign =
+                        if (typographySettings.justifyText) {
+                            TextAlign.Justify
+                        } else {
+                            null
+                        },
+                    modifier =
+                        Modifier
+                            .bringIntoViewRequester(bringIntoView)
+                            .indication(interactionSource, LocalIndication.current)
+                            .focusableInNonTouchMode(interactionSource = interactionSource)
+                            .then(
+                                if (tapHandler == null) {
+                                    Modifier
+                                } else {
+                                    Modifier.readAloudTap { onTextTap(it) }
+                                },
+                            ),
+                )
+                readFromHereMenu?.let { (offset, position) ->
+                    val height = layoutHolder[0]?.size?.height ?: 0
+                    DropdownMenu(
+                        expanded = true,
+                        onDismissRequest = { readFromHereMenu = null },
+                        offset =
+                            with(density) {
+                                DpOffset(position.x.toDp(), (position.y - height).toDp())
+                            },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.read_aloud_from_here)) },
+                            leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null) },
+                            onClick = {
+                                readFromHereMenu = null
+                                tapHandler?.onReadFrom(linearText, offset)
+                            },
+                        )
+                    }
+                }
+            }
         }
     }
 }
+
+/**
+ * Reports a plain tap without consuming the press, so text selection, scrolling and
+ * links (which consume their own taps first) keep working.
+ */
+private fun Modifier.readAloudTap(onTap: (Offset) -> Unit): Modifier =
+    pointerInput(Unit) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            val up = waitForUpOrCancellation() ?: return@awaitEachGesture
+            if (up.uptimeMillis - down.uptimeMillis < viewConfiguration.longPressTimeoutMillis) {
+                up.consume()
+                onTap(up.position)
+            }
+        }
+    }
 
 @Composable
 fun LinearBlockQuoteContent(
