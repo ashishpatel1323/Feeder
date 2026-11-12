@@ -50,6 +50,37 @@ class OpenAIApiTest {
         }
 
     @Test
+    fun testSummaryResponseWithoutLangLineKeepsWholeSummary() =
+        runTest {
+            val chatCompletion = createResponse("First line of summary\nSecond line")
+            val api = createApi(response = chatCompletion)
+            val actual = api.summarize("My content", OpenAISettings(key = "test", modelId = "test-model-id"))
+            val expected = createResult("First line of summary\nSecond line", "")
+            assertEquals(expected, actual)
+        }
+
+    @Test
+    fun compatibleBaseUrlIsUsedAsTyped() {
+        val host =
+            OpenAISettings(key = "ollama", modelId = "llama3.2", baseUrl = "http://192.168.1.10:11434/v1")
+                .toOpenAIHost(withAzureDeploymentId = false)
+        assertEquals("http://192.168.1.10:11434/v1/", host.baseUrl)
+    }
+
+    @Test
+    fun azureBaseUrlStillGetsOpenAIPath() {
+        val host =
+            OpenAISettings(
+                key = "k",
+                modelId = "m",
+                baseUrl = "https://example.openai.azure.com",
+                azureApiVersion = "2024-02-01",
+                azureDeploymentId = "dep",
+            ).toOpenAIHost(withAzureDeploymentId = true)
+        assertTrue(host.baseUrl.endsWith("/openai/deployments/dep"), host.baseUrl)
+    }
+
+    @Test
     fun deepLVerificationUsesAuthorizationHeader() =
         runTest {
             MockWebServer().use { server ->

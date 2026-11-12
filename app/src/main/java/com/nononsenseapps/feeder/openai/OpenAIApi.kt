@@ -269,11 +269,18 @@ class OpenAIApi(
     }
 
     private fun parseSummaryResponse(content: String): SummaryResponse {
-        val firstLine = content.lineSequence().firstOrNull() ?: ""
-        val result = LANG_REGEX.find(firstLine)
+        val trimmed = content.trim()
+        val firstLine = trimmed.lineSequence().firstOrNull() ?: ""
+        val result =
+            LANG_REGEX.find(firstLine.trim())
+                ?: return SummaryResponse(
+                    // Smaller (local) models often skip the "Lang:" line, so keep the whole text
+                    lang = "",
+                    content = trimmed,
+                )
         return SummaryResponse(
-            lang = result?.groupValues?.getOrNull(1) ?: "",
-            content = content.replaceFirst(firstLine, "").trim(),
+            lang = result.groupValues.getOrNull(1) ?: "",
+            content = trimmed.removePrefix(firstLine).trim(),
         )
     }
 
@@ -409,6 +416,11 @@ fun OpenAISettings.toOpenAIHost(withAzureDeploymentId: Boolean): OpenAIHost =
     baseUrl.let { baseUrl ->
         if (baseUrl.isEmpty()) {
             OpenAIHost.OpenAI
+        } else if (!isAzure) {
+            // OpenAI-compatible servers (Ollama, LM Studio, llama.cpp, OpenRouter...) expect
+            // requests relative to the base URL as typed, e.g. http://192.168.1.10:11434/v1/.
+            // Only Azure needs the extra "openai/deployments/..." path segments.
+            OpenAIHost(baseUrl = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/")
         } else {
             OpenAIHost(
                 baseUrl =
