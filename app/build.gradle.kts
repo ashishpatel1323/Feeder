@@ -244,6 +244,8 @@ ktlint {
 
 dependencies {
     implementation(libs.media3.exoplayer)
+    // On-device summaries with Gemini Nano (fork only: proprietary Google library)
+    implementation(libs.mlkit.genai.prompt)
     implementation(libs.media3.session)
     ktlintRuleset(libs.ktlint.compose)
     ksp(libs.room)

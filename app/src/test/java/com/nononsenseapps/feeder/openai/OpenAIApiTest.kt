@@ -60,6 +60,34 @@ class OpenAIApiTest {
         }
 
     @Test
+    fun onDeviceSummaryUsesOnDeviceModel() =
+        runTest {
+            val fake = FakeOnDeviceSummarizer(answer = "Lang: en\nShort summary")
+            val api = OpenAIApi("lang", { error("No network client for on-device summaries") }, fake)
+            val actual = api.summarize("Article text", OpenAISettings(baseUrl = ON_DEVICE_SUMMARY_PROVIDER_URL))
+            assertIs<OpenAIApi.SummaryResult.Success>(actual)
+            assertEquals("Short summary", actual.content)
+            assertEquals("en", actual.detectedLanguage)
+            assertEquals("Article text", fake.lastContent)
+        }
+
+    @Test
+    fun onDeviceUnavailableFailsVerification() =
+        runTest {
+            val fake = FakeOnDeviceSummarizer(status = OnDeviceStatus.Unavailable("Not on this phone"))
+            val api = OpenAIApi("lang", { error("No network client for on-device summaries") }, fake)
+            val actual = api.listModelIds(OpenAISettings(baseUrl = ON_DEVICE_SUMMARY_PROVIDER_URL))
+            assertEquals(OpenAIApi.ModelsResult.Error("Not on this phone"), actual)
+        }
+
+    @Test
+    fun onDeviceSettingsAreValidWithoutKey() {
+        val settings = OpenAISettings(baseUrl = ON_DEVICE_SUMMARY_PROVIDER_URL)
+        assertTrue(settings.canSummarize)
+        assertTrue(!settings.canTranslate)
+    }
+
+    @Test
     fun compatibleBaseUrlIsUsedAsTyped() {
         val host =
             OpenAISettings(key = "ollama", modelId = "llama3.2", baseUrl = "http://192.168.1.10:11434/v1")
@@ -219,4 +247,22 @@ class OpenAIApiTest {
         totalTokens = 0,
         detectedLanguage = lang,
     )
+}
+
+private class FakeOnDeviceSummarizer(
+    private val status: OnDeviceStatus = OnDeviceStatus.Ready("Gemini Nano"),
+    private val answer: String = "",
+) : OnDeviceSummarizer {
+    var lastContent: String? = null
+
+    override suspend fun checkStatus(): OnDeviceStatus = status
+
+    override suspend fun generate(
+        systemPrompt: String,
+        userPrompt: String,
+        content: String,
+    ): String {
+        lastContent = content
+        return answer
+    }
 }

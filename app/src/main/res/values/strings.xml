@@ -339,6 +339,11 @@
   <string name="provider_azure_openai">Azure OpenAI</string>
   <string name="provider_deepl">DeepL</string>
   <string name="provider_local_translation">Local offline</string>
+  <string name="provider_on_device_gemini_nano">On-device (Gemini Nano)</string>
+  <string name="checking_on_device_model">Checking if this phone supports Gemini Nano…</string>
+  <string name="on_device_model_unavailable">Gemini Nano isn\'t available on this phone.</string>
+  <string name="on_device_model_info">Summaries run on this phone with Gemini Nano. Articles never leave the device. Works only while Feeder is open.</string>
+  <string name="on_device_model_ready">Ready: %1$s runs on this phone. Articles never leave the device. If Android still has to download the model, the first summary takes longer.</string>
   <string name="base_url_optional">Base URL (optional)</string>
   <string name="translation_endpoint">Translation endpoint</string>
   <string name="azure_api_version">Azure API version</string>
