@@ -135,11 +135,11 @@ class GeminiNanoSummarizer(
 
     override suspend fun checkStatus(): OnDeviceStatus =
         try {
-            val backend = lock.withLock { findBackend(refresh = true) }
+            val (backend, diagnostic) = lock.withLock { findBackend(refresh = true) to diagnostics() }
             when (backend?.status) {
                 FeatureStatus.AVAILABLE -> OnDeviceStatus.Ready(modelName = backend.displayName())
                 FeatureStatus.DOWNLOADABLE, FeatureStatus.DOWNLOADING -> OnDeviceStatus.NeedsDownload
-                else -> OnDeviceStatus.Unavailable(UNSUPPORTED_MESSAGE + "\n\n" + diagnostics())
+                else -> OnDeviceStatus.Unavailable(UNSUPPORTED_MESSAGE + "\n\n" + diagnostic)
             }
         } catch (e: CancellationException) {
             throw e
