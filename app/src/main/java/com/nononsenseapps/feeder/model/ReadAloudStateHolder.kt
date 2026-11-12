@@ -548,7 +548,7 @@ class TTSStateHolder(
     fun setLanguage(lang: LocaleOverride) {
         coroutineScope.launch(Dispatchers.Main.immediate) {
             _language.value = lang
-            request?.let { tts(listOf(AnnotatedString(it.text)), it.detectLanguage, it.articleId, it.title, it.author, it.feedTitle) }
+            request?.let { tts(listOf(AnnotatedString(it.text)), it.detectLanguage, it.articleId, it.title, it.author, it.feedTitle, it.startOffset) }
         }
     }
 
