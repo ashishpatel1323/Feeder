@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.update
@@ -196,6 +197,14 @@ class Repository(
         if (value) {
             settingsStore.setFeedListFilterRecentlyRead(true)
         }
+    }
+
+    fun setFeedListFilterToday(value: Boolean) {
+        settingsStore.setFeedListFilterToday(value)
+    }
+
+    fun setFeedListFilterShortReads(value: Boolean) {
+        settingsStore.setFeedListFilterShortReads(value)
     }
 
     val search: MutableStateFlow<String> = MutableStateFlow("")
@@ -416,8 +425,7 @@ class Repository(
                     (value ?: Instant.EPOCH).isAfter(Instant.now().minusSeconds(10))
                 }.distinctUntilChanged()
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    fun getCurrentFeedListItems(): Flow<PagingData<FeedListItem>> =
+    private val currentFeedListArgs: Flow<FeedListArgs> =
         combine(
             currentFeedAndTag,
             minReadTime,
@@ -437,19 +445,76 @@ class Repository(
                 newestFirst = currentSorting == SortingOptions.NEWEST_FIRST,
                 filter = feedListFilter,
                 search = search,
-                groupByFeed = grouping == FeedListGrouping.FEED,
+                sorting = currentSorting,
+                grouping = grouping,
             )
-        }.flatMapLatest {
+        }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun getCurrentFeedListItems(): Flow<PagingData<FeedListItem>> =
+        currentFeedListArgs.flatMapLatest {
             feedItemStore.getPagedFeedItemsRaw(
                 feedId = it.feedId,
                 tag = it.tag,
                 minReadTime = it.minReadTime,
-                newestFirst = it.newestFirst,
-                groupByFeed = it.groupByFeed,
+                sorting = it.sorting,
+                grouping = it.grouping,
                 filter = it.filter,
                 search = it.search,
             )
         }
+
+    /**
+     * Groups of the current article list in list order, with their counts. Empty when the list
+     * isn't grouped.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val feedListGroups: Flow<List<FeedListGroup>> =
+        currentFeedListArgs.flatMapLatest {
+            when (it.grouping) {
+                FeedListGrouping.NONE -> flowOf(emptyList())
+                else ->
+                    feedItemStore.getFeedListGroups(
+                        feedId = it.feedId,
+                        tag = it.tag,
+                        minReadTime = it.minReadTime,
+                        sorting = it.sorting,
+                        filter = it.filter,
+                        search = it.search,
+                        grouping = it.grouping,
+                    )
+            }
+        }
+
+    suspend fun markGroupAsRead(groupKey: String) {
+        val (feedId, tag) = currentFeedAndTag.value
+        feedItemStore.markGroupAsRead(
+            feedId = feedId,
+            tag = tag,
+            filter = feedListFilter.value,
+            search = search.value,
+            minReadTime =
+                when (feedId) {
+                    ID_SAVED_ARTICLES -> Instant.EPOCH
+                    else -> minReadTime.value
+                },
+            grouping = feedListGrouping.value,
+            groupKey = groupKey,
+        )
+        runOnceSyncChainSendRead(di)
+    }
+
+    /**
+     * The order a mark-above/below follows, or null for the plain date orders.
+     */
+    private fun currentListOrder(before: Boolean): ListOrder? {
+        val sorting = currentSorting.value
+        val grouping = feedListGrouping.value
+        val plainDateOrder =
+            grouping == FeedListGrouping.NONE &&
+                (sorting == SortingOptions.NEWEST_FIRST || sorting == SortingOptions.OLDEST_FIRST)
+        return if (plainDateOrder) null else ListOrder(grouping, sorting, before)
+    }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     fun getCurrentWidgetFeedListItems(): Flow<List<FeedListItem>> =
@@ -630,7 +695,7 @@ class Repository(
             minReadTime = minReadTime.value,
             descending = SortingOptions.NEWEST_FIRST != currentSorting.value,
             cursor = cursor,
-            feedsBefore = true.takeIf { feedListGrouping.value == FeedListGrouping.FEED },
+            listOrder = currentListOrder(before = true),
         )
         runOnceSyncChainSendRead(di)
     }
@@ -648,7 +713,7 @@ class Repository(
             minReadTime = minReadTime.value,
             descending = SortingOptions.NEWEST_FIRST == currentSorting.value,
             cursor = cursor,
-            feedsBefore = false.takeIf { feedListGrouping.value == FeedListGrouping.FEED },
+            listOrder = currentListOrder(before = false),
         )
         runOnceSyncChainSendRead(di)
     }
@@ -928,7 +993,8 @@ private data class FeedListArgs(
     val minReadTime: Instant,
     val filter: FeedListFilter,
     val search: String,
-    val groupByFeed: Boolean = false,
+    val sorting: SortingOptions = SortingOptions.NEWEST_FIRST,
+    val grouping: FeedListGrouping = FeedListGrouping.NONE,
 )
 
 // Wrapper class because flow combine doesn't like nulls

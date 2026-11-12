@@ -175,6 +175,8 @@ data class FeedListItem(
     val rawPubDate: ZonedDateTime?,
     val wordCount: Int,
     val feedId: Long = ID_UNSET,
+    // Key of the group this item is in for the current grouping, empty when not grouped
+    val groupKey: String = "",
 ) {
     val cursor: FeedItemCursor
         get() =

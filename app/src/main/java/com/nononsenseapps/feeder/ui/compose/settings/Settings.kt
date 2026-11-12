@@ -681,6 +681,8 @@ fun SettingsList(
                     immutableListHolderOf(
                         SortingOptions.NEWEST_FIRST.asSortOption(),
                         SortingOptions.OLDEST_FIRST.asSortOption(),
+                        SortingOptions.SHORTEST_FIRST.asSortOption(),
+                        SortingOptions.LONGEST_FIRST.asSortOption(),
                     ),
                 onSelection = onSortingChange,
                 modifier =

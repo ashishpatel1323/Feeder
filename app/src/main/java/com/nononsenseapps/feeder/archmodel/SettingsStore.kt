@@ -166,6 +166,8 @@ class SettingsStore(
                 saved = sp.getBoolean(PREFS_FILTER_SAVED, false),
                 recentlyRead = sp.getBoolean(PREFS_FILTER_RECENTLY_READ, true),
                 read = sp.getBoolean(PREFS_FILTER_READ, true),
+                today = sp.getBoolean(PREFS_FILTER_TODAY, false),
+                shortReads = sp.getBoolean(PREFS_FILTER_SHORT_READS, false),
             ),
         )
     val feedListFilter: StateFlow<FeedListFilter> = _feedListFilter.asStateFlow()
@@ -183,6 +185,16 @@ class SettingsStore(
     fun setFeedListFilterRead(value: Boolean) {
         _feedListFilter.update { it.copy(read = value) }
         sp.edit().putBoolean(PREFS_FILTER_READ, value).apply()
+    }
+
+    fun setFeedListFilterToday(value: Boolean) {
+        _feedListFilter.update { it.copy(today = value) }
+        sp.edit().putBoolean(PREFS_FILTER_TODAY, value).apply()
+    }
+
+    fun setFeedListFilterShortReads(value: Boolean) {
+        _feedListFilter.update { it.copy(shortReads = value) }
+        sp.edit().putBoolean(PREFS_FILTER_SHORT_READS, value).apply()
     }
 
     private val _currentTheme =
@@ -757,6 +769,8 @@ const val PREF_MAX_LINES = "pref_max_lines"
 const val PREFS_FILTER_SAVED = "prefs_filter_saved"
 const val PREFS_FILTER_RECENTLY_READ = "prefs_filter_recently_read"
 const val PREFS_FILTER_READ = "prefs_filter_read"
+const val PREFS_FILTER_TODAY = "prefs_filter_today"
+const val PREFS_FILTER_SHORT_READS = "prefs_filter_short_reads"
 
 const val PREF_LIST_SHOW_ONLY_TITLES = "prefs_list_show_only_titles"
 
@@ -887,6 +901,8 @@ enum class SortingOptions(
 ) {
     NEWEST_FIRST(R.string.sort_newest_first),
     OLDEST_FIRST(R.string.sort_oldest_first),
+    SHORTEST_FIRST(R.string.sort_shortest_first),
+    LONGEST_FIRST(R.string.sort_longest_first),
 }
 
 /**
@@ -898,6 +914,10 @@ enum class FeedListGrouping(
     NONE(R.string.group_by_none),
     DATE(R.string.group_by_date),
     FEED(R.string.group_by_feed),
+    TAG(R.string.group_by_tag),
+    LENGTH(R.string.group_by_length),
+    STATUS(R.string.group_by_status),
+    SITE(R.string.group_by_site),
 }
 
 fun feedListGroupingFromString(value: String): FeedListGrouping =
@@ -1038,6 +1058,8 @@ data class PrefsFeedListFilter(
     override val saved: Boolean,
     override val recentlyRead: Boolean,
     override val read: Boolean,
+    override val today: Boolean = false,
+    override val shortReads: Boolean = false,
 ) : FeedListFilter {
     override val unread: Boolean = true
 }

@@ -91,10 +91,10 @@ class FeedItemStore(
         feedId: Long,
         tag: String,
         minReadTime: Instant,
-        newestFirst: Boolean,
+        sorting: SortingOptions,
         filter: FeedListFilter,
         search: String,
-        groupByFeed: Boolean = false,
+        grouping: FeedListGrouping = FeedListGrouping.NONE,
     ): Flow<PagingData<FeedListItem>> =
         Pager(
             config =
@@ -109,29 +109,105 @@ class FeedItemStore(
             val args = mutableListOf<Any?>()
 
             queryString.apply {
-                append("SELECT $PREVIEW_COLUMNS FROM feed_items\n")
+                append("SELECT $PREVIEW_COLUMNS, ${grouping.keyExpr()} AS group_key FROM feed_items\n")
                 append("LEFT JOIN feeds ON feed_items.feed_id = feeds.id\n")
                 append("WHERE\n")
 
                 rawQueryFilter(filter, search, args, minReadTime, feedId, tag)
 
                 append("ORDER BY ")
-                if (groupByFeed) {
-                    // Feeds alphabetically, then each feed's articles in the chosen date order
-                    append("$FEED_GROUP_SORT_KEY ASC, $FEED_GROUP_ID ASC, ")
-                }
-                when (newestFirst) {
-                    true -> append("$FEED_ITEM_LIST_SORT_ORDER_DESC\n")
-                    else -> append("$FEED_ITEM_LIST_SORT_ORDER_ASC\n")
+                when {
+                    // The plain date orders are backed by a database index
+                    grouping == FeedListGrouping.NONE && sorting == SortingOptions.NEWEST_FIRST ->
+                        append("$FEED_ITEM_LIST_SORT_ORDER_DESC\n")
+                    grouping == FeedListGrouping.NONE && sorting == SortingOptions.OLDEST_FIRST ->
+                        append("$FEED_ITEM_LIST_SORT_ORDER_ASC\n")
+                    else -> append("${listOrderTerms(grouping, sorting).toOrderBy()}\n")
                 }
             }
 
-            dao.pagingPreviews(SimpleSQLiteQuery(queryString.toString(), args.toTypedArray()))
+            dao.pagingGroupedPreviews(SimpleSQLiteQuery(queryString.toString(), args.toTypedArray()))
         }.flow
             .map { pagingData ->
                 pagingData
-                    .map { it.toFeedListItem(application) }
+                    .map { it.preview.toFeedListItem(application, groupKey = it.groupKey) }
             }
+
+    /**
+     * The groups of the current list, in list order, with their article and unread counts.
+     */
+    fun getFeedListGroups(
+        feedId: Long,
+        tag: String,
+        minReadTime: Instant,
+        sorting: SortingOptions,
+        filter: FeedListFilter,
+        search: String,
+        grouping: FeedListGrouping,
+    ): Flow<List<FeedListGroup>> {
+        val queryString = StringBuilder()
+        val args = mutableListOf<Any?>()
+
+        queryString.apply {
+            append("SELECT ${grouping.keyExpr()} AS group_key, COUNT(*) AS total,\n")
+            append("SUM(CASE WHEN feed_items.read_time IS NULL THEN 1 ELSE 0 END) AS unread\n")
+            append("FROM feed_items\n")
+            append("LEFT JOIN feeds ON feed_items.feed_id = feeds.id\n")
+            append("WHERE\n")
+            rawQueryFilter(filter, search, args, minReadTime, feedId, tag)
+            append("GROUP BY group_key\n")
+            // Every group term is constant within a group, MIN just makes that explicit
+            val order =
+                grouping
+                    .orderTerms(sorting)
+                    .map { it.copy(expr = "MIN(${it.expr})") }
+            if (order.isNotEmpty()) {
+                append("ORDER BY ${order.toOrderBy()}\n")
+            }
+        }
+
+        return dao.getFeedListGroups(SimpleSQLiteQuery(queryString.toString(), args.toTypedArray()))
+    }
+
+    suspend fun markGroupAsRead(
+        feedId: Long,
+        tag: String,
+        filter: FeedListFilter,
+        search: String,
+        minReadTime: Instant,
+        grouping: FeedListGrouping,
+        groupKey: String,
+    ) {
+        if (grouping == FeedListGrouping.NONE) return
+        val queryString = StringBuilder()
+        val args = mutableListOf<Any?>()
+
+        queryString.apply {
+            append("UPDATE feed_items SET read_time = coalesce(read_time, ?), notified = 1\n").also {
+                args.add(Instant.now().toEpochMilli())
+            }
+            append("WHERE id IN (\n")
+            append("SELECT feed_items.id FROM feed_items\n")
+            append("LEFT JOIN feeds ON feed_items.feed_id = feeds.id\n")
+            append("WHERE\n")
+            rawQueryFilter(filter, search, args, minReadTime, feedId, tag)
+            append("AND ${grouping.keyExpr()} = ?\n").also { args.add(groupKey) }
+            append(")\n")
+        }
+
+        executeWrite(queryString.toString(), args)
+    }
+
+    private suspend fun executeWrite(
+        sql: String,
+        args: List<Any?>,
+    ) {
+        // Room does not support writable raw queries
+        withContext(Dispatchers.IO) {
+            appDatabase.openHelper.writableDatabase.execSQL(sql, args.toTypedArray())
+            appDatabase.invalidationTracker.refreshVersionsAsync()
+        }
+    }
 
     private fun StringBuilder.rawQueryFilter(
         filter: FeedListFilter,
@@ -166,6 +242,21 @@ class FeedItemStore(
             append(")\n")
         }
 
+        if (filter.today) {
+            append("AND feed_items.primary_sort_time >= ?\n").also {
+                args.add(
+                    LocalDate
+                        .now()
+                        .atStartOfDay(ZoneId.systemDefault())
+                        .toInstant()
+                        .toEpochMilli(),
+                )
+            }
+        }
+        if (filter.shortReads) {
+            append("AND $WORD_COUNT_EXPR < $SHORT_READ_MAX_WORDS\n")
+        }
+
         when {
             search.isNotEmpty() -> {
                 // User probably means the literal characters
@@ -193,10 +284,10 @@ class FeedItemStore(
         minReadTime: Instant,
         descending: Boolean,
         cursor: FeedItemCursor,
-        // Non-null when the list is grouped by feed: true marks the feeds sorted before the
-        // cursor's feed, false the feeds after it. Within the cursor's own feed the date order
-        // still decides.
-        feedsBefore: Boolean? = null,
+        // Set when the list is grouped or sorted by something other than date alone: the range
+        // then follows that order, and [before] picks the articles above (true) or below the
+        // cursor. [descending] is only used for the plain date orders.
+        listOrder: ListOrder? = null,
     ) {
         val queryString = StringBuilder()
         val args = mutableListOf<Any?>()
@@ -214,19 +305,19 @@ class FeedItemStore(
             // this version of sqlite doesn't seem to support tuple comparisons
             append("and (\n")
 
-            if (feedsBefore != null) {
-                val cmp = if (feedsBefore) "<" else ">"
-                // Articles without a feed (imported saved articles) form one group keyed
-                // by an empty name and id 0, matching the list order.
-                val cursorFeedId = "(SELECT IFNULL(feed_id, 0) FROM feed_items WHERE id = ?)"
-                val cursorFeedKey =
-                    "IFNULL((SELECT $FEED_GROUP_SORT_KEY FROM feeds WHERE feeds.id = $cursorFeedId), '')"
-                append("$FEED_GROUP_SORT_KEY $cmp $cursorFeedKey\n").also { args.add(cursor.id) }
-                append("or $FEED_GROUP_SORT_KEY = $cursorFeedKey and $FEED_GROUP_ID $cmp $cursorFeedId\n").also {
-                    args.add(cursor.id)
-                    args.add(cursor.id)
-                }
-                append("or $FEED_GROUP_ID = $cursorFeedId and (\n").also { args.add(cursor.id) }
+            if (listOrder != null) {
+                appendRangeCondition(
+                    terms = listOrderTerms(listOrder.grouping, listOrder.sorting),
+                    before = listOrder.before,
+                    cursorId = cursor.id,
+                    args = args,
+                )
+                // and (
+                append(")\n")
+                // where id in (
+                append(")\n")
+                executeWrite(queryString.toString(), args)
+                return
             }
 
             append(
@@ -257,11 +348,6 @@ class FeedItemStore(
             }
 
             append(")\n")
-
-            if (feedsBefore != null) {
-                // feeds.id = cursor feed and (
-                append(")\n")
-            }
 
             // where id in (
             append(")\n")
@@ -390,23 +476,33 @@ class FeedItemStore(
 }
 
 /**
- * Sort key for grouping the list by feed: the name shown for the feed, ignoring case.
+ * Full list order: groups first, then the chosen sort within each group.
  */
-private const val FEED_GROUP_SORT_KEY =
-    "(COALESCE(NULLIF(TRIM(feeds.custom_title), ''), feeds.title, '') COLLATE NOCASE)"
+internal fun listOrderTerms(
+    grouping: FeedListGrouping,
+    sorting: SortingOptions,
+): List<OrderTerm> = grouping.orderTerms(sorting) + sorting.orderTerms()
 
 /**
- * Feed id for grouping, with articles that have no feed sharing id 0.
+ * The order of the list a mark-above/below is done in, and which side of the cursor to mark.
  */
-private const val FEED_GROUP_ID = "IFNULL(feeds.id, 0)"
+data class ListOrder(
+    val grouping: FeedListGrouping,
+    val sorting: SortingOptions,
+    val before: Boolean,
+)
 
-private fun PreviewItem.toFeedListItem(context: Context) =
+private fun PreviewItem.toFeedListItem(
+    context: Context,
+    groupKey: String = "",
+) =
     FeedListItem(
         id = id,
         title = plainTitle,
         snippet = plainSnippet,
         feedTitle = feedDisplayTitle,
         feedId = feedId ?: ID_UNSET,
+        groupKey = groupKey,
         unread = readTime == null,
         pubDate = pubDate.formatForFeed(context),
         image = image,
