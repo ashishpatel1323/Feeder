@@ -11,14 +11,13 @@ import androidx.compose.foundation.gestures.anchoredDraggable
 import androidx.compose.foundation.gestures.animateTo
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.MarkEmailUnread
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -263,10 +262,11 @@ fun SwipeableFeedItemPreview(
                         drawRect(color = color)
                     }.padding(horizontal = 24.dp),
         ) {
+            // Same icons the list already uses: double check = mark read, envelope = mark unread
             Icon(
-                when (item.unread) {
-                    true -> Icons.Default.VisibilityOff
-                    false -> Icons.Default.Visibility
+                when (item.unread || filter.onlyUnread) {
+                    true -> Icons.Default.DoneAll
+                    false -> Icons.Default.MarkEmailUnread
                 },
                 contentDescription = null,
             )
@@ -421,11 +421,12 @@ fun SwipeableFeedItemPreview(
                                             .height(0.dp)
                                             .width(0.dp)
 
+                                    // Left swipe can start anywhere on the item (anchors only allow
+                                    // the leftward direction); start padding keeps the drawer edge free
                                     SwipeAsRead.ONLY_FROM_END -> {
                                         this
-                                            .fillMaxHeight()
-                                            .width(this@BoxWithConstraints.maxWidth / 4)
-                                            .align(Alignment.CenterEnd)
+                                            .padding(start = 48.dp)
+                                            .matchParentSize()
                                     }
 
                                     SwipeAsRead.FROM_ANYWHERE -> {
