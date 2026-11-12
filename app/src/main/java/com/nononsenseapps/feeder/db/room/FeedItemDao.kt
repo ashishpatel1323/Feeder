@@ -10,11 +10,13 @@ import androidx.room.Query
 import androidx.room.RawQuery
 import androidx.room.Update
 import androidx.sqlite.db.SupportSQLiteQuery
+import com.nononsenseapps.feeder.archmodel.FeedListGroup
 import com.nononsenseapps.feeder.db.COL_ID
 import com.nononsenseapps.feeder.db.COL_PLAINSNIPPET
 import com.nononsenseapps.feeder.db.COL_TITLE
 import com.nononsenseapps.feeder.db.COL_URL
 import com.nononsenseapps.feeder.db.FEEDS_TABLE_NAME
+import com.nononsenseapps.feeder.model.GroupedPreviewItem
 import com.nononsenseapps.feeder.model.PREVIEW_COLUMNS
 import com.nononsenseapps.feeder.model.PreviewItem
 import kotlinx.coroutines.flow.Flow
@@ -158,6 +160,12 @@ interface FeedItemDao {
 
     @RawQuery(observedEntities = [FeedItem::class])
     fun pagingPreviews(query: SupportSQLiteQuery): PagingSource<Int, PreviewItem>
+
+    @RawQuery(observedEntities = [FeedItem::class, Feed::class])
+    fun pagingGroupedPreviews(query: SupportSQLiteQuery): PagingSource<Int, GroupedPreviewItem>
+
+    @RawQuery(observedEntities = [FeedItem::class, Feed::class])
+    fun getFeedListGroups(query: SupportSQLiteQuery): Flow<List<FeedListGroup>>
 
     @Query(
         """

@@ -15,6 +15,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -114,6 +115,7 @@ import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.archmodel.FeedItemStyle
 import com.nononsenseapps.feeder.archmodel.FeedListGrouping
 import com.nononsenseapps.feeder.archmodel.FeedType
+import com.nononsenseapps.feeder.archmodel.SortingOptions
 import com.nononsenseapps.feeder.db.room.FeedItemCursor
 import com.nononsenseapps.feeder.db.room.ID_SAVED_ARTICLES
 import com.nononsenseapps.feeder.db.room.ID_UNSET
@@ -518,6 +520,8 @@ fun FeedScreen(
             onShowFilterMenu = viewModel::setFilterMenuVisible,
             filterCallback = viewModel.filterCallback,
             onSetFeedListGrouping = viewModel::setFeedListGrouping,
+            onSetSorting = viewModel::setCurrentSorting,
+            onMarkGroupAsRead = { groupKey -> viewModel.markGroupAsRead(groupKey) },
             onShowSearchBar = viewModel::setSearchBarVisible,
             searchCallback = viewModel::searchCallback,
             feedListState = feedListState,
@@ -588,6 +592,8 @@ fun FeedScreen(
     ttsOnSetSpeed: (Float) -> Unit = {},
     ttsOnGoToSpokenText: () -> Unit = {},
     onSetFeedListGrouping: (FeedListGrouping) -> Unit = {},
+    onSetSorting: (SortingOptions) -> Unit = {},
+    onMarkGroupAsRead: (String) -> Unit = {},
 ) {
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -848,6 +854,8 @@ fun FeedScreen(
                 FeedListGroupingButton(
                     current = viewState.feedListGrouping,
                     onSelect = onSetFeedListGrouping,
+                    currentSorting = viewState.currentSorting,
+                    onSelectSorting = onSetSorting,
                 )
 
                 PlainTooltipBox(tooltip = { Text(stringResource(R.string.open_menu)) }) {
@@ -1070,64 +1078,75 @@ fun FeedScreen(
                 false -> FeedScreenType.FeedGrid
             }
 
-        when (screenType) {
-            FeedScreenType.FeedGrid ->
-                FeedGridContent(
-                    viewState = viewState,
-                    onOpenNavDrawer = {
-                        coroutineScope.launch {
-                            if (drawerState.isOpen) {
-                                drawerState.close()
-                            } else {
-                                drawerState.open()
-                            }
-                        }
-                    },
-                    onAddFeed = onAddFeed,
-                    markAsUnread = markAsUnread,
-                    markAsReadOnSwipe = markAsReadOnSwipe,
-                    markBeforeAsRead = markBeforeAsRead,
-                    markAfterAsRead = markAfterAsRead,
-                    onItemClick = onOpenFeedItem,
-                    onOpenFeedItemInReader = onOpenFeedItemInReader,
-                    onOpenFeedItemInCustomTab = onOpenFeedItemInCustomTab,
-                    onOpenFeedItemInBrowser = onOpenFeedItemInBrowser,
-                    onSetBookmark = onSetBookmark,
-                    gridState = feedGridState,
-                    pagedFeedItems = pagedFeedItems,
-                    translatedFeedCards = translatedFeedCards,
-                    onTranslateFeedCard = onTranslateFeedCard,
-                    modifier = innerModifier,
+        Column(modifier = innerModifier) {
+            // Quick filters stay on screen rather than behind the filter menu
+            if (viewState.currentFeedOrTag.isNotSavedArticles) {
+                FeedListFilterChips(
+                    filter = viewState.filter,
+                    filterCallback = filterCallback,
                 )
+            }
 
-            FeedScreenType.FeedList ->
-                FeedListContent(
-                    viewState = viewState,
-                    onOpenNavDrawer = {
-                        coroutineScope.launch {
-                            if (drawerState.isOpen) {
-                                drawerState.close()
-                            } else {
-                                drawerState.open()
+            when (screenType) {
+                FeedScreenType.FeedGrid ->
+                    FeedGridContent(
+                        viewState = viewState,
+                        onOpenNavDrawer = {
+                            coroutineScope.launch {
+                                if (drawerState.isOpen) {
+                                    drawerState.close()
+                                } else {
+                                    drawerState.open()
+                                }
                             }
-                        }
-                    },
-                    onAddFeed = onAddFeed,
-                    markAsUnread = markAsUnread,
-                    markAsReadOnSwipe = markAsReadOnSwipe,
-                    markBeforeAsRead = markBeforeAsRead,
-                    markAfterAsRead = markAfterAsRead,
-                    onItemClick = onOpenFeedItem,
-                    onOpenFeedItemInReader = onOpenFeedItemInReader,
-                    onOpenFeedItemInCustomTab = onOpenFeedItemInCustomTab,
-                    onOpenFeedItemInBrowser = onOpenFeedItemInBrowser,
-                    onSetBookmark = onSetBookmark,
-                    listState = feedListState,
-                    pagedFeedItems = pagedFeedItems,
-                    translatedFeedCards = translatedFeedCards,
-                    onTranslateFeedCard = onTranslateFeedCard,
-                    modifier = innerModifier,
-                )
+                        },
+                        onAddFeed = onAddFeed,
+                        markAsUnread = markAsUnread,
+                        markAsReadOnSwipe = markAsReadOnSwipe,
+                        markBeforeAsRead = markBeforeAsRead,
+                        markAfterAsRead = markAfterAsRead,
+                        onItemClick = onOpenFeedItem,
+                        onOpenFeedItemInReader = onOpenFeedItemInReader,
+                        onOpenFeedItemInCustomTab = onOpenFeedItemInCustomTab,
+                        onOpenFeedItemInBrowser = onOpenFeedItemInBrowser,
+                        onSetBookmark = onSetBookmark,
+                        gridState = feedGridState,
+                        pagedFeedItems = pagedFeedItems,
+                        translatedFeedCards = translatedFeedCards,
+                        onTranslateFeedCard = onTranslateFeedCard,
+                        modifier = Modifier.weight(1f),
+                    )
+
+                FeedScreenType.FeedList ->
+                    FeedListContent(
+                        viewState = viewState,
+                        onOpenNavDrawer = {
+                            coroutineScope.launch {
+                                if (drawerState.isOpen) {
+                                    drawerState.close()
+                                } else {
+                                    drawerState.open()
+                                }
+                            }
+                        },
+                        onAddFeed = onAddFeed,
+                        markAsUnread = markAsUnread,
+                        markAsReadOnSwipe = markAsReadOnSwipe,
+                        markBeforeAsRead = markBeforeAsRead,
+                        markAfterAsRead = markAfterAsRead,
+                        onItemClick = onOpenFeedItem,
+                        onOpenFeedItemInReader = onOpenFeedItemInReader,
+                        onOpenFeedItemInCustomTab = onOpenFeedItemInCustomTab,
+                        onOpenFeedItemInBrowser = onOpenFeedItemInBrowser,
+                        onSetBookmark = onSetBookmark,
+                        listState = feedListState,
+                        onMarkGroupAsRead = onMarkGroupAsRead,
+                        pagedFeedItems = pagedFeedItems,
+                        translatedFeedCards = translatedFeedCards,
+                        onTranslateFeedCard = onTranslateFeedCard,
+                        modifier = Modifier.weight(1f),
+                    )
+            }
         }
     }
 }
@@ -1410,6 +1429,7 @@ fun FeedListContent(
     translatedFeedCards: TranslatedFeedCards,
     onTranslateFeedCard: (FeedListItem) -> Unit,
     modifier: Modifier = Modifier,
+    onMarkGroupAsRead: (String) -> Unit = {},
 ) {
     val coroutineScope = rememberCoroutineScope()
     val activityLauncher: ActivityLauncher by LocalDI.current.instance()
@@ -1435,12 +1455,39 @@ fun FeedListContent(
             )
         }
 
+        val grouping = viewState.feedListGrouping
+        val cardStyle =
+            viewState.feedItemStyle == FeedItemStyle.CARD ||
+                viewState.feedItemStyle == FeedItemStyle.COMPACT_CARD
+        // Groups the user has collapsed, by collapseKey. Survives opening an article and
+        // coming back; cleared when the grouping changes.
+        var collapsedGroups by rememberSaveable(grouping) { mutableStateOf(ArrayList<String>()) }
+        val unreadByGroup =
+            remember(viewState.feedListGroups) {
+                viewState.feedListGroups.associate { it.key to it.unread }
+            }
+        val toggleGroup: (String) -> Unit = { key ->
+            collapsedGroups =
+                ArrayList(if (key in collapsedGroups) collapsedGroups - key else collapsedGroups + key)
+        }
+        // Long press on a header: collapse every group, or expand them all if all are collapsed
+        val toggleAllGroups: () -> Unit = {
+            val allKeys = viewState.feedListGroups.map { collapseKey(grouping, it.key) }
+            collapsedGroups =
+                if (allKeys.isNotEmpty() && collapsedGroups.containsAll(allKeys)) {
+                    ArrayList()
+                } else {
+                    ArrayList(allKeys)
+                }
+        }
+
         val arrangement =
-            when (viewState.feedItemStyle) {
-                FeedItemStyle.CARD -> Arrangement.spacedBy(LocalDimens.current.margin)
-                FeedItemStyle.COMPACT_CARD -> Arrangement.spacedBy(LocalDimens.current.margin)
-                FeedItemStyle.COMPACT -> Arrangement.spacedBy(0.dp)
-                FeedItemStyle.SUPER_COMPACT -> Arrangement.spacedBy(0.dp)
+            when {
+                // Collapsed rows have no height, and list spacing would still pile up between
+                // them, so with grouping on the card gap is drawn inside each visible row instead
+                grouping != FeedListGrouping.NONE -> Arrangement.spacedBy(0.dp)
+                cardStyle -> Arrangement.spacedBy(LocalDimens.current.margin)
+                else -> Arrangement.spacedBy(0.dp)
             }
 
         AnimatedVisibility(
@@ -1504,10 +1551,6 @@ fun FeedListContent(
                     // observable would dirty the snapshot on every scroll frame.
                     val itemScrolledOffTop = remember(previewItem.id) { AtomicBoolean(false) }
 
-                    LaunchedEffect(loadedItem.id, loadedItem.title, loadedItem.snippet, translatedFeedCards.generation, onTranslateFeedCard) {
-                        onTranslateFeedCard(loadedItem)
-                    }
-
                     // Marks items which have been visible long enough as read once they leave
                     // composition, which happens when they scroll out of the viewport
                     DisposableEffect(previewItem.id, markAsUnread) {
@@ -1523,142 +1566,166 @@ fun FeedListContent(
 
                     // Section header above the first article of each group. peek() reads the
                     // previous row without triggering a page load.
-                    val grouping = viewState.feedListGrouping
-                    if (grouping != FeedListGrouping.NONE && loadedItem !== PLACEHOLDER_ITEM) {
+                    val groupKey =
+                        if (grouping != FeedListGrouping.NONE && loadedItem !== PLACEHOLDER_ITEM) {
+                            collapseKey(grouping, loadedItem.groupKey)
+                        } else {
+                            null
+                        }
+                    val collapsed = groupKey != null && groupKey in collapsedGroups
+                    if (groupKey != null) {
                         val previous = if (itemIndex > 0) pagedFeedItems.peek(itemIndex - 1) else null
-                        if (previous == null || previous.groupKey(grouping) != loadedItem.groupKey(grouping)) {
+                        if (previous == null || previous.groupKey != loadedItem.groupKey) {
+                            if (cardStyle && itemIndex > 0) {
+                                Spacer(modifier = Modifier.height(LocalDimens.current.margin))
+                            }
                             FeedListGroupHeader(
                                 text = rememberGroupHeaderText(loadedItem, grouping),
+                                collapsed = collapsed,
+                                onToggle = { toggleGroup(groupKey) },
+                                unreadCount = unreadByGroup[loadedItem.groupKey] ?: 0,
+                                onMarkGroupAsRead = { onMarkGroupAsRead(loadedItem.groupKey) },
+                                onToggleAll = toggleAllGroups,
                             )
                         }
                     }
 
-                    SwipeableFeedItemPreview(
-                        onSwipe = { currentState ->
-                            markAsReadOnSwipe(
-                                previewItem.id,
-                                !currentState,
-                                previewItem.bookmarked,
-                            )
-                        },
-                        filter = viewState.filter,
-                        item = previewItem,
-                        showThumbnail = viewState.showThumbnails,
-                        feedItemStyle = viewState.feedItemStyle,
-                        swipeAsRead = viewState.swipeAsRead,
-                        bookmarkIndicator = !viewState.currentFeedOrTag.isSavedArticles,
-                        maxLines = viewState.maxLines,
-                        showOnlyTitle = viewState.showOnlyTitle,
-                        showReadingTime = viewState.showReadingTime,
-                        onMarkAboveAsRead = {
-                            markBeforeAsRead(previewItem.cursor)
-                            if (viewState.filter.onlyUnread) {
-                                coroutineScope.launch {
-                                    listState.scrollToItem(0)
-                                }
-                            }
-                        },
-                        onMarkBelowAsRead = {
-                            markAfterAsRead(previewItem.cursor)
-                        },
-                        onToggleBookmark = {
-                            onSetBookmark(previewItem.id, !previewItem.bookmarked)
-                        },
-                        onShareItem = {
-                            val intent =
-                                Intent.createChooser(
-                                    Intent(Intent.ACTION_SEND).apply {
-                                        if (previewItem.link != null) {
-                                            putExtra(
-                                                Intent.EXTRA_TEXT,
-                                                stripTrackingParameters(previewItem.link),
-                                            )
-                                        }
-                                        putExtra(Intent.EXTRA_TITLE, previewItem.title)
-                                        type = "text/plain"
-                                    },
-                                    null,
-                                )
-                            activityLauncher.startActivity(
-                                openAdjacentIfSuitable = false,
-                                intent = intent,
-                            )
-                        },
-                        onItemClick = {
-                            onItemClick(previewItem.id)
-                        },
-                        onOpenFeedItemInReader = {
-                            onOpenFeedItemInReader(previewItem.id)
-                        },
-                        onOpenFeedItemInCustomTab = {
-                            onOpenFeedItemInCustomTab(previewItem.id)
-                        },
-                        onOpenFeedItemInBrowser = {
-                            onOpenFeedItemInBrowser(previewItem.id)
-                        },
-                        modifier =
-                            Modifier
-                                // Deliberately not animateItem(). The list is not an animated
-                                // list: entries appear and disappear when the database says so
-                                // (opening an article, a sync landing, a filter changing), and
-                                // those transitions are not worth the cost here. Every frame
-                                // spent driving N item animations competes with the scroll
-                                // itself, and the animator places and clips each entry
-                                // separately - which is exactly how an entry and its separator
-                                // end up on different offsets. Weighting everything towards
-                                // scrolling being exact and cheap is the more responsive
-                                // behavior on a feed list of thousands of rows.
-                                .safeSemantics {
-                                    collectionItemInfo =
-                                        CollectionItemInfo(
-                                            rowIndex = itemIndex,
-                                            rowSpan = 1,
-                                            columnIndex = 1,
-                                            columnSpan = 1,
-                                        )
-                                }.let { modifier ->
-                                    if (viewState.markAsReadOnScroll && previewItem.unread) {
-                                        modifier.trackVisibility(0.9f) { info ->
-                                            // Remembered so the disposable effect can tell in which
-                                            // direction the item left the screen
-                                            itemScrolledOffTop.set(info.isScrolledOffTop)
-                                            if (info.isAboveThreshold) {
-                                                // Using itemCoroutineScope because that scope gets destroyed when item scrolls off screen
-                                                // So implicitly, if user is scrolling very fast, the coroutine will be cancelled
-                                                // before marking as read
-                                                itemCoroutineScope.launch {
-                                                    delay(REQUIRED_VISIBLE_TIME_FOR_MARK_AS_READ)
-                                                    logDebug(LOG_TAG, "Item $itemIndex marking as wasVisible")
-                                                    itemWasVisible = true
-                                                    // Marks as read in disposable effect
-                                                }
-                                            }
-                                        }
-                                    } else {
-                                        modifier
-                                    }
-                                },
-                        swipeEnabled = !listState.isScrollInProgress,
-                    )
+                    if (!collapsed) {
+                        // Only articles that are shown get their preview translated
+                        LaunchedEffect(loadedItem.id, loadedItem.title, loadedItem.snippet, translatedFeedCards.generation, onTranslateFeedCard) {
+                            onTranslateFeedCard(loadedItem)
+                        }
 
-                    // Emitted inside the entry's own item, so the list positions it from the same
-                    // measurement that positions the row above it and the two cannot drift apart.
-                    //
-                    // A filled Box rather than HorizontalDivider: the divider draws through a Canvas
-                    // whose colour comes from DividerTokens, which resolved to nothing visible on this
-                    // surface. A background modifier has no token and no Canvas, so what is drawn is
-                    // exactly the colour written here.
-                    if (viewState.feedItemStyle != FeedItemStyle.CARD &&
-                        viewState.feedItemStyle != FeedItemStyle.COMPACT_CARD &&
-                        itemIndex < pagedFeedItems.itemCount - 1
-                    ) {
-                        Box(
+                        if (cardStyle && grouping != FeedListGrouping.NONE) {
+                            Spacer(modifier = Modifier.height(LocalDimens.current.margin))
+                        }
+                        SwipeableFeedItemPreview(
+                            onSwipe = { currentState ->
+                                markAsReadOnSwipe(
+                                    previewItem.id,
+                                    !currentState,
+                                    previewItem.bookmarked,
+                                )
+                            },
+                            filter = viewState.filter,
+                            item = previewItem,
+                            showThumbnail = viewState.showThumbnails,
+                            feedItemStyle = viewState.feedItemStyle,
+                            swipeAsRead = viewState.swipeAsRead,
+                            bookmarkIndicator = !viewState.currentFeedOrTag.isSavedArticles,
+                            maxLines = viewState.maxLines,
+                            showOnlyTitle = viewState.showOnlyTitle,
+                            showReadingTime = viewState.showReadingTime,
+                            onMarkAboveAsRead = {
+                                markBeforeAsRead(previewItem.cursor)
+                                if (viewState.filter.onlyUnread) {
+                                    coroutineScope.launch {
+                                        listState.scrollToItem(0)
+                                    }
+                                }
+                            },
+                            onMarkBelowAsRead = {
+                                markAfterAsRead(previewItem.cursor)
+                            },
+                            onToggleBookmark = {
+                                onSetBookmark(previewItem.id, !previewItem.bookmarked)
+                            },
+                            onShareItem = {
+                                val intent =
+                                    Intent.createChooser(
+                                        Intent(Intent.ACTION_SEND).apply {
+                                            if (previewItem.link != null) {
+                                                putExtra(
+                                                    Intent.EXTRA_TEXT,
+                                                    stripTrackingParameters(previewItem.link),
+                                                )
+                                            }
+                                            putExtra(Intent.EXTRA_TITLE, previewItem.title)
+                                            type = "text/plain"
+                                        },
+                                        null,
+                                    )
+                                activityLauncher.startActivity(
+                                    openAdjacentIfSuitable = false,
+                                    intent = intent,
+                                )
+                            },
+                            onItemClick = {
+                                onItemClick(previewItem.id)
+                            },
+                            onOpenFeedItemInReader = {
+                                onOpenFeedItemInReader(previewItem.id)
+                            },
+                            onOpenFeedItemInCustomTab = {
+                                onOpenFeedItemInCustomTab(previewItem.id)
+                            },
+                            onOpenFeedItemInBrowser = {
+                                onOpenFeedItemInBrowser(previewItem.id)
+                            },
                             modifier =
                                 Modifier
-                                    .fillMaxWidth()
-                                    .height(1.dp)
-                                    .background(MaterialTheme.colorScheme.outlineVariant),
+                                    // Deliberately not animateItem(). The list is not an animated
+                                    // list: entries appear and disappear when the database says so
+                                    // (opening an article, a sync landing, a filter changing), and
+                                    // those transitions are not worth the cost here. Every frame
+                                    // spent driving N item animations competes with the scroll
+                                    // itself, and the animator places and clips each entry
+                                    // separately - which is exactly how an entry and its separator
+                                    // end up on different offsets. Weighting everything towards
+                                    // scrolling being exact and cheap is the more responsive
+                                    // behavior on a feed list of thousands of rows.
+                                    .safeSemantics {
+                                        collectionItemInfo =
+                                            CollectionItemInfo(
+                                                rowIndex = itemIndex,
+                                                rowSpan = 1,
+                                                columnIndex = 1,
+                                                columnSpan = 1,
+                                            )
+                                    }.let { modifier ->
+                                        if (viewState.markAsReadOnScroll && previewItem.unread) {
+                                            modifier.trackVisibility(0.9f) { info ->
+                                                // Remembered so the disposable effect can tell in which
+                                                // direction the item left the screen
+                                                itemScrolledOffTop.set(info.isScrolledOffTop)
+                                                if (info.isAboveThreshold) {
+                                                    // Using itemCoroutineScope because that scope gets destroyed when item scrolls off screen
+                                                    // So implicitly, if user is scrolling very fast, the coroutine will be cancelled
+                                                    // before marking as read
+                                                    itemCoroutineScope.launch {
+                                                        delay(REQUIRED_VISIBLE_TIME_FOR_MARK_AS_READ)
+                                                        logDebug(LOG_TAG, "Item $itemIndex marking as wasVisible")
+                                                        itemWasVisible = true
+                                                        // Marks as read in disposable effect
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            modifier
+                                        }
+                                    },
+                            swipeEnabled = !listState.isScrollInProgress,
                         )
+
+                        // Emitted inside the entry's own item, so the list positions it from the same
+                        // measurement that positions the row above it and the two cannot drift apart.
+                        //
+                        // A filled Box rather than HorizontalDivider: the divider draws through a Canvas
+                        // whose colour comes from DividerTokens, which resolved to nothing visible on this
+                        // surface. A background modifier has no token and no Canvas, so what is drawn is
+                        // exactly the colour written here.
+                        if (viewState.feedItemStyle != FeedItemStyle.CARD &&
+                            viewState.feedItemStyle != FeedItemStyle.COMPACT_CARD &&
+                            itemIndex < pagedFeedItems.itemCount - 1
+                        ) {
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .height(1.dp)
+                                        .background(MaterialTheme.colorScheme.outlineVariant),
+                            )
+                        }
                     }
                 }
                 /*
@@ -1677,6 +1744,39 @@ fun FeedListContent(
                         )
                     }
                 }
+            }
+        }
+
+        // Sticky header: once the list has scrolled, the group of the topmost article stays
+        // pinned above the list. Index 0 of the list is the scroll trick spacer.
+        if (grouping != FeedListGrouping.NONE && viewState.haveVisibleFeedItems) {
+            val stickyIndex by remember(listState) {
+                derivedStateOf {
+                    val first = listState.firstVisibleItemIndex
+                    if (first > 1 || (first == 1 && listState.firstVisibleItemScrollOffset > 0)) {
+                        first - 1
+                    } else {
+                        -1
+                    }
+                }
+            }
+            val stickyItem =
+                if (stickyIndex in 0 until pagedFeedItems.itemCount) {
+                    pagedFeedItems.peek(stickyIndex)
+                } else {
+                    null
+                }
+            if (stickyItem != null) {
+                val stickyKey = collapseKey(grouping, stickyItem.groupKey)
+                FeedListGroupHeader(
+                    text = rememberGroupHeaderText(stickyItem, grouping),
+                    collapsed = stickyKey in collapsedGroups,
+                    onToggle = { toggleGroup(stickyKey) },
+                    unreadCount = unreadByGroup[stickyItem.groupKey] ?: 0,
+                    onMarkGroupAsRead = { onMarkGroupAsRead(stickyItem.groupKey) },
+                    onToggleAll = toggleAllGroups,
+                    modifier = Modifier.align(Alignment.TopCenter),
+                )
             }
         }
     }

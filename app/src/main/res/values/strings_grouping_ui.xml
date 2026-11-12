@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="group_untagged">Untagged</string>
+  <string name="group_quick_reads">Quick reads (under 3 min)</string>
+  <string name="group_medium_reads">Medium reads (3–10 min)</string>
+  <string name="group_long_reads">Long reads (over 10 min)</string>
+  <string name="group_status_unread">Unread</string>
+  <string name="group_status_saved">Saved</string>
+  <string name="group_status_read">Read</string>
+  <string name="group_unknown_site">Unknown site</string>
+  <string name="group_no_feed">No feed</string>
+  <string name="group_unread_count">%1$d unread</string>
+  <string name="group_mark_as_read">Mark %1$s as read</string>
+  <string name="group_toggle_all">Collapse or expand all groups</string>
+  <string name="filter_chip_unread_only">Unread only</string>
+  <string name="filter_chip_short_reads">Short reads</string>
+</resources>
