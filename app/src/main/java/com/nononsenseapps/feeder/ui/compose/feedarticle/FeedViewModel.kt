@@ -7,12 +7,14 @@ import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.nononsenseapps.feeder.ApplicationCoroutineScope
 import com.nononsenseapps.feeder.archmodel.FeedItemStyle
+import com.nononsenseapps.feeder.archmodel.FeedListGroup
 import com.nononsenseapps.feeder.archmodel.FeedListGrouping
 import com.nononsenseapps.feeder.archmodel.FeedType
 import com.nononsenseapps.feeder.archmodel.ItemOpener
 import com.nononsenseapps.feeder.archmodel.OpenAISettings
 import com.nononsenseapps.feeder.archmodel.Repository
 import com.nononsenseapps.feeder.archmodel.ScreenTitle
+import com.nononsenseapps.feeder.archmodel.SortingOptions
 import com.nononsenseapps.feeder.archmodel.SwipeAsRead
 import com.nononsenseapps.feeder.archmodel.ThemeOptions
 import com.nononsenseapps.feeder.background.runOnceRssSync
@@ -176,6 +178,11 @@ class FeedViewModel(
         applicationCoroutineScope.launch {
             val (feedId, feedTag) = repository.currentFeedAndTag.value
             repository.markAfterAsRead(cursor, feedId, feedTag)
+        }
+
+    fun markGroupAsRead(groupKey: String) =
+        applicationCoroutineScope.launch {
+            repository.markGroupAsRead(groupKey)
         }
 
     fun setBookmarked(
@@ -367,6 +374,10 @@ class FeedViewModel(
         repository.setFeedListGrouping(value)
     }
 
+    fun setCurrentSorting(value: SortingOptions) {
+        repository.setCurrentSorting(value)
+    }
+
     private val searchBarVisible: MutableStateFlow<Boolean> =
         MutableStateFlow(state["searchBarVisible"] ?: false)
 
@@ -507,6 +518,8 @@ class FeedViewModel(
             podcastPlayerStateHolder.playerState,
             repository.forceSingleColumn,
             repository.feedListGrouping,
+            repository.currentSorting,
+            repository.feedListGroups,
         ) { params: Array<Any?> ->
             val haveVisibleFeedItems = (params[7] as Int) > 0
             val currentFeedOrTag = params[13] as FeedOrTag
@@ -551,6 +564,8 @@ class FeedViewModel(
                 translationModelDownloadProgress = params[28] as BergamotModelDownloadProgress?,
                 forceSingleColumn = params[31] as Boolean,
                 feedListGrouping = params[32] as FeedListGrouping,
+                currentSorting = params[33] as SortingOptions,
+                feedListGroups = params[34] as List<FeedListGroup>,
             )
         }.stateIn(
             viewModelScope,
@@ -669,6 +684,20 @@ class FeedViewModel(
     override fun setRead(value: Boolean) {
         repository.setFeedListFilterRead(value)
     }
+
+    override fun setOnlyUnread() {
+        repository.setFeedListFilterSaved(false)
+        repository.setFeedListFilterRecentlyRead(false)
+        repository.setFeedListFilterRead(false)
+    }
+
+    override fun setToday(value: Boolean) {
+        repository.setFeedListFilterToday(value)
+    }
+
+    override fun setShortReads(value: Boolean) {
+        repository.setFeedListFilterShortReads(value)
+    }
 }
 
 @Immutable
@@ -708,6 +737,8 @@ data class FeedState(
     override val translationModelDownloadProgress: BergamotModelDownloadProgress? = null,
     override val forceSingleColumn: Boolean = false,
     override val feedListGrouping: FeedListGrouping = FeedListGrouping.NONE,
+    override val currentSorting: SortingOptions = SortingOptions.NEWEST_FIRST,
+    override val feedListGroups: List<FeedListGroup> = emptyList(),
 ) : FeedScreenViewState
 
 @Immutable
@@ -745,6 +776,12 @@ interface FeedScreenViewState {
     val forceSingleColumn: Boolean
     val feedListGrouping: FeedListGrouping
         get() = FeedListGrouping.NONE
+    val currentSorting: SortingOptions
+        get() = SortingOptions.NEWEST_FIRST
+
+    // Groups of the current list in list order, with their counts. Empty when not grouped.
+    val feedListGroups: List<FeedListGroup>
+        get() = emptyList()
 }
 
 private data class FeedCardTranslationConfig(
@@ -803,6 +840,10 @@ interface FeedListFilter {
     val saved: Boolean
     val recentlyRead: Boolean
     val read: Boolean
+
+    // Restrictive filters: only articles from today / only articles under 3 minutes
+    val today: Boolean
+    val shortReads: Boolean
 }
 
 val emptyFeedListFilter =
@@ -811,6 +852,8 @@ val emptyFeedListFilter =
         override val saved: Boolean = false
         override val recentlyRead: Boolean = false
         override val read: Boolean = false
+        override val today: Boolean = false
+        override val shortReads: Boolean = false
     }
 
 @Immutable
@@ -820,6 +863,12 @@ interface FeedListFilterCallback {
     fun setRecentlyRead(value: Boolean)
 
     fun setRead(value: Boolean)
+
+    fun setOnlyUnread()
+
+    fun setToday(value: Boolean)
+
+    fun setShortReads(value: Boolean)
 }
 
 val FeedListFilter.onlyUnread: Boolean
