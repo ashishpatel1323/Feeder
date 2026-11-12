@@ -258,6 +258,10 @@ class Repository(
 
     fun setCurrentSorting(value: SortingOptions) = settingsStore.setCurrentSorting(value)
 
+    val feedListGrouping: StateFlow<FeedListGrouping> = settingsStore.feedListGrouping
+
+    fun setFeedListGrouping(value: FeedListGrouping) = settingsStore.setFeedListGrouping(value)
+
     val showFab: StateFlow<Boolean> = settingsStore.showFab
 
     fun setShowFab(value: Boolean) = settingsStore.setShowFab(value)
@@ -417,10 +421,10 @@ class Repository(
         combine(
             currentFeedAndTag,
             minReadTime,
-            currentSorting,
+            combine(currentSorting, feedListGrouping) { sorting, grouping -> sorting to grouping },
             feedListFilter,
             search,
-        ) { feedAndTag, minReadTime, currentSorting, feedListFilter, search ->
+        ) { feedAndTag, minReadTime, (currentSorting, grouping), feedListFilter, search ->
             val (feedId, tag) = feedAndTag
             FeedListArgs(
                 feedId = feedId,
@@ -433,6 +437,7 @@ class Repository(
                 newestFirst = currentSorting == SortingOptions.NEWEST_FIRST,
                 filter = feedListFilter,
                 search = search,
+                groupByFeed = grouping == FeedListGrouping.FEED,
             )
         }.flatMapLatest {
             feedItemStore.getPagedFeedItemsRaw(
@@ -440,6 +445,7 @@ class Repository(
                 tag = it.tag,
                 minReadTime = it.minReadTime,
                 newestFirst = it.newestFirst,
+                groupByFeed = it.groupByFeed,
                 filter = it.filter,
                 search = it.search,
             )
@@ -624,6 +630,7 @@ class Repository(
             minReadTime = minReadTime.value,
             descending = SortingOptions.NEWEST_FIRST != currentSorting.value,
             cursor = cursor,
+            feedsBefore = true.takeIf { feedListGrouping.value == FeedListGrouping.FEED },
         )
         runOnceSyncChainSendRead(di)
     }
@@ -641,6 +648,7 @@ class Repository(
             minReadTime = minReadTime.value,
             descending = SortingOptions.NEWEST_FIRST == currentSorting.value,
             cursor = cursor,
+            feedsBefore = false.takeIf { feedListGrouping.value == FeedListGrouping.FEED },
         )
         runOnceSyncChainSendRead(di)
     }
@@ -920,6 +928,7 @@ private data class FeedListArgs(
     val minReadTime: Instant,
     val filter: FeedListFilter,
     val search: String,
+    val groupByFeed: Boolean = false,
 )
 
 // Wrapper class because flow combine doesn't like nulls

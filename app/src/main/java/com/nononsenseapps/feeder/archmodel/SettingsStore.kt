@@ -227,6 +227,17 @@ class SettingsStore(
         sp.edit().putString(PREF_SORT, value.name.lowercase()).apply()
     }
 
+    private val _feedListGrouping =
+        MutableStateFlow(
+            feedListGroupingFromString(sp.getString(PREF_FEED_LIST_GROUPING, null) ?: ""),
+        )
+    val feedListGrouping = _feedListGrouping.asStateFlow()
+
+    fun setFeedListGrouping(value: FeedListGrouping) {
+        _feedListGrouping.value = value
+        sp.edit().putString(PREF_FEED_LIST_GROUPING, value.name.lowercase()).apply()
+    }
+
     private val _showFab = MutableStateFlow(sp.getBoolean(PREF_SHOW_FAB, true))
     val showFab = _showFab.asStateFlow()
 
@@ -687,6 +698,7 @@ const val PREF_DYNAMIC_THEME = "pref_dynamic_theme"
  * Sort settings
  */
 const val PREF_SORT = "pref_sort"
+const val PREF_FEED_LIST_GROUPING = "pref_feed_list_grouping"
 
 /**
  * Floating action button settings
@@ -876,6 +888,24 @@ enum class SortingOptions(
     NEWEST_FIRST(R.string.sort_newest_first),
     OLDEST_FIRST(R.string.sort_oldest_first),
 }
+
+/**
+ * How the article list is split into sections. NONE keeps the plain list.
+ */
+enum class FeedListGrouping(
+    @StringRes val stringId: Int,
+) {
+    NONE(R.string.group_by_none),
+    DATE(R.string.group_by_date),
+    FEED(R.string.group_by_feed),
+}
+
+fun feedListGroupingFromString(value: String): FeedListGrouping =
+    try {
+        FeedListGrouping.valueOf(value.uppercase())
+    } catch (_: Exception) {
+        FeedListGrouping.NONE
+    }
 
 enum class ItemOpener(
     @StringRes val stringId: Int,

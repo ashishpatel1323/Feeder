@@ -112,6 +112,7 @@ import androidx.paging.compose.itemKey
 import com.nononsenseapps.feeder.ApplicationCoroutineScope
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.archmodel.FeedItemStyle
+import com.nononsenseapps.feeder.archmodel.FeedListGrouping
 import com.nononsenseapps.feeder.archmodel.FeedType
 import com.nononsenseapps.feeder.db.room.FeedItemCursor
 import com.nononsenseapps.feeder.db.room.ID_SAVED_ARTICLES
@@ -516,6 +517,7 @@ fun FeedScreen(
             },
             onShowFilterMenu = viewModel::setFilterMenuVisible,
             filterCallback = viewModel.filterCallback,
+            onSetFeedListGrouping = viewModel::setFeedListGrouping,
             onShowSearchBar = viewModel::setSearchBarVisible,
             searchCallback = viewModel::searchCallback,
             feedListState = feedListState,
@@ -585,6 +587,7 @@ fun FeedScreen(
     ttsOnSeekTo: (Long) -> Unit = {},
     ttsOnSetSpeed: (Float) -> Unit = {},
     ttsOnGoToSpokenText: () -> Unit = {},
+    onSetFeedListGrouping: (FeedListGrouping) -> Unit = {},
 ) {
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -841,6 +844,11 @@ fun FeedScreen(
                         }
                     }
                 }
+
+                FeedListGroupingButton(
+                    current = viewState.feedListGrouping,
+                    onSelect = onSetFeedListGrouping,
+                )
 
                 PlainTooltipBox(tooltip = { Text(stringResource(R.string.open_menu)) }) {
                     Box {
@@ -1510,6 +1518,18 @@ fun FeedListContent(
                                     markAsUnread(previewItem.id, false)
                                 }
                             }
+                        }
+                    }
+
+                    // Section header above the first article of each group. peek() reads the
+                    // previous row without triggering a page load.
+                    val grouping = viewState.feedListGrouping
+                    if (grouping != FeedListGrouping.NONE && loadedItem !== PLACEHOLDER_ITEM) {
+                        val previous = if (itemIndex > 0) pagedFeedItems.peek(itemIndex - 1) else null
+                        if (previous == null || previous.groupKey(grouping) != loadedItem.groupKey(grouping)) {
+                            FeedListGroupHeader(
+                                text = rememberGroupHeaderText(loadedItem, grouping),
+                            )
                         }
                     }
 
