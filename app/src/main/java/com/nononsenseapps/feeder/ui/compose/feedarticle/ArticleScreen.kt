@@ -13,6 +13,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -46,6 +47,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
@@ -54,11 +56,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -73,6 +79,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.PermissionStatus
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.archmodel.TextToDisplay
 import com.nononsenseapps.feeder.db.room.ID_UNSET
@@ -87,6 +95,7 @@ import com.nononsenseapps.feeder.ui.compose.html.ColumnArticleContent
 import com.nononsenseapps.feeder.ui.compose.icons.CustomFilled
 import com.nononsenseapps.feeder.ui.compose.icons.TextToSpeech
 import com.nononsenseapps.feeder.ui.compose.navigation.ArticleSwipeDirection
+import com.nononsenseapps.feeder.ui.compose.readaloud.HideableCompactTTSPlayer
 import com.nononsenseapps.feeder.ui.compose.readaloud.HideableTTSPlayer
 import com.nononsenseapps.feeder.ui.compose.readaloud.SpeechFollowViewport
 import com.nononsenseapps.feeder.ui.compose.readaloud.SpeechHighlight
@@ -95,6 +104,7 @@ import com.nononsenseapps.feeder.ui.compose.readaloud.stopSpeechFollowingOnUserS
 import com.nononsenseapps.feeder.ui.compose.theme.SensibleTopAppBar
 import com.nononsenseapps.feeder.ui.compose.utils.ImmutableHolder
 import com.nononsenseapps.feeder.ui.compose.utils.ScreenType
+import com.nononsenseapps.feeder.ui.compose.utils.rememberApiPermissionState
 import com.nononsenseapps.feeder.util.ActivityLauncher
 import com.nononsenseapps.feeder.util.stripTrackingParameters
 import com.nononsenseapps.feeder.util.unicodeWrap
@@ -264,6 +274,7 @@ fun ArticleScreen(
 
 @OptIn(
     ExperimentalMaterial3Api::class,
+    ExperimentalPermissionsApi::class,
 )
 @Composable
 fun ArticleScreen(
@@ -312,7 +323,27 @@ fun ArticleScreen(
     swipeNeighbors: ArticleSwipeNeighbors = ArticleSwipeNeighbors(),
     onSwipeToArticle: (Long, ArticleSwipeDirection) -> Unit = { _, _ -> },
 ) {
-    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+    // While reading aloud the bottom bar is the player and the article actions move to the top bar
+    val readingAloud = viewState.isBottomBarVisible && !viewState.podcastPlayerState.isVisible
+    val enterAlwaysScrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+    val pinnedScrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+    // The top bar must not scroll away while it holds the article actions
+    val scrollBehavior = if (readingAloud) pinnedScrollBehavior else enterAlwaysScrollBehavior
+
+    // Some phones (OxygenOS) hide the media notification, and with it the system media player and
+    // lock-screen controls, until the app may post notifications. Ask once when reading aloud starts.
+    val notificationPermission =
+        rememberApiPermissionState(
+            permission = "android.permission.POST_NOTIFICATIONS",
+            minimumApiLevel = 33,
+        )
+    var askedForNotificationPermission by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(readingAloud) {
+        if (readingAloud && !askedForNotificationPermission && notificationPermission.status !is PermissionStatus.Granted) {
+            askedForNotificationPermission = true
+            notificationPermission.launchPermissionRequest()
+        }
+    }
 
     val bottomBarVisibleState = remember { MutableTransitionState(viewState.isBottomBarVisible) }
     LaunchedEffect(viewState.isBottomBarVisible) {
@@ -348,55 +379,77 @@ fun ArticleScreen(
                     }
                 },
                 actions = {
-                    PlainTooltipBox(tooltip = { Text(stringResource(R.string.fetch_full_article)) }) {
-                        IconButton(
-                            onClick = onToggleFullText,
-                        ) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.Article,
-                                contentDescription = stringResource(R.string.fetch_full_article),
-                            )
-                        }
-                    }
-
-                    val readAloudLabel =
-                        stringResource(
-                            if (viewState.isTTSPlaying) R.string.pause_reading else R.string.read_article,
-                        )
-                    PlainTooltipBox(tooltip = { Text(readAloudLabel) }) {
-                        IconButton(
-                            onClick = {
-                                if (viewState.isTTSPlaying) ttsOnPause() else ttsOnPlay()
-                            },
-                        ) {
-                            Icon(
-                                if (viewState.isTTSPlaying) Icons.Default.Pause else Icons.CustomFilled.TextToSpeech,
-                                contentDescription = readAloudLabel,
-                            )
-                        }
-                    }
-
-                    if (!viewState.articleLink.isNullOrBlank()) {
-                        val originalPageLabel =
-                            stringResource(if (showOriginalPage) R.string.show_reader_view else R.string.show_original_page)
-                        PlainTooltipBox(tooltip = { Text(originalPageLabel) }) {
-                            IconButton(onClick = onToggleOriginalPage) {
+                    // Up to eight actions share the top bar while reading aloud, so they use 40 dp touch targets
+                    CompositionLocalProvider(
+                        LocalMinimumInteractiveComponentSize provides if (readingAloud) 40.dp else 48.dp,
+                    ) {
+                        PlainTooltipBox(tooltip = { Text(stringResource(R.string.fetch_full_article)) }) {
+                            IconButton(
+                                onClick = onToggleFullText,
+                            ) {
                                 Icon(
-                                    Icons.Default.Language,
-                                    contentDescription = originalPageLabel,
-                                    tint = if (showOriginalPage) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                                    Icons.AutoMirrored.Filled.Article,
+                                    contentDescription = stringResource(R.string.fetch_full_article),
                                 )
                             }
                         }
-                    }
 
-                    PlainTooltipBox(tooltip = { Text(stringResource(id = R.string.open_in_web_view)) }) {
-                        IconButton(
-                            onClick = onOpenInCustomTab,
-                        ) {
-                            Icon(
-                                Icons.Default.OpenInBrowser,
-                                contentDescription = stringResource(id = R.string.open_in_web_view),
+                        // The player has its own play/pause while reading aloud
+                        if (!readingAloud) {
+                            val readAloudLabel =
+                                stringResource(
+                                    if (viewState.isTTSPlaying) R.string.pause_reading else R.string.read_article,
+                                )
+                            PlainTooltipBox(tooltip = { Text(readAloudLabel) }) {
+                                IconButton(
+                                    onClick = {
+                                        if (viewState.isTTSPlaying) ttsOnPause() else ttsOnPlay()
+                                    },
+                                ) {
+                                    Icon(
+                                        if (viewState.isTTSPlaying) Icons.Default.Pause else Icons.CustomFilled.TextToSpeech,
+                                        contentDescription = readAloudLabel,
+                                    )
+                                }
+                            }
+                        }
+
+                        if (!viewState.articleLink.isNullOrBlank()) {
+                            val originalPageLabel =
+                                stringResource(if (showOriginalPage) R.string.show_reader_view else R.string.show_original_page)
+                            PlainTooltipBox(tooltip = { Text(originalPageLabel) }) {
+                                IconButton(onClick = onToggleOriginalPage) {
+                                    Icon(
+                                        Icons.Default.Language,
+                                        contentDescription = originalPageLabel,
+                                        tint = if (showOriginalPage) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                                    )
+                                }
+                            }
+                        }
+
+                        PlainTooltipBox(tooltip = { Text(stringResource(id = R.string.open_in_web_view)) }) {
+                            IconButton(
+                                onClick = onOpenInCustomTab,
+                            ) {
+                                Icon(
+                                    Icons.Default.OpenInBrowser,
+                                    contentDescription = stringResource(id = R.string.open_in_web_view),
+                                )
+                            }
+                        }
+
+                        if (readingAloud) {
+                            ArticleTopBarActions(
+                                isBookmarked = viewState.isBookmarked,
+                                showSummarize = viewState.showSummarize,
+                                showTranslate = viewState.showTranslate,
+                                isShowingTranslated = viewState.isShowingTranslated,
+                                onShare = onShare,
+                                onMarkAsUnread = onMarkAsUnread,
+                                onSummarize = onSummarize,
+                                onToggleBookmark = onToggleBookmark,
+                                onTranslate = onTranslate,
                             )
                         }
                     }
@@ -404,49 +457,68 @@ fun ArticleScreen(
             )
         },
         bottomBar = {
-            Column {
-                // The action bar below takes the navigation bar inset, so the player must not add it again
-                Box(modifier = Modifier.consumeWindowInsets(WindowInsets.navigationBars)) {
-                    if (viewState.podcastPlayerState.isVisible) {
-                        HideablePodcastPlayer(
-                            visibleState = bottomBarVisibleState,
-                            viewState = viewState.podcastPlayerState,
-                            onPlay = podcastOnPlay,
-                            onPause = podcastOnPause,
-                            onStop = podcastOnStop,
-                            onSeekBack = podcastOnSeekBack,
-                            onSeekForward = podcastOnSeekForward,
-                            onSeekTo = podcastOnSeekTo,
-                        )
-                    } else {
-                        HideableTTSPlayer(
-                            visibleState = bottomBarVisibleState,
-                            currentlyPlaying = viewState.isTTSPlaying,
-                            onPlay = ttsOnPlay,
-                            onPause = ttsOnPause,
-                            onStop = ttsOnStop,
-                            onSkipNext = ttsOnSkipNext,
-                            languages = ImmutableHolder(viewState.ttsLanguages),
-                            onSelectLanguage = ttsOnSelectLanguage,
-                            progress = readAloudProgress,
-                            onSeekTo = ttsOnSeekTo,
-                            onSelectSpeed = ttsOnSetSpeed,
-                            onGoToSpokenText = ttsOnGoToSpokenText,
-                            displayedArticleId = viewState.articleId,
-                        )
-                    }
-                }
-                ArticleActionBar(
-                    isBookmarked = viewState.isBookmarked,
-                    showSummarize = viewState.showSummarize,
-                    showTranslate = viewState.showTranslate,
-                    isShowingTranslated = viewState.isShowingTranslated,
-                    onShare = onShare,
-                    onMarkAsUnread = onMarkAsUnread,
-                    onSummarize = onSummarize,
-                    onToggleBookmark = onToggleBookmark,
-                    onTranslate = onTranslate,
+            if (readingAloud) {
+                // One bar: the player replaces the action bar and takes the navigation bar inset itself
+                HideableCompactTTSPlayer(
+                    visibleState = bottomBarVisibleState,
+                    currentlyPlaying = viewState.isTTSPlaying,
+                    onPlay = ttsOnPlay,
+                    onPause = ttsOnPause,
+                    onStop = ttsOnStop,
+                    onSkipNext = ttsOnSkipNext,
+                    languages = ImmutableHolder(viewState.ttsLanguages),
+                    onSelectLanguage = ttsOnSelectLanguage,
+                    progress = readAloudProgress,
+                    onSeekTo = ttsOnSeekTo,
+                    onSelectSpeed = ttsOnSetSpeed,
+                    onGoToSpokenText = ttsOnGoToSpokenText,
+                    displayedArticleId = viewState.articleId,
                 )
+            } else {
+                Column {
+                    // The action bar below takes the navigation bar inset, so the player must not add it again
+                    Box(modifier = Modifier.consumeWindowInsets(WindowInsets.navigationBars)) {
+                        if (viewState.podcastPlayerState.isVisible) {
+                            HideablePodcastPlayer(
+                                visibleState = bottomBarVisibleState,
+                                viewState = viewState.podcastPlayerState,
+                                onPlay = podcastOnPlay,
+                                onPause = podcastOnPause,
+                                onStop = podcastOnStop,
+                                onSeekBack = podcastOnSeekBack,
+                                onSeekForward = podcastOnSeekForward,
+                                onSeekTo = podcastOnSeekTo,
+                            )
+                        } else {
+                            HideableTTSPlayer(
+                                visibleState = bottomBarVisibleState,
+                                currentlyPlaying = viewState.isTTSPlaying,
+                                onPlay = ttsOnPlay,
+                                onPause = ttsOnPause,
+                                onStop = ttsOnStop,
+                                onSkipNext = ttsOnSkipNext,
+                                languages = ImmutableHolder(viewState.ttsLanguages),
+                                onSelectLanguage = ttsOnSelectLanguage,
+                                progress = readAloudProgress,
+                                onSeekTo = ttsOnSeekTo,
+                                onSelectSpeed = ttsOnSetSpeed,
+                                onGoToSpokenText = ttsOnGoToSpokenText,
+                                displayedArticleId = viewState.articleId,
+                            )
+                        }
+                    }
+                    ArticleActionBar(
+                        isBookmarked = viewState.isBookmarked,
+                        showSummarize = viewState.showSummarize,
+                        showTranslate = viewState.showTranslate,
+                        isShowingTranslated = viewState.isShowingTranslated,
+                        onShare = onShare,
+                        onMarkAsUnread = onMarkAsUnread,
+                        onSummarize = onSummarize,
+                        onToggleBookmark = onToggleBookmark,
+                        onTranslate = onTranslate,
+                    )
+                }
             }
         },
     ) { padding ->
@@ -816,6 +888,51 @@ private fun SummarySection(summary: OpenAISummaryState) {
                     }
                 }
             }
+        }
+    }
+}
+
+/** Share, Unread, Summarize, Save and Translate as icon buttons, for the top bar while reading aloud. */
+@Composable
+private fun RowScope.ArticleTopBarActions(
+    isBookmarked: Boolean,
+    showSummarize: Boolean,
+    showTranslate: Boolean,
+    isShowingTranslated: Boolean,
+    onShare: () -> Unit,
+    onMarkAsUnread: () -> Unit,
+    onSummarize: () -> Unit,
+    onToggleBookmark: () -> Unit,
+    onTranslate: () -> Unit,
+) {
+    TopBarAction(Icons.Default.Share, stringResource(R.string.share), onShare)
+    TopBarAction(Icons.Outlined.VisibilityOff, stringResource(R.string.action_unread), onMarkAsUnread)
+    if (showSummarize) {
+        TopBarAction(Icons.Outlined.AutoAwesome, stringResource(R.string.summarize), onSummarize)
+    }
+    TopBarAction(
+        if (isBookmarked) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+        stringResource(if (isBookmarked) R.string.action_saved else R.string.action_save),
+        onToggleBookmark,
+    )
+    if (showTranslate) {
+        TopBarAction(
+            Icons.Default.Translate,
+            stringResource(if (isShowingTranslated) R.string.action_original else R.string.action_translate),
+            onTranslate,
+        )
+    }
+}
+
+@Composable
+private fun TopBarAction(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+) {
+    PlainTooltipBox(tooltip = { Text(label) }) {
+        IconButton(onClick = onClick) {
+            Icon(icon, contentDescription = label)
         }
     }
 }
