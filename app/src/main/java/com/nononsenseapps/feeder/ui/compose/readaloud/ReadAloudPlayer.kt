@@ -49,12 +49,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nononsenseapps.feeder.R
@@ -134,7 +136,6 @@ fun TTSPlayer(
     displayedArticleId: Long? = null,
     onSelectSpeed: (Float) -> Unit = {},
 ) {
-    var showSpeedMenu by remember { mutableStateOf(false) }
     val seekable = progress.preparationProgress == null && progress.durationMillis > 0 && progress.error == null
     val positionLabel = stringResource(R.string.read_aloud_position)
     Column(modifier = modifier) {
@@ -249,40 +250,7 @@ fun TTSPlayer(
                             )
                         }
                     }
-                    Box {
-                        val speedLabel = stringResource(R.string.read_aloud_speed)
-                        PlainTooltipBox(tooltip = { Text(speedLabel) }) {
-                            FilledTonalButton(
-                                onClick = { showSpeedMenu = true },
-                                shape = CircleShape,
-                                contentPadding = PaddingValues(0.dp),
-                                modifier =
-                                    Modifier
-                                        .size(48.dp)
-                                        .safeSemantics { contentDescription = "$speedLabel ${formatSpeed(progress.speed)}" },
-                            ) {
-                                Text(formatSpeed(progress.speed), style = MaterialTheme.typography.labelLarge, maxLines = 1)
-                            }
-                        }
-                        DropdownMenu(
-                            expanded = showSpeedMenu,
-                            onDismissRequest = { showSpeedMenu = false },
-                            modifier = Modifier.onKeyEventLikeEscape { showSpeedMenu = false },
-                        ) {
-                            for (speed in READ_ALOUD_SPEEDS) {
-                                DropdownMenuItem(
-                                    onClick = {
-                                        onSelectSpeed(speed)
-                                        showSpeedMenu = false
-                                    },
-                                    text = { Text(formatSpeed(speed)) },
-                                    trailingIcon = {
-                                        if (speed == progress.speed) Icon(Icons.Default.Check, contentDescription = null)
-                                    },
-                                )
-                            }
-                        }
-                    }
+                    SpeedButton(speed = progress.speed, onSelectSpeed = onSelectSpeed)
                 }
             },
         )
@@ -290,7 +258,51 @@ fun TTSPlayer(
 }
 
 @Composable
-private fun SecondaryControls(
+internal fun SpeedButton(
+    speed: Float,
+    onSelectSpeed: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    size: Dp = 48.dp,
+) {
+    var showSpeedMenu by remember { mutableStateOf(false) }
+    Box(modifier = modifier) {
+        val speedLabel = stringResource(R.string.read_aloud_speed)
+        PlainTooltipBox(tooltip = { Text(speedLabel) }) {
+            FilledTonalButton(
+                onClick = { showSpeedMenu = true },
+                shape = CircleShape,
+                contentPadding = PaddingValues(0.dp),
+                modifier =
+                    Modifier
+                        .size(size)
+                        .safeSemantics { contentDescription = "$speedLabel ${formatSpeed(speed)}" },
+            ) {
+                Text(formatSpeed(speed), style = MaterialTheme.typography.labelLarge, maxLines = 1)
+            }
+        }
+        DropdownMenu(
+            expanded = showSpeedMenu,
+            onDismissRequest = { showSpeedMenu = false },
+            modifier = Modifier.onKeyEventLikeEscape { showSpeedMenu = false },
+        ) {
+            for (option in READ_ALOUD_SPEEDS) {
+                DropdownMenuItem(
+                    onClick = {
+                        onSelectSpeed(option)
+                        showSpeedMenu = false
+                    },
+                    text = { Text(formatSpeed(option)) },
+                    trailingIcon = {
+                        if (option == speed) Icon(Icons.Default.Check, contentDescription = null)
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+internal fun SecondaryControls(
     progress: ReadAloudProgress,
     displayedArticleId: Long?,
     onSkipNext: () -> Unit,
@@ -298,6 +310,7 @@ private fun SecondaryControls(
     languages: ImmutableHolder<List<Locale>>,
     onSelectLanguage: (LocaleOverride) -> Unit,
     modifier: Modifier = Modifier,
+    languageIcon: ImageVector = Icons.Default.Translate,
 ) {
     var showMenu by remember { mutableStateOf(false) }
     val closeMenuText = stringResource(id = R.string.close_menu)
@@ -329,7 +342,7 @@ private fun SecondaryControls(
         Box {
             PlainTooltipBox(tooltip = { Text(stringResource(R.string.set_language)) }) {
                 IconButton(onClick = { showMenu = true }) {
-                    Icon(Icons.Default.Translate, contentDescription = stringResource(R.string.set_language))
+                    Icon(languageIcon, contentDescription = stringResource(R.string.set_language))
                 }
             }
             DropdownMenu(
