@@ -117,6 +117,7 @@ class GeminiNanoSummarizer(
                 .setInputType(SummarizerOptions.InputType.ARTICLE)
                 .setOutputType(SummarizerOptions.OutputType.THREE_BULLETS)
                 .setLanguage(SummarizerOptions.Language.ENGLISH)
+                .setLongInputAutoTruncationEnabled(true)
                 .build(),
         )
     }
