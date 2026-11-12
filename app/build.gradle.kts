@@ -121,6 +121,15 @@ android {
                 (project.findProperty("APP_ID_SUFFIX") as String?)?.let {
                     applicationIdSuffix = it
                 }
+                // Fork CI: skip R8 for faster builds
+                if (project.findProperty("SKIP_MINIFY") == "true") {
+                    isMinifyEnabled = false
+                    isShrinkResources = false
+                }
+                // Fork CI: only package native libraries for these ABIs (e.g. "arm64-v8a")
+                (project.findProperty("ABI_FILTERS") as String?)?.let {
+                    ndk.abiFilters.addAll(it.split(",").map(String::trim))
+                }
             }
         // See androidComponents below for related configurations
         flavorDimensions += "store"
