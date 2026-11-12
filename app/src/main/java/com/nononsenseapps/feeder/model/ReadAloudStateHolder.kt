@@ -150,11 +150,12 @@ class TTSStateHolder(
         title: String = "",
         author: String = "",
         feedTitle: String = "",
+        startOffset: Int = 0,
     ) {
         val text = textArray.filterNot { it.isBlank() }.joinToString("\n\n") { it.text }
         if (text.isBlank()) return
         coroutineScope.launch(Dispatchers.Main.immediate) {
-            request = SpeechRequest(articleId, text, useDetectLanguage, title, author, feedTitle)
+            request = SpeechRequest(articleId, text, useDetectLanguage, title, author, feedTitle, startOffset.coerceIn(0, text.length - 1))
             playWhenReady = true
             _ttsState.value = PlaybackStatus.PLAYING
             _progress.value = ReadAloudProgress(articleId = articleId, text = text, preparationProgress = 0f, followSpokenText = true, focusRequestId = ++focusSequence, speed = playbackSpeed)
@@ -341,7 +342,11 @@ class TTSStateHolder(
                         runCatching { engine.defaultVoice?.let { engine.voice = it } }
                         defaultVoiceLocale ?: preferredLocale
                     }
-            val parts = speechSegments(current.text, locale, minOf(TextToSpeech.getMaxSpeechInputLength(), 700), firstChunkMaxLength = 180)
+            val parts =
+                speechSegments(current.text, locale, minOf(TextToSpeech.getMaxSpeechInputLength(), 700), firstChunkMaxLength = 180)
+                    .startingAt(current.startOffset)
+                    .ifEmpty { error("No text to read") }
+            val readStart = parts.first().start
             return withContext(Dispatchers.IO) {
                 SpeechWaveFile(audio).use { wave ->
                     var buffer: SpeechAudioBuffer? = null
@@ -418,7 +423,7 @@ class TTSStateHolder(
                             withContext(Dispatchers.Main.immediate) {
                                 if (request === current) {
                                     segments = timeline.toList()
-                                    val fraction = part.end.toDouble() / current.text.length
+                                    val fraction = (part.end - readStart).toDouble() / (current.text.length - readStart)
                                     _progress.value =
                                         _progress.value.copy(
                                             durationMillis = (end / fraction).toLong().coerceAtLeast(end),
@@ -484,7 +489,7 @@ class TTSStateHolder(
         coroutineScope.launch(Dispatchers.Main.immediate) {
             playWhenReady = true
             if (_progress.value.error != null) {
-                request?.let { tts(listOf(AnnotatedString(it.text)), it.detectLanguage, it.articleId, it.title, it.author, it.feedTitle) }
+                request?.let { tts(listOf(AnnotatedString(it.text)), it.detectLanguage, it.articleId, it.title, it.author, it.feedTitle, it.startOffset) }
             } else {
                 player?.let {
                     if (it.playbackState == Player.STATE_ENDED) it.seekTo(0)
@@ -511,6 +516,28 @@ class TTSStateHolder(
                 updatePosition()
             }
         }
+    }
+
+    /**
+     * Jumps to [offset] in [text] when that part is already prepared for this article.
+     * Returns false when reading has to be started again from there instead.
+     */
+    fun playFromPreparedText(
+        articleId: Long,
+        text: String,
+        offset: Int,
+    ): Boolean {
+        val current = _progress.value
+        val speaking = request ?: return false
+        if (current.articleId != articleId || current.text != text || current.error != null || current.preparationProgress != null) return false
+        val first = segments.firstOrNull() ?: return false
+        // Text before the first prepared sentence was never synthesized
+        if (offset < first.start && speaking.startOffset > 0) return false
+        val target = segments.firstOrNull { it.end > offset } ?: return false
+        _progress.value = current.copy(followSpokenText = true)
+        seekTo(target.startMillis)
+        play()
+        return true
     }
 
     fun skipNext() {
@@ -603,6 +630,8 @@ class TTSStateHolder(
         val title: String,
         val author: String,
         val feedTitle: String,
+        // Where in text reading started, for "read aloud from here"
+        val startOffset: Int = 0,
     )
 
     companion object {

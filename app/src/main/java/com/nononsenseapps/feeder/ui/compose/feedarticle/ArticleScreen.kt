@@ -123,6 +123,7 @@ fun ArticleScreen(
     val viewState by viewModel.viewState.collectAsStateWithLifecycle()
     val readAloudProgress = viewModel.readAloudProgress
     val speechHighlight by viewModel.speechHighlight.collectAsStateWithLifecycle(initialValue = null)
+    val isReadingAloudHere by viewModel.isReadingAloudHere.collectAsStateWithLifecycle(initialValue = false)
     val isPagingMode by mavm.isPagingMode.collectAsStateWithLifecycle()
     val isAnimatedPaging by mavm.isAnimatedPaging.collectAsStateWithLifecycle()
 
@@ -208,6 +209,8 @@ fun ArticleScreen(
         speechHighlight = speechHighlight,
         ttsOnSeekTo = viewModel::ttsSeekTo,
         ttsOnSetSpeed = viewModel::ttsSetSpeed,
+        isReadingAloud = isReadingAloudHere,
+        ttsOnReadFrom = viewModel::ttsReadFrom,
         ttsOnUserScroll = viewModel::ttsStopFollowing,
         ttsOnGoToSpokenText = {
             viewModel.ttsFocusSpokenText()?.let { articleId ->
@@ -285,6 +288,8 @@ fun ArticleScreen(
     speechHighlight: SpeechHighlight? = null,
     ttsOnSeekTo: (Long) -> Unit = {},
     ttsOnSetSpeed: (Float) -> Unit = {},
+    isReadingAloud: Boolean = false,
+    ttsOnReadFrom: ((speechOffset: Int) -> Unit)? = null,
     ttsOnGoToSpokenText: () -> Unit = {},
     ttsOnUserScroll: () -> Unit = {},
     isPagingMode: Boolean = false,
@@ -549,6 +554,8 @@ fun ArticleScreen(
                 viewState = viewState,
                 screenType = ScreenType.SINGLE,
                 speechHighlight = speechHighlight,
+                isReadingAloud = isReadingAloud,
+                onReadAloudFrom = ttsOnReadFrom,
                 articleScrollState = articleScrollState,
                 onUserScroll = ttsOnUserScroll,
                 onFeedTitleClick = onFeedTitleClick,
@@ -689,6 +696,8 @@ fun ArticleContent(
     modifier: Modifier = Modifier,
     speechHighlight: SpeechHighlight? = null,
     onUserScroll: (() -> Unit)? = null,
+    isReadingAloud: Boolean = false,
+    onReadAloudFrom: ((speechOffset: Int) -> Unit)? = null,
 ) {
     val toolbarColor = MaterialTheme.colorScheme.surface.toArgb()
 
@@ -767,6 +776,8 @@ fun ArticleContent(
                     ColumnArticleContent(
                         articleContent = viewState.articleContent,
                         speechHighlight = speechHighlight,
+                        isReadingAloud = isReadingAloud,
+                        onReadAloudFrom = onReadAloudFrom,
                         onLinkClick = { link, index ->
                             if (index != null && elementPositions.containsKey(index)) {
                                 onUserScroll?.invoke()

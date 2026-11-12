@@ -69,6 +69,20 @@ class SpeechHighlightTest {
         assertTrue(highlights.containsKey(item))
     }
 
+    @Test fun tappedCharactersMappedToTheirPositionInTheSpeechText() {
+        val intro = text("  Intro paragraph.")
+        val blank = text("  ")
+        val quoted = text("A quoted line.")
+        val article = LinearArticle(listOf(intro, blank, LinearBlockQuote(emptySet(), null, quoted)))
+        val source = article.speechText()
+        assertEquals(0, article.speechOffsetOf(intro, 0))
+        assertEquals("paragraph.", source.substring(checkNotNull(article.speechOffsetOf(intro, intro.text.indexOf("paragraph"))), source.indexOf("\n")))
+        assertEquals("quoted line.", source.substring(checkNotNull(article.speechOffsetOf(quoted, 2))))
+        assertEquals(source.length - 1, article.speechOffsetOf(quoted, quoted.text.length))
+        assertEquals(null, article.speechOffsetOf(blank, 0))
+        assertEquals(null, article.speechOffsetOf(text("Not in the article."), 0))
+    }
+
     @Test fun formattedMinutesAndHours() {
         assertEquals("0:00", formatSpeechTime(-1))
         assertEquals("3:05", formatSpeechTime(185000))

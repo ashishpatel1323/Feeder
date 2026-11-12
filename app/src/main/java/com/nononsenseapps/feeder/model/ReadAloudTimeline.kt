@@ -45,6 +45,9 @@ internal fun speechSegments(
     }
 }
 
+/** Drops the segments before [offset], keeping the sentence that contains it. */
+internal fun List<SpeechSegment>.startingAt(offset: Int): List<SpeechSegment> = if (offset <= 0) this else dropWhile { it.end <= offset }
+
 internal fun List<SpeechSegment>.segmentAt(positionMillis: Long): SpeechSegment? = lastOrNull { positionMillis >= it.startMillis }?.takeIf { positionMillis < it.endMillis }
 
 /** Streams engine PCM to disk; never retains an article's audio in memory. */

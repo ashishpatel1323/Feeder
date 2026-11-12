@@ -178,6 +178,40 @@ internal fun LinearArticle.speechText(): String =
         .filter { it.isNotBlank() }
         .joinToString("\n\n")
 
+/**
+ * Position in [speechText] of character [index] in [text], or null when that element is not read aloud.
+ */
+internal fun LinearArticle.speechOffsetOf(
+    text: LinearText,
+    index: Int,
+): Int? {
+    var position = 0
+    var first = true
+    for (element in speakableTexts()) {
+        val trimmed = element.text.trim()
+        if (element === text && trimmed.isEmpty()) return null
+        if (trimmed.isEmpty()) continue
+        if (!first) position += 2
+        first = false
+        if (element === text) {
+            val leading = element.text.indexOfFirst { !it.isWhitespace() }
+            return position + (index - leading).coerceIn(0, trimmed.length - 1)
+        }
+        position += trimmed.length
+    }
+    return null
+}
+
+/** Lets a tap on article text start read aloud from that point. */
+internal class ReadAloudTapHandler(
+    // While reading, a tap jumps straight there; otherwise it offers to start reading
+    val isReading: Boolean,
+    val onReadFrom: (LinearText, Int) -> Unit,
+)
+
+@Suppress("ktlint:compose:compositionlocal-allowlist")
+internal val LocalReadAloudTapHandler = compositionLocalOf<ReadAloudTapHandler?> { null }
+
 /** Maps matching text in document order, never highlighting another occurrence of a repeated paragraph. */
 internal class SpeechHighlightIndex(
     article: LinearArticle,
