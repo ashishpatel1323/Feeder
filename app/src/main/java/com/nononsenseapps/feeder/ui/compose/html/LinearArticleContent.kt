@@ -767,7 +767,15 @@ fun LinearTextContent(
                     if (handler.isReading) {
                         handler.onReadFrom(linearText, offset)
                     } else {
-                        tappedWord = wordRangeAt(linearText.text, offset)
+                        // The layout's word boundaries understand languages written without spaces
+                        val boundary = layout.getWordBoundary(offset.coerceAtMost((linearText.text.length - 1).coerceAtLeast(0)))
+                        val layoutWord = boundary.start until boundary.end
+                        tappedWord =
+                            if (!layoutWord.isEmpty() && linearText.text.substring(boundary.start, boundary.end).any { it.isLetterOrDigit() }) {
+                                layoutWord
+                            } else {
+                                wordRangeAt(linearText.text, offset)
+                            }
                     }
                 }
             }
