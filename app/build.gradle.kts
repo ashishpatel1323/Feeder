@@ -117,6 +117,10 @@ android {
                 if (project.hasProperty("STORE_FILE")) {
                     signingConfig = signingConfigs.getByName("release")
                 }
+                // Lets CI builds install alongside (or over) other variants of the app
+                (project.findProperty("APP_ID_SUFFIX") as String?)?.let {
+                    applicationIdSuffix = it
+                }
             }
         // See androidComponents below for related configurations
         flavorDimensions += "store"
