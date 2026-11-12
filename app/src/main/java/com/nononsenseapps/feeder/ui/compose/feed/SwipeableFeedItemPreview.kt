@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BookmarkAdd
+import androidx.compose.material.icons.filled.BookmarkRemove
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.MarkEmailUnread
 import androidx.compose.material3.Icon
@@ -55,6 +57,7 @@ import com.nononsenseapps.feeder.ui.compose.feedarticle.FeedListFilter
 import com.nononsenseapps.feeder.ui.compose.feedarticle.onlyUnread
 import com.nononsenseapps.feeder.ui.compose.theme.LocalDimens
 import com.nononsenseapps.feeder.ui.compose.theme.SwipingItemToReadColor
+import com.nononsenseapps.feeder.ui.compose.theme.SwipingItemToSaveColor
 import com.nononsenseapps.feeder.ui.compose.theme.SwipingItemToUnreadColor
 import com.nononsenseapps.feeder.ui.compose.utils.isCompactLandscape
 import com.nononsenseapps.feeder.util.logDebug
@@ -94,10 +97,17 @@ fun SwipeableFeedItemPreview(
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val anchoredDraggableState = remember { AnchoredDraggableState(FeedItemSwipeState.CENTER) }
     val onSwipeCallback by rememberUpdatedState(newValue = onSwipe)
+    val onToggleBookmarkCallback by rememberUpdatedState(newValue = onToggleBookmark)
+
+    // Swiping towards the end (right in LTR) saves / unsaves; towards the start toggles read
+    val swipingToSave by remember {
+        derivedStateOf { anchoredDraggableState.offset > 0 }
+    }
 
     val color by animateColorAsState(
         targetValue =
             when {
+                swipingToSave -> SwipingItemToSaveColor
                 item.unread || filter.onlyUnread -> SwipingItemToReadColor
                 else -> SwipingItemToUnreadColor
             },
@@ -113,7 +123,12 @@ fun SwipeableFeedItemPreview(
 
     var skipHapticFeedback by remember { mutableStateOf(false) }
     LaunchedEffect(anchoredDraggableState.settledValue) {
-        if (anchoredDraggableState.settledValue != FeedItemSwipeState.CENTER) {
+        if (anchoredDraggableState.settledValue == FeedItemSwipeState.END) {
+            logDebug(LOG_TAG, "onSwipe toggle bookmark ${item.bookmarked}")
+            skipHapticFeedback = true
+            anchoredDraggableState.animateTo(FeedItemSwipeState.CENTER)
+            onToggleBookmarkCallback()
+        } else if (anchoredDraggableState.settledValue == FeedItemSwipeState.START) {
             logDebug(LOG_TAG, "onSwipe ${item.unread}")
             if (!filter.onlyUnread) {
                 skipHapticFeedback = true
@@ -264,9 +279,11 @@ fun SwipeableFeedItemPreview(
         ) {
             // Same icons the list already uses: double check = mark read, envelope = mark unread
             Icon(
-                when (item.unread || filter.onlyUnread) {
-                    true -> Icons.Default.DoneAll
-                    false -> Icons.Default.MarkEmailUnread
+                when {
+                    swipingToSave && item.bookmarked -> Icons.Default.BookmarkRemove
+                    swipingToSave -> Icons.Default.BookmarkAdd
+                    item.unread || filter.onlyUnread -> Icons.Default.DoneAll
+                    else -> Icons.Default.MarkEmailUnread
                 },
                 contentDescription = null,
             )
@@ -421,15 +438,9 @@ fun SwipeableFeedItemPreview(
                                             .height(0.dp)
                                             .width(0.dp)
 
-                                    // Left swipe can start anywhere on the item (anchors only allow
-                                    // the leftward direction); start padding keeps the drawer edge free
-                                    SwipeAsRead.ONLY_FROM_END -> {
-                                        this
-                                            .padding(start = 48.dp)
-                                            .matchParentSize()
-                                    }
-
-                                    SwipeAsRead.FROM_ANYWHERE -> {
+                                    // Swipes can start anywhere on the item; start padding keeps
+                                    // the nav drawer edge free
+                                    SwipeAsRead.ONLY_FROM_END, SwipeAsRead.FROM_ANYWHERE -> {
                                         this
                                             .padding(start = 48.dp)
                                             .matchParentSize()
@@ -447,14 +458,10 @@ fun SwipeableFeedItemPreview(
                 LaunchedEffect(swipeAsRead) {
                     anchoredDraggableState.updateAnchors(
                         DraggableAnchors {
-                            if (swipeAsRead == SwipeAsRead.ONLY_FROM_END) {
-                                FeedItemSwipeState.START at -(maxWidthPx / 2)
-                                FeedItemSwipeState.CENTER at 0f
-                            } else if (swipeAsRead == SwipeAsRead.FROM_ANYWHERE) {
-                                FeedItemSwipeState.START at -(maxWidthPx / 2)
-                                FeedItemSwipeState.CENTER at 0f
-                                FeedItemSwipeState.END at maxWidthPx / 2
-                            }
+                            // START = mark read / unread, END = save / unsave
+                            FeedItemSwipeState.START at -(maxWidthPx / 2)
+                            FeedItemSwipeState.CENTER at 0f
+                            FeedItemSwipeState.END at maxWidthPx / 2
                         },
                     )
                 }
