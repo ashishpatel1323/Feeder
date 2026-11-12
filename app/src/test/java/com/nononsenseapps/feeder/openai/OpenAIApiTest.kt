@@ -208,9 +208,19 @@ class OpenAIApiTest {
         assertTrue(settings.canUseAsTranslationApi)
     }
 
-    private fun createApi(response: ChatCompletion) = OpenAIApi("lang", openAIClientFactory = { OpenAIClientMock(response) })
+    private fun createApi(response: ChatCompletion) =
+        OpenAIApi(
+            "lang",
+            openAIClientFactory = { OpenAIClientMock(response) },
+            onDeviceSummarizer = FakeOnDeviceSummarizer(),
+        )
 
-    private fun createTranslationApi() = OpenAIApi("en", openAIClientFactory = { error("OpenAI client should not be used for translation-only providers") })
+    private fun createTranslationApi() =
+        OpenAIApi(
+            "en",
+            openAIClientFactory = { error("OpenAI client should not be used for translation-only providers") },
+            onDeviceSummarizer = FakeOnDeviceSummarizer(),
+        )
 
     private fun createResponse(message: String) =
         ChatCompletion(

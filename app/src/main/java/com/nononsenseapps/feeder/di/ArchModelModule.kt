@@ -18,6 +18,7 @@ import com.nononsenseapps.feeder.localtranslation.LocalTranslator
 import com.nononsenseapps.feeder.model.OPMLParserHandler
 import com.nononsenseapps.feeder.model.TranslationManager
 import com.nononsenseapps.feeder.model.opml.OPMLImporter
+import com.nononsenseapps.feeder.openai.GeminiNanoSummarizer
 import com.nononsenseapps.feeder.openai.OpenAIApi
 import com.nononsenseapps.feeder.openai.OpenAIClient
 import com.nononsenseapps.feeder.openai.OpenAIClientDefault
@@ -57,7 +58,14 @@ val archModelModule =
         bind<LocalTranslator>() with singleton { LocalTranslator(di) }
         bind<TranslationManager>() with singleton { TranslationManager(di) }
         bindFactory<OpenAISettings, OpenAIClient> { settings -> OpenAIClientDefault(settings) }
-        bind<OpenAIApi>() with singleton { OpenAIApi(appLang = Locale.getDefault().getISO3Language(), factory()) }
+        bind<OpenAIApi>() with
+            singleton {
+                OpenAIApi(
+                    appLang = Locale.getDefault().getISO3Language(),
+                    openAIClientFactory = factory(),
+                    onDeviceSummarizer = GeminiNanoSummarizer(instance<Application>()),
+                )
+            }
         bind<SuggestedFeedRepository>() with
             singleton {
                 SuggestedFeedRepository(

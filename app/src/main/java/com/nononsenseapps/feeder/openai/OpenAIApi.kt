@@ -25,7 +25,7 @@ import java.util.concurrent.TimeUnit
 class OpenAIApi(
     private val appLang: String,
     private val openAIClientFactory: (OpenAISettings) -> OpenAIClient,
-    private val onDeviceSummarizer: OnDeviceSummarizer = GeminiNanoSummarizer(),
+    private val onDeviceSummarizer: OnDeviceSummarizer,
 ) {
     private val json =
         Json {
