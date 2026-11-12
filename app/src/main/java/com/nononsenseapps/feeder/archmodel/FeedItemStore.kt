@@ -118,7 +118,7 @@ class FeedItemStore(
                 append("ORDER BY ")
                 if (groupByFeed) {
                     // Feeds alphabetically, then each feed's articles in the chosen date order
-                    append("$FEED_GROUP_SORT_KEY ASC, feeds.id ASC, ")
+                    append("$FEED_GROUP_SORT_KEY ASC, $FEED_GROUP_ID ASC, ")
                 }
                 when (newestFirst) {
                     true -> append("$FEED_ITEM_LIST_SORT_ORDER_DESC\n")
@@ -216,15 +216,17 @@ class FeedItemStore(
 
             if (feedsBefore != null) {
                 val cmp = if (feedsBefore) "<" else ">"
-                val cursorFeedId = "(SELECT feed_id FROM feed_items WHERE id = ?)"
+                // Articles without a feed (imported saved articles) form one group keyed
+                // by an empty name and id 0, matching the list order.
+                val cursorFeedId = "(SELECT IFNULL(feed_id, 0) FROM feed_items WHERE id = ?)"
                 val cursorFeedKey =
-                    "(SELECT $FEED_GROUP_SORT_KEY FROM feeds WHERE feeds.id = $cursorFeedId)"
+                    "IFNULL((SELECT $FEED_GROUP_SORT_KEY FROM feeds WHERE feeds.id = $cursorFeedId), '')"
                 append("$FEED_GROUP_SORT_KEY $cmp $cursorFeedKey\n").also { args.add(cursor.id) }
-                append("or $FEED_GROUP_SORT_KEY = $cursorFeedKey and feeds.id $cmp $cursorFeedId\n").also {
+                append("or $FEED_GROUP_SORT_KEY = $cursorFeedKey and $FEED_GROUP_ID $cmp $cursorFeedId\n").also {
                     args.add(cursor.id)
                     args.add(cursor.id)
                 }
-                append("or feeds.id = $cursorFeedId and (\n").also { args.add(cursor.id) }
+                append("or $FEED_GROUP_ID = $cursorFeedId and (\n").also { args.add(cursor.id) }
             }
 
             append(
@@ -391,7 +393,12 @@ class FeedItemStore(
  * Sort key for grouping the list by feed: the name shown for the feed, ignoring case.
  */
 private const val FEED_GROUP_SORT_KEY =
-    "(COALESCE(NULLIF(TRIM(feeds.custom_title), ''), feeds.title) COLLATE NOCASE)"
+    "(COALESCE(NULLIF(TRIM(feeds.custom_title), ''), feeds.title, '') COLLATE NOCASE)"
+
+/**
+ * Feed id for grouping, with articles that have no feed sharing id 0.
+ */
+private const val FEED_GROUP_ID = "IFNULL(feeds.id, 0)"
 
 private fun PreviewItem.toFeedListItem(context: Context) =
     FeedListItem(
