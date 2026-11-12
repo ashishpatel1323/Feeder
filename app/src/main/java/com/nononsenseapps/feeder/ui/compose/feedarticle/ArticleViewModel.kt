@@ -61,6 +61,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -96,6 +97,23 @@ class ArticleViewModel(
         readAloudProgress
             .map { it.articleId == itemId && it.error == null }
             .distinctUntilChanged()
+
+    // The original web page shown in place of the reader view, with its own text to read aloud
+    private val _showOriginalPage = MutableStateFlow(state["showOriginalPage"] ?: false)
+    val showOriginalPage: StateFlow<Boolean> = _showOriginalPage.asStateFlow()
+    private var originalPageText: String? = null
+
+    fun toggleOriginalPage() {
+        val show = !_showOriginalPage.value
+        state["showOriginalPage"] = show
+        _showOriginalPage.value = show
+        if (!show) originalPageText = null
+    }
+
+    /** The visible text of the original page, in the order the page script reports offsets in. */
+    fun setOriginalPageText(text: String) {
+        originalPageText = text.takeIf { it.isNotBlank() }
+    }
 
     fun ttsSeekTo(positionMillis: Long) = ttsStateHolder.seekTo(positionMillis)
 
@@ -492,22 +510,26 @@ class ArticleViewModel(
         toolbarVisible.update { visible }
     }
 
-    // Which version of the article (full text, translated) read aloud was last started with from here
-    private var spokenVersion: Pair<Boolean, Boolean>? = null
+    // Which version of the article (full text, translated, original page) read aloud was last started with from here
+    private var spokenVersion: Triple<Boolean, Boolean, Boolean>? = null
 
-    // Read exactly what is on screen (feed text, full text or translation) so highlights match it
-    private fun displayedSpeechText(): String? =
-        viewState.value
+    private fun displayedVersion() = Triple(isFullText, viewState.value.isShowingTranslated, _showOriginalPage.value)
+
+    // Read exactly what is on screen (feed text, full text, translation or original page) so highlights match it
+    private fun displayedSpeechText(): String? {
+        if (_showOriginalPage.value) originalPageText?.let { return it }
+        return viewState.value
             .takeIf { it.textToDisplay == TextToDisplay.CONTENT }
             ?.articleContent
             ?.speechText()
             ?.takeIf { it.isNotBlank() }
+    }
 
     private fun readAloud(
         text: String,
         startOffset: Int = 0,
     ) {
-        spokenVersion = isFullText to viewState.value.isShowingTranslated
+        spokenVersion = displayedVersion()
         ttsStateHolder.tts(
             textArray = listOf(AnnotatedString(text)),
             useDetectLanguage = repository.useDetectLanguage.value,
@@ -531,7 +553,7 @@ class ArticleViewModel(
     fun ttsPlay() {
         stopPodcastPlayback()
         val displayedText = displayedSpeechText()
-        val displayedVersion = isFullText to viewState.value.isShowingTranslated
+        val displayedVersion = displayedVersion()
         // A session started from another screen is resumed; one started here only if the same version is shown
         val sameVersion = spokenVersion == null || spokenVersion == displayedVersion
         if (sameVersion && ttsStateHolder.resumeIfPausedOn(itemId)) {

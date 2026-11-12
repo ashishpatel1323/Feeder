@@ -131,6 +131,8 @@
   <string name="article_list_settings">Article list</string>
   <string name="open_link_in_web_view">Open link in web view</string>
   <string name="open_in_web_view">Open in Web view</string>
+  <string name="show_original_page">Show original page</string>
+  <string name="show_reader_view">Show reader view</string>
   <string name="max_feed_items">Max items per feed</string>
   <string name="could_not_load_url">Could not load URL</string>
 
