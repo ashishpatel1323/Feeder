@@ -2,6 +2,8 @@ package com.nononsenseapps.feeder.ui.compose.readaloud
 
 import com.nononsenseapps.feeder.model.SpeechSegment
 import com.nononsenseapps.feeder.model.html.LinearArticle
+import com.nononsenseapps.feeder.model.html.LinearBlockQuote
+import com.nononsenseapps.feeder.model.html.LinearListItem
 import com.nononsenseapps.feeder.model.html.LinearText
 import com.nononsenseapps.feeder.model.html.LinearTextBlockStyle
 import org.junit.Assert.assertEquals
@@ -43,6 +45,28 @@ class SpeechHighlightTest {
         assertSame(first, focus.text)
         assertEquals(7L, focus.requestId)
         assertEquals(first.text.indices, focus.range)
+    }
+
+    @Test fun speechTextFromDisplayedArticleHighlightedEveryParagraph() {
+        val intro = text("  Intro paragraph.  ")
+        val quoted = text("A quoted line.")
+        val item = text("A list item.")
+        val blank = text("   ")
+        val article =
+            LinearArticle(
+                listOf(
+                    intro,
+                    LinearBlockQuote(emptySet(), null, quoted),
+                    blank,
+                    LinearListItem(emptySet(), null, listOf(item)),
+                ),
+            )
+        val source = article.speechText()
+        assertEquals("Intro paragraph.\n\nA quoted line.\n\nA list item.", source)
+        val highlights = SpeechHighlightIndex(article, source).highlights(SpeechSegment(0, source.length))
+        assertTrue(highlights.containsKey(intro))
+        assertTrue(highlights.containsKey(quoted))
+        assertTrue(highlights.containsKey(item))
     }
 
     @Test fun formattedMinutesAndHours() {

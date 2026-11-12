@@ -50,6 +50,7 @@ import com.nononsenseapps.feeder.openai.canSummarize
 import com.nononsenseapps.feeder.openai.canUseAsTranslationApi
 import com.nononsenseapps.feeder.openai.isLocalTranslation
 import com.nononsenseapps.feeder.ui.compose.readaloud.SpeechHighlight
+import com.nononsenseapps.feeder.ui.compose.readaloud.speechText
 import com.nononsenseapps.feeder.ui.compose.text.htmlToAnnotatedString
 import com.nononsenseapps.feeder.ui.text.MarkdownToHtmlConverter
 import com.nononsenseapps.feeder.util.Either
@@ -342,6 +343,10 @@ class ArticleViewModel(
         // Using as general loading text
         textToDisplay.update { TextToDisplay.LOADING_FULLTEXT }
         displayFullTextOverride.value = displayFullTextOverride.value?.not() ?: articleFlow.value?.fullTextByDefault?.not() ?: true
+        // Audio prepared for the other version of the text would no longer match what is shown
+        if (readAloudProgress.value.articleId == itemId) {
+            ttsStateHolder.stop()
+        }
         if (showTranslatedContent.value) {
             translateCurrentArticle()
         }
@@ -484,7 +489,25 @@ class ArticleViewModel(
 
     fun ttsPlay() {
         stopPodcastPlayback()
-        if (ttsStateHolder.resumeIfPausedOn(itemId)) {
+        // Read exactly what is on screen (feed text, full text or translation) so highlights match it
+        val displayedText =
+            viewState.value
+                .takeIf { it.textToDisplay == TextToDisplay.CONTENT }
+                ?.articleContent
+                ?.speechText()
+                ?.takeIf { it.isNotBlank() }
+        if (ttsStateHolder.resumeIfPausedOn(itemId, displayedText)) {
+            return
+        }
+        if (displayedText != null) {
+            ttsStateHolder.tts(
+                textArray = listOf(AnnotatedString(displayedText)),
+                useDetectLanguage = repository.useDetectLanguage.value,
+                articleId = itemId,
+                title = viewState.value.articleTitle,
+                author = viewState.value.author.orEmpty(),
+                feedTitle = viewState.value.feedDisplayTitle,
+            )
             return
         }
         viewModelScope.launch(Dispatchers.IO) {

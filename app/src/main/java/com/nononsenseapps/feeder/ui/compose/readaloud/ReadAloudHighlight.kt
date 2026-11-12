@@ -146,6 +146,38 @@ internal class SpeechFocusTarget(
 @Suppress("ktlint:compose:compositionlocal-allowlist")
 internal val LocalSpeechFocusTarget = compositionLocalOf<SpeechFocusTarget?> { null }
 
+/**
+ * The text elements of an article in reading order, the same ones that can be highlighted.
+ */
+internal fun LinearArticle.speakableTexts(): List<LinearText> {
+    val result = mutableListOf<LinearText>()
+
+    fun visit(element: LinearElement) {
+        when (element) {
+            is LinearText -> result += element
+            is LinearBlockQuote -> element.content.forEach(::visit)
+            is LinearListItem -> element.content.forEach(::visit)
+            is LinearTable ->
+                element.cells.entries
+                    .sortedWith(compareBy({ it.key.row }, { it.key.col }))
+                    .filterNot { it.value.isFiller }
+                    .forEach { it.value.content.forEach(::visit) }
+            else -> Unit
+        }
+    }
+    elements.forEach(::visit)
+    return result
+}
+
+/**
+ * The text to read aloud for an article, built from what is shown so highlights always match.
+ */
+internal fun LinearArticle.speechText(): String =
+    speakableTexts()
+        .map { it.text.trim() }
+        .filter { it.isNotBlank() }
+        .joinToString("\n\n")
+
 /** Maps matching text in document order, never highlighting another occurrence of a repeated paragraph. */
 internal class SpeechHighlightIndex(
     article: LinearArticle,
@@ -157,31 +189,17 @@ internal class SpeechHighlightIndex(
 
     init {
         var cursor = 0
-
-        fun visit(element: LinearElement) {
-            when (element) {
-                is LinearText -> {
-                    val normalized = normalizeSpeechText(element.text)
-                    if (normalized.text.isNotBlank()) {
-                        val start = source.text.indexOf(normalized.text, cursor)
-                        if (start >= 0) {
-                            matches[element] = start to normalized
-                            documentOrder += element
-                            cursor = start + normalized.text.length
-                        }
-                    }
+        article.speakableTexts().forEach { element ->
+            val normalized = normalizeSpeechText(element.text)
+            if (normalized.text.isNotBlank()) {
+                val start = source.text.indexOf(normalized.text, cursor)
+                if (start >= 0) {
+                    matches[element] = start to normalized
+                    documentOrder += element
+                    cursor = start + normalized.text.length
                 }
-                is LinearBlockQuote -> element.content.forEach(::visit)
-                is LinearListItem -> element.content.forEach(::visit)
-                is LinearTable ->
-                    element.cells.entries
-                        .sortedWith(compareBy({ it.key.row }, { it.key.col }))
-                        .filterNot { it.value.isFiller }
-                        .forEach { it.value.content.forEach(::visit) }
-                else -> Unit
             }
         }
-        article.elements.forEach(::visit)
     }
 
     fun highlights(segment: SpeechSegment): Map<LinearText, IntRange> {
