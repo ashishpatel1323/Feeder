@@ -1,11 +1,15 @@
 package com.nononsenseapps.feeder.ui.compose.feed
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.RssFeed
@@ -22,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
@@ -177,25 +182,50 @@ internal fun dateHeaderText(
 }
 
 /**
- * Section header shown above the first article of each group.
+ * Stable string form of [groupKey], used to remember which groups are collapsed.
+ */
+fun FeedListItem.groupKeyString(grouping: FeedListGrouping): String = "${grouping.name}:${groupKey(grouping)}"
+
+/**
+ * Section header shown above the first article of each group: a full-width shaded band with
+ * the group's name and a chevron. Tapping it collapses or expands the group.
  */
 @Composable
 fun FeedListGroupHeader(
     text: String,
+    collapsed: Boolean,
+    onToggle: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleSmall,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
+    val expandedString = stringResource(R.string.group_expanded)
+    val collapsedString = stringResource(R.string.group_collapsed)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier =
             modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface)
-                .padding(horizontal = 16.dp, vertical = 10.dp)
-                .safeSemantics { heading() },
-    )
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                .clickable(onClick = onToggle)
+                .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp)
+                .safeSemantics(mergeDescendants = true) {
+                    heading()
+                    stateDescription = if (collapsed) collapsedString else expandedString
+                    role = Role.Button
+                },
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Icon(
+            if (collapsed) Icons.Default.ExpandMore else Icons.Default.ExpandLess,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
