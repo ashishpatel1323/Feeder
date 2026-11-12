@@ -121,10 +121,10 @@ android {
                 (project.findProperty("APP_ID_SUFFIX") as String?)?.let {
                     applicationIdSuffix = it
                 }
-                // Fork CI: skip R8 for faster builds
-                if (project.findProperty("SKIP_MINIFY") == "true") {
-                    isMinifyEnabled = false
-                    isShrinkResources = false
+                // Fork CI: keep R8 shrinking (unshrunk APK is ~100 MB) but skip its
+                // slow optimization passes
+                if (project.findProperty("FAST_R8") == "true") {
+                    proguardFile("proguard-ci-fast.pro")
                 }
                 // Fork CI: only package native libraries for these ABIs (e.g. "arm64-v8a")
                 (project.findProperty("ABI_FILTERS") as String?)?.let {

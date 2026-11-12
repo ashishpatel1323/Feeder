@@ -3,9 +3,9 @@
 #
 # Upstream's release jobs need the upstream signing secrets, so this builds the
 # F-Droid release variant signed with the repo's shared debug keystore.
-# For speed it skips R8 (that step alone took ~2.5 min), and for size it only
-# packages arm64-v8a native libraries (the bundled Go feed parser ships a large
-# .so per ABI). Every 64-bit Android phone from the last several years is arm64.
+# R8 still shrinks the app (without it the APK is ~100 MB), but its slow
+# optimization passes are skipped. Only arm64-v8a native libraries are packaged,
+# which every 64-bit Android phone from the last several years uses.
 # That key is stable, so each new APK installs over the previous one. The
 # ".debug" application id suffix keeps the same package as the old debug APKs,
 # so existing installs update in place and keep their feeds and settings.
@@ -55,7 +55,7 @@ jobs:
           -PKEY_ALIAS=AndroidDebugKey
           -PKEY_PASSWORD=android
           -PAPP_ID_SUFFIX=.debug
-          -PSKIP_MINIFY=true
+          -PFAST_R8=true
           -PABI_FILTERS=arm64-v8a
 
       - name: rename apk
