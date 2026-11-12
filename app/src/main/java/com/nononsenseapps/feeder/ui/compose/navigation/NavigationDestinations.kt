@@ -6,6 +6,7 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -433,6 +434,18 @@ data object FeedDestination : NavigationDestination(
     }
 }
 
+/**
+ * Direction of the article swipe that is opening the next article, so it can slide in from
+ * the side it was swiped from.
+ */
+enum class ArticleSwipeDirection {
+    NONE,
+    NEXT,
+    PREVIOUS,
+}
+
+private var pendingArticleSwipe = ArticleSwipeDirection.NONE
+
 data object ArticleDestination : NavigationDestination(
     path = "reader",
     navArguments =
@@ -447,13 +460,38 @@ data object ArticleDestination : NavigationDestination(
                 uriPattern = "$DEEP_LINK_BASE_URI/article/{itemId}"
             },
         ),
+    enterTransition = {
+        when (pendingArticleSwipe) {
+            ArticleSwipeDirection.NEXT -> slideInHorizontally { it }
+            ArticleSwipeDirection.PREVIOUS -> slideInHorizontally { -it }
+            ArticleSwipeDirection.NONE -> fadeIn()
+        }
+    },
 ) {
     fun navigate(
         navController: NavController,
         itemId: Long,
     ) {
+        pendingArticleSwipe = ArticleSwipeDirection.NONE
         navController.navigate("$path/$itemId") {
             launchSingleTop = true
+        }
+    }
+
+    /**
+     * Replaces the open article with a neighbour from the list, so back still returns to the
+     * list.
+     */
+    fun swipeTo(
+        navController: NavController,
+        itemId: Long,
+        direction: ArticleSwipeDirection,
+    ) {
+        pendingArticleSwipe = direction
+        navController.navigate("$path/$itemId") {
+            popUpTo(this@ArticleDestination.route) {
+                inclusive = true
+            }
         }
     }
 
@@ -489,6 +527,7 @@ data object ArticleDestination : NavigationDestination(
             viewModel = backStackEntry.diAwareViewModel(),
             mainActivityViewModel = mainActivityViewModel,
             onNavigateToArticle = { ArticleDestination.navigate(navController, it) },
+            onSwipeToArticle = { id, direction -> swipeTo(navController, id, direction) },
         )
     }
 }

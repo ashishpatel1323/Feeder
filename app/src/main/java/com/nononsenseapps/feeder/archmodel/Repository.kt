@@ -504,6 +504,54 @@ class Repository(
         runOnceSyncChainSendRead(di)
     }
 
+    // The article list as it was when an article was opened from it, so swiping between
+    // articles follows what the user saw even after opening marks articles as read (which
+    // can drop them from an "Unread only" list or move them to another Status group).
+    @Volatile
+    private var articleSwipeList: List<Long> = emptyList()
+
+    /**
+     * Remembers the current list's order for swiping between articles. Call before the opened
+     * article is marked as read.
+     */
+    suspend fun captureArticleSwipeList(openedItemId: Long) {
+        articleSwipeList = loadCurrentFeedListIds(alsoIncludeId = openedItemId)
+    }
+
+    /**
+     * The articles before and after [itemId] in the list the user came from, null at either end.
+     */
+    suspend fun getArticleSwipeNeighbors(itemId: Long): Pair<Long?, Long?> {
+        var list = articleSwipeList
+        var index = list.indexOf(itemId)
+        if (index < 0) {
+            // Opened from somewhere else, like a notification: use the list as it is now
+            list = loadCurrentFeedListIds(alsoIncludeId = itemId)
+            articleSwipeList = list
+            index = list.indexOf(itemId)
+        }
+        if (index < 0) return null to null
+        return list.getOrNull(index - 1) to list.getOrNull(index + 1)
+    }
+
+    private suspend fun loadCurrentFeedListIds(alsoIncludeId: Long): List<Long> {
+        val (feedId, tag) = currentFeedAndTag.value
+        return feedItemStore.getFeedListItemIds(
+            feedId = feedId,
+            tag = tag,
+            minReadTime =
+                when (feedId) {
+                    ID_SAVED_ARTICLES -> Instant.EPOCH
+                    else -> minReadTime.value
+                },
+            sorting = currentSorting.value,
+            filter = feedListFilter.value,
+            search = search.value,
+            grouping = feedListGrouping.value,
+            alsoIncludeId = alsoIncludeId,
+        )
+    }
+
     /**
      * The order a mark-above/below follows, or null for the plain date orders.
      */

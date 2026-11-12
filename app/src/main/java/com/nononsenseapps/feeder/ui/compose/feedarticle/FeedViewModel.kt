@@ -433,6 +433,7 @@ class FeedViewModel(
             }
 
             else -> {
+                repository.captureArticleSwipeList(itemId)
                 setCurrentArticle(itemId)
                 navigateToArticle()
             }
@@ -471,7 +472,8 @@ class FeedViewModel(
     fun openArticleInReader(
         itemId: Long,
         navigateToArticle: () -> Unit,
-    ) {
+    ) = viewModelScope.launch {
+        repository.captureArticleSwipeList(itemId)
         setCurrentArticle(itemId)
         navigateToArticle()
         markAsRead(itemId)

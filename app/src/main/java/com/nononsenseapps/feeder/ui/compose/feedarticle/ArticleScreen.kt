@@ -84,6 +84,7 @@ import com.nononsenseapps.feeder.ui.ScrollDirection
 import com.nononsenseapps.feeder.ui.compose.components.TranslationProgressContent
 import com.nononsenseapps.feeder.ui.compose.feed.PlainTooltipBox
 import com.nononsenseapps.feeder.ui.compose.html.ColumnArticleContent
+import com.nononsenseapps.feeder.ui.compose.navigation.ArticleSwipeDirection
 import com.nononsenseapps.feeder.ui.compose.icons.CustomFilled
 import com.nononsenseapps.feeder.ui.compose.icons.TextToSpeech
 import com.nononsenseapps.feeder.ui.compose.readaloud.HideableTTSPlayer
@@ -117,6 +118,7 @@ fun ArticleScreen(
     mainActivityViewModel: MainActivityViewModel,
     modifier: Modifier = Modifier,
     onNavigateToArticle: (Long) -> Unit = {},
+    onSwipeToArticle: (Long, ArticleSwipeDirection) -> Unit = { _, _ -> },
 ) {
     BackHandler(onBack = onNavigateUp)
     val di = LocalDI.current
@@ -130,6 +132,7 @@ fun ArticleScreen(
     val isPagingMode by mavm.isPagingMode.collectAsStateWithLifecycle()
     val isAnimatedPaging by mavm.isAnimatedPaging.collectAsStateWithLifecycle()
     val showOriginalPage by viewModel.showOriginalPage.collectAsStateWithLifecycle()
+    val swipeNeighbors by viewModel.swipeNeighbors.collectAsStateWithLifecycle()
 
     val articleScrollState = rememberScrollState(initial = viewModel.scrollPosition)
 
@@ -254,6 +257,8 @@ fun ArticleScreen(
         onToggleOriginalPage = viewModel::toggleOriginalPage,
         onOriginalPageText = viewModel::setOriginalPageText,
         onOpenLink = { link -> activityLauncher.openLinkInCustomTab(link, toolbarColor) },
+        swipeNeighbors = swipeNeighbors,
+        onSwipeToArticle = onSwipeToArticle,
     )
 }
 
@@ -304,6 +309,8 @@ fun ArticleScreen(
     onToggleOriginalPage: () -> Unit = {},
     onOriginalPageText: (String) -> Unit = {},
     onOpenLink: (String) -> Unit = {},
+    swipeNeighbors: ArticleSwipeNeighbors = ArticleSwipeNeighbors(),
+    onSwipeToArticle: (Long, ArticleSwipeDirection) -> Unit = { _, _ -> },
 ) {
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
@@ -460,81 +467,84 @@ fun ArticleScreen(
             }
         } else {
             // Box handles the dynamic padding so ArticleContent don't have to recompose on scroll
-            SpeechFollowViewport(
-                centerSpeech = speechHighlight?.followSpokenText == true,
-                modifier =
-                    Modifier
-                        .padding(padding)
-                        .stopSpeechFollowingOnUserScroll(ttsOnUserScroll),
+            ArticleSwipeContainer(
+                neighbors = swipeNeighbors,
+                onSwipeTo = onSwipeToArticle,
+                modifier = Modifier.padding(padding),
             ) {
-                val coroutineScope = rememberCoroutineScope()
-                ArticleContent(
-                    viewState = viewState,
-                    screenType = ScreenType.SINGLE,
-                    speechHighlight = speechHighlight,
-                    isReadingAloud = isReadingAloud,
-                    onReadAloudFrom = ttsOnReadFrom,
-                    articleScrollState = articleScrollState,
-                    onUserScroll = ttsOnUserScroll,
-                    onFeedTitleClick = onFeedTitleClick,
-                    onOpenAudioPlayer = onOpenAudioPlayer,
-                    onOpenInCustomTab = onOpenInCustomTab,
-                    onBookmark = onToggleBookmark,
-                    onMarkAsUnread = onMarkAsUnread,
-                    modifier =
-                        Modifier
-                            .focusGroup()
-                            .focusRequester(focusArticle)
-                            .focusProperties {
-                                up = focusTopBar
-                            },
-                )
+                SpeechFollowViewport(
+                    centerSpeech = speechHighlight?.followSpokenText == true,
+                    modifier = Modifier.stopSpeechFollowingOnUserScroll(ttsOnUserScroll),
+                ) {
+                    val coroutineScope = rememberCoroutineScope()
+                    ArticleContent(
+                        viewState = viewState,
+                        screenType = ScreenType.SINGLE,
+                        speechHighlight = speechHighlight,
+                        isReadingAloud = isReadingAloud,
+                        onReadAloudFrom = ttsOnReadFrom,
+                        articleScrollState = articleScrollState,
+                        onUserScroll = ttsOnUserScroll,
+                        onFeedTitleClick = onFeedTitleClick,
+                        onOpenAudioPlayer = onOpenAudioPlayer,
+                        onOpenInCustomTab = onOpenInCustomTab,
+                        onBookmark = onToggleBookmark,
+                        onMarkAsUnread = onMarkAsUnread,
+                        modifier =
+                            Modifier
+                                .focusGroup()
+                                .focusRequester(focusArticle)
+                                .focusProperties {
+                                    up = focusTopBar
+                                },
+                    )
 
-                if (isPagingMode) {
-                    Row(modifier = Modifier.matchParentSize()) {
-                        Box(
-                            modifier =
-                                Modifier
-                                    .fillMaxHeight()
-                                    .weight(0.2f)
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null,
-                                    ) {
-                                        val scrollAmount = (articleScrollState.viewportSize * 0.9f).toInt()
-                                        val target = (articleScrollState.value - scrollAmount).coerceAtLeast(0)
-                                        ttsOnUserScroll()
-                                        coroutineScope.launch {
-                                            if (isAnimatedPaging) {
-                                                articleScrollState.animateScrollTo(target)
-                                            } else {
-                                                articleScrollState.scrollTo(target)
+                    if (isPagingMode) {
+                        Row(modifier = Modifier.matchParentSize()) {
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .fillMaxHeight()
+                                        .weight(0.2f)
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null,
+                                        ) {
+                                            val scrollAmount = (articleScrollState.viewportSize * 0.9f).toInt()
+                                            val target = (articleScrollState.value - scrollAmount).coerceAtLeast(0)
+                                            ttsOnUserScroll()
+                                            coroutineScope.launch {
+                                                if (isAnimatedPaging) {
+                                                    articleScrollState.animateScrollTo(target)
+                                                } else {
+                                                    articleScrollState.scrollTo(target)
+                                                }
                                             }
-                                        }
-                                    },
-                        )
-                        Spacer(modifier = Modifier.weight(0.6f))
-                        Box(
-                            modifier =
-                                Modifier
-                                    .fillMaxHeight()
-                                    .weight(0.2f)
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null,
-                                    ) {
-                                        val scrollAmount = (articleScrollState.viewportSize * 0.9f).toInt()
-                                        val target = (articleScrollState.value + scrollAmount).coerceAtMost(articleScrollState.maxValue)
-                                        ttsOnUserScroll()
-                                        coroutineScope.launch {
-                                            if (isAnimatedPaging) {
-                                                articleScrollState.animateScrollTo(target)
-                                            } else {
-                                                articleScrollState.scrollTo(target)
+                                        },
+                            )
+                            Spacer(modifier = Modifier.weight(0.6f))
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .fillMaxHeight()
+                                        .weight(0.2f)
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null,
+                                        ) {
+                                            val scrollAmount = (articleScrollState.viewportSize * 0.9f).toInt()
+                                            val target = (articleScrollState.value + scrollAmount).coerceAtMost(articleScrollState.maxValue)
+                                            ttsOnUserScroll()
+                                            coroutineScope.launch {
+                                                if (isAnimatedPaging) {
+                                                    articleScrollState.animateScrollTo(target)
+                                                } else {
+                                                    articleScrollState.scrollTo(target)
+                                                }
                                             }
-                                        }
-                                    },
-                        )
+                                        },
+                            )
+                        }
                     }
                 }
             }
