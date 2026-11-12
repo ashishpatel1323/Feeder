@@ -152,6 +152,18 @@ class ArticleViewModel(
     val scrollPosition: Int get() =
         state["scrollPosition"] ?: 0
 
+    private val _swipeNeighbors = MutableStateFlow(ArticleSwipeNeighbors())
+
+    /** The articles before and after this one in the list the user opened it from. */
+    val swipeNeighbors: StateFlow<ArticleSwipeNeighbors> = _swipeNeighbors.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            val (previous, next) = repository.getArticleSwipeNeighbors(itemId)
+            _swipeNeighbors.value = ArticleSwipeNeighbors(previousId = previous, nextId = next)
+        }
+    }
+
     private val articleFlow =
         repository
             .getArticleFlow(itemId)

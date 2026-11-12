@@ -167,6 +167,9 @@ interface FeedItemDao {
     @RawQuery(observedEntities = [FeedItem::class, Feed::class])
     fun getFeedListGroups(query: SupportSQLiteQuery): Flow<List<FeedListGroup>>
 
+    @RawQuery
+    suspend fun getFeedItemIdsRaw(query: SupportSQLiteQuery): List<Long>
+
     @Query(
         """
         SELECT $PREVIEW_COLUMNS

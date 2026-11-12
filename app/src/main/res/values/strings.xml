@@ -453,4 +453,8 @@
   <string name="widget_title">Feeder</string>
   <string name="widget_refreshing">Refreshing</string>
   <string name="force_single_column">Force single column</string>
+  <string name="next_article">Next article</string>
+  <string name="previous_article">Previous article</string>
+  <string name="last_article_in_list">Last article in this list</string>
+  <string name="first_article_in_list">First article in this list</string>
 </resources>

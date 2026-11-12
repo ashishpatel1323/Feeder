@@ -134,6 +134,46 @@ class FeedItemStore(
             }
 
     /**
+     * Ids of every article in the list, in the order the list shows them (groups, then sort).
+     * [alsoIncludeId] is kept even if the filter would hide it, e.g. an article that was just
+     * marked as read while "Unread only" is on.
+     */
+    suspend fun getFeedListItemIds(
+        feedId: Long,
+        tag: String,
+        minReadTime: Instant,
+        sorting: SortingOptions,
+        filter: FeedListFilter,
+        search: String,
+        grouping: FeedListGrouping,
+        alsoIncludeId: Long = ID_UNSET,
+    ): List<Long> {
+        val queryString = StringBuilder()
+        val args = mutableListOf<Any?>()
+
+        queryString.apply {
+            append("SELECT feed_items.id FROM feed_items\n")
+            append("LEFT JOIN feeds ON feed_items.feed_id = feeds.id\n")
+            append("WHERE (\n")
+            rawQueryFilter(filter, search, args, minReadTime, feedId, tag)
+            append(")\n")
+            if (alsoIncludeId > ID_UNSET) {
+                append("OR feed_items.id = ?\n").also { args.add(alsoIncludeId) }
+            }
+            append("ORDER BY ")
+            when {
+                grouping == FeedListGrouping.NONE && sorting == SortingOptions.NEWEST_FIRST ->
+                    append("$FEED_ITEM_LIST_SORT_ORDER_DESC\n")
+                grouping == FeedListGrouping.NONE && sorting == SortingOptions.OLDEST_FIRST ->
+                    append("$FEED_ITEM_LIST_SORT_ORDER_ASC\n")
+                else -> append("${listOrderTerms(grouping, sorting).toOrderBy()}\n")
+            }
+        }
+
+        return dao.getFeedItemIdsRaw(SimpleSQLiteQuery(queryString.toString(), args.toTypedArray()))
+    }
+
+    /**
      * The groups of the current list, in list order, with their article and unread counts.
      */
     fun getFeedListGroups(
