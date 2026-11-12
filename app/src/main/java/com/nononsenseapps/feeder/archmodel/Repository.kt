@@ -510,11 +510,25 @@ class Repository(
     @Volatile
     private var articleSwipeList: List<Long> = emptyList()
 
+    // The list settings the snapshot was taken with. A snapshot from other settings is stale.
+    @Volatile
+    private var articleSwipeListKey: Any? = null
+
+    private fun currentArticleSwipeListKey(): Any =
+        listOf(
+            currentFeedAndTag.value,
+            currentSorting.value,
+            feedListGrouping.value,
+            feedListFilter.value,
+            search.value,
+        )
+
     /**
      * Remembers the current list's order for swiping between articles. Call before the opened
      * article is marked as read.
      */
     suspend fun captureArticleSwipeList(openedItemId: Long) {
+        articleSwipeListKey = currentArticleSwipeListKey()
         articleSwipeList = loadCurrentFeedListIds(alsoIncludeId = openedItemId)
     }
 
@@ -524,9 +538,12 @@ class Repository(
     suspend fun getArticleSwipeNeighbors(itemId: Long): Pair<Long?, Long?> {
         var list = articleSwipeList
         var index = list.indexOf(itemId)
-        if (index < 0) {
-            // Opened from somewhere else, like a notification: use the list as it is now
+        val key = currentArticleSwipeListKey()
+        if (index < 0 || key != articleSwipeListKey) {
+            // Opened from somewhere else, like a notification, or the list has changed since:
+            // use the list as it is now
             list = loadCurrentFeedListIds(alsoIncludeId = itemId)
+            articleSwipeListKey = key
             articleSwipeList = list
             index = list.indexOf(itemId)
         }
