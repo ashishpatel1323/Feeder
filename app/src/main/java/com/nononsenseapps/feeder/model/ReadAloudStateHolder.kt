@@ -257,7 +257,6 @@ class TTSStateHolder(
                     val timeline = withTimeout(5 * 60_000L) { synthesize(current, directory, audio) }
                     if (request !== current) return@launch
                     segments = timeline
-                    words = wordTimeline.toList()
                     val duration = timeline.lastOrNull()?.endMillis ?: error("No speech audio")
                     _progress.value = _progress.value.copy(durationMillis = duration, generatedMillis = duration, isDurationEstimated = false)
                 } catch (e: TimeoutCancellationException) {
