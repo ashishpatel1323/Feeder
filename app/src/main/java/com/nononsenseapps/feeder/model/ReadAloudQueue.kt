@@ -120,13 +120,15 @@ class ReadAloudQueue(
                 val article = repository.getArticle(target) ?: return@launch
                 // Stop the old article at once; the new one may need its full text downloaded first
                 ttsStateHolder.pause()
-                _fullTextArticleId.value = target
-                _openArticle.tryEmit(target to if (next) ArticleSwipeDirection.NEXT else ArticleSwipeDirection.PREVIOUS)
                 repository.markAsReadAndNotified(target)
-                val text =
-                    loadSpeechText(article, fullText = true)
-                        ?: loadSpeechText(article, fullText = false).also { _fullTextArticleId.value = null }
-                        ?: return@launch
+                // Load before the screen opens the article, so the two never download the same full
+                // text at once, and the screen shows the version that is actually read
+                val fullText = loadSpeechText(article, fullText = true)
+                val text = fullText ?: loadSpeechText(article, fullText = false) ?: return@launch
+                // Stop, or reading another article, while loading cancels this move
+                if (ttsStateHolder.progress.value.articleId != current) return@launch
+                _fullTextArticleId.value = if (fullText != null) target else null
+                _openArticle.tryEmit(target to if (next) ArticleSwipeDirection.NEXT else ArticleSwipeDirection.PREVIOUS)
                 ttsStateHolder.tts(
                     textArray = listOf(AnnotatedString(text)),
                     useDetectLanguage = repository.useDetectLanguage.value,
