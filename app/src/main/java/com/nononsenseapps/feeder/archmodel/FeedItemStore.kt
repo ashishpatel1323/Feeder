@@ -494,6 +494,28 @@ class FeedItemStore(
         dao.deleteFeedItems(ids)
     }
 
+    suspend fun updateHnScore(
+        id: Long,
+        points: Int?,
+        comments: Int?,
+        hnId: String?,
+        checkedTime: Instant,
+    ) {
+        dao.updateHnScore(id = id, points = points, comments = comments, hnId = hnId, checkedTime = checkedTime)
+    }
+
+    suspend fun clearHnScores() {
+        dao.clearHnScores()
+    }
+
+    suspend fun getItemsNeedingHnScore(
+        since: Instant,
+        staleBefore: Instant,
+        limit: Int,
+    ): List<FeedItemIdWithLink> = dao.getItemsNeedingHnScore(since = since, staleBefore = staleBefore, limit = limit)
+
+    suspend fun getHnCheckedTime(id: Long): Instant? = dao.getHnCheckedTime(id)
+
     suspend fun updateWordCountFull(
         id: Long,
         wordCount: Int,
@@ -551,6 +573,7 @@ private fun PreviewItem.toFeedListItem(
     rawPubDate = pubDate,
     primarySortTime = primarySortTime,
     wordCount = bestWordCount,
+    hnPoints = hnPoints,
 )
 
 internal fun ZonedDateTime?.formatForFeed(

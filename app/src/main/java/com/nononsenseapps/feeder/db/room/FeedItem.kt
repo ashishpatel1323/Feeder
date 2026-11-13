@@ -15,6 +15,10 @@ import com.nononsenseapps.feeder.db.COL_FEEDID
 import com.nononsenseapps.feeder.db.COL_FIRSTSYNCEDTIME
 import com.nononsenseapps.feeder.db.COL_FULLTEXT_DOWNLOADED
 import com.nononsenseapps.feeder.db.COL_GUID
+import com.nononsenseapps.feeder.db.COL_HN_CHECKED_TIME
+import com.nononsenseapps.feeder.db.COL_HN_COMMENTS
+import com.nononsenseapps.feeder.db.COL_HN_ID
+import com.nononsenseapps.feeder.db.COL_HN_POINTS
 import com.nononsenseapps.feeder.db.COL_ID
 import com.nononsenseapps.feeder.db.COL_IMAGEURL
 import com.nononsenseapps.feeder.db.COL_IMAGE_FROM_BODY
@@ -122,6 +126,14 @@ data class FeedItem
         @ColumnInfo(name = COL_WORD_COUNT) var wordCount: Int = 0,
         @ColumnInfo(name = COL_WORD_COUNT_FULL) var wordCountFull: Int = 0,
         @ColumnInfo(name = COL_BLOCK_TIME) var blockTime: Instant? = null,
+        // Hacker News popularity, null until a submission of this link has been found
+        @ColumnInfo(name = COL_HN_POINTS) var hnPoints: Int? = null,
+        @ColumnInfo(name = COL_HN_COMMENTS) var hnComments: Int? = null,
+        @ColumnInfo(name = COL_HN_ID) var hnId: String? = null,
+        @ColumnInfo(
+            name = COL_HN_CHECKED_TIME,
+            typeAffinity = ColumnInfo.INTEGER,
+        ) var hnCheckedTime: Instant = Instant.EPOCH,
     ) : FeedItemForFetching,
         FeedItemCursor {
         constructor() : this(id = ID_UNSET)

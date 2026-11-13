@@ -226,6 +226,8 @@ fun SettingsScreen(
             onOpenAdjacent = settingsViewModel::setIsOpenAdjacent,
             showReadingTime = viewState.showReadingTime,
             onShowReadingTimeChange = settingsViewModel::setShowReadingTime,
+            showHnScore = viewState.showHnScore,
+            onShowHnScoreChange = settingsViewModel::setShowHnScore,
             showTitleUnreadCount = viewState.showTitleUnreadCount,
             onShowTitleUnreadCountChange = settingsViewModel::setShowTitleUnreadCount,
             onStartActivity = { intent ->
@@ -332,6 +334,8 @@ private fun SettingsScreenPreview() {
             onOpenAdjacent = {},
             showReadingTime = false,
             onShowReadingTimeChange = {},
+            showHnScore = false,
+            onShowHnScoreChange = {},
             showTitleUnreadCount = false,
             onShowTitleUnreadCountChange = {},
             onStartActivity = {},
@@ -425,6 +429,8 @@ fun SettingsList(
     onOpenAdjacent: (Boolean) -> Unit,
     showReadingTime: Boolean,
     onShowReadingTimeChange: (Boolean) -> Unit,
+    showHnScore: Boolean,
+    onShowHnScoreChange: (Boolean) -> Unit,
     showTitleUnreadCount: Boolean,
     onShowTitleUnreadCountChange: (Boolean) -> Unit,
     onStartActivity: (intent: Intent) -> Unit,
@@ -758,6 +764,13 @@ fun SettingsList(
                 title = stringResource(id = R.string.show_reading_time),
                 checked = showReadingTime,
                 onCheckedChange = onShowReadingTimeChange,
+            )
+
+            SwitchSetting(
+                title = stringResource(id = R.string.show_hn_score),
+                description = stringResource(id = R.string.show_hn_score_description),
+                checked = showHnScore,
+                onCheckedChange = onShowHnScoreChange,
             )
 
             SwitchSetting(

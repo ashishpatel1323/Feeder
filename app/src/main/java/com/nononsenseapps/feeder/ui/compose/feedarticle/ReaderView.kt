@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.ContentAlpha
@@ -74,6 +75,7 @@ import com.nononsenseapps.feeder.model.ThumbnailImage
 import com.nononsenseapps.feeder.ui.compose.coil.RestrainedCropScaling
 import com.nononsenseapps.feeder.ui.compose.coil.rememberTintedVectorPainter
 import com.nononsenseapps.feeder.ui.compose.components.safeSemantics
+import com.nononsenseapps.feeder.ui.compose.feed.HnScoreBadge
 import com.nononsenseapps.feeder.ui.compose.text.WithBidiDeterminedLayoutDirection
 import com.nononsenseapps.feeder.ui.compose.text.WithTooltipIfNotBlank
 import com.nononsenseapps.feeder.ui.compose.text.rememberMaxImageWidth
@@ -105,6 +107,8 @@ fun ReaderView(
     showHeaderImage: Boolean,
     contentImageUrls: Set<String>,
     modifier: Modifier = Modifier,
+    hnPoints: Int? = null,
+    onHnScoreClick: (() -> Unit)? = null,
     articleScrollState: ScrollState = rememberScrollState(),
     articleBody: @Composable (indexOffset: Int) -> Unit,
 ) {
@@ -201,19 +205,46 @@ fun ReaderView(
                                 )
                             }
                         }
-                        if (authorDate != null) {
+                        if (authorDate != null || hnPoints != null) {
                             ProvideScaledText(style = MaterialTheme.typography.titleMedium) {
                                 CompositionLocalProvider(LocalContentAlpha provides ContentAlpha.medium) {
-                                    WithBidiDeterminedLayoutDirection(paragraph = authorDate) {
-                                        val interactionSource = remember { MutableInteractionSource() }
-                                        Text(
-                                            text = authorDate,
-                                            modifier =
-                                                Modifier
-                                                    .width(dimens.maxReaderWidth)
-                                                    .indication(interactionSource, LocalIndication.current)
-                                                    .focusableInNonTouchMode(interactionSource = interactionSource),
-                                        )
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.width(dimens.maxReaderWidth),
+                                    ) {
+                                        if (authorDate != null) {
+                                            WithBidiDeterminedLayoutDirection(paragraph = authorDate) {
+                                                val interactionSource = remember { MutableInteractionSource() }
+                                                Text(
+                                                    text = authorDate,
+                                                    modifier =
+                                                        Modifier
+                                                            .weight(1f)
+                                                            .indication(interactionSource, LocalIndication.current)
+                                                            .focusableInNonTouchMode(interactionSource = interactionSource),
+                                                )
+                                            }
+                                        } else {
+                                            Spacer(modifier = Modifier.weight(1f))
+                                        }
+                                        if (hnPoints != null) {
+                                            val openDiscussionLabel = stringResource(R.string.open_hn_discussion)
+                                            HnScoreBadge(
+                                                points = hnPoints,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                iconSize = 20.dp,
+                                                modifier =
+                                                    if (onHnScoreClick != null) {
+                                                        Modifier
+                                                            .clip(RoundedCornerShape(8.dp))
+                                                            .clickable(onClickLabel = openDiscussionLabel, onClick = onHnScoreClick)
+                                                            .padding(horizontal = 6.dp, vertical = 4.dp)
+                                                    } else {
+                                                        Modifier
+                                                    },
+                                            )
+                                        }
                                     }
                                 }
                             }

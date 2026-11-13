@@ -61,6 +61,49 @@ interface FeedItemDao {
 
     @Query(
         """
+            update feed_items
+            set hn_points = :points, hn_comments = :comments, hn_id = :hnId, hn_checked_time = :checkedTime
+            where id = :id
+        """,
+    )
+    suspend fun updateHnScore(
+        id: Long,
+        points: Int?,
+        comments: Int?,
+        hnId: String?,
+        checkedTime: Instant,
+    )
+
+    @Query(
+        """
+            update feed_items
+            set hn_points = NULL, hn_comments = NULL, hn_id = NULL, hn_checked_time = 0
+        """,
+    )
+    suspend fun clearHnScores()
+
+    @Query(
+        """
+        SELECT id, link FROM feed_items
+        WHERE link IS NOT NULL AND link != ''
+          AND block_time IS NULL
+          AND primary_sort_time > :since
+          AND hn_checked_time < :staleBefore
+        ORDER BY hn_checked_time ASC, primary_sort_time DESC
+        LIMIT :limit
+        """,
+    )
+    suspend fun getItemsNeedingHnScore(
+        since: Instant,
+        staleBefore: Instant,
+        limit: Int,
+    ): List<FeedItemIdWithLink>
+
+    @Query("SELECT hn_checked_time FROM feed_items WHERE id = :id")
+    suspend fun getHnCheckedTime(id: Long): Instant?
+
+    @Query(
+        """
         SELECT id FROM feed_items
         WHERE feed_id IS :feedId AND bookmarked = 0
         ORDER BY primary_sort_time DESC, pub_date DESC

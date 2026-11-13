@@ -2,6 +2,7 @@ package com.nononsenseapps.feeder.di
 
 import com.nononsenseapps.feeder.model.FeedParser
 import com.nononsenseapps.feeder.model.FullTextParser
+import com.nononsenseapps.feeder.model.HackerNewsScores
 import com.nononsenseapps.feeder.model.RssLocalSync
 import com.nononsenseapps.feeder.sync.SyncRestClient
 import com.nononsenseapps.jsonfeed.Feed
@@ -25,4 +26,5 @@ val networkModule =
         bind<SyncRestClient>() with singleton { SyncRestClient(di) }
         bind<RssLocalSync>() with singleton { RssLocalSync(di) }
         bind<FullTextParser>() with singleton { FullTextParser(di) }
+        bind<HackerNewsScores>() with singleton { HackerNewsScores(di) }
     }
