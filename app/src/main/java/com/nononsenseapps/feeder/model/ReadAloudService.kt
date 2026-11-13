@@ -355,7 +355,12 @@ class ReadAloudService : MediaSessionService() {
         private fun withArticleCommands(commands: Player.Commands): Player.Commands =
             commands
                 .buildUpon()
-                .addAll(*ARTICLE_COMMANDS.toIntArray())
+                .addAll(
+                    Player.COMMAND_SEEK_TO_NEXT,
+                    Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
+                    Player.COMMAND_SEEK_TO_PREVIOUS,
+                    Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
+                )
                 .build()
 
         const val ACTION_PREPARE = "com.nononsenseapps.feeder.READ_ALOUD_PREPARE"
