@@ -341,7 +341,13 @@ class GeminiNanoSummarizer(
 
     private fun Exception.describe(): String {
         val code = (this as? GenAiException)?.errorCode?.let { " (code $it)" } ?: ""
-        return "${javaClass.simpleName}$code: ${message ?: cause?.message ?: "no message"}"
+        // First frames show where it failed, which matters most for message-less errors
+        val source: Throwable = cause?.takeIf { message == null && it.message != null } ?: this
+        val where =
+            source.stackTrace
+                .take(3)
+                .joinToString(" < ") { "${it.className}.${it.methodName}:${it.lineNumber}" }
+        return "${javaClass.simpleName}$code: ${message ?: cause?.message ?: "no message"} at $where"
     }
 
     private fun statusName(status: Int): String =
