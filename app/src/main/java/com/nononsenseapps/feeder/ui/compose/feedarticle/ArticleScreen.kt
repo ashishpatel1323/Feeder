@@ -60,11 +60,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -79,8 +76,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.google.accompanist.permissions.ExperimentalPermissionsApi
-import com.google.accompanist.permissions.PermissionStatus
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.archmodel.TextToDisplay
 import com.nononsenseapps.feeder.db.room.ID_UNSET
@@ -104,7 +99,6 @@ import com.nononsenseapps.feeder.ui.compose.readaloud.stopSpeechFollowingOnUserS
 import com.nononsenseapps.feeder.ui.compose.theme.SensibleTopAppBar
 import com.nononsenseapps.feeder.ui.compose.utils.ImmutableHolder
 import com.nononsenseapps.feeder.ui.compose.utils.ScreenType
-import com.nononsenseapps.feeder.ui.compose.utils.rememberApiPermissionState
 import com.nononsenseapps.feeder.util.ActivityLauncher
 import com.nononsenseapps.feeder.util.stripTrackingParameters
 import com.nononsenseapps.feeder.util.unicodeWrap
@@ -274,7 +268,6 @@ fun ArticleScreen(
 
 @OptIn(
     ExperimentalMaterial3Api::class,
-    ExperimentalPermissionsApi::class,
 )
 @Composable
 fun ArticleScreen(
@@ -329,21 +322,6 @@ fun ArticleScreen(
     val pinnedScrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     // The top bar must not scroll away while it holds the article actions
     val scrollBehavior = if (readingAloud) pinnedScrollBehavior else enterAlwaysScrollBehavior
-
-    // Some phones (OxygenOS) hide the media notification, and with it the system media player and
-    // lock-screen controls, until the app may post notifications. Ask once when reading aloud starts.
-    val notificationPermission =
-        rememberApiPermissionState(
-            permission = "android.permission.POST_NOTIFICATIONS",
-            minimumApiLevel = 33,
-        )
-    var askedForNotificationPermission by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(readingAloud) {
-        if (readingAloud && !askedForNotificationPermission && notificationPermission.status !is PermissionStatus.Granted) {
-            askedForNotificationPermission = true
-            notificationPermission.launchPermissionRequest()
-        }
-    }
 
     val bottomBarVisibleState = remember { MutableTransitionState(viewState.isBottomBarVisible) }
     LaunchedEffect(viewState.isBottomBarVisible) {
