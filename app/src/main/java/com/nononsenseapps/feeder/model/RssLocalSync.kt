@@ -58,6 +58,7 @@ class RssLocalSync(
     private val okHttpClient: OkHttpClient by instance()
     private val filePathProvider: FilePathProvider by instance()
     private val application: Application by instance()
+    private val hackerNewsScores: HackerNewsScores by instance()
 
     suspend fun syncFeeds(
         feedId: Long = ID_UNSET,
@@ -164,6 +165,12 @@ class RssLocalSync(
                             repository.applyRemoteReadMarks()
                         } catch (e: Exception) {
                             Log.e(LOG_TAG, "Error on final apply", e)
+                        }
+
+                        try {
+                            hackerNewsScores.refreshRecent()
+                        } catch (e: Exception) {
+                            Log.e(LOG_TAG, "Error fetching Hacker News scores", e)
                         }
 
                         result = true

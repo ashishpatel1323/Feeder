@@ -177,6 +177,8 @@ data class FeedListItem(
     val feedId: Long = ID_UNSET,
     // Key of the group this item is in for the current grouping, empty when not grouped
     val groupKey: String = "",
+    // Hacker News points for this link, null when unknown or the feature is off
+    val hnPoints: Int? = null,
 ) {
     val cursor: FeedItemCursor
         get() =

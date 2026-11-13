@@ -82,6 +82,7 @@ import com.nononsenseapps.feeder.db.room.ID_UNSET
 import com.nononsenseapps.feeder.localtranslation.BergamotModelDownloadProgress
 import com.nononsenseapps.feeder.model.LocaleOverride
 import com.nononsenseapps.feeder.model.ReadAloudProgress
+import com.nononsenseapps.feeder.model.hackerNewsDiscussionUrl
 import com.nononsenseapps.feeder.ui.MainActivityViewModel
 import com.nononsenseapps.feeder.ui.ScrollDirection
 import com.nononsenseapps.feeder.ui.compose.components.TranslationProgressContent
@@ -733,6 +734,16 @@ fun ArticleContent(
         image = viewState.image,
         showHeaderImage = viewState.textToDisplay == TextToDisplay.CONTENT,
         contentImageUrls = contentImageUrls,
+        hnPoints = viewState.hnPoints,
+        onHnScoreClick =
+            viewState.hnId?.let { hnId ->
+                {
+                    activityLauncher.openLink(
+                        link = hackerNewsDiscussionUrl(hnId),
+                        toolbarColor = toolbarColor,
+                    )
+                }
+            },
         modifier = if (onUserScroll != null) modifier.stopSpeechFollowingOnAccessibilityScroll(articleScrollState, onUserScroll) else modifier,
         articleScrollState = articleScrollState,
     ) { indexOffset ->

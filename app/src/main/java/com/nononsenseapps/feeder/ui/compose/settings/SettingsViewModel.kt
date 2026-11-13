@@ -167,6 +167,10 @@ class SettingsViewModel(
         repository.setShowReadingTime(value)
     }
 
+    fun setShowHnScore(value: Boolean) {
+        repository.setShowHnScore(value)
+    }
+
     fun setShowTitleUnreadCount(value: Boolean) {
         repository.setShowTitleUnreadCount(value)
     }
@@ -324,6 +328,7 @@ class SettingsViewModel(
                 repository.useInAppAudioPlayer,
                 repository.forceSingleColumn,
                 repository.applyBlocklistToLinks,
+                repository.showHnScore,
             ) { params: Array<Any> ->
                 @Suppress("UNCHECKED_CAST")
                 SettingsViewState(
@@ -377,6 +382,7 @@ class SettingsViewModel(
                     useInAppAudioPlayer = params[40] as Boolean,
                     forceSingleColumn = params[41] as Boolean,
                     applyBlocklistToLinks = params[42] as Boolean,
+                    showHnScore = params[43] as Boolean,
                 )
             }.collect {
                 _viewState.value = it
@@ -474,6 +480,7 @@ data class SettingsViewState(
     val useInAppAudioPlayer: Boolean = true,
     val forceSingleColumn: Boolean = true,
     val applyBlocklistToLinks: Boolean = false,
+    val showHnScore: Boolean = false,
 )
 
 data class UIFeedSettings(
