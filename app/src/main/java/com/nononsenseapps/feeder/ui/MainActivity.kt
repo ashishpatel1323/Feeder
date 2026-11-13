@@ -19,6 +19,7 @@ import androidx.core.content.edit
 import androidx.core.util.Consumer
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import com.nononsenseapps.feeder.archmodel.Repository
@@ -26,6 +27,8 @@ import com.nononsenseapps.feeder.background.runOnceRssSync
 import com.nononsenseapps.feeder.background.runOnceSyncChainGetUpdates
 import com.nononsenseapps.feeder.background.schedulePeriodicOrphanedFilesCleanup
 import com.nononsenseapps.feeder.base.DIAwareComponentActivity
+import com.nononsenseapps.feeder.model.PlaybackStatus
+import com.nononsenseapps.feeder.model.TTSStateHolder
 import com.nononsenseapps.feeder.notifications.NotificationsWorker
 import com.nononsenseapps.feeder.ui.compose.navigation.AddFeedDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.ArticleDestination
@@ -46,6 +49,10 @@ class MainActivity : DIAwareComponentActivity() {
     private val mainActivityViewModel: MainActivityViewModel by instance(arg = this)
     private val repository: Repository by instance()
     private val preferences: SharedPreferences by instance()
+    private val ttsStateHolder: TTSStateHolder by instance()
+    private var askedForReadAloudNotificationPermission = false
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
     private var localNetworkMigrationStarted = false
     private val localNetworkPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -118,11 +125,34 @@ class MainActivity : DIAwareComponentActivity() {
 
         enableEdgeToEdge()
 
+        // Some phones (OxygenOS) hide the read-aloud media notification without notification
+        // permission, and with it the lock-screen and control-center play/pause. Ask when reading
+        // starts, from whichever screen it was started.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                ttsStateHolder.ttsState.collect { state ->
+                    if (state == PlaybackStatus.PLAYING) maybeRequestNotificationPermissionForReadAloud()
+                }
+            }
+        }
+
         setContent {
             withAllProviders {
                 AppContent()
             }
         }
+    }
+
+    private fun maybeRequestNotificationPermissionForReadAloud() {
+        if (askedForReadAloudNotificationPermission ||
+            Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        // Once per activity; Android itself stops showing the prompt after the user denies it twice.
+        askedForReadAloudNotificationPermission = true
+        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
     private fun maybeRequestLocalNetworkPermissionForExistingFeeds() {

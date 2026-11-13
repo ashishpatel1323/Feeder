@@ -66,36 +66,38 @@ class ReadAloudService : MediaSessionService() {
                     setWakeMode(C.WAKE_MODE_LOCAL)
                 }
         val activity = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val sessionPlayer =
+            object : ForwardingPlayer(player) {
+                private fun bounded(positionMs: Long): Long = positionMs.coerceIn(0, holder.progress.value.generatedMillis)
+
+                override fun seekTo(positionMs: Long) = player.seekTo(bounded(positionMs))
+
+                override fun seekTo(
+                    mediaItemIndex: Int,
+                    positionMs: Long,
+                ) = player.seekTo(mediaItemIndex, bounded(positionMs))
+
+                override fun seekBack() = seekTo(player.currentPosition - 10_000)
+
+                override fun seekForward() = seekTo(player.currentPosition + 10_000)
+            }
         session =
             MediaSession
-                .Builder(
-                    this,
-                    object : ForwardingPlayer(player) {
-                        private fun bounded(positionMs: Long): Long = positionMs.coerceIn(0, holder.progress.value.generatedMillis)
-
-                        override fun seekTo(positionMs: Long) = player.seekTo(bounded(positionMs))
-
-                        override fun seekTo(
-                            mediaItemIndex: Int,
-                            positionMs: Long,
-                        ) = player.seekTo(mediaItemIndex, bounded(positionMs))
-
-                        override fun seekBack() = seekTo(player.currentPosition - 10_000)
-
-                        override fun seekForward() = seekTo(player.currentPosition + 10_000)
-                    },
-                ).setSessionActivity(activity)
+                .Builder(this, sessionPlayer)
+                .setSessionActivity(activity)
                 .setMediaButtonPreferences(
                     listOf(
+                        // Custom commands rather than player commands: the platform session (lock
+                        // screen, control center, OEM media panels) only shows custom buttons.
                         CommandButton
                             .Builder(CommandButton.ICON_SKIP_BACK_10)
-                            .setPlayerCommand(Player.COMMAND_SEEK_BACK)
+                            .setSessionCommand(SessionCommand(ACTION_SEEK_BACK, Bundle.EMPTY))
                             .setDisplayName(getString(R.string.skip_back_10))
                             .setSlots(CommandButton.SLOT_BACK)
                             .build(),
                         CommandButton
                             .Builder(CommandButton.ICON_SKIP_FORWARD_10)
-                            .setPlayerCommand(Player.COMMAND_SEEK_FORWARD)
+                            .setSessionCommand(SessionCommand(ACTION_SEEK_FORWARD, Bundle.EMPTY))
                             .setDisplayName(getString(R.string.skip_forward_10))
                             .setSlots(CommandButton.SLOT_FORWARD)
                             .build(),
@@ -112,7 +114,8 @@ class ReadAloudService : MediaSessionService() {
                             session: MediaSession,
                             controller: MediaSession.ControllerInfo,
                         ): MediaSession.ConnectionResult {
-                            if (!controller.isTrusted) return MediaSession.ConnectionResult.reject()
+                            // Accept every controller: lock screen, control center, headsets, watches
+                            // and OEM media panels are not all "trusted" system apps.
                             val defaults = super.onConnect(session, controller)
                             // External controls can operate this article, not replace its local audio.
                             val commands =
@@ -128,6 +131,8 @@ class ReadAloudService : MediaSessionService() {
                                     defaults.availableSessionCommands
                                         .buildUpon()
                                         .add(SessionCommand(ACTION_STOP, Bundle.EMPTY))
+                                        .add(SessionCommand(ACTION_SEEK_BACK, Bundle.EMPTY))
+                                        .add(SessionCommand(ACTION_SEEK_FORWARD, Bundle.EMPTY))
                                         .build(),
                                 ).build()
                         }
@@ -138,11 +143,13 @@ class ReadAloudService : MediaSessionService() {
                             customCommand: SessionCommand,
                             args: Bundle,
                         ): ListenableFuture<SessionResult> {
-                            if (customCommand.customAction == ACTION_STOP) {
-                                holder.stop()
-                                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                            when (customCommand.customAction) {
+                                ACTION_STOP -> holder.stop()
+                                ACTION_SEEK_BACK -> sessionPlayer.seekBack()
+                                ACTION_SEEK_FORWARD -> sessionPlayer.seekForward()
+                                else -> return super.onCustomCommand(session, controller, customCommand, args)
                             }
-                            return super.onCustomCommand(session, controller, customCommand, args)
+                            return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                         }
                     },
                 ).build()
@@ -222,6 +229,8 @@ class ReadAloudService : MediaSessionService() {
     companion object {
         const val ACTION_PREPARE = "com.nononsenseapps.feeder.READ_ALOUD_PREPARE"
         private const val ACTION_STOP = "com.nononsenseapps.feeder.READ_ALOUD_STOP"
+        private const val ACTION_SEEK_BACK = "com.nononsenseapps.feeder.READ_ALOUD_SEEK_BACK"
+        private const val ACTION_SEEK_FORWARD = "com.nononsenseapps.feeder.READ_ALOUD_SEEK_FORWARD"
         private const val CHANNEL_ID = "read-aloud-preparation"
         private const val NOTIFICATION_ID = 2401
     }
