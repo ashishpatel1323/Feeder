@@ -310,6 +310,15 @@ class SettingsStore(
         sp.edit().putBoolean(PREF_READALOUD_USE_DETECT_LANGUAGE, value).apply()
     }
 
+    private val _readAloudAutoContinue =
+        MutableStateFlow(sp.getBoolean(PREF_READALOUD_AUTO_CONTINUE, false))
+    val readAloudAutoContinue = _readAloudAutoContinue.asStateFlow()
+
+    fun setReadAloudAutoContinue(value: Boolean) {
+        _readAloudAutoContinue.value = value
+        sp.edit().putBoolean(PREF_READALOUD_AUTO_CONTINUE, value).apply()
+    }
+
     private val _useDynamicTheme =
         MutableStateFlow(
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
@@ -791,6 +800,7 @@ const val PREF_OPEN_DRAWER_ON_FAB = "pref_open_drawer_on_fab"
  * Read Aloud Settings
  */
 const val PREF_READALOUD_USE_DETECT_LANGUAGE = "pref_readaloud_detect_lang"
+const val PREF_READALOUD_AUTO_CONTINUE = "pref_readaloud_auto_continue"
 
 /**
  * OpenAI integration

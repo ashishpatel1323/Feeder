@@ -92,6 +92,21 @@ class TTSStateHolder(
     private val preferences by lazy { context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE) }
     private var playbackSpeed = 1f
 
+    /** Moves read aloud between articles in the list; set by [ReadAloudQueue]. */
+    interface ArticleNavigator {
+        fun hasPrevious(): Boolean
+
+        fun hasNext(): Boolean
+
+        fun previous()
+
+        fun next()
+
+        fun onArticleFinished(articleId: Long)
+    }
+
+    var articleNavigator: ArticleNavigator? = null
+
     init {
         coroutineScope.launch(Dispatchers.IO) {
             val saved = preferences.getFloat(PREF_SPEED, 1f).coerceIn(MIN_SPEED, MAX_SPEED)
@@ -201,6 +216,15 @@ class TTSStateHolder(
                             if (player.playWhenReady && player.playbackState != Player.STATE_ENDED && player.playbackState != Player.STATE_IDLE) PlaybackStatus.PLAYING else PlaybackStatus.PAUSED
                         updatePosition()
                     }
+                    val finished = request
+                    if (finished != null &&
+                        events.contains(Player.EVENT_PLAYBACK_STATE_CHANGED) &&
+                        player.playbackState == Player.STATE_ENDED &&
+                        !_progress.value.isDurationEstimated &&
+                        _progress.value.error == null
+                    ) {
+                        articleNavigator?.onArticleFinished(finished.articleId)
+                    }
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
@@ -284,7 +308,7 @@ class TTSStateHolder(
                     MediaMetadata
                         .Builder()
                         .setTitle(current.title.ifBlank { context.getString(R.string.read_article) })
-                        .setArtist(current.author.ifBlank { current.feedTitle }.ifBlank { context.getString(R.string.app_name) })
+                        .setArtist(current.feedTitle.ifBlank { current.author }.ifBlank { context.getString(R.string.app_name) })
                         .setArtworkData(artwork, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
                         .build(),
                 ).build()

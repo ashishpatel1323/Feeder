@@ -87,6 +87,10 @@ class SettingsViewModel(
         repository.setUseDetectLanguage(value)
     }
 
+    fun setReadAloudAutoContinue(value: Boolean) {
+        repository.setReadAloudAutoContinue(value)
+    }
+
     fun setUseDynamicTheme(value: Boolean) {
         repository.setUseDynamicTheme(value)
     }
@@ -329,6 +333,7 @@ class SettingsViewModel(
                 repository.forceSingleColumn,
                 repository.applyBlocklistToLinks,
                 repository.showHnScore,
+                repository.readAloudAutoContinue,
             ) { params: Array<Any> ->
                 @Suppress("UNCHECKED_CAST")
                 SettingsViewState(
@@ -383,6 +388,7 @@ class SettingsViewModel(
                     forceSingleColumn = params[41] as Boolean,
                     applyBlocklistToLinks = params[42] as Boolean,
                     showHnScore = params[43] as Boolean,
+                    readAloudAutoContinue = params[44] as Boolean,
                 )
             }.collect {
                 _viewState.value = it
@@ -481,6 +487,7 @@ data class SettingsViewState(
     val forceSingleColumn: Boolean = true,
     val applyBlocklistToLinks: Boolean = false,
     val showHnScore: Boolean = false,
+    val readAloudAutoContinue: Boolean = false,
 )
 
 data class UIFeedSettings(

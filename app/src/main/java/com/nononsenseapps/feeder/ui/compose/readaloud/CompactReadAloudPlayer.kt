@@ -5,21 +5,27 @@ import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -27,7 +33,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material3.AlertDialog
@@ -40,6 +49,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -48,17 +58,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.model.LocaleOverride
+import com.nononsenseapps.feeder.model.ReadAloudNeighbors
 import com.nononsenseapps.feeder.model.ReadAloudProgress
 import com.nononsenseapps.feeder.ui.compose.components.safeSemantics
 import com.nononsenseapps.feeder.ui.compose.feed.PlainTooltipBox
@@ -88,6 +103,10 @@ fun HideableCompactTTSPlayer(
     onSelectSpeed: (Float) -> Unit,
     modifier: Modifier = Modifier,
     diagnostics: () -> String = { "" },
+    neighbors: ReadAloudNeighbors = ReadAloudNeighbors(),
+    onSkipArticle: (next: Boolean) -> Unit = {},
+    autoContinue: Boolean = false,
+    onSetAutoContinue: (Boolean) -> Unit = {},
 ) {
     AnimatedVisibility(
         modifier = modifier,
@@ -110,6 +129,10 @@ fun HideableCompactTTSPlayer(
             displayedArticleId = displayedArticleId,
             onSelectSpeed = onSelectSpeed,
             diagnostics = diagnostics,
+            neighbors = neighbors,
+            onSkipArticle = onSkipArticle,
+            autoContinue = autoContinue,
+            onSetAutoContinue = onSetAutoContinue,
         )
     }
 }
@@ -130,6 +153,10 @@ fun CompactTTSPlayer(
     displayedArticleId: Long? = null,
     onSelectSpeed: (Float) -> Unit = {},
     diagnostics: () -> String = { "" },
+    neighbors: ReadAloudNeighbors = ReadAloudNeighbors(),
+    onSkipArticle: (next: Boolean) -> Unit = {},
+    autoContinue: Boolean = false,
+    onSetAutoContinue: (Boolean) -> Unit = {},
 ) {
     var diagnosticsText by remember { mutableStateOf<String?>(null) }
     diagnosticsText?.let { text ->
@@ -158,6 +185,12 @@ fun CompactTTSPlayer(
             modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)),
         ) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            UpNextStrip(
+                neighbors = neighbors,
+                onSkipArticle = onSkipArticle,
+                autoContinue = autoContinue,
+                onSetAutoContinue = onSetAutoContinue,
+            )
             progress.error?.let {
                 Text(
                     it,
@@ -217,6 +250,99 @@ fun CompactTTSPlayer(
                         languageIcon = Icons.Outlined.RecordVoiceOver,
                     )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Previous and next article titles above the player: tapping either side reads that article in
+ * full text. Auto continues to the next article when one finishes.
+ */
+@Composable
+private fun UpNextStrip(
+    neighbors: ReadAloudNeighbors,
+    onSkipArticle: (next: Boolean) -> Unit,
+    autoContinue: Boolean,
+    onSetAutoContinue: (Boolean) -> Unit,
+) {
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(36.dp)
+                .padding(horizontal = 4.dp),
+    ) {
+        val hasPrevious = neighbors.previousId != null
+        val previousLabel = stringResource(R.string.previous_article)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clickable(enabled = hasPrevious, onClickLabel = previousLabel, role = Role.Button) { onSkipArticle(false) }
+                    .padding(horizontal = 4.dp)
+                    .alpha(if (hasPrevious) 1f else 0.4f),
+        ) {
+            Icon(Icons.Default.SkipPrevious, contentDescription = previousLabel, tint = muted, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(4.dp))
+            Text(
+                neighbors.previousTitle.takeIf { hasPrevious } ?: stringResource(R.string.read_aloud_start_of_list),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        VerticalDivider(modifier = Modifier.height(18.dp), color = MaterialTheme.colorScheme.outlineVariant)
+        val hasNext = neighbors.nextId != null
+        val nextLabel = stringResource(R.string.next_article)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.End,
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clickable(enabled = hasNext, onClickLabel = nextLabel, role = Role.Button) { onSkipArticle(true) }
+                    .padding(horizontal = 4.dp)
+                    .alpha(if (hasNext) 1f else 0.4f),
+        ) {
+            Text(
+                if (hasNext) stringResource(R.string.read_aloud_next_title, neighbors.nextTitle) else stringResource(R.string.read_aloud_end_of_list),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            Spacer(Modifier.width(4.dp))
+            Icon(Icons.Default.SkipNext, contentDescription = nextLabel, tint = muted, modifier = Modifier.size(18.dp))
+        }
+        val autoDescription = stringResource(R.string.read_aloud_auto_continue_description)
+        Surface(
+            shape = CircleShape,
+            color = if (autoContinue) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+            contentColor = if (autoContinue) MaterialTheme.colorScheme.onSecondaryContainer else muted,
+            border = if (autoContinue) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            modifier =
+                Modifier
+                    .padding(start = 4.dp)
+                    .safeSemantics { contentDescription = autoDescription },
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier =
+                    Modifier
+                        .toggleable(value = autoContinue, role = Role.Switch, onValueChange = onSetAutoContinue)
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+            ) {
+                Icon(Icons.Default.Repeat, contentDescription = null, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(3.dp))
+                Text(stringResource(R.string.read_aloud_auto_continue), style = MaterialTheme.typography.labelSmall)
             }
         }
     }

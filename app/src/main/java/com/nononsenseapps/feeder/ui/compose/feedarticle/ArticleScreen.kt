@@ -62,6 +62,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,6 +82,7 @@ import com.nononsenseapps.feeder.archmodel.TextToDisplay
 import com.nononsenseapps.feeder.db.room.ID_UNSET
 import com.nononsenseapps.feeder.localtranslation.BergamotModelDownloadProgress
 import com.nononsenseapps.feeder.model.LocaleOverride
+import com.nononsenseapps.feeder.model.ReadAloudNeighbors
 import com.nononsenseapps.feeder.model.ReadAloudProgress
 import com.nononsenseapps.feeder.model.hackerNewsDiscussionUrl
 import com.nononsenseapps.feeder.ui.MainActivityViewModel
@@ -138,6 +140,16 @@ fun ArticleScreen(
     val isAnimatedPaging by mavm.isAnimatedPaging.collectAsStateWithLifecycle()
     val showOriginalPage by viewModel.showOriginalPage.collectAsStateWithLifecycle()
     val swipeNeighbors by viewModel.swipeNeighbors.collectAsStateWithLifecycle()
+    val readAloudNeighbors by viewModel.readAloudNeighbors.collectAsStateWithLifecycle()
+    val readAloudAutoContinue by viewModel.readAloudAutoContinue.collectAsStateWithLifecycle()
+
+    // Previous / next and auto-continue in read aloud open the article being read
+    val currentOnSwipeToArticle by rememberUpdatedState(onSwipeToArticle)
+    LaunchedEffect(viewModel) {
+        viewModel.readAloudOpenArticle.collect { (articleId, direction) ->
+            if (articleId != viewModel.itemId) currentOnSwipeToArticle(articleId, direction)
+        }
+    }
 
     val articleScrollState = rememberScrollState(initial = viewModel.scrollPosition)
 
@@ -265,6 +277,10 @@ fun ArticleScreen(
         onOpenLink = { link -> activityLauncher.openLinkInCustomTab(link, toolbarColor) },
         swipeNeighbors = swipeNeighbors,
         onSwipeToArticle = onSwipeToArticle,
+        readAloudNeighbors = readAloudNeighbors,
+        ttsOnSkipArticle = viewModel::ttsSkipArticle,
+        readAloudAutoContinue = readAloudAutoContinue,
+        ttsOnSetAutoContinue = viewModel::ttsSetAutoContinue,
     )
 }
 
@@ -318,6 +334,10 @@ fun ArticleScreen(
     onOpenLink: (String) -> Unit = {},
     swipeNeighbors: ArticleSwipeNeighbors = ArticleSwipeNeighbors(),
     onSwipeToArticle: (Long, ArticleSwipeDirection) -> Unit = { _, _ -> },
+    readAloudNeighbors: ReadAloudNeighbors = ReadAloudNeighbors(),
+    ttsOnSkipArticle: (next: Boolean) -> Unit = {},
+    readAloudAutoContinue: Boolean = false,
+    ttsOnSetAutoContinue: (Boolean) -> Unit = {},
 ) {
     // While reading aloud the bottom bar is the player and the article actions move to the top bar
     val readingAloud = viewState.isBottomBarVisible && !viewState.podcastPlayerState.isVisible
@@ -455,6 +475,10 @@ fun ArticleScreen(
                     onGoToSpokenText = ttsOnGoToSpokenText,
                     displayedArticleId = viewState.articleId,
                     diagnostics = ttsDiagnostics,
+                    neighbors = readAloudNeighbors,
+                    onSkipArticle = ttsOnSkipArticle,
+                    autoContinue = readAloudAutoContinue,
+                    onSetAutoContinue = ttsOnSetAutoContinue,
                 )
             } else {
                 Column {

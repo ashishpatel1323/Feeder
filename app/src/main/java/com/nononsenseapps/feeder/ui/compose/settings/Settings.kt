@@ -198,6 +198,8 @@ fun SettingsScreen(
             onShowThumbnailsChange = settingsViewModel::setShowThumbnails,
             useDetectLanguage = viewState.useDetectLanguage,
             onUseDetectLanguageChange = settingsViewModel::setUseDetectLanguage,
+            readAloudAutoContinue = viewState.readAloudAutoContinue,
+            onReadAloudAutoContinueChange = settingsViewModel::setReadAloudAutoContinue,
             maxItemsPerFeedValue = viewState.maximumCountPerFeed,
             onMaxItemsPerFeedChange = settingsViewModel::setMaxCountPerFeed,
             currentItemOpenerValue = viewState.itemOpener,
@@ -306,6 +308,8 @@ private fun SettingsScreenPreview() {
             onShowThumbnailsChange = {},
             useDetectLanguage = true,
             onUseDetectLanguageChange = {},
+            readAloudAutoContinue = false,
+            onReadAloudAutoContinueChange = {},
             maxItemsPerFeedValue = 101,
             onMaxItemsPerFeedChange = {},
             currentItemOpenerValue = ItemOpener.CUSTOM_TAB,
@@ -401,6 +405,8 @@ fun SettingsList(
     onShowThumbnailsChange: (Boolean) -> Unit,
     useDetectLanguage: Boolean,
     onUseDetectLanguageChange: (Boolean) -> Unit,
+    readAloudAutoContinue: Boolean,
+    onReadAloudAutoContinueChange: (Boolean) -> Unit,
     maxItemsPerFeedValue: Int,
     onMaxItemsPerFeedChange: (Int) -> Unit,
     currentItemOpenerValue: ItemOpener,
@@ -887,6 +893,12 @@ fun SettingsList(
                 checked = useDetectLanguage,
                 onCheckedChange = onUseDetectLanguageChange,
                 description = stringResource(id = R.string.description_for_read_aloud),
+            )
+            SwitchSetting(
+                title = stringResource(id = R.string.read_aloud_auto_continue_setting),
+                checked = readAloudAutoContinue,
+                onCheckedChange = onReadAloudAutoContinueChange,
+                description = stringResource(id = R.string.read_aloud_auto_continue_description),
             )
         }
 

@@ -37,6 +37,7 @@ import com.nononsenseapps.feeder.model.ForceCacheOnSomeFailuresInterceptor
 import com.nononsenseapps.feeder.model.OneImageRequestPerHostInterceptor
 import com.nononsenseapps.feeder.model.PodcastPlayerStateHolder
 import com.nononsenseapps.feeder.model.RateLimitedInterceptor
+import com.nononsenseapps.feeder.model.ReadAloudQueue
 import com.nononsenseapps.feeder.model.TTSStateHolder
 import com.nononsenseapps.feeder.model.TooManyRequestsInterceptor
 import com.nononsenseapps.feeder.model.UserAgentInterceptor
@@ -210,6 +211,7 @@ class FeederApplication :
         bind<ApplicationCoroutineScope>() with instance(applicationCoroutineScope)
         import(networkModule)
         bind<TTSStateHolder>() with instance(ttsStateHolder)
+        bind<ReadAloudQueue>() with singleton { ReadAloudQueue(di) }
         bind<PodcastPlayerStateHolder>() with instance(podcastPlayerStateHolder)
         bind<NotificationsWorker>() with singleton { NotificationsWorker(di) }
     }
