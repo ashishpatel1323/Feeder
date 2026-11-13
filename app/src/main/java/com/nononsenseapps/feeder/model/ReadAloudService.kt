@@ -360,8 +360,7 @@ class ReadAloudService : MediaSessionService() {
                     Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
                     Player.COMMAND_SEEK_TO_PREVIOUS,
                     Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
-                )
-                .build()
+                ).build()
 
         const val ACTION_PREPARE = "com.nononsenseapps.feeder.READ_ALOUD_PREPARE"
         private const val ACTION_STOP = "com.nononsenseapps.feeder.READ_ALOUD_STOP"
