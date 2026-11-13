@@ -219,6 +219,7 @@ fun ArticleScreen(
         speechHighlight = speechHighlight,
         ttsOnSeekTo = viewModel::ttsSeekTo,
         ttsOnSetSpeed = viewModel::ttsSetSpeed,
+        ttsDiagnostics = viewModel::ttsDiagnostics,
         isReadingAloud = isReadingAloudHere,
         ttsOnReadFrom = viewModel::ttsReadFrom,
         ttsOnUserScroll = viewModel::ttsStopFollowing,
@@ -303,6 +304,7 @@ fun ArticleScreen(
     speechHighlight: SpeechHighlight? = null,
     ttsOnSeekTo: (Long) -> Unit = {},
     ttsOnSetSpeed: (Float) -> Unit = {},
+    ttsDiagnostics: () -> String = { "" },
     isReadingAloud: Boolean = false,
     ttsOnReadFrom: ((speechOffset: Int) -> Unit)? = null,
     ttsOnGoToSpokenText: () -> Unit = {},
@@ -451,6 +453,7 @@ fun ArticleScreen(
                     onSelectSpeed = ttsOnSetSpeed,
                     onGoToSpokenText = ttsOnGoToSpokenText,
                     displayedArticleId = viewState.articleId,
+                    diagnostics = ttsDiagnostics,
                 )
             } else {
                 Column {

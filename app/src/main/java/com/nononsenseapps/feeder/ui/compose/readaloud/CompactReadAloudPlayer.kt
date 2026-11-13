@@ -5,6 +5,7 @@ import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,10 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Pause
@@ -25,8 +30,8 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.RecordVoiceOver
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,14 +39,21 @@ import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -75,6 +87,7 @@ fun HideableCompactTTSPlayer(
     displayedArticleId: Long?,
     onSelectSpeed: (Float) -> Unit,
     modifier: Modifier = Modifier,
+    diagnostics: () -> String = { "" },
 ) {
     AnimatedVisibility(
         modifier = modifier,
@@ -96,6 +109,7 @@ fun HideableCompactTTSPlayer(
             onGoToSpokenText = onGoToSpokenText,
             displayedArticleId = displayedArticleId,
             onSelectSpeed = onSelectSpeed,
+            diagnostics = diagnostics,
         )
     }
 }
@@ -115,7 +129,26 @@ fun CompactTTSPlayer(
     onGoToSpokenText: () -> Unit = {},
     displayedArticleId: Long? = null,
     onSelectSpeed: (Float) -> Unit = {},
+    diagnostics: () -> String = { "" },
 ) {
+    var diagnosticsText by remember { mutableStateOf<String?>(null) }
+    diagnosticsText?.let { text ->
+        AlertDialog(
+            onDismissRequest = { diagnosticsText = null },
+            confirmButton = {
+                TextButton(onClick = { diagnosticsText = diagnostics() }) { Text(stringResource(R.string.read_aloud_diagnostics_refresh)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { diagnosticsText = null }) { Text(stringResource(android.R.string.ok)) }
+            },
+            title = { Text(stringResource(R.string.read_aloud_diagnostics)) },
+            text = {
+                SelectionContainer(Modifier.verticalScroll(rememberScrollState())) {
+                    Text(text, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+                }
+            },
+        )
+    }
     val seekable = progress.preparationProgress == null && progress.durationMillis > 0 && progress.error == null
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -162,6 +195,7 @@ fun CompactTTSPlayer(
                         progress = progress,
                         onPlay = onPlay,
                         onPause = onPause,
+                        onLongClick = { diagnosticsText = diagnostics() },
                     )
                     PlainTooltipBox(tooltip = { Text(stringResource(R.string.seek_forward_10_seconds)) }) {
                         IconButton(
@@ -195,6 +229,7 @@ private fun PlayButtonWithProgress(
     progress: ReadAloudProgress,
     onPlay: () -> Unit,
     onPause: () -> Unit,
+    onLongClick: () -> Unit,
 ) {
     val preparing = progress.preparationProgress != null
     val fraction =
@@ -232,15 +267,29 @@ private fun PlayButtonWithProgress(
                     gapSize = 0.dp,
                 )
             }
-            FilledTonalIconButton(
-                onClick = if (currentlyPlaying) onPause else onPlay,
+            // Long-press opens read-aloud diagnostics
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                 modifier = Modifier.size(42.dp),
             ) {
-                Icon(
-                    if (currentlyPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = label,
-                    modifier = Modifier.size(28.dp),
-                )
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier =
+                        Modifier.combinedClickable(
+                            role = Role.Button,
+                            onClickLabel = label,
+                            onClick = if (currentlyPlaying) onPause else onPlay,
+                            onLongClick = onLongClick,
+                        ),
+                ) {
+                    Icon(
+                        if (currentlyPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = label,
+                        modifier = Modifier.size(28.dp),
+                    )
+                }
             }
         }
     }

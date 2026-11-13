@@ -1,11 +1,13 @@
 package com.nononsenseapps.feeder.model
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
@@ -180,14 +182,86 @@ class ReadAloudService : MediaSessionService() {
         session: MediaSession,
         startInForegroundRequired: Boolean,
     ) {
+        notificationUpdates++
         // Clearing the previous playlist must not demote an active synthesis job.
         if (holder.progress.value.preparationProgress != null) {
+            lastNotificationUpdate = "preparation"
             showPreparationNotification()
         } else {
             val synthesizing = holder.progress.value.isDurationEstimated && holder.progress.value.error == null
-            super.onUpdateNotification(session, startInForegroundRequired || synthesizing)
+            lastNotificationUpdate = "media, foreground=${startInForegroundRequired || synthesizing}"
+            try {
+                super.onUpdateNotification(session, startInForegroundRequired || synthesizing)
+            } catch (e: RuntimeException) {
+                lastNotificationError = e.toString()
+                throw e
+            }
         }
     }
+
+    private var notificationUpdates = 0
+    private var lastNotificationUpdate = "none"
+    private var lastNotificationError: String? = null
+
+    /** What Android sees of read aloud, shown in a dialog so problems can be diagnosed from a screenshot. */
+    internal fun diagnostics(): String =
+        buildString {
+            val current = session ?: return "Media session: none"
+            val player = current.player
+            appendLine("Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}), ${Build.MANUFACTURER} ${Build.MODEL}")
+            appendLine(
+                "Player: state=${playerStateName(player.playbackState)} playWhenReady=${player.playWhenReady} " +
+                    "playing=${player.isPlaying} live=${player.isCurrentMediaItemLive} items=${player.mediaItemCount}",
+            )
+            appendLine(
+                "Player commands: playPause=${player.isCommandAvailable(Player.COMMAND_PLAY_PAUSE)} " +
+                    "seekBack=${player.isCommandAvailable(Player.COMMAND_SEEK_BACK)} " +
+                    "currentItem=${player.isCommandAvailable(Player.COMMAND_GET_CURRENT_MEDIA_ITEM)}",
+            )
+            appendLine("Session added to service: ${isSessionAdded(current)}")
+            appendLine("Controllers (${current.connectedControllers.size}):")
+            for (controller in current.connectedControllers) {
+                appendLine(
+                    "  ${controller.packageName} v${controller.controllerVersion} trusted=${controller.isTrusted} " +
+                        "notification=${current.isMediaNotificationController(controller)}",
+                )
+            }
+            val platform = android.media.session.MediaController(this@ReadAloudService, current.platformToken)
+            val state = platform.playbackState
+            appendLine(
+                "Platform state: ${state?.state} actions=0x${java.lang.Long.toHexString(state?.actions ?: 0)} " +
+                    "speed=${state?.playbackSpeed} position=${state?.position}",
+            )
+            appendLine("Platform custom actions: ${state?.customActions?.map { it.action.substringAfterLast('.') }}")
+            appendLine("Platform title: ${platform.metadata?.getString(android.media.MediaMetadata.METADATA_KEY_TITLE)}")
+            val manager = getSystemService(NotificationManager::class.java)
+            appendLine("Notifications enabled: ${manager.areNotificationsEnabled()}")
+            appendLine("Channel importance: ${manager.getNotificationChannel(CHANNEL_ID)?.importance}")
+            appendLine("Notification updates: $notificationUpdates, last: $lastNotificationUpdate")
+            appendLine("Last notification error: ${lastNotificationError ?: "none"}")
+            appendLine("Foreground service type: $foregroundServiceType")
+            val active = manager.activeNotifications
+            appendLine("Active notifications (${active.size}):")
+            for (posted in active) {
+                val notification = posted.notification
+                appendLine(
+                    "  id=${posted.id} channel=${notification.channelId} " +
+                        "style=${notification.extras.getString(Notification.EXTRA_TEMPLATE)?.substringAfterLast('$')} " +
+                        "foreground=${notification.flags and Notification.FLAG_FOREGROUND_SERVICE != 0} " +
+                        "session=${notification.extras.containsKey(Notification.EXTRA_MEDIA_SESSION)} " +
+                        "actions=${notification.actions?.size ?: 0}",
+                )
+            }
+        }
+
+    private fun playerStateName(state: Int): String =
+        when (state) {
+            Player.STATE_IDLE -> "idle"
+            Player.STATE_BUFFERING -> "buffering"
+            Player.STATE_READY -> "ready"
+            Player.STATE_ENDED -> "ended"
+            else -> state.toString()
+        }
 
     private fun showPreparationNotification() {
         val manager = getSystemService(NotificationManager::class.java)

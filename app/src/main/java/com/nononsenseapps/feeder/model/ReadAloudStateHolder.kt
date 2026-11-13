@@ -649,6 +649,9 @@ class TTSStateHolder(
 
     fun shutdown() = stop()
 
+    /** Read-aloud state as Android sees it, for the diagnostics dialog. */
+    fun diagnostics(): String = "App state: ${_ttsState.value}\n" + (service?.diagnostics() ?: "Read-aloud service: not running")
+
     private data class SpeechRequest(
         val articleId: Long,
         val text: String,
