@@ -25,6 +25,11 @@
 # Everything in the app is essential
 -keep class com.nononsenseapps.** { *; }
 
+# ReadAloudService matches this Player.Listener callback by name in a Proxy
+-keepclassmembers interface androidx.media3.common.Player$Listener {
+    void onAvailableCommandsChanged(androidx.media3.common.Player$Commands);
+}
+
 # For Okio
 # Animal Sniffer compileOnly dependency to ensure APIs are compatible with older versions of Java.
 -dontwarn org.codehaus.mojo.animal_sniffer.*
