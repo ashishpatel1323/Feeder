@@ -80,3 +80,18 @@
 -dontwarn javax.lang.model.element.ElementKind
 -dontwarn jdk.javadoc.doclet.Taglet$Location
 -dontwarn jdk.javadoc.doclet.Taglet
+
+# ML Kit GenAI (Gemini Nano through AICore). Its consumer rules don't cover
+# everything it reads by reflection, so R8 shrinking left every client throwing
+# a bare NullPointerException in release builds. Keep it whole.
+-keep class com.google.mlkit.genai.** { *; }
+-keep class com.google.mlkit.common.** { *; }
+-keep class com.google.android.gms.internal.mlkit_genai** { *; }
+-keep class com.google.android.gms.internal.mlkit_common** { *; }
+-keep class com.google.android.apps.aicore.** { *; }
+-keep class com.google.android.aicore.** { *; }
+-keep class com.google.ai.edge.aicore.** { *; }
+-keepclassmembers class * extends com.google.protobuf.GeneratedMessageLite { <fields>; }
+-keep interface * extends android.os.IInterface { *; }
+-keep class * implements android.os.IInterface { *; }
+-keep class * extends android.os.Binder { *; }
