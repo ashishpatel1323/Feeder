@@ -37,8 +37,12 @@ class ReadAloudService : MediaSessionService() {
     private var session: MediaSession? = null
     private val holder: TTSStateHolder by lazy { (application as FeederApplication).di.direct.instance() }
 
+    // Previous / next article for the media controls, and auto-continue when an article ends
+    private lateinit var queue: ReadAloudQueue
+
     override fun onCreate() {
         super.onCreate()
+        queue = (application as FeederApplication).di.direct.instance()
         setMediaNotificationProvider(
             DefaultMediaNotificationProvider
                 .Builder(this)
@@ -82,6 +86,39 @@ class ReadAloudService : MediaSessionService() {
                 override fun seekBack() = seekTo(player.currentPosition - 10_000)
 
                 override fun seekForward() = seekTo(player.currentPosition + 10_000)
+
+                // Previous / next move to the neighbouring article in the list
+                override fun seekToNext() = queue.skip(next = true)
+
+                override fun seekToNextMediaItem() = queue.skip(next = true)
+
+                override fun seekToPrevious() = queue.skip(next = false)
+
+                override fun seekToPreviousMediaItem() = queue.skip(next = false)
+
+                override fun hasNextMediaItem(): Boolean = true
+
+                override fun hasPreviousMediaItem(): Boolean = true
+
+                override fun isCommandAvailable(command: Int): Boolean = command in ARTICLE_COMMANDS || super.isCommandAvailable(command)
+
+                override fun getAvailableCommands(): Player.Commands = withArticleCommands(super.getAvailableCommands())
+
+                private val wrappedListeners = HashMap<Player.Listener, Player.Listener>()
+
+                override fun addListener(listener: Player.Listener) {
+                    val wrapped =
+                        object : Player.Listener by listener {
+                            override fun onAvailableCommandsChanged(availableCommands: Player.Commands) =
+                                listener.onAvailableCommandsChanged(withArticleCommands(availableCommands))
+                        }
+                    wrappedListeners[listener] = wrapped
+                    super.addListener(wrapped)
+                }
+
+                override fun removeListener(listener: Player.Listener) {
+                    super.removeListener(wrappedListeners.remove(listener) ?: listener)
+                }
             }
         session =
             MediaSession
@@ -89,25 +126,27 @@ class ReadAloudService : MediaSessionService() {
                 .setSessionActivity(activity)
                 .setMediaButtonPreferences(
                     listOf(
-                        // Custom commands rather than player commands: the platform session (lock
-                        // screen, control center, OEM media panels) only shows custom buttons.
+                        // The back / forward slots stay free for previous / next article. Custom
+                        // commands rather than player commands: the platform session (lock screen,
+                        // control center, OEM media panels) only shows custom buttons as extras,
+                        // and Android shows the first two of them.
                         CommandButton
                             .Builder(CommandButton.ICON_SKIP_BACK_10)
                             .setSessionCommand(SessionCommand(ACTION_SEEK_BACK, Bundle.EMPTY))
                             .setDisplayName(getString(R.string.skip_back_10))
-                            .setSlots(CommandButton.SLOT_BACK)
+                            .setSlots(CommandButton.SLOT_OVERFLOW)
                             .build(),
                         CommandButton
                             .Builder(CommandButton.ICON_SKIP_FORWARD_10)
                             .setSessionCommand(SessionCommand(ACTION_SEEK_FORWARD, Bundle.EMPTY))
                             .setDisplayName(getString(R.string.skip_forward_10))
-                            .setSlots(CommandButton.SLOT_FORWARD)
+                            .setSlots(CommandButton.SLOT_OVERFLOW)
                             .build(),
                         CommandButton
                             .Builder(CommandButton.ICON_STOP)
                             .setSessionCommand(SessionCommand(ACTION_STOP, Bundle.EMPTY))
                             .setDisplayName(getString(R.string.stop_reading))
-                            .setSlots(CommandButton.SLOT_FORWARD_SECONDARY, CommandButton.SLOT_OVERFLOW)
+                            .setSlots(CommandButton.SLOT_OVERFLOW)
                             .build(),
                     ),
                 ).setCallback(
@@ -306,6 +345,20 @@ class ReadAloudService : MediaSessionService() {
     }
 
     companion object {
+        private val ARTICLE_COMMANDS =
+            setOf(
+                Player.COMMAND_SEEK_TO_NEXT,
+                Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
+                Player.COMMAND_SEEK_TO_PREVIOUS,
+                Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
+            )
+
+        private fun withArticleCommands(commands: Player.Commands): Player.Commands =
+            commands
+                .buildUpon()
+                .addAll(*ARTICLE_COMMANDS.toIntArray())
+                .build()
+
         const val ACTION_PREPARE = "com.nononsenseapps.feeder.READ_ALOUD_PREPARE"
         private const val ACTION_STOP = "com.nononsenseapps.feeder.READ_ALOUD_STOP"
         private const val ACTION_SEEK_BACK = "com.nononsenseapps.feeder.READ_ALOUD_SEEK_BACK"

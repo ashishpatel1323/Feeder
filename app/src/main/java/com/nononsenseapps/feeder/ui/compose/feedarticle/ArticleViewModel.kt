@@ -38,6 +38,7 @@ import com.nononsenseapps.feeder.model.NotHTML
 import com.nononsenseapps.feeder.model.PlaybackStatus
 import com.nononsenseapps.feeder.model.PodcastPlayerState
 import com.nononsenseapps.feeder.model.PodcastPlayerStateHolder
+import com.nononsenseapps.feeder.model.ReadAloudQueue
 import com.nononsenseapps.feeder.model.SystemTranslationSettingsRequiredException
 import com.nononsenseapps.feeder.model.TTSStateHolder
 import com.nononsenseapps.feeder.model.ThumbnailImage
@@ -135,6 +136,20 @@ class ArticleViewModel(
 
     fun ttsStopFollowing() = ttsStateHolder.stopFollowingSpokenText()
 
+    private val readAloudQueue: ReadAloudQueue by instance()
+
+    /** Previous / next article for the player's up-next strip. */
+    val readAloudNeighbors = readAloudQueue.neighbors
+
+    val readAloudAutoContinue = readAloudQueue.autoContinue
+
+    /** Articles read aloud by previous / next or auto-continue, for the screen to open. */
+    val readAloudOpenArticle = readAloudQueue.openArticle
+
+    fun ttsSkipArticle(next: Boolean) = readAloudQueue.skip(next)
+
+    fun ttsSetAutoContinue(value: Boolean) = readAloudQueue.setAutoContinue(value)
+
     private val podcastPlayerStateHolder: PodcastPlayerStateHolder by instance()
     private val fullTextParser: FullTextParser by instance()
     private val filePathProvider: FilePathProvider by instance()
@@ -177,6 +192,18 @@ class ArticleViewModel(
 
     private val textToDisplay = MutableStateFlow(TextToDisplay.CONTENT)
     private val displayFullTextOverride = MutableStateFlow<Boolean?>(null)
+
+    init {
+        viewModelScope.launch {
+            // Read aloud moved here with previous / next: show the full text it is reading
+            readAloudQueue.fullTextArticleId.collect { articleId ->
+                if (articleId == itemId && displayFullTextOverride.value != true) {
+                    textToDisplay.update { TextToDisplay.LOADING_FULLTEXT }
+                    displayFullTextOverride.value = true
+                }
+            }
+        }
+    }
 
     private val articleContentFlow: StateFlow<LinearArticle> =
         combine(

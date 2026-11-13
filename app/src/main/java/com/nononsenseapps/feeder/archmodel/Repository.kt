@@ -217,6 +217,8 @@ class Repository(
 
     suspend fun getCurrentArticle() = feedItemStore.getArticle(currentArticleId.value)
 
+    suspend fun getArticle(itemId: Long): Article? = feedItemStore.getArticle(itemId)?.let { Article(it) }
+
     fun getArticleFlow(itemId: Long): Flow<Article?> =
         feedItemStore
             .getFeedItem(itemId)
@@ -306,6 +308,10 @@ class Repository(
     val useDetectLanguage = settingsStore.useDetectLanguage
 
     fun setUseDetectLanguage(value: Boolean) = settingsStore.setUseDetectLanguage(value)
+
+    val readAloudAutoContinue = settingsStore.readAloudAutoContinue
+
+    fun setReadAloudAutoContinue(value: Boolean) = settingsStore.setReadAloudAutoContinue(value)
 
     val useDynamicTheme = settingsStore.useDynamicTheme
 
