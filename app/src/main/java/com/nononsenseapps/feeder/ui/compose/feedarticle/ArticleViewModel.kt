@@ -31,6 +31,7 @@ import com.nononsenseapps.feeder.model.BergamotRuntimeDownloadRequiredException
 import com.nononsenseapps.feeder.model.FeedParserError
 import com.nononsenseapps.feeder.model.FullTextParser
 import com.nononsenseapps.feeder.model.FullTextTooLarge
+import com.nononsenseapps.feeder.model.HackerNewsScores
 import com.nononsenseapps.feeder.model.LocaleOverride
 import com.nononsenseapps.feeder.model.NoBody
 import com.nononsenseapps.feeder.model.NoUrl
@@ -158,6 +159,7 @@ class ArticleViewModel(
     private val translationManager: TranslationManager by instance()
     private val bergamotModelManager: BergamotModelManager by instance()
     private val localTranslator: LocalTranslator by instance()
+    private val hackerNewsScores: HackerNewsScores by instance()
 
     // Use this for actions which should complete even if app goes off screen
     private val applicationCoroutineScope: ApplicationCoroutineScope by instance()
@@ -318,6 +320,9 @@ class ArticleViewModel(
                         article?.wordCount ?: 0
                     },
                 image = article?.image,
+                hnPoints = article?.hnPoints,
+                hnComments = article?.hnComments,
+                hnId = article?.hnId,
                 showSummarize = summarySettings.canSummarize && !article?.link.isNullOrEmpty(),
                 openAiSummary = openAiSummary,
                 showTranslate = isShowingTranslated || (canRequestTranslation && alreadyInPreferredLanguage == null),
@@ -346,6 +351,14 @@ class ArticleViewModel(
                     return@collect
                 }
                 handledInitialOpenActions = true
+
+                launch(Dispatchers.IO) {
+                    try {
+                        hackerNewsScores.refreshIfStale(id = article.id, link = article.link)
+                    } catch (e: Exception) {
+                        Log.w(LOG_TAG, "Failed to refresh Hacker News score", e)
+                    }
+                }
 
                 val feed = repository.getFeed(feedId)
                 if (feed?.summarizeOnOpen == true && repository.openAISettings.value.canSummarize) {
@@ -1083,6 +1096,9 @@ private data class ArticleState(
     override val keyHolder: ArticleItemKeyHolder = RotatingArticleItemKeyHolder,
     override val wordCount: Int = 0,
     override val image: ThumbnailImage? = null,
+    override val hnPoints: Int? = null,
+    override val hnComments: Int? = null,
+    override val hnId: String? = null,
     override val showSummarize: Boolean = false,
     override val openAiSummary: OpenAISummaryState = OpenAISummaryState.Empty,
     override val showTranslate: Boolean = false,
@@ -1120,6 +1136,9 @@ interface ArticleScreenViewState {
     val keyHolder: ArticleItemKeyHolder
     val wordCount: Int
     val image: ThumbnailImage?
+    val hnPoints: Int?
+    val hnComments: Int?
+    val hnId: String?
     val showSummarize: Boolean
     val openAiSummary: OpenAISummaryState
     val showTranslate: Boolean

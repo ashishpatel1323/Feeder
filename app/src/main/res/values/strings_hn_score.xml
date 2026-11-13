@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="show_hn_score">Show Hacker News score</string>
+  <string name="show_hn_score_description">Shows how many points an article got on Hacker News, next to its date. Each new article\'s link is looked up on hn.algolia.com, so that service can see which links are in your feeds.</string>
+  <string name="open_hn_discussion">Open Hacker News discussion</string>
+  <plurals name="hn_points_description">
+    <item quantity="one">%1$d point on Hacker News</item>
+    <item quantity="other">%1$d points on Hacker News</item>
+  </plurals>
+</resources>
