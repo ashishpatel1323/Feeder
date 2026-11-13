@@ -31,6 +31,8 @@ import com.nononsenseapps.feeder.ui.MainActivity
 import com.nononsenseapps.feeder.util.DEEP_LINK_BASE_URI
 import org.kodein.di.direct
 import org.kodein.di.instance
+import java.lang.reflect.InvocationTargetException
+import java.lang.reflect.Proxy
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class ReadAloudService : MediaSessionService() {
@@ -107,10 +109,7 @@ class ReadAloudService : MediaSessionService() {
                 private val wrappedListeners = HashMap<Player.Listener, Player.Listener>()
 
                 override fun addListener(listener: Player.Listener) {
-                    val wrapped =
-                        object : Player.Listener by listener {
-                            override fun onAvailableCommandsChanged(availableCommands: Player.Commands) = listener.onAvailableCommandsChanged(withArticleCommands(availableCommands))
-                        }
+                    val wrapped = withArticleCommands(listener)
                     wrappedListeners[listener] = wrapped
                     super.addListener(wrapped)
                 }
@@ -361,6 +360,30 @@ class ReadAloudService : MediaSessionService() {
                     Player.COMMAND_SEEK_TO_PREVIOUS,
                     Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
                 ).build()
+
+        /**
+         * Passes every event on to [listener], adding the article commands to available commands.
+         * A proxy rather than Kotlin's `by` delegation: `by` skips Java default methods, which is
+         * every Player.Listener method, so the session would get no events and post no notification.
+         */
+        private fun withArticleCommands(listener: Player.Listener): Player.Listener =
+            Proxy.newProxyInstance(
+                Player.Listener::class.java.classLoader,
+                arrayOf(Player.Listener::class.java),
+            ) { proxy, method, args ->
+                when {
+                    method.name == "equals" && method.parameterTypes.size == 1 -> proxy === args?.get(0)
+                    method.name == "hashCode" && method.parameterTypes.isEmpty() -> System.identityHashCode(proxy)
+                    method.name == "toString" && method.parameterTypes.isEmpty() -> "ArticleCommands($listener)"
+                    method.name == "onAvailableCommandsChanged" && args?.size == 1 -> listener.onAvailableCommandsChanged(withArticleCommands(args.single() as Player.Commands))
+                    else ->
+                        try {
+                            method.invoke(listener, *(args ?: emptyArray()))
+                        } catch (e: InvocationTargetException) {
+                            throw e.targetException ?: e
+                        }
+                }
+            } as Player.Listener
 
         const val ACTION_PREPARE = "com.nononsenseapps.feeder.READ_ALOUD_PREPARE"
         private const val ACTION_STOP = "com.nononsenseapps.feeder.READ_ALOUD_STOP"
