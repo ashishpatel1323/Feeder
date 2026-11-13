@@ -112,31 +112,36 @@ class ReadAloudService : MediaSessionService() {
                     ),
                 ).setCallback(
                     object : MediaSession.Callback {
-                        override fun onConnect(
+                        override fun onConnectAsync(
                             session: MediaSession,
                             controller: MediaSession.ControllerInfo,
-                        ): MediaSession.ConnectionResult {
-                            // Accept every controller: lock screen, control center, headsets, watches
-                            // and OEM media panels are not all "trusted" system apps.
-                            val defaults = super.onConnect(session, controller)
+                        ): ListenableFuture<MediaSession.ConnectionResult> {
+                            // Accept every controller with full commands: lock screen, control center,
+                            // headsets, watches and OEM media panels are not all "trusted" system apps.
+                            // Build from the defaults explicitly. super.onConnect() returns an EMPTY
+                            // placeholder, and the platform session (lock screen, control center)
+                            // copies the media notification controller's commands, so starting from
+                            // it left Android with no play/pause and no notification.
                             // External controls can operate this article, not replace its local audio.
                             val commands =
-                                defaults.availablePlayerCommands
+                                MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS
                                     .buildUpon()
                                     .remove(Player.COMMAND_SET_MEDIA_ITEM)
                                     .remove(Player.COMMAND_CHANGE_MEDIA_ITEMS)
                                     .build()
-                            return MediaSession.ConnectionResult
-                                .AcceptedResultBuilder(session)
-                                .setAvailablePlayerCommands(commands)
-                                .setAvailableSessionCommands(
-                                    defaults.availableSessionCommands
-                                        .buildUpon()
-                                        .add(SessionCommand(ACTION_STOP, Bundle.EMPTY))
-                                        .add(SessionCommand(ACTION_SEEK_BACK, Bundle.EMPTY))
-                                        .add(SessionCommand(ACTION_SEEK_FORWARD, Bundle.EMPTY))
-                                        .build(),
-                                ).build()
+                            return Futures.immediateFuture(
+                                MediaSession.ConnectionResult
+                                    .AcceptedResultBuilder(session, controller)
+                                    .setAvailablePlayerCommands(commands)
+                                    .setAvailableSessionCommands(
+                                        MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS
+                                            .buildUpon()
+                                            .add(SessionCommand(ACTION_STOP, Bundle.EMPTY))
+                                            .add(SessionCommand(ACTION_SEEK_BACK, Bundle.EMPTY))
+                                            .add(SessionCommand(ACTION_SEEK_FORWARD, Bundle.EMPTY))
+                                            .build(),
+                                    ).build(),
+                            )
                         }
 
                         override fun onCustomCommand(
