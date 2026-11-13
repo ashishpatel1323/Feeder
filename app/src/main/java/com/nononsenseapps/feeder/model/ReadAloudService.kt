@@ -109,8 +109,7 @@ class ReadAloudService : MediaSessionService() {
                 override fun addListener(listener: Player.Listener) {
                     val wrapped =
                         object : Player.Listener by listener {
-                            override fun onAvailableCommandsChanged(availableCommands: Player.Commands) =
-                                listener.onAvailableCommandsChanged(withArticleCommands(availableCommands))
+                            override fun onAvailableCommandsChanged(availableCommands: Player.Commands) = listener.onAvailableCommandsChanged(withArticleCommands(availableCommands))
                         }
                     wrappedListeners[listener] = wrapped
                     super.addListener(wrapped)

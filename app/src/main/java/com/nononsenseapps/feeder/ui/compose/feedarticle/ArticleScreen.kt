@@ -62,6 +62,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -143,9 +144,10 @@ fun ArticleScreen(
     val readAloudAutoContinue by viewModel.readAloudAutoContinue.collectAsStateWithLifecycle()
 
     // Previous / next and auto-continue in read aloud open the article being read
+    val currentOnSwipeToArticle by rememberUpdatedState(onSwipeToArticle)
     LaunchedEffect(viewModel) {
         viewModel.readAloudOpenArticle.collect { (articleId, direction) ->
-            if (articleId != viewModel.itemId) onSwipeToArticle(articleId, direction)
+            if (articleId != viewModel.itemId) currentOnSwipeToArticle(articleId, direction)
         }
     }
 
