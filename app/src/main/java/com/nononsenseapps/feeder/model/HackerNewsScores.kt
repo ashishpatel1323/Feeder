@@ -49,6 +49,9 @@ class HackerNewsScores(
             return
         }
         mutex.withLock {
+            if (!enabled) {
+                return
+            }
             val now = Instant.now()
             val items =
                 repository.getItemsNeedingHnScore(
@@ -57,6 +60,10 @@ class HackerNewsScores(
                     limit = limit,
                 )
             for (item in items) {
+                if (!enabled) {
+                    // Turned off while refreshing, stop sending links
+                    break
+                }
                 val link = item.link ?: continue
                 if (!refresh(id = item.id, link = link, now = now)) {
                     // Probably offline or rate limited, try again on next sync
@@ -83,9 +90,24 @@ class HackerNewsScores(
             return
         }
         mutex.withLock {
-            refresh(id = id, link = link, now = now)
+            if (enabled) {
+                refresh(id = id, link = link, now = now)
+            }
         }
     }
+
+    /**
+     * Removes all stored scores. Holds the same lock as the lookups so an in-flight
+     * lookup can't write a score back after the feature was turned off.
+     */
+    suspend fun clearAll() {
+        mutex.withLock {
+            repository.clearHnScores()
+        }
+    }
+
+    private val enabled: Boolean
+        get() = repository.showHnScore.value
 
     /**
      * Returns false if the lookup failed (network error), true otherwise.
@@ -102,6 +124,10 @@ class HackerNewsScores(
                 Log.w(LOG_TAG, "Hacker News lookup failed: ${e.message}")
                 return false
             }
+        if (!enabled) {
+            // Turned off during the lookup, don't store anything
+            return false
+        }
         repository.updateHnScore(
             id = id,
             points = story?.points,
@@ -226,14 +252,15 @@ internal fun normalizeLinkForHn(link: String?): String? {
 internal fun hnSearchQueryFor(link: String?): String? = normalizeLinkForHn(link)?.substringBefore('?')
 
 /**
- * Picks the most upvoted submission whose URL is the same article as [link].
+ * Picks the most upvoted submission whose URL is the same article as [link]. Tracking
+ * parameters are ignored, other query parameters must match since some sites use them
+ * to identify articles (like ?id=5).
  */
 internal fun parseHnSearchResponse(
     json: String,
     link: String,
 ): HnStory? {
     val target = normalizeLinkForHn(link) ?: return null
-    val targetWithoutQuery = target.substringBefore('?')
     val hits =
         try {
             Json.parseToJsonElement(json).jsonObject["hits"]?.jsonArray
@@ -244,9 +271,8 @@ internal fun parseHnSearchResponse(
         .mapNotNull { element ->
             val hit = element as? JsonObject ?: return@mapNotNull null
             val hitUrl = normalizeLinkForHn(hit["url"]?.jsonPrimitive?.contentOrNull) ?: return@mapNotNull null
-            // Exact match, or the same page when one side has extra query parameters
-            val matches = hitUrl == target || hitUrl.substringBefore('?') == targetWithoutQuery
-            if (!matches) {
+            // Must be the same page, including query parameters that identify the article
+            if (hitUrl != target) {
                 return@mapNotNull null
             }
             val id = hit["objectID"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null

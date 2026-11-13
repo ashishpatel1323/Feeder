@@ -1026,7 +1026,7 @@ class Repository(
             if (value) {
                 hackerNewsScores.refreshRecent()
             } else {
-                feedItemStore.clearHnScores()
+                hackerNewsScores.clearAll()
             }
         }
     }
@@ -1044,6 +1044,8 @@ class Repository(
         staleBefore: Instant,
         limit: Int,
     ): List<FeedItemIdWithLink> = feedItemStore.getItemsNeedingHnScore(since = since, staleBefore = staleBefore, limit = limit)
+
+    suspend fun clearHnScores() = feedItemStore.clearHnScores()
 
     suspend fun getHnCheckedTime(id: Long): Instant? = feedItemStore.getHnCheckedTime(id)
 

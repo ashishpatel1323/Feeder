@@ -48,6 +48,22 @@ class HackerNewsScoresTest {
     }
 
     @Test
+    fun parseRequiresIdentifyingQueryParametersToMatch() {
+        val json =
+            """
+            {"hits":[
+              {"objectID":"6","url":"https://example.com/post?id=6","points":900,"num_comments":10},
+              {"objectID":"5","url":"https://example.com/post?id=5&utm_source=hn","points":12,"num_comments":3},
+              {"objectID":"0","url":"https://example.com/post","points":400,"num_comments":2}
+            ]}
+            """.trimIndent()
+        assertEquals(
+            HnStory(id = "5", points = 12, comments = 3),
+            parseHnSearchResponse(json, "https://example.com/post?id=5"),
+        )
+    }
+
+    @Test
     fun parseReturnsNullWhenNoMatch() {
         val json = """{"hits":[{"objectID":"1","url":"https://example.com/other","points":9,"num_comments":0}]}"""
         assertNull(parseHnSearchResponse(json, "https://example.com/post"))
