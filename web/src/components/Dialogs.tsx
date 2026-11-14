@@ -16,6 +16,7 @@ import {
 import { parseJoinLink } from '../lib/crypto'
 import { getAccessToken, health, setAccessToken } from '../lib/api'
 import { updateSettings, type Settings } from '../lib/settings'
+import { isKokoroVoice, kokoro, KOKORO_PREFIX, KOKORO_VOICES, webGpuAvailable, type KokoroStatus } from '../lib/kokoro'
 import { readAloud } from '../lib/readaloud'
 import { IconButton } from './Icon'
 
@@ -308,17 +309,24 @@ function SyncSection({ toast }: { toast: (m: string) => void }) {
   )
 }
 
+/** Browser voices that are neural/network voices and sound natural. */
+const NATURAL_VOICE = /natural|neural|online|premium|enhanced|google|siri/i
+
 export function SettingsDialog({ settings, onClose, toast }: { settings: Settings; onClose: () => void; toast: (m: string) => void }) {
   const [token, setToken] = useState(getAccessToken())
   const [tokenRequired, setTokenRequired] = useState(false)
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([])
+  const [voiceModel, setVoiceModel] = useState<KokoroStatus>(kokoro.status)
+  useEffect(() => kokoro.subscribe(setVoiceModel), [])
   const s = settings
+  const natural = (v: SpeechSynthesisVoice) => NATURAL_VOICE.test(v.name)
+  const sortedVoices = [...voices].sort((a, b) => Number(natural(b)) - Number(natural(a)) || a.name.localeCompare(b.name))
 
   useEffect(() => {
     health()
       .then((h) => setTokenRequired(h.tokenRequired))
       .catch(() => undefined)
-    if (!readAloud.supported) return
+    if (!('speechSynthesis' in window)) return
     const load = () => setVoices(speechSynthesis.getVoices())
     load()
     speechSynthesis.addEventListener('voiceschanged', load)
@@ -394,18 +402,57 @@ export function SettingsDialog({ settings, onClose, toast }: { settings: Setting
 
       <section className="settings-section">
         <h3>Read aloud</h3>
-        {!readAloud.supported ? <p className="error">This browser has no speech synthesis.</p> : null}
+        {!readAloud.supported ? <p className="error">This browser has no speech synthesis. Pick a natural voice below.</p> : null}
         <label className="row-label">
           Voice
-          <select value={s.readAloudVoice} onChange={(e) => updateSettings({ readAloudVoice: e.target.value })}>
+          <select
+            value={s.readAloudVoice}
+            onChange={(e) => {
+              updateSettings({ readAloudVoice: e.target.value })
+              // Start the one-time download as soon as a natural voice is picked
+              if (isKokoroVoice(e.target.value)) kokoro.load(s.readAloudKokoroGpu).catch(() => undefined)
+            }}
+          >
             <option value="">Default for the article's language</option>
-            {voices.map((v) => (
-              <option key={v.voiceURI} value={v.voiceURI}>
-                {v.name} ({v.lang}){v.localService ? '' : ' · online'}
-              </option>
-            ))}
+            <optgroup label="Natural, runs on this device (English)">
+              {KOKORO_VOICES.map((v) => (
+                <option key={v.id} value={KOKORO_PREFIX + v.id}>
+                  {v.label}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Browser voices">
+              {sortedVoices.map((v) => (
+                <option key={v.voiceURI} value={v.voiceURI}>
+                  {natural(v) ? '★ ' : ''}
+                  {v.name} ({v.lang}){v.localService ? '' : ' · online'}
+                </option>
+              ))}
+            </optgroup>
           </select>
         </label>
+        {isKokoroVoice(s.readAloudVoice) ? (
+          <div className="voice-model">
+            <p className="muted small">
+              {voiceModel.state === 'ready'
+                ? `Natural voice ready (${voiceModel.device === 'webgpu' ? 'GPU' : 'CPU'}).`
+                : voiceModel.state === 'loading'
+                  ? `Downloading the voice model… ${Math.round(voiceModel.progress * 100)}% (once; the browser keeps it)`
+                  : voiceModel.state === 'error'
+                    ? `The voice model failed to load: ${voiceModel.error}`
+                    : `The voice model downloads once (about ${s.readAloudKokoroGpu && webGpuAvailable() ? '310' : '90'} MB) the first time you use it.`}
+            </p>
+            {voiceModel.state === 'idle' || voiceModel.state === 'error' ? (
+              <button onClick={() => kokoro.load(s.readAloudKokoroGpu).catch(() => undefined)}>Download now</button>
+            ) : null}
+            {webGpuAvailable() ? (
+              <label className="check">
+                <input type="checkbox" checked={s.readAloudKokoroGpu} onChange={(e) => updateSettings({ readAloudKokoroGpu: e.target.checked })} />
+                Use the graphics card (faster, about 310 MB download)
+              </label>
+            ) : null}
+          </div>
+        ) : null}
         <label className="row-label">
           Speed
           <input type="range" min={0.6} max={2.5} step={0.1} value={s.readAloudRate} onChange={(e) => updateSettings({ readAloudRate: Number(e.target.value) })} />
@@ -415,7 +462,7 @@ export function SettingsDialog({ settings, onClose, toast }: { settings: Setting
           <input type="checkbox" checked={s.readAloudAutoContinue} onChange={(e) => updateSettings({ readAloudAutoContinue: e.target.checked })} />
           Continue with the next article when one ends
         </label>
-        <p className="muted small">Voices that run on this computer usually report word timings, so the word highlight is exact. Online voices often don't, and the highlight is estimated.</p>
+        <p className="muted small">★ marks the more natural browser voices (Edge's "Natural" voices are the best). The natural voices above sound most human but need a reasonably fast computer; their word highlight is estimated.</p>
       </section>
 
       <section className="settings-section">

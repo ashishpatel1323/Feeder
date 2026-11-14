@@ -9,6 +9,8 @@
  * length, like the Android app does for engines without word timings.
  */
 
+import { isKokoroVoice, kokoro, KOKORO_PREFIX, wavBlob, type KokoroAudio } from './kokoro'
+
 interface Segment {
   node: Text
   start: number
@@ -36,6 +38,31 @@ type Listener = (s: ReadAloudState) => void
 const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'SVG', 'FIGCAPTION', 'BUTTON'])
 const BLOCK_TAGS =
   /^(P|DIV|LI|H[1-6]|BLOCKQUOTE|PRE|TD|TH|SECTION|ARTICLE|HEADER|FOOTER|FIGURE|UL|OL|TABLE|TR|BR|HR|DT|DD)$/
+
+const hasSpeech = () => typeof window !== 'undefined' && 'speechSynthesis' in window
+const cancelSpeech = () => {
+  if (hasSpeech()) speechSynthesis.cancel()
+}
+
+/** Kokoro reads at most ~500 phonemes at once: split long sentences at punctuation, then spaces. */
+export function chunkForKokoro(text: string, max = 280): { start: number; end: number }[] {
+  const out: { start: number; end: number }[] = []
+  let pos = 0
+  while (pos < text.length) {
+    let end = Math.min(text.length, pos + max)
+    if (end < text.length) {
+      const window = text.slice(pos, end)
+      const punct = Math.max(window.lastIndexOf(', '), window.lastIndexOf('; '), window.lastIndexOf(': '), window.lastIndexOf(' – '), window.lastIndexOf(' — '))
+      const space = window.lastIndexOf(' ')
+      const cut = punct > max / 3 ? punct + 1 : space > 0 ? space : window.length
+      end = pos + cut
+    }
+    if (text.slice(pos, end).trim()) out.push({ start: pos, end })
+    pos = end
+    while (pos < text.length && /\s/.test(text[pos])) pos++
+  }
+  return out
+}
 
 const highlights = () => (typeof CSS !== 'undefined' && 'highlights' in CSS ? CSS.highlights : null)
 
@@ -74,6 +101,12 @@ export class ReadAloudEngine {
   private estimateTimer: number | null = null
   private silentAudio: HTMLAudioElement | null = null
   private lang = 'en'
+  private kokoroEl: HTMLAudioElement | null = null
+  private kokoroUrl: string | null = null
+  private kokoroCache = new Map<string, Promise<KokoroAudio>>()
+  private wordFrame: number | null = null
+  /** Use the GPU for the natural voice when the browser supports WebGPU. */
+  kokoroGpu = false
 
   state: ReadAloudState = { status: 'idle', itemId: null, sentence: 0, sentences: 0, rate: 1, wordTiming: null }
   voiceURI = ''
@@ -85,7 +118,11 @@ export class ReadAloudEngine {
   artist = ''
 
   get supported(): boolean {
-    return typeof window !== 'undefined' && 'speechSynthesis' in window
+    return hasSpeech() || isKokoroVoice(this.voiceURI)
+  }
+
+  private get usingKokoro(): boolean {
+    return isKokoroVoice(this.voiceURI)
   }
 
   subscribe(l: Listener): () => void {
@@ -212,7 +249,10 @@ export class ReadAloudEngine {
 
   setRate(rate: number) {
     this.set({ rate })
-    if (this.state.status === 'playing') this.speakFrom(this.state.sentence, null)
+    if (this.state.status !== 'playing') return
+    // Recorded audio just plays faster; browser voices restart the sentence at the new rate
+    if (this.usingKokoro && this.kokoroEl) this.kokoroEl.playbackRate = rate
+    else this.speakFrom(this.state.sentence, null)
   }
 
   play(fromOffset?: number) {
@@ -228,7 +268,8 @@ export class ReadAloudEngine {
 
   pause() {
     this.generation++
-    speechSynthesis.cancel()
+    cancelSpeech()
+    this.stopKokoroAudio()
     this.clearEstimate()
     this.set({ status: 'paused' })
     this.silentAudio?.pause()
@@ -242,7 +283,8 @@ export class ReadAloudEngine {
 
   stop() {
     this.generation++
-    if (this.supported) speechSynthesis.cancel()
+    cancelSpeech()
+    this.stopKokoroAudio()
     this.clearEstimate()
     highlights()?.delete('ra-sentence')
     highlights()?.delete('ra-word')
@@ -264,6 +306,10 @@ export class ReadAloudEngine {
     if (this.estimateTimer !== null) {
       clearTimeout(this.estimateTimer)
       this.estimateTimer = null
+    }
+    if (this.wordFrame !== null) {
+      cancelAnimationFrame(this.wordFrame)
+      this.wordFrame = null
     }
   }
 
@@ -308,7 +354,8 @@ export class ReadAloudEngine {
 
   private speakFrom(index: number, fromOffset: number | null) {
     const gen = ++this.generation
-    speechSynthesis.cancel()
+    cancelSpeech()
+    this.stopKokoroAudio()
     this.clearEstimate()
     const sentence = this.sentences[index]
     if (!sentence) {
@@ -324,6 +371,11 @@ export class ReadAloudEngine {
     this.set({ status: 'playing', sentence: index })
     this.highlightSentence(index)
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing'
+
+    if (this.usingKokoro) {
+      void this.speakKokoro(gen, index, begin, sentence.end)
+      return
+    }
 
     const u = new SpeechSynthesisUtterance(spoken)
     const voice = this.pickVoice()
@@ -401,6 +453,133 @@ export class ReadAloudEngine {
       if (i < schedule.length) this.estimateTimer = window.setTimeout(step, schedule[i].at - schedule[i - 1].at)
     }
     step()
+  }
+
+  // --- Natural voice (Kokoro): generated on this device, played as audio --------------------
+
+  private kokoroFor(voice: string, text: string): Promise<KokoroAudio> {
+    const key = `${voice}\n${text}`
+    let p = this.kokoroCache.get(key)
+    if (!p) {
+      p = kokoro.generate(text, voice)
+      p.catch(() => this.kokoroCache.delete(key))
+      this.kokoroCache.set(key, p)
+      // Keep the last few sentences (going back a sentence is common), drop older ones
+      while (this.kokoroCache.size > 8) this.kokoroCache.delete(this.kokoroCache.keys().next().value!)
+    }
+    return p
+  }
+
+  /** The text chunks (absolute offsets) to generate for a sentence. */
+  private kokoroChunks(begin: number, end: number) {
+    return chunkForKokoro(this.text.slice(begin, end)).map((c) => ({ start: begin + c.start, end: begin + c.end }))
+  }
+
+  private stopKokoroAudio() {
+    if (this.kokoroEl) {
+      this.kokoroEl.onended = null
+      this.kokoroEl.onerror = null
+      this.kokoroEl.pause()
+    }
+    if (this.kokoroUrl) {
+      URL.revokeObjectURL(this.kokoroUrl)
+      this.kokoroUrl = null
+    }
+  }
+
+  private async speakKokoro(gen: number, index: number, begin: number, end: number) {
+    const voice = this.voiceURI.slice(KOKORO_PREFIX.length)
+    if (this.state.wordTiming !== 'estimated') this.set({ wordTiming: 'estimated' })
+    try {
+      await kokoro.load(this.kokoroGpu)
+    } catch (e) {
+      if (gen !== this.generation) return
+      this.onError?.(`The natural voice could not load (${e instanceof Error ? e.message : e}).`)
+      this.stop()
+      return
+    }
+    // Ask for this sentence first (the worker handles requests in order), then the next one,
+    // so it is ready by the time this one ends
+    const chunks = this.kokoroChunks(begin, end).map((c) => ({ ...c, audio: this.kokoroFor(voice, this.text.slice(c.start, c.end)) }))
+    const next = this.sentences[index + 1]
+    if (next) for (const c of this.kokoroChunks(next.start, next.end)) void this.kokoroFor(voice, this.text.slice(c.start, c.end)).catch(() => undefined)
+
+    for (const chunk of chunks) {
+      if (gen !== this.generation) return
+      let audio: KokoroAudio
+      try {
+        audio = await chunk.audio
+      } catch (e) {
+        if (gen !== this.generation) return
+        console.warn('Natural voice failed', e)
+        if (++this.failures >= 3) {
+          this.failures = 0
+          this.onError?.('The natural voice keeps failing. Try a browser voice in Settings.')
+          this.stop()
+          return
+        }
+        continue
+      }
+      if (gen !== this.generation) return
+      const ok = await this.playKokoroChunk(gen, audio, chunk.start, chunk.end)
+      if (!ok) return
+    }
+    if (gen !== this.generation) return
+    this.failures = 0
+    this.speakFrom(index + 1, null)
+  }
+
+  /** Plays one chunk; resolves true when it finished, false when interrupted. */
+  private playKokoroChunk(gen: number, audio: KokoroAudio, start: number, end: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      this.stopKokoroAudio()
+      const el = (this.kokoroEl ??= new Audio())
+      this.kokoroUrl = URL.createObjectURL(wavBlob(audio))
+      el.src = this.kokoroUrl
+      el.playbackRate = this.state.rate
+      el.preservesPitch = true
+      el.onended = () => {
+        this.clearEstimate()
+        resolve(gen === this.generation)
+      }
+      el.onerror = () => resolve(false)
+      el.play().then(
+        () => this.followWords(gen, el, start, end, audio.samples.length / audio.sampleRate),
+        (e) => {
+          console.warn('Audio playback failed', e)
+          resolve(false)
+        },
+      )
+    })
+  }
+
+  /** Word highlight from the audio position: words get time in proportion to their length. */
+  private followWords(gen: number, el: HTMLAudioElement, from: number, to: number, duration: number) {
+    const words: { start: number; end: number; at: number }[] = []
+    const re = /\S+/g
+    const slice = this.text.slice(from, to)
+    let total = 0
+    for (let m = re.exec(slice); m; m = re.exec(slice)) {
+      words.push({ start: from + m.index, end: from + m.index + m[0].length, at: total })
+      total += m[0].length + 1
+    }
+    if (!words.length) return
+    // Generated speech has a little silence at both ends
+    const lead = Math.min(0.15, duration * 0.05)
+    const span = Math.max(0.1, duration - lead * 2)
+    let shown = -1
+    const tick = () => {
+      if (gen !== this.generation) return
+      const frac = (el.currentTime - lead) / span
+      let i = 0
+      while (i + 1 < words.length && words[i + 1].at / total <= frac) i++
+      if (i !== shown) {
+        shown = i
+        this.highlightWord(words[i].start, words[i].end)
+      }
+      this.wordFrame = requestAnimationFrame(tick)
+    }
+    tick()
   }
 
   private finish() {

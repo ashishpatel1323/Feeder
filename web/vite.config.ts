@@ -50,6 +50,8 @@ const apiMiddleware: Connect.NextHandleFunction = async (req, res, next) => {
 
 export default defineConfig({
   plugins: [react(), devApi()],
+  // The natural-voice worker uses import.meta.url to find its WebAssembly files
+  worker: { format: 'es' },
   test: {
     environment: 'jsdom',
   },

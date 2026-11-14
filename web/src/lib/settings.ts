@@ -20,6 +20,8 @@ export interface Settings {
   readAloudRate: number
   readAloudVoice: string
   readAloudAutoContinue: boolean
+  /** Run the natural (Kokoro) voice on the GPU where WebGPU exists: faster, bigger download. */
+  readAloudKokoroGpu: boolean
   summaryProvider: 'none' | 'openai'
   /** OpenAI-compatible base URL, e.g. https://api.openai.com/v1 or http://localhost:11434/v1 for Ollama. */
   summaryBaseUrl: string
@@ -42,6 +44,7 @@ export const DEFAULT_SETTINGS: Settings = {
   readAloudRate: 1,
   readAloudVoice: '',
   readAloudAutoContinue: true,
+  readAloudKokoroGpu: false,
   summaryProvider: 'none',
   summaryBaseUrl: 'http://localhost:11434/v1',
   summaryApiKey: '',

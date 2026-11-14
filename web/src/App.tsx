@@ -61,8 +61,9 @@ export default function App() {
 
   useEffect(() => {
     readAloud.voiceURI = settings.readAloudVoice
+    readAloud.kokoroGpu = settings.readAloudKokoroGpu
     if (readAloud.state.rate !== settings.readAloudRate && readAloud.state.status === 'idle') readAloud.setRate(settings.readAloudRate)
-  }, [settings.readAloudVoice, settings.readAloudRate])
+  }, [settings.readAloudVoice, settings.readAloudRate, settings.readAloudKokoroGpu])
 
   const groups = useMemo(() => {
     const selected = selectItems(items, feeds, selection)

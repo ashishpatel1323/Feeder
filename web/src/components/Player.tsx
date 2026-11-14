@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+import { isKokoroVoice, kokoro, type KokoroStatus } from '../lib/kokoro'
 import { readAloud, type ReadAloudState } from '../lib/readaloud'
 import { updateSettings, type Settings } from '../lib/settings'
 import { Icon, IconButton } from './Icon'
@@ -22,6 +24,9 @@ export function Player({ state, settings, hasPrev, hasNext, nextTitle, onPrev, o
     readAloud.setRate(next)
     updateSettings({ readAloudRate: next })
   }
+  const [voice, setVoice] = useState<KokoroStatus>(kokoro.status)
+  useEffect(() => kokoro.subscribe(setVoice), [])
+  const downloading = isKokoroVoice(settings.readAloudVoice) && voice.state === 'loading'
   const progress = state.sentences ? Math.round(((state.sentence + 1) / state.sentences) * 100) : 0
 
   return (
@@ -53,8 +58,14 @@ export function Player({ state, settings, hasPrev, hasNext, nextTitle, onPrev, o
           {state.rate.toFixed(1).replace(/\.0$/, '')}×
         </button>
         <span className="player-info" title="Whether this voice reports word timings">
-          {state.sentence + 1}/{state.sentences}
-          {state.wordTiming ? ` · ${state.wordTiming === 'exact' ? 'exact' : 'estimated'} words` : ''}
+          {downloading ? (
+            `Downloading natural voice… ${Math.round(voice.progress * 100)}%`
+          ) : (
+            <>
+              {state.sentence + 1}/{state.sentences}
+              {state.wordTiming ? ` · ${state.wordTiming === 'exact' ? 'exact' : 'estimated'} words` : ''}
+            </>
+          )}
         </span>
         <IconButton icon="close" label="Stop" onClick={() => readAloud.stop()} />
       </div>
