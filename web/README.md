@@ -15,6 +15,8 @@ Feeder in the browser. It joins the same sync chain as Feeder on your phone, so 
 - Read aloud with the browser's voices: sentence and word highlight, tap a word for
   "Read from here", tap while reading to jump, compact player with speed, previous/next
   article, up-next strip and auto-continue, media keys (Media Session)
+- Natural voice that runs on this device (Kokoro via kokoro-js, English): the model downloads
+  once from Hugging Face (about 90 MB, or 310 MB with the GPU option) and runs in a worker
 - Next/previous follows the list order at the time you opened the article; swipe on touch,
   J/K or arrow keys on a keyboard (also R read aloud, S save, M unread, O open original)
 - Hacker News score badge (Settings, off by default), og:image thumbnails (per feed, synced)
