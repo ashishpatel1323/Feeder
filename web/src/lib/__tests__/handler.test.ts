@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { checkTarget, isBlockedHost, safeContentType } from '../../../server/handler'
+import { checkTarget, handle, isBlockedHost, safeContentType } from '../../../server/handler'
 
 describe('backend fetch guard', () => {
   it('never serves fetched HTML, SVG or scripts as themselves', () => {
@@ -17,5 +17,16 @@ describe('backend fetch guard', () => {
     expect(isBlockedHost('example.com')).toBe(false)
     expect(typeof checkTarget('file:///etc/passwd')).toBe('string')
     expect(typeof checkTarget('https://example.com/feed')).toBe('object')
+  })
+})
+
+describe('backend routing', () => {
+  it('takes the path from __path when Vercel rewrote the request', async () => {
+    const health = await handle(new Request('https://x.vercel.app/api/proxy?__path=health'), { ACCESS_TOKEN: 'k' })
+    expect(await health.json()).toEqual({ ok: true, tokenRequired: true })
+    const locked = await handle(new Request('https://x.vercel.app/api/proxy?__path=sync/devices'), { ACCESS_TOKEN: 'k' })
+    expect(locked.status).toBe(401)
+    const plain = await handle(new Request('https://x.pages.dev/api/health'), {})
+    expect(await plain.json()).toEqual({ ok: true, tokenRequired: false })
   })
 })

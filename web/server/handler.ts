@@ -138,6 +138,8 @@ async function proxySync(request: Request, env: Env, path: string): Promise<Resp
 
   const incoming = new URL(request.url)
   const target = new URL(`/api/v1/${path}`, server)
+  incoming.searchParams.delete('__path')
+  incoming.searchParams.delete('t')
   target.search = incoming.search
 
   const headers = new Headers({ authorization: SYNC_BASIC_AUTH, accept: 'application/json' })
@@ -162,7 +164,8 @@ async function proxySync(request: Request, env: Env, path: string): Promise<Resp
 export async function handle(request: Request, env: Env): Promise<Response> {
   allowPrivate = env.ALLOW_PRIVATE_HOSTS === '1'
   const url = new URL(request.url)
-  const path = url.pathname.replace(/^\/api\/?/, '')
+  // Vercel rewrites /api/* to one function and passes the original path in __path.
+  const path = url.searchParams.get('__path') ?? url.pathname.replace(/^\/api\/?/, '')
 
   if (path === 'health') return json(200, { ok: true, tokenRequired: Boolean(env.ACCESS_TOKEN) })
 

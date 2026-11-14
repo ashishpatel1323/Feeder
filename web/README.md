@@ -29,7 +29,7 @@ read". Saved articles, marking unread again, and app settings stay on each devic
 ## How it works
 
 ```
-browser (React + IndexedDB)  ──/api/fetch──▶  Pages Function  ──▶  feed / article sites
+browser (React + IndexedDB)  ──/api/fetch──▶  /api function   ──▶  feed / article sites
        │ encrypts with your key            └──/api/sync──▶  feeder-sync server
 ```
 
@@ -50,7 +50,24 @@ npm test
 Environment variables for `npm run dev`: `SYNC_SERVER` (a self-hosted feeder-sync),
 `ACCESS_TOKEN`, `ALLOW_PRIVATE_HOSTS=1` (lets the fetcher reach localhost, for testing).
 
-## Deploy (Cloudflare Pages, free tier)
+## Deploy
+
+Pick one host. Both run the same `server/handler.ts`, and both free tiers are enough.
+
+### Vercel (Hobby, free)
+
+1. In Vercel, Add New › Project, and import `ashishpatel1323/Feeder`.
+2. Set Root Directory to `web`. Vercel reads `web/vercel.json` for the rest (Vite build,
+   `dist` output, `/api/*` routed to the edge function in `api/proxy.ts`).
+3. Under Environment Variables, add `ACCESS_TOKEN` (a long random string) and enter the same
+   string in the app under Settings › Backend access. Optional: `SYNC_SERVER`.
+4. Deploy. Every push to `master` redeploys; pull requests get preview URLs. No GitHub
+   secrets are needed, and the Cloudflare step in the `Web` workflow stays skipped.
+
+Vercel builds the whole repository's pushes, so in Project › Settings › Git you can set
+"Ignored Build Step" to `git diff --quiet HEAD^ HEAD -- .` to skip Android-only commits.
+
+### Cloudflare Pages (free tier)
 
 The `Web` workflow deploys on every push to `master` that touches `web/`, once these
 repository secrets exist:

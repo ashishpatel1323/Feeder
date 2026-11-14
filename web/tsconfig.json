@@ -14,5 +14,5 @@
     "types": ["vitest/globals", "node"],
     "noEmit": true
   },
-  "include": ["src", "server", "functions", "vite.config.ts"]
+  "include": ["src", "server", "functions", "api", "vite.config.ts"]
 }
