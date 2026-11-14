@@ -15,6 +15,10 @@ on:
   push:
     branches:
       - master
+    # The web app has its own workflow (web.yml); web-only changes don't need a new APK
+    paths-ignore:
+      - "web/**"
+      - ".github/workflows/web.yml"
   workflow_dispatch:
 
 concurrency:
