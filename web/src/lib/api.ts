@@ -44,7 +44,7 @@ export function proxiedUrl(url: string): string {
 /** Fetches any http(s) URL through the backend. */
 export async function proxyFetch(url: string, signal?: AbortSignal): Promise<{ text: string; finalUrl: string; contentType: string }> {
   const res = await fetch(`/api/fetch?url=${encodeURIComponent(url)}`, { headers: apiHeaders(), signal })
-  const contentType = res.headers.get('content-type') ?? ''
+  const contentType = res.headers.get('x-original-content-type') || res.headers.get('content-type') || ''
   const text = decodeBody(new Uint8Array(await res.arrayBuffer()), contentType)
   if (!res.ok) throw new HttpError(res.status, text)
   return { text, finalUrl: res.headers.get('x-final-url') ?? url, contentType }

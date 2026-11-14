@@ -58,6 +58,23 @@ describe('parseFeed', () => {
     expect(f.articles[0].guid.startsWith('https://ex.com/blog/abc-1|')).toBe(true)
   })
 
+  it('rejects XHTML pages and other XML', () => {
+    const xhtml = '<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Site</title></head><body/></html>'
+    expect(() => parseFeed(xhtml, 'https://s.com/')).toThrow()
+    expect(() => parseFeed('<root><item/></root>', 'https://s.com/')).toThrow()
+    // a genuinely empty feed is fine
+    expect(parseFeed('<rss version="2.0"><channel><title>E</title></channel></rss>', 'https://e.com/f').articles).toEqual([])
+  })
+
+  it('keeps markup in Atom xhtml content', () => {
+    const atom = `<feed xmlns="http://www.w3.org/2005/Atom"><title>X</title><entry><id>tag:x,1</id><title>T</title>
+      <content type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml"><p>One <a href="https://l.com/">link</a></p><p><img src="https://i.com/a.png"/></p></div></content></entry></feed>`
+    const html = parseFeed(atom, 'https://x.com/feed').articles[0].contentHtml
+    expect(html).toContain('<a href="https://l.com/">link</a>')
+    expect(html).toContain('<img src="https://i.com/a.png"')
+    expect(html).not.toContain('xmlns')
+  })
+
   it('keeps absolute links byte-for-byte', () => {
     expect(relativeLinkIntoAbsolute('https://x.com/', 'https://EX.com')).toBe('https://EX.com')
   })

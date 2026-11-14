@@ -170,6 +170,18 @@ function finish(feedUrl: string, raw: RawItem[], alternateId: boolean): ParsedAr
     })
 }
 
+/** Atom text constructs: type="xhtml" holds real markup (inside a <div>), others hold text or escaped HTML. */
+function atomText(el: Element | null): string {
+  if (!el) return ''
+  if ((el.getAttribute('type') ?? '').toLowerCase() !== 'xhtml') return el.textContent ?? ''
+  const wrapper = child(el, 'div') ?? el
+  const serializer = new XMLSerializer()
+  return Array.from(wrapper.childNodes)
+    .map((n) => serializer.serializeToString(n))
+    .join('')
+    .replace(/ xmlns="http:\/\/www\.w3\.org\/1999\/xhtml"/g, '')
+}
+
 function parseXml(text: string, feedUrl: string, alternateId: boolean): ParsedFeed {
   const doc = new DOMParser().parseFromString(text, 'application/xml')
   const root = doc.documentElement
@@ -185,14 +197,13 @@ function parseXml(text: string, feedUrl: string, alternateId: boolean): ParsedFe
       return (alt ?? links[0])?.getAttribute('href') ?? null
     }
     const raw: RawItem[] = children(root, 'entry').map((e) => {
-      const content = child(e, 'content')
       const enclosure = children(e, 'link').find((l) => l.getAttribute('rel') === 'enclosure')
       return {
         rawGuid: childText(e, 'id'),
         rawLink: linkOf(e),
         title: child(e, 'title')?.textContent ?? '',
-        contentHtml: content?.textContent ?? '',
-        summaryHtml: child(e, 'summary')?.textContent ?? '',
+        contentHtml: atomText(child(e, 'content')),
+        summaryHtml: atomText(child(e, 'summary')),
         imageUrl: mediaImage(e),
         author: (child(e, 'author') && childText(child(e, 'author')!, 'name')) || null,
         published: parseDate(childText(e, 'published') ?? childText(e, 'updated')),
@@ -212,7 +223,9 @@ function parseXml(text: string, feedUrl: string, alternateId: boolean): ParsedFe
   }
 
   // RSS 2.0 (<rss><channel><item>) or RSS 1.0 (<rdf:RDF><channel/><item/>)
-  const channel = child(root, 'channel') ?? root
+  if (root.localName !== 'rss' && root.localName !== 'RDF') throw new Error('Not a feed')
+  const channel = child(root, 'channel')
+  if (!channel) throw new Error('Not a feed (no channel)')
   const itemEls = children(channel, 'item').length ? children(channel, 'item') : children(root, 'item')
   const raw: RawItem[] = itemEls.map((i) => {
     const enclosure = child(i, 'enclosure')

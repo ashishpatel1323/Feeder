@@ -76,6 +76,16 @@ export function checkTarget(raw: string | null): URL | string {
   return url
 }
 
+/**
+ * Raster images keep their type so <img src="/api/fetch?..."> works. Everything else (HTML,
+ * SVG, XML, scripts) is served as plain text so a browser never renders or runs it here.
+ */
+export function safeContentType(original: string | null): string {
+  const type = (original ?? '').split(';')[0].trim().toLowerCase()
+  if (/^image\/(png|jpe?g|gif|webp|avif|bmp|x-icon|vnd\.microsoft\.icon)$/.test(type)) return type
+  return 'text/plain; charset=x-user-defined'
+}
+
 async function proxyFetch(request: Request): Promise<Response> {
   const target = checkTarget(new URL(request.url).searchParams.get('url'))
   if (typeof target === 'string') return json(400, { error: target })
@@ -108,9 +118,14 @@ async function proxyFetch(request: Request): Promise<Response> {
   if (length > MAX_FETCH_BYTES) return json(413, { error: 'Too large' })
 
   const headers = new Headers({
-    'content-type': upstream.headers.get('content-type') ?? 'application/octet-stream',
+    'content-type': safeContentType(upstream.headers.get('content-type')),
+    // The real type, for the app to read (it decodes the body itself)
+    'x-original-content-type': upstream.headers.get('content-type') ?? '',
     'x-final-url': current.toString(),
     'cache-control': 'private, max-age=300',
+    // Fetched content must never run as this site, even if someone opens the URL directly
+    'x-content-type-options': 'nosniff',
+    'content-security-policy': "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'",
   })
   return new Response(upstream.body, { status: upstream.status, headers })
 }
