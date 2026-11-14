@@ -3,6 +3,7 @@ import { proxyFetch } from './api'
 import { db, getKv, itemId, newFeed, type Feed, type Item } from './db'
 import { countWords, findFeedLinks, htmlToText, parseFeed } from './feedparse'
 import { makeFilter } from './filterrules'
+import { getSyncState } from './sync'
 
 export const MAX_ITEMS_PER_FEED_KEY = 'maxItemsPerFeed'
 
@@ -14,6 +15,7 @@ async function fetchOne(feed: Feed): Promise<number> {
   const articles = parsed.articles.filter(keep)
   let added = 0
   const max = await getKv<number>(MAX_ITEMS_PER_FEED_KEY, 200)
+  const syncing = (await getSyncState()) !== null
 
   await db.transaction('rw', db.items, db.feeds, db.remoteReadMarks, async () => {
     // The feed may have been deleted while it was downloading
@@ -73,7 +75,8 @@ async function fetchOne(feed: Feed): Promise<number> {
     const all = await db.items.where('feedUrl').equals(feed.url).toArray()
     if (all.length > max) {
       const drop = all
-        .filter((i) => !i.saved)
+        // Keep saved articles, and read marks the sync chain hasn't received yet
+        .filter((i) => !i.saved && !(syncing && i.read && !i.readSynced))
         .sort((a, b) => b.sortTime - a.sortTime)
         .slice(max)
         .map((i) => i.id)

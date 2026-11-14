@@ -44,6 +44,20 @@ const DEVICE_NOT_REGISTERED = 'device not registered'
 export const getSyncState = () => getKv<SyncState | null>(SYNC_KEY, null)
 const saveSyncState = (s: SyncState | null) => setKv(SYNC_KEY, s)
 
+class ChainChanged extends Error {}
+
+/** Stops a sync run whose chain was left or replaced while it was waiting on the network. */
+async function assertCurrent(state: SyncState): Promise<void> {
+  const now = await getSyncState()
+  if (now?.syncCode !== state.syncCode || now.deviceId !== state.deviceId) throw new ChainChanged()
+}
+
+/** Saves state from a sync run, unless the chain changed meanwhile (a stale run must not restore it). */
+async function saveRunState(state: SyncState): Promise<void> {
+  await assertCurrent(state)
+  await saveSyncState(state)
+}
+
 function browserDeviceName(): string {
   const ua = navigator.userAgent
   const browser = /Edg\//.test(ua)
@@ -291,15 +305,20 @@ async function getFeeds(state: SyncState, keys: SecretKeys): Promise<string[]> {
   }
   if (res.hash === state.lastFeedsRemoteHash || !res.encrypted) return []
   const decoded = JSON.parse(await decryptString(res.encrypted, keys)) as { feeds: EncryptedFeed[] }
-  // Were there local edits not yet sent? Then keep them marked as unsent after merging.
-  const before = await localFeedsHash()
-  const noLocalEdits =
-    state.localFeedsHashAtLastSync === before ||
-    (state.localFeedsHashAtLastSync === null && (await db.feeds.count()) === 0)
-  const added = await feedDiffing(decoded.feeds ?? [])
+  await assertCurrent(state)
+  // One transaction, so a feed edit saved meanwhile can't slip into the "already synced" hash
+  const added = await db.transaction('rw', db.feeds, db.items, db.remoteFeeds, async () => {
+    // Were there local edits not yet sent? Then keep them marked as unsent after merging.
+    const before = await localFeedsHash()
+    const noLocalEdits =
+      state.localFeedsHashAtLastSync === before ||
+      (state.localFeedsHashAtLastSync === null && (await db.feeds.count()) === 0)
+    const result = await feedDiffing(decoded.feeds ?? [])
+    if (noLocalEdits) state.localFeedsHashAtLastSync = await localFeedsHash()
+    return result
+  })
   state.lastFeedsRemoteHash = res.hash
-  if (noLocalEdits) state.localFeedsHashAtLastSync = await localFeedsHash()
-  await saveSyncState(state)
+  await saveRunState(state)
   return added
 }
 
@@ -315,7 +334,7 @@ async function sendUpdatedFeeds(state: SyncState, keys: SecretKeys): Promise<voi
   if (state.localFeedsHashAtLastSync === currentHash) return
   if (state.localFeedsHashAtLastSync === null && feeds.length === 0) {
     state.localFeedsHashAtLastSync = currentHash
-    await saveSyncState(state)
+    await saveRunState(state)
     return
   }
   const encrypted = await encryptString(JSON.stringify({ feeds }), keys)
@@ -330,12 +349,12 @@ async function sendUpdatedFeeds(state: SyncState, keys: SecretKeys): Promise<voi
     state.localFeedsHashAtLastSync = currentHash
     await db.remoteFeeds.clear()
     await db.remoteFeeds.bulkPut(feeds.map((f) => ({ url: f.url })))
-    await saveSyncState(state)
+    await saveRunState(state)
   } catch (e) {
     if (e instanceof HttpError && e.status === 412) {
       // Someone else updated first: fetch theirs, then try again next sync
       state.lastFeedsRemoteHash = -1
-      await saveSyncState(state)
+      await saveRunState(state)
       return
     }
     throw e
@@ -351,27 +370,33 @@ async function getRead(state: SyncState, keys: SecretKeys): Promise<number> {
       query: { since: String(state.latestMessageTimestamp + 1) },
     }),
   )
+  await assertCurrent(state)
   let applied = 0
   for (const mark of res.readMarks ?? []) {
+    let key: string
     try {
       const content = JSON.parse(await decryptString(mark.encrypted, keys)) as { feedUrl: string; articleGuid: string }
-      const key = itemId(content.feedUrl, content.articleGuid)
-      await db.transaction('rw', db.items, db.remoteReadMarks, async () => {
-        await db.remoteReadMarks.put({ key })
-        const item = await db.items.get(key)
-        if (item && !item.read) {
-          await db.items.update(key, { read: 1, readTime: mark.timestamp, readSynced: 1 })
-          applied++
-        } else if (item) {
-          await db.items.update(key, { readSynced: 1 })
-        }
-      })
+      if (typeof content.feedUrl !== 'string' || typeof content.articleGuid !== 'string') throw new Error('Bad read mark')
+      key = itemId(content.feedUrl, content.articleGuid)
     } catch (e) {
       console.warn('Skipping unreadable read mark', e)
+      state.latestMessageTimestamp = Math.max(state.latestMessageTimestamp, mark.timestamp)
+      continue
     }
+    // A storage failure throws out of here, so the cursor never moves past an unapplied mark
+    await db.transaction('rw', db.items, db.remoteReadMarks, async () => {
+      await db.remoteReadMarks.put({ key })
+      const item = await db.items.get(key)
+      if (item && !item.read) {
+        await db.items.update(key, { read: 1, readTime: mark.timestamp, readSynced: 1 })
+        applied++
+      } else if (item) {
+        await db.items.update(key, { readSynced: 1 })
+      }
+    })
     state.latestMessageTimestamp = Math.max(state.latestMessageTimestamp, mark.timestamp)
   }
-  await saveSyncState(state)
+  await saveRunState(state)
   return applied
 }
 
@@ -412,12 +437,14 @@ export function syncNow(): Promise<SyncResult | null> {
       const readMarksApplied = await getRead(state, keys)
       await sendUpdatedFeeds(state, keys)
       const readMarksSent = await sendReadMarks(state, keys)
-      const fresh = (await getSyncState()) ?? state
+      await assertCurrent(state)
+      const fresh = (await getSyncState())!
       await saveSyncState({ ...fresh, lastSyncAt: Date.now(), lastError: null })
       return { addedFeeds, readMarksApplied, readMarksSent }
     } catch (e) {
+      if (e instanceof ChainChanged) return null
       const fresh = await getSyncState()
-      if (fresh) await saveSyncState({ ...fresh, lastError: e instanceof Error ? e.message : String(e) })
+      if (fresh?.syncCode === state.syncCode) await saveSyncState({ ...fresh, lastError: e instanceof Error ? e.message : String(e) })
       throw e
     }
   })().finally(() => {
