@@ -116,6 +116,7 @@ async function proxyFetch(request: Request): Promise<Response> {
 
   const length = Number(upstream.headers.get('content-length') ?? '0')
   if (length > MAX_FETCH_BYTES) return json(413, { error: 'Too large' })
+  const body = upstream.body ? upstream.body.pipeThrough(byteLimit(MAX_FETCH_BYTES)) : null
 
   const headers = new Headers({
     'content-type': safeContentType(upstream.headers.get('content-type')),
@@ -127,7 +128,19 @@ async function proxyFetch(request: Request): Promise<Response> {
     'x-content-type-options': 'nosniff',
     'content-security-policy': "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'",
   })
-  return new Response(upstream.body, { status: upstream.status, headers })
+  return new Response(body, { status: upstream.status, headers })
+}
+
+/** Passes bytes through and fails the stream once more than `max` bytes went by. */
+export function byteLimit(max: number): TransformStream<Uint8Array, Uint8Array> {
+  let seen = 0
+  return new TransformStream({
+    transform(chunk, controller) {
+      seen += chunk.byteLength
+      if (seen > max) controller.error(new Error('Too large'))
+      else controller.enqueue(chunk)
+    },
+  })
 }
 
 async function proxySync(request: Request, env: Env, path: string): Promise<Response> {
@@ -152,7 +165,10 @@ async function proxySync(request: Request, env: Env, path: string): Promise<Resp
     method: request.method,
     headers,
     body: hasBody ? await request.text() : undefined,
+    // The sync server has no reason to redirect; following one could reach a host the check never saw
+    redirect: 'manual',
   })
+  if (upstream.status >= 300 && upstream.status < 400) return json(502, { error: 'Sync server redirected' })
   const out = new Headers({ 'cache-control': 'no-store' })
   for (const name of ['content-type', 'etag']) {
     const value = upstream.headers.get(name)

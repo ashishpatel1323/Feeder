@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { checkTarget, handle, isBlockedHost, safeContentType } from '../../../server/handler'
+import { byteLimit, checkTarget, handle, isBlockedHost, safeContentType } from '../../../server/handler'
 
 describe('backend fetch guard', () => {
   it('never serves fetched HTML, SVG or scripts as themselves', () => {
@@ -28,5 +28,14 @@ describe('backend routing', () => {
     expect(locked.status).toBe(401)
     const plain = await handle(new Request('https://x.pages.dev/api/health'), {})
     expect(await plain.json()).toEqual({ ok: true, tokenRequired: false })
+  })
+})
+
+describe('byteLimit', () => {
+  it('fails a body that grows past the limit even without content-length', async () => {
+    const big = new Response(new Uint8Array(20)).body!.pipeThrough(byteLimit(10))
+    await expect(new Response(big).arrayBuffer()).rejects.toThrow()
+    const ok = new Response(new Uint8Array(5)).body!.pipeThrough(byteLimit(10))
+    expect((await new Response(ok).arrayBuffer()).byteLength).toBe(5)
   })
 })

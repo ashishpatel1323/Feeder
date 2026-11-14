@@ -149,6 +149,8 @@ async function forgetChain() {
   await saveSyncState(null)
   await db.remoteFeeds.clear()
   await db.remoteReadMarks.clear()
+  // "Already sent" was about the old chain; a new chain needs every read mark again
+  await db.items.toCollection().modify({ readSynced: 0 })
 }
 
 export async function leaveChain(): Promise<void> {

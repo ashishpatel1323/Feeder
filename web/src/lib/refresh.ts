@@ -16,6 +16,8 @@ async function fetchOne(feed: Feed): Promise<number> {
   const max = await getKv<number>(MAX_ITEMS_PER_FEED_KEY, 200)
 
   await db.transaction('rw', db.items, db.feeds, db.remoteReadMarks, async () => {
+    // The feed may have been deleted while it was downloading
+    if (!(await db.feeds.get(feed.url))) return
     const ids = articles.map((a) => itemId(feed.url, a.guid))
     const existing = new Map((await db.items.bulkGet(ids)).filter(Boolean).map((i) => [i!.id, i!]))
     const remoteRead = new Set(
