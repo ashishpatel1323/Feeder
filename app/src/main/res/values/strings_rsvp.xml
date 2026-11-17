@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Speed reading (one word at a time) -->
+  <string name="speed_read">Speed read</string>
+  <string name="rsvp_close">Close speed reading</string>
+  <string name="rsvp_play">Play</string>
+  <string name="rsvp_pause">Pause</string>
+  <string name="rsvp_back_sentence">Back one sentence</string>
+  <string name="rsvp_back_word">Back one word</string>
+  <string name="rsvp_forward_word">Forward one word</string>
+  <string name="rsvp_slower">Slower</string>
+  <string name="rsvp_faster">Faster</string>
+  <string name="rsvp_position">Position in article</string>
+  <string name="rsvp_words_per_minute">Words per minute</string>
+  <string name="rsvp_wpm">%1$d wpm</string>
+  <string name="rsvp_seconds_left">%1$d s left</string>
+  <string name="rsvp_minutes_left">%1$d min left</string>
+  <string name="rsvp_paused">Paused · tap to continue</string>
+  <string name="rsvp_finished">Finished</string>
+  <string name="rsvp_no_text">There\'s no text to speed read in this article.</string>
+</resources>
