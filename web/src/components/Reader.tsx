@@ -7,6 +7,7 @@ import { readAloud, type ReadAloudState } from '../lib/readaloud'
 import type { Settings } from '../lib/settings'
 import { Icon, IconButton } from './Icon'
 import { Player } from './Player'
+import { Rsvp } from './Rsvp'
 
 interface Props {
   item: Item
@@ -34,6 +35,8 @@ export function Reader(p: Props) {
   const [ra, setRa] = useState<ReadAloudState>(readAloud.state)
   const [pill, setPill] = useState<{ x: number; y: number; offset: number } | null>(null)
   const touch = useRef<{ x: number; y: number; t: number } | null>(null)
+  // Speed reading: the indexed text and where to start in it
+  const [rsvp, setRsvp] = useState<{ text: string; offset: number } | null>(null)
 
   useEffect(() => readAloud.subscribe(setRa), [])
 
@@ -42,6 +45,7 @@ export function Reader(p: Props) {
     setFullMode(!!feed?.fullTextByDefault)
     setFullState('idle')
     setPill(null)
+    setRsvp(null)
     readAloud.showTapWord(null)
     scrollRef.current?.scrollTo({ top: 0 })
   }, [item.id, feed?.fullTextByDefault])
@@ -106,7 +110,7 @@ export function Reader(p: Props) {
       return
     }
     const box = scrollRef.current!.getBoundingClientRect()
-    const x = Math.min(Math.max(e.clientX - box.left, 90), box.width - 90)
+    const x = Math.min(Math.max(e.clientX - box.left, 160), box.width - 160)
     setPill({ x, y: e.clientY - box.top + scrollRef.current!.scrollTop, offset })
     readAloud.showTapWord(offset)
   }
@@ -117,6 +121,41 @@ export function Reader(p: Props) {
     readAloud.play(pill.offset)
     setPill(null)
   }
+
+  const openSpeedReading = (offset = 0) => {
+    // Read the same text read aloud uses, so the stopping point maps back onto the article
+    if (readAloud.state.itemId !== item.id && bodyRef.current) readAloud.attach(bodyRef.current, item.id)
+    if (readAloud.state.status === 'playing') readAloud.toggle()
+    setPill(null)
+    readAloud.showTapWord(null)
+    setRsvp({ text: readAloud.indexedText, offset })
+  }
+
+  const closeSpeedReading = (offset: number) => {
+    setRsvp(null)
+    // Scroll the article to where speed reading stopped and mark that word
+    const w = readAloud.wordAt(offset)
+    const range = w && readAloud.rangeFor(w.start, w.end)
+    const scroller = scrollRef.current
+    if (!range || !scroller || offset <= 0) return
+    readAloud.showTapWord(offset)
+    const top = range.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop
+    scroller.scrollTo({ top: Math.max(0, top - scroller.clientHeight / 3) })
+  }
+
+  // V opens speed reading (the overlay handles its own keys once open)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'v' || e.ctrlKey || e.metaKey || e.altKey || rsvp) return
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
+      if (document.querySelector('.modal-backdrop')) return
+      e.preventDefault()
+      openSpeedReading()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
 
   const toggleRead = () => db.items.update(item.id, { read: item.read ? 0 : 1, readTime: item.read ? null : Date.now(), readSynced: 0 })
   const toggleSave = () => db.items.update(item.id, { saved: item.saved ? 0 : 1 })
@@ -182,6 +221,7 @@ export function Reader(p: Props) {
           onClick={() => (playing ? readAloud.stop() : readAloud.play())}
           disabled={!readAloud.supported}
         />
+        <IconButton icon="speed" label="Speed read (V)" active={!!rsvp} onClick={() => openSpeedReading()} />
         <IconButton icon="article" label={fullMode ? 'Show feed text (F)' : 'Full text (F)'} active={fullMode} onClick={() => setFullMode(!fullMode)} />
         {item.link ? (
           <a className="icon-btn" href={item.link} target="_blank" rel="noopener noreferrer" title="Open original page (O)" aria-label="Open original page">
@@ -235,15 +275,22 @@ export function Reader(p: Props) {
           <div className="article-body" ref={bodyRef} onClick={onBodyClick} dangerouslySetInnerHTML={{ __html: html }} />
         </article>
         {pill ? (
-          <button className="read-pill" style={{ left: pill.x, top: pill.y + 18 }} onClick={readFromHere}>
-            <Icon name="play" size={16} /> Read from here
-          </button>
+          <div className="read-pill-group" style={{ left: pill.x, top: pill.y + 18 }}>
+            <button className="read-pill" onClick={readFromHere}>
+              <Icon name="play" size={16} /> Read from here
+            </button>
+            <button className="read-pill secondary" onClick={() => openSpeedReading(pill.offset)}>
+              <Icon name="speed" size={16} /> Speed read
+            </button>
+          </div>
         ) : null}
       </div>
 
       {playing ? (
         <Player state={ra} hasPrev={p.hasPrev} hasNext={p.hasNext} onPrev={p.onPrev} onNext={p.onNext} nextTitle={p.nextTitle} settings={p.settings} />
       ) : null}
+
+      {rsvp ? <Rsvp text={rsvp.text} startOffset={rsvp.offset} title={item.title} onClose={closeSpeedReading} /> : null}
 
       <footer className="action-bar">
         <IconButton icon="share" label="Share" onClick={share} showLabel />

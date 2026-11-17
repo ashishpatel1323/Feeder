@@ -589,6 +589,14 @@ class ArticleViewModel(
             ?.takeIf { it.isNotBlank() }
     }
 
+    /** Text for speed reading: exactly what is on screen, like read aloud. Empty when there is none yet. */
+    fun speedReadingText(): String = displayedSpeechText().orEmpty()
+
+    /** Speed reading and read aloud don't mix: pause the voice when speed reading opens. */
+    fun prepareSpeedReading() {
+        if (viewState.value.isTTSPlaying) ttsPause()
+    }
+
     private fun readAloud(
         text: String,
         startOffset: Int = 0,

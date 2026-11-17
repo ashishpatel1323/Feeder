@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.BookmarkBorder
@@ -60,9 +61,13 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -99,6 +104,7 @@ import com.nononsenseapps.feeder.ui.compose.readaloud.SpeechFollowViewport
 import com.nononsenseapps.feeder.ui.compose.readaloud.SpeechHighlight
 import com.nononsenseapps.feeder.ui.compose.readaloud.stopSpeechFollowingOnAccessibilityScroll
 import com.nononsenseapps.feeder.ui.compose.readaloud.stopSpeechFollowingOnUserScroll
+import com.nononsenseapps.feeder.ui.compose.rsvp.RsvpReader
 import com.nononsenseapps.feeder.ui.compose.theme.SensibleTopAppBar
 import com.nononsenseapps.feeder.ui.compose.utils.ImmutableHolder
 import com.nononsenseapps.feeder.ui.compose.utils.ScreenType
@@ -186,6 +192,22 @@ fun ArticleScreen(
     }
 
     val toolbarColor = MaterialTheme.colorScheme.surface.toArgb()
+
+    // Speed reading opens over the article and continues where it was left
+    var speedReadingOpen by rememberSaveable { mutableStateOf(false) }
+    var speedReadingOffset by rememberSaveable { mutableIntStateOf(0) }
+    if (speedReadingOpen) {
+        val speedReadingText = remember { viewModel.speedReadingText() }
+        RsvpReader(
+            text = speedReadingText,
+            title = viewState.articleTitle,
+            startOffset = speedReadingOffset,
+            onClose = { offset ->
+                speedReadingOpen = false
+                speedReadingOffset = offset
+            },
+        )
+    }
 
     ArticleScreen(
         viewState = viewState,
@@ -281,6 +303,10 @@ fun ArticleScreen(
         ttsOnSkipArticle = viewModel::ttsSkipArticle,
         readAloudAutoContinue = readAloudAutoContinue,
         ttsOnSetAutoContinue = viewModel::ttsSetAutoContinue,
+        onSpeedRead = {
+            viewModel.prepareSpeedReading()
+            speedReadingOpen = true
+        },
     )
 }
 
@@ -338,6 +364,7 @@ fun ArticleScreen(
     ttsOnSkipArticle: (next: Boolean) -> Unit = {},
     readAloudAutoContinue: Boolean = false,
     ttsOnSetAutoContinue: (Boolean) -> Unit = {},
+    onSpeedRead: () -> Unit = {},
 ) {
     // While reading aloud the bottom bar is the player and the article actions move to the top bar
     val readingAloud = viewState.isBottomBarVisible && !viewState.podcastPlayerState.isVisible
@@ -411,6 +438,12 @@ fun ArticleScreen(
                                         if (viewState.isTTSPlaying) Icons.Default.Pause else Icons.CustomFilled.TextToSpeech,
                                         contentDescription = readAloudLabel,
                                     )
+                                }
+                            }
+
+                            PlainTooltipBox(tooltip = { Text(stringResource(R.string.speed_read)) }) {
+                                IconButton(onClick = onSpeedRead) {
+                                    Icon(Icons.Default.Speed, contentDescription = stringResource(R.string.speed_read))
                                 }
                             }
                         }

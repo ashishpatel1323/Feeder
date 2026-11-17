@@ -121,6 +121,11 @@ export class ReadAloudEngine {
     return hasSpeech() || isKokoroVoice(this.voiceURI)
   }
 
+  /** The text indexed by [attach], which offsets refer to. Speed reading uses it too. */
+  get indexedText(): string {
+    return this.text
+  }
+
   private get usingKokoro(): boolean {
     return isKokoroVoice(this.voiceURI)
   }
