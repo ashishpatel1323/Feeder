@@ -570,6 +570,7 @@ fun ArticleScreen(
                         speechHighlight = speechHighlight,
                         isReadingAloud = isReadingAloud,
                         onReadAloudFrom = ttsOnReadFrom,
+                        fastReading = fastReading,
                         articleScrollState = articleScrollState,
                         onUserScroll = ttsOnUserScroll,
                         onFeedTitleClick = onFeedTitleClick,
