@@ -30,6 +30,19 @@ interface FeedDao {
     @Delete
     suspend fun deleteFeed(feed: Feed): Int
 
+    /**
+     * Fork: one-time switch of every feed to full article by default. Bumps when_modified so the
+     * change wins over older settings from other devices in the sync chain.
+     */
+    @Query(
+        """
+        UPDATE feeds
+        SET fulltext_by_default = 1, when_modified = :whenModifiedMillis
+        WHERE fulltext_by_default = 0
+        """,
+    )
+    suspend fun enableFullTextForAllFeeds(whenModifiedMillis: Long): Int
+
     @Query("DELETE FROM feeds WHERE id IS :feedId")
     suspend fun deleteFeedWithId(feedId: Long): Int
 

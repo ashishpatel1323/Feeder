@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, feedDisplayTitle, type Feed, type Item } from './lib/db'
 import { applyFilters, buildGroups, selectItems, type Selection } from './lib/listquery'
-import { useSettings } from './lib/settings'
+import { getSettings, updateSettings, useSettings } from './lib/settings'
 import { refreshFeeds } from './lib/refresh'
 import { getSyncState, syncNow } from './lib/sync'
 import { fetchOgImages, refreshHnScores } from './lib/extras'
@@ -214,6 +214,9 @@ export default function App() {
           break
         case 'o':
           if (openItem?.link) window.open(openItem.link, '_blank', 'noopener')
+          break
+        case 'b':
+          void getSettings().then((s) => updateSettings({ fastReading: !s.fastReading }))
           break
         case 'r':
           if (openItem) readAloud.state.status === 'idle' ? readAloud.play() : readAloud.stop()

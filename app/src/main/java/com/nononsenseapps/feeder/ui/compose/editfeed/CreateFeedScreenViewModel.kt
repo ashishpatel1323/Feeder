@@ -40,7 +40,8 @@ class CreateFeedScreenViewModel(
     }
     override var feedTitle: String by mutableSavedStateOf(state, "")
     override var feedTag: String by mutableSavedStateOf(state, "")
-    override var fullTextByDefault: Boolean by mutableSavedStateOf(state, false)
+    // Fork: fetch the full article by default for every new feed
+    override var fullTextByDefault: Boolean by mutableSavedStateOf(state, true)
     override var skipDuplicates: Boolean by mutableSavedStateOf(state, false)
     override var notify: Boolean by mutableSavedStateOf(state, false)
     override var articleOpener: String by mutableSavedStateOf(state, "")

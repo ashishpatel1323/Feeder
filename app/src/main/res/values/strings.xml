@@ -64,6 +64,7 @@
   <string name="action_save">Save</string>
   <string name="action_saved">Saved</string>
   <string name="action_translate">Translate</string>
+  <string name="fast_reading">Fast read</string>
   <string name="action_original">Original</string>
   <string name="text_to_speech">Text to speech</string>
   <string name="pause_reading">Pause reading</string>
