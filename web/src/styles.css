@@ -653,6 +653,10 @@ a {
 .article-body figure {
   margin: 1em 0;
 }
+/* Fast reading: bold word starts */
+.article-body b.fr {
+  font-weight: 700;
+}
 .notice {
   padding: 8px 12px;
   border-radius: 8px;

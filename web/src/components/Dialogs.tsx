@@ -358,6 +358,10 @@ export function SettingsDialog({ settings, onClose, toast }: { settings: Setting
           Mark articles read when opened
         </label>
         <label className="check">
+          <input type="checkbox" checked={s.fastReading} onChange={(e) => updateSettings({ fastReading: e.target.checked })} />
+          Fast reading: bold the start of every word (also the Fast read button, or B)
+        </label>
+        <label className="check">
           <input type="checkbox" checked={s.showThumbnails} onChange={(e) => updateSettings({ showThumbnails: e.target.checked })} />
           Show thumbnails in the list
         </label>

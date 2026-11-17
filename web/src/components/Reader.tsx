@@ -4,7 +4,8 @@ import { formatPoints, readingMinutes, wordsOf } from '../lib/listquery'
 import { hnDiscussionUrl, loadFullText, sanitize, summarize } from '../lib/extras'
 import { htmlToText } from '../lib/feedparse'
 import { readAloud, type ReadAloudState } from '../lib/readaloud'
-import type { Settings } from '../lib/settings'
+import { updateSettings, type Settings } from '../lib/settings'
+import { applyFastReading } from '../lib/fastReading'
 import { Icon, IconButton } from './Icon'
 import { Player } from './Player'
 
@@ -63,10 +64,13 @@ export function Reader(p: Props) {
     }
   }, [fullMode, item.id, item.fullHtml, item])
 
+  const fastReading = p.settings.fastReading
   const html = useMemo(() => {
     const source = fullMode && item.fullHtml ? item.fullHtml : item.contentHtml
-    return sanitize(source || `<p>${item.snippet}</p>`, item.link ?? feed?.url ?? null)
-  }, [fullMode, item.fullHtml, item.contentHtml, item.snippet, item.link, feed?.url])
+    const clean = sanitize(source || `<p>${item.snippet}</p>`, item.link ?? feed?.url ?? null)
+    // Bold word starts only add elements, so read aloud and tap-to-read see the same text
+    return fastReading ? applyFastReading(clean) : clean
+  }, [fullMode, item.fullHtml, item.contentHtml, item.snippet, item.link, feed?.url, fastReading])
 
   // (Re)index text for read aloud whenever what's shown changes
   useEffect(() => {
@@ -250,6 +254,14 @@ export function Reader(p: Props) {
         <IconButton icon={item.read ? 'unread' : 'read'} label={item.read ? 'Mark unread' : 'Mark read'} onClick={toggleRead} showLabel />
         <IconButton icon="summarize" label={summaryState === 'loading' ? 'Summarizing…' : 'Summarize'} onClick={doSummary} disabled={summaryState === 'loading'} showLabel />
         <IconButton icon={item.saved ? 'bookmarkFilled' : 'bookmark'} label={item.saved ? 'Saved' : 'Save'} active={!!item.saved} onClick={toggleSave} showLabel />
+        <IconButton
+          icon="formatBold"
+          label="Fast read"
+          title={fastReading ? 'Turn off bold word starts (B)' : 'Bold word starts to read faster (B)'}
+          active={fastReading}
+          onClick={() => updateSettings({ fastReading: !fastReading })}
+          showLabel
+        />
       </footer>
     </section>
   )

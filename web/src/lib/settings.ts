@@ -17,6 +17,8 @@ export interface Settings {
   refreshMinutes: number
   theme: 'system' | 'light' | 'dark'
   textSize: number
+  /** Bold the start of every word in the reader ("fast reading"). */
+  fastReading: boolean
   readAloudRate: number
   readAloudVoice: string
   readAloudAutoContinue: boolean
@@ -41,6 +43,7 @@ export const DEFAULT_SETTINGS: Settings = {
   refreshMinutes: 30,
   theme: 'system',
   textSize: 18,
+  fastReading: false,
   readAloudRate: 1,
   readAloudVoice: '',
   readAloudAutoContinue: true,
