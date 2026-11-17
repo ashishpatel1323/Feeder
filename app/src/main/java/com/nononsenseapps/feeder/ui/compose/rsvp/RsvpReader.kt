@@ -65,6 +65,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.nononsenseapps.feeder.R
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
@@ -143,6 +146,17 @@ fun RsvpReader(
         delay((word.delayMillis(wpm) * ramp).toLong())
         shownSincePlay++
         if (atEnd) playing = false else index++
+    }
+
+    // Pause when the app goes to the background, so no words pass unseen
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_PAUSE) playing = false
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     // Keep the screen on while words are flowing

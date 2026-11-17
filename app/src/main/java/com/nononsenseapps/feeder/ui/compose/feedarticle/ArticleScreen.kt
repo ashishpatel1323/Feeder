@@ -197,7 +197,9 @@ fun ArticleScreen(
     var speedReadingOpen by rememberSaveable { mutableStateOf(false) }
     var speedReadingOffset by rememberSaveable { mutableIntStateOf(0) }
     if (speedReadingOpen) {
-        val speedReadingText = remember { viewModel.speedReadingText() }
+        // Snapshot the text once it exists (it can still be loading when opened), but don't swap it mid-read
+        val latestText = viewModel.speedReadingText()
+        val speedReadingText = remember(latestText.isEmpty()) { latestText }
         RsvpReader(
             text = speedReadingText,
             title = viewState.articleTitle,
