@@ -151,6 +151,11 @@ class ArticleViewModel(
 
     fun ttsSetAutoContinue(value: Boolean) = readAloudQueue.setAutoContinue(value)
 
+    /** Bold word starts ("fast reading"), shown in the reader. */
+    val fastReading = repository.fastReading
+
+    fun setFastReading(value: Boolean) = repository.setFastReading(value)
+
     private val podcastPlayerStateHolder: PodcastPlayerStateHolder by instance()
     private val fullTextParser: FullTextParser by instance()
     private val filePathProvider: FilePathProvider by instance()

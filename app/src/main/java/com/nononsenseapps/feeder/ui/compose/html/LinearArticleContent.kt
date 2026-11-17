@@ -200,6 +200,7 @@ fun ColumnArticleContent(
     speechHighlight: SpeechHighlight? = null,
     isReadingAloud: Boolean = false,
     onReadAloudFrom: ((speechOffset: Int) -> Unit)? = null,
+    fastReading: Boolean = false,
 ) {
     val speechIndex =
         remember(articleContent, speechHighlight?.text) {
@@ -233,6 +234,7 @@ fun ColumnArticleContent(
         LocalSpeechWordHighlights provides wordHighlights,
         LocalSpeechFocusTarget provides focusTarget,
         LocalReadAloudTapHandler provides tapHandler,
+        LocalFastReading provides fastReading,
     ) {
         articleContent.elements.forEachIndexed { index, element ->
             ProvideTextStyle(
@@ -728,14 +730,25 @@ fun LinearTextContent(
             val wordForeground = MaterialTheme.colorScheme.onPrimaryContainer
             // The word tapped to offer "Read from here"
             var tappedWord by remember(linearText) { mutableStateOf<IntRange?>(null) }
+            // Bold word starts; code keeps its own look
+            val fastReading = LocalFastReading.current && linearText.blockStyle == LinearTextBlockStyle.TEXT
+            val fastReadingRanges =
+                remember(linearText, fastReading) {
+                    if (fastReading) fastReadingRanges(linearText.text) else emptyList()
+                }
             val annotatedString =
-                remember(original, range, wordRange, highlightColor, wordBackground, wordForeground, tappedWord) {
-                    if (range == null && wordRange == null && tappedWord == null) {
+                remember(original, range, wordRange, highlightColor, wordBackground, wordForeground, tappedWord, fastReadingRanges) {
+                    if (range == null && wordRange == null && tappedWord == null && fastReadingRanges.isEmpty()) {
                         original
                     } else {
                         AnnotatedString
                             .Builder(original)
                             .apply {
+                                fastReadingRanges.forEach {
+                                    if (it.last < original.length) {
+                                        addStyle(SpanStyle(fontWeight = FontWeight.Bold), it.first, it.last + 1)
+                                    }
+                                }
                                 range?.let { addStyle(SpanStyle(background = highlightColor), it.first, (it.last + 1).coerceAtMost(original.length)) }
                                 // The spoken word stands out on top of its sentence, as in Speechify
                                 wordRange?.let {

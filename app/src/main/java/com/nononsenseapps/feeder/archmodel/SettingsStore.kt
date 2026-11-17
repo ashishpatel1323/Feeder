@@ -484,6 +484,14 @@ class SettingsStore(
         sp.edit().putBoolean(PREF_LIST_SHOW_READING_TIME, value).apply()
     }
 
+    private val _fastReading = MutableStateFlow(sp.getBoolean(PREF_FAST_READING, false))
+    val fastReading = _fastReading.asStateFlow()
+
+    fun setFastReading(value: Boolean) {
+        _fastReading.value = value
+        sp.edit().putBoolean(PREF_FAST_READING, value).apply()
+    }
+
     private val _showHnScore = MutableStateFlow(sp.getBoolean(PREF_SHOW_HN_SCORE, false))
     val showHnScore = _showHnScore.asStateFlow()
 
@@ -802,6 +810,7 @@ const val PREF_LIST_SHOW_ONLY_TITLES = "prefs_list_show_only_titles"
 
 const val PREF_LIST_SHOW_READING_TIME = "pref_show_reading_time"
 const val PREF_SHOW_HN_SCORE = "pref_show_hn_score"
+const val PREF_FAST_READING = "pref_fast_reading"
 
 const val PREF_OPEN_DRAWER_ON_FAB = "pref_open_drawer_on_fab"
 

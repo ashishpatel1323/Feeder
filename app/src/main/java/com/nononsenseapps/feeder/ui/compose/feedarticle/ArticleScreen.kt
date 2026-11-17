@@ -27,10 +27,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.FormatBold
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Pause
@@ -142,6 +144,7 @@ fun ArticleScreen(
     val swipeNeighbors by viewModel.swipeNeighbors.collectAsStateWithLifecycle()
     val readAloudNeighbors by viewModel.readAloudNeighbors.collectAsStateWithLifecycle()
     val readAloudAutoContinue by viewModel.readAloudAutoContinue.collectAsStateWithLifecycle()
+    val fastReading by viewModel.fastReading.collectAsStateWithLifecycle()
 
     // Previous / next and auto-continue in read aloud open the article being read
     val currentOnSwipeToArticle by rememberUpdatedState(onSwipeToArticle)
@@ -281,6 +284,8 @@ fun ArticleScreen(
         ttsOnSkipArticle = viewModel::ttsSkipArticle,
         readAloudAutoContinue = readAloudAutoContinue,
         ttsOnSetAutoContinue = viewModel::ttsSetAutoContinue,
+        fastReading = fastReading,
+        onToggleFastReading = { viewModel.setFastReading(!fastReading) },
     )
 }
 
@@ -338,6 +343,8 @@ fun ArticleScreen(
     ttsOnSkipArticle: (next: Boolean) -> Unit = {},
     readAloudAutoContinue: Boolean = false,
     ttsOnSetAutoContinue: (Boolean) -> Unit = {},
+    fastReading: Boolean = false,
+    onToggleFastReading: () -> Unit = {},
 ) {
     // While reading aloud the bottom bar is the player and the article actions move to the top bar
     val readingAloud = viewState.isBottomBarVisible && !viewState.podcastPlayerState.isVisible
@@ -523,6 +530,8 @@ fun ArticleScreen(
                         onSummarize = onSummarize,
                         onToggleBookmark = onToggleBookmark,
                         onTranslate = onTranslate,
+                        fastReading = fastReading,
+                        onToggleFastReading = onToggleFastReading,
                     )
                 }
             }
@@ -561,6 +570,7 @@ fun ArticleScreen(
                         speechHighlight = speechHighlight,
                         isReadingAloud = isReadingAloud,
                         onReadAloudFrom = ttsOnReadFrom,
+                        fastReading = fastReading,
                         articleScrollState = articleScrollState,
                         onUserScroll = ttsOnUserScroll,
                         onFeedTitleClick = onFeedTitleClick,
@@ -705,6 +715,7 @@ fun ArticleContent(
     onUserScroll: (() -> Unit)? = null,
     isReadingAloud: Boolean = false,
     onReadAloudFrom: ((speechOffset: Int) -> Unit)? = null,
+    fastReading: Boolean = false,
 ) {
     val toolbarColor = MaterialTheme.colorScheme.surface.toArgb()
 
@@ -795,6 +806,7 @@ fun ArticleContent(
                         speechHighlight = speechHighlight,
                         isReadingAloud = isReadingAloud,
                         onReadAloudFrom = onReadAloudFrom,
+                        fastReading = fastReading,
                         onLinkClick = { link, index ->
                             if (index != null && elementPositions.containsKey(index)) {
                                 onUserScroll?.invoke()
@@ -964,6 +976,8 @@ private fun ArticleActionBar(
     onSummarize: () -> Unit,
     onToggleBookmark: () -> Unit,
     onTranslate: () -> Unit,
+    fastReading: Boolean,
+    onToggleFastReading: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -1017,6 +1031,13 @@ private fun ArticleActionBar(
                         modifier = Modifier.weight(1f),
                     )
                 }
+                ArticleAction(
+                    icon = Icons.Default.FormatBold,
+                    label = stringResource(R.string.fast_reading),
+                    onClick = onToggleFastReading,
+                    selected = fastReading,
+                    modifier = Modifier.weight(1f),
+                )
             }
         }
     }
@@ -1028,19 +1049,28 @@ private fun ArticleAction(
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    // Set for on/off actions, which then show their state
+    selected: Boolean? = null,
 ) {
+    val color = if (selected == true) MaterialTheme.colorScheme.primary else LocalContentColor.current
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier =
             modifier
-                .clickable(role = Role.Button, onClick = onClick)
-                .padding(vertical = 8.dp),
+                .then(
+                    if (selected == null) {
+                        Modifier.clickable(role = Role.Button, onClick = onClick)
+                    } else {
+                        Modifier.toggleable(value = selected, role = Role.Switch, onValueChange = { onClick() })
+                    },
+                ).padding(vertical = 8.dp),
     ) {
-        Icon(icon, contentDescription = null)
+        Icon(icon, contentDescription = null, tint = color)
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
+            color = color,
             maxLines = 1,
         )
     }

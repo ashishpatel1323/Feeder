@@ -328,6 +328,10 @@ class Repository(
 
     fun setReadAloudAutoContinue(value: Boolean) = settingsStore.setReadAloudAutoContinue(value)
 
+    val fastReading = settingsStore.fastReading
+
+    fun setFastReading(value: Boolean) = settingsStore.setFastReading(value)
+
     val useDynamicTheme = settingsStore.useDynamicTheme
 
     fun setUseDynamicTheme(value: Boolean) = settingsStore.setUseDynamicTheme(value)
