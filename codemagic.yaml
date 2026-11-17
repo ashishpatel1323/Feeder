@@ -1,0 +1,95 @@
+# Codemagic CI for this fork's Android APK.
+#
+# Stands in for .github/workflows/fork_apk.yml while GitHub Actions is blocked by a billing
+# problem. Same build: the F-Droid release variant signed with the committed shareddebug.keystore,
+# ".debug" app id suffix (so it updates the existing installs), fast R8, arm64-v8a only.
+#
+# Free tier: 500 build minutes a month on macOS M2 (Linux has no free minutes), shared with
+# CheckvistM, so this runs on pushes to master only and skips web-only changes.
+#
+# Needs a variable group `github` holding GITHUB_TOKEN, a fine-grained token with Contents: read and
+# write on ashishpatel1323/Feeder. It publishes the release.
+
+workflows:
+  fork-apk:
+    name: Fork APK (master)
+    instance_type: mac_mini_m2
+    max_build_duration: 45
+    environment:
+      java: 21
+      groups:
+        - github
+      vars:
+        # The GitHub workflow tagged its releases build-<run number> (last: build-44). Codemagic
+        # numbers its builds from 1, so offset them past that to keep tags unique and ordered.
+        BUILD_NUMBER_OFFSET: 1000
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: master
+          include: true
+          source: true
+      cancel_previous_builds: true
+    when:
+      changeset:
+        excludes:
+          - web/**
+          - .github/workflows/web.yml
+    cache:
+      cache_paths:
+        - ~/.gradle/caches
+        - ~/.gradle/wrapper
+    scripts:
+      - name: Set the build number
+        script: |
+          N=$((BUILD_NUMBER_OFFSET + BUILD_NUMBER))
+          echo "CI_BUILD_NUMBER=$N" >> "$CM_ENV"
+          echo "Build $N"
+      - name: Fetch submodules and history
+        script: |
+          git submodule update --init --recursive
+          # versionCode-related tasks count commits
+          git fetch --unshallow 2>/dev/null || true
+      - name: Point Gradle at the Android SDK
+        script: echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
+      - name: Build release APK
+        script: |
+          chmod +x ./gradlew
+          # lintVital adds minutes and is already covered by upstream CI
+          ./gradlew assembleFdroidRelease \
+            -x lintVitalFdroidRelease \
+            -PSTORE_FILE="$CM_BUILD_DIR/shareddebug.keystore" \
+            -PSTORE_PASSWORD=android \
+            -PKEY_ALIAS=AndroidDebugKey \
+            -PKEY_PASSWORD=android \
+            -PAPP_ID_SUFFIX=.debug \
+            -PFAST_R8=true \
+            -PABI_FILTERS=arm64-v8a
+      - name: Rename APK
+        script: |
+          short_sha="${CM_COMMIT::8}"
+          name="feeder-fork-${CI_BUILD_NUMBER}-${short_sha}.apk"
+          mkdir -p dist
+          mv app/build/outputs/apk/fdroid/release/app-fdroid-release.apk "dist/$name"
+          echo "APK_PATH=dist/$name" >> "$CM_ENV"
+          echo "SHORT_SHA=$short_sha" >> "$CM_ENV"
+          ls -lh "dist/$name"
+      # Marked latest, so /releases/latest always points at the newest fork build.
+      - name: Publish GitHub release
+        script: |
+          set -euo pipefail
+          export GH_TOKEN="$GITHUB_TOKEN"
+          gh release create "build-$CI_BUILD_NUMBER" "$APK_PATH" \
+            -R ashishpatel1323/Feeder --target "$CM_COMMIT" --latest \
+            --title "Android build · #$CI_BUILD_NUMBER · $SHORT_SHA" \
+            --notes "Automatic Codemagic build of $CM_COMMIT on master. Install the attached APK; it updates over the previous fork build."
+    artifacts:
+      - dist/*.apk
+    publishing:
+      email:
+        recipients:
+          - ashishpatel1323@gmail.com
+        notify:
+          success: true
+          failure: true
