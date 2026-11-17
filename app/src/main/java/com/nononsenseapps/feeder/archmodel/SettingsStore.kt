@@ -44,6 +44,14 @@ class SettingsStore(
         _addedFeederNews.value = value
     }
 
+    /** Fork: true once every existing feed was switched to full article by default. */
+    val enabledFullTextForAllFeeds: Boolean
+        get() = sp.getBoolean(PREF_ENABLED_FULLTEXT_FOR_ALL_FEEDS, false)
+
+    fun setEnabledFullTextForAllFeeds(value: Boolean) {
+        sp.edit().putBoolean(PREF_ENABLED_FULLTEXT_FOR_ALL_FEEDS, value).apply()
+    }
+
     private val _minReadTime: MutableStateFlow<Instant> =
         MutableStateFlow(
             // by design - min read time is never written to disk
@@ -701,6 +709,7 @@ class SettingsStore(
  * Boolean indicating if Feeder News feed has been added or not
  */
 const val PREF_ADDED_FEEDER_NEWS = "pref_added_feeder_news"
+const val PREF_ENABLED_FULLTEXT_FOR_ALL_FEEDS = "pref_fork_enabled_fulltext_for_all_feeds"
 
 /**
  * These indicate which fragment to open by default

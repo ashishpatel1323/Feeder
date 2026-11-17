@@ -86,6 +86,20 @@ class FeederDb extends Dexie {
       remoteFeeds: '&url',
       kv: '&key',
     })
+    // Full article by default for every feed: switch the existing ones on once. Bumping
+    // whenModified makes the change win over older settings from the sync chain.
+    this.version(2).upgrade(async (tx) => {
+      const now = Date.now()
+      await tx
+        .table('feeds')
+        .toCollection()
+        .modify((f: Feed) => {
+          if (!f.fullTextByDefault) {
+            f.fullTextByDefault = true
+            f.whenModified = now
+          }
+        })
+    })
   }
 }
 
@@ -107,7 +121,7 @@ export function newFeed(url: string, partial: Partial<Feed> = {}): Feed {
     customTitle: '',
     tag: '',
     imageUrl: null,
-    fullTextByDefault: false,
+    fullTextByDefault: true,
     openArticlesWith: '',
     alternateId: false,
     fetchOgImages: false,

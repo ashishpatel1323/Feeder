@@ -286,7 +286,9 @@ class OpmlPullParser(
                                     ?: parser
                                         .getAttributeValue(null, ATTR_FLYM_RETRIEVE_FULL_TEXT)
                                         ?.toBoolean()
-                            ) ?: feed.fullTextByDefault,
+                            )
+                                // Fork: full article by default when the OPML says nothing
+                                ?: true,
                         alternateId =
                             parser
                                 .getAttributeValue(OPML_FEEDER_NAMESPACE, ATTR_ALTERNATE_ID)

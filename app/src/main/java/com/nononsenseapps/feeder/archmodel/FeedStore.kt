@@ -105,6 +105,9 @@ class FeedStore(
         }
     }
 
+    suspend fun enableFullTextForAllFeeds(whenModified: Instant): Int =
+        feedDao.enableFullTextForAllFeeds(whenModifiedMillis = whenModified.toEpochMilli())
+
     suspend fun upsertFeed(feedSql: Feed): Long =
         try {
             feedDao.upsert(feed = feedSql)
