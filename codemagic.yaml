@@ -79,6 +79,11 @@ workflows:
       - name: Publish GitHub release
         script: |
           set -euo pipefail
+          # A build started by hand from another branch keeps its APK as an artifact only.
+          if [ "$CM_BRANCH" != "master" ]; then
+            echo "Skipping release: $CM_BRANCH is not master"
+            exit 0
+          fi
           export GH_TOKEN="$GITHUB_TOKEN"
           gh release create "build-$CI_BUILD_NUMBER" "$APK_PATH" \
             -R ashishpatel1323/Feeder --target "$CM_COMMIT" --latest \
