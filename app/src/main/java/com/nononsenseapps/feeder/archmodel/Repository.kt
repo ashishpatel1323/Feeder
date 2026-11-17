@@ -75,6 +75,17 @@ class Repository(
 
     init {
         addFeederNewsIfInitialStart()
+        enableFullTextForAllFeedsOnce()
+    }
+
+    /** Fork: full article by default for every feed, applied once to the feeds that already exist. */
+    private fun enableFullTextForAllFeedsOnce() {
+        if (!settingsStore.enabledFullTextForAllFeeds) {
+            applicationCoroutineScope.launch {
+                feedStore.enableFullTextForAllFeeds(Instant.now())
+                settingsStore.setEnabledFullTextForAllFeeds(true)
+            }
+        }
     }
 
     private fun addFeederNewsIfInitialStart() {
@@ -85,6 +96,7 @@ class Repository(
                         Feed(
                             title = "Feeder News",
                             url = URL("https://news.nononsenseapps.com/index.atom"),
+                            fullTextByDefault = true,
                         ),
                     )
                 settingsStore.setAddedFeederNews(true)
