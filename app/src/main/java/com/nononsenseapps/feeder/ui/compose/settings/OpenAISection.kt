@@ -68,6 +68,7 @@ import com.nononsenseapps.feeder.openai.isBlankConfiguration
 import com.nononsenseapps.feeder.openai.isDeepL
 import com.nononsenseapps.feeder.openai.isLocalTranslation
 import com.nononsenseapps.feeder.openai.isOnDeviceSummary
+import com.nononsenseapps.feeder.ui.compose.components.SwitchExpressive
 import com.nononsenseapps.feeder.ui.compose.theme.LocalDimens
 import kotlinx.coroutines.delay
 import java.util.Locale
@@ -689,7 +690,7 @@ private fun BergamotLanguagesOnlySwitch(
             text = stringResource(R.string.show_only_bergamot_languages),
             modifier = Modifier.weight(1f),
         )
-        Switch(
+        SwitchExpressive(
             checked = checked,
             onCheckedChange = onCheckedChange,
         )
@@ -969,6 +970,7 @@ private val BERGAMOT_TARGET_LANGUAGE_CODES =
         "uk",
         "ur",
         "vi",
+        "zh",
     )
 
 @Composable

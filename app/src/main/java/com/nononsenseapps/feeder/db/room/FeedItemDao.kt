@@ -121,6 +121,12 @@ interface FeedItemDao {
         feedId: Long?,
     ): FeedItem?
 
+    @Query("SELECT * FROM feed_items WHERE feed_id = :feedId AND guid IN (:guids)")
+    suspend fun loadFeedItems(
+        feedId: Long,
+        guids: List<String>,
+    ): List<FeedItem>
+
     @Query("SELECT * FROM feed_items WHERE id IS :id")
     suspend fun loadFeedItem(id: Long): FeedItem?
 
@@ -635,6 +641,7 @@ suspend fun FeedItemDao.upsertFeedItems(
     itemsWithText: List<Pair<FeedItem, String>>,
     block: suspend (FeedItem, String) -> Unit,
 ) {
+    if (itemsWithText.isEmpty()) return
     val updatedItems =
         itemsWithText.filter { (item, _) ->
             item.id > ID_UNSET
