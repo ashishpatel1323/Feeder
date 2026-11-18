@@ -18,9 +18,6 @@ class FeedListGroupingTest {
             quickReads = "Quick",
             mediumReads = "Medium",
             longReads = "Long",
-            unread = "Unread",
-            saved = "Saved",
-            read = "Read",
             unknownSite = "Unknown site",
             noFeed = "No feed",
         )
@@ -92,13 +89,6 @@ class FeedListGroupingTest {
         assertEquals("Quick", header(FeedListGrouping.LENGTH, "0"))
         assertEquals("Medium", header(FeedListGrouping.LENGTH, "1"))
         assertEquals("Long", header(FeedListGrouping.LENGTH, "2"))
-    }
-
-    @Test
-    fun statusHeader() {
-        assertEquals("Unread", header(FeedListGrouping.STATUS, "0"))
-        assertEquals("Saved", header(FeedListGrouping.STATUS, "1"))
-        assertEquals("Read", header(FeedListGrouping.STATUS, "2"))
     }
 
     @Test

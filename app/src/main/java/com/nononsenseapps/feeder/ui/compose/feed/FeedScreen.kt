@@ -42,13 +42,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CheckBox
-import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.ImportExport
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
@@ -101,7 +98,6 @@ import androidx.compose.ui.semantics.collectionInfo
 import androidx.compose.ui.semantics.collectionItemInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -525,7 +521,6 @@ fun FeedScreen(
             onSetBookmark = { itemId, value ->
                 viewModel.setBookmarked(itemId, value)
             },
-            onShowFilterMenu = viewModel::setFilterMenuVisible,
             filterCallback = viewModel.filterCallback,
             onSetFeedListGrouping = viewModel::setFeedListGrouping,
             onSetSorting = viewModel::setCurrentSorting,
@@ -585,7 +580,6 @@ fun FeedScreen(
     onOpenFeedItemInCustomTab: (Long) -> Unit,
     onOpenFeedItemInBrowser: (Long) -> Unit,
     onSetBookmark: (Long, Boolean) -> Unit,
-    onShowFilterMenu: (Boolean) -> Unit,
     filterCallback: FeedListFilterCallback,
     onShowSearchBar: (Boolean) -> Unit,
     searchCallback: (String) -> Unit,
@@ -711,170 +705,6 @@ fun FeedScreen(
                         }
                     }
                 }
-
-                if (viewState.currentFeedOrTag.isNotSavedArticles) {
-                    PlainTooltipBox(
-                        tooltip = {
-                            Text(stringResource(id = R.string.filter_noun))
-                        },
-                    ) {
-                        Box {
-                            IconButton(
-                                onClick = { onShowFilterMenu(true) },
-                            ) {
-                                Icon(
-                                    Icons.Default.FilterList,
-                                    contentDescription = stringResource(R.string.filter_noun),
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = viewState.showFilterMenu,
-                                onDismissRequest = { onShowFilterMenu(false) },
-                                modifier =
-                                    Modifier
-                                        .onKeyEventLikeEscape {
-                                            onShowFilterMenu(false)
-                                        },
-                            ) {
-                                val selectedString = stringResource(androidx.compose.ui.R.string.selected)
-                                val notSelectedString = stringResource(androidx.compose.ui.R.string.not_selected)
-
-                                DropdownMenuItem(
-                                    enabled = false,
-                                    onClick = { /* Can't be modified - only shown for completeness */ },
-                                    leadingIcon = {
-                                        Icon(
-                                            when (viewState.filter.unread) {
-                                                true -> Icons.Default.CheckBox
-                                                false -> Icons.Default.CheckBoxOutlineBlank
-                                            },
-                                            contentDescription = null,
-                                        )
-                                    },
-                                    text = {
-                                        Text(stringResource(id = R.string.unread_adjective))
-                                    },
-                                    modifier =
-                                        Modifier
-                                            .safeSemantics {
-                                                stateDescription =
-                                                    when (viewState.filter.unread) {
-                                                        true -> selectedString
-                                                        else -> notSelectedString
-                                                    }
-                                                role = Role.Checkbox
-                                            },
-                                )
-                                DropdownMenuItem(
-                                    onClick = {
-                                        filterCallback.setSaved(!viewState.filter.saved)
-                                        onShowFilterMenu(false)
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            when (viewState.filter.saved) {
-                                                true -> Icons.Default.CheckBox
-                                                false -> Icons.Default.CheckBoxOutlineBlank
-                                            },
-                                            contentDescription = null,
-                                        )
-                                    },
-                                    text = {
-                                        Text(stringResource(id = R.string.saved_adjective))
-                                    },
-                                    modifier =
-                                        Modifier
-                                            .safeSemantics {
-                                                stateDescription =
-                                                    when (viewState.filter.saved) {
-                                                        true -> selectedString
-                                                        else -> notSelectedString
-                                                    }
-                                                role = Role.Checkbox
-                                            },
-                                )
-                                DropdownMenuItem(
-                                    onClick = {
-                                        filterCallback.setRecentlyRead(!viewState.filter.recentlyRead)
-                                        onShowFilterMenu(false)
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            when (viewState.filter.recentlyRead) {
-                                                true -> Icons.Default.CheckBox
-                                                false -> Icons.Default.CheckBoxOutlineBlank
-                                            },
-                                            contentDescription = null,
-                                        )
-                                    },
-                                    text = {
-                                        Text(stringResource(id = R.string.recently_read_adjective))
-                                    },
-                                    modifier =
-                                        Modifier
-                                            .safeSemantics {
-                                                stateDescription =
-                                                    when (viewState.filter.recentlyRead) {
-                                                        true -> selectedString
-                                                        else -> notSelectedString
-                                                    }
-                                                role = Role.Checkbox
-                                            },
-                                )
-                                DropdownMenuItem(
-                                    onClick = {
-                                        filterCallback.setRead(!viewState.filter.read)
-                                        // Closing it is important for accessibility
-                                        onShowFilterMenu(false)
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            when (viewState.filter.read) {
-                                                true -> Icons.Default.CheckBox
-                                                false -> Icons.Default.CheckBoxOutlineBlank
-                                            },
-                                            contentDescription = null,
-                                        )
-                                    },
-                                    text = {
-                                        Text(stringResource(id = R.string.read_adjective))
-                                    },
-                                    modifier =
-                                        Modifier
-                                            .safeSemantics {
-                                                stateDescription =
-                                                    when (viewState.filter.read) {
-                                                        true -> selectedString
-                                                        else -> notSelectedString
-                                                    }
-                                                role = Role.Checkbox
-                                            },
-                                )
-                                // Hidden button for TalkBack
-                                DropdownMenuItem(
-                                    onClick = {
-                                        onShowFilterMenu(false)
-                                    },
-                                    text = {},
-                                    modifier =
-                                        Modifier
-                                            .height(0.dp)
-                                            .safeSemantics {
-                                                contentDescription = closeMenuText
-                                                role = Role.Button
-                                            },
-                                )
-                            }
-                        }
-                    }
-                }
-
-                FeedListGroupingButton(
-                    current = viewState.feedListGrouping,
-                    onSelect = onSetFeedListGrouping,
-                    currentSorting = viewState.currentSorting,
-                    onSelectSorting = onSetSorting,
-                )
 
                 PlainTooltipBox(tooltip = { Text(stringResource(R.string.open_menu)) }) {
                     Box {
@@ -1097,13 +927,18 @@ fun FeedScreen(
             }
 
         Column(modifier = innerModifier) {
-            // Quick filters stay on screen rather than behind the filter menu
-            if (viewState.currentFeedOrTag.isNotSavedArticles) {
-                FeedListFilterChips(
-                    filter = viewState.filter,
-                    filterCallback = filterCallback,
-                )
-            }
+            // Show tabs, Today and Sort and group stay on screen. The Saved articles list
+            // is saved articles only, so it has no Show tabs.
+            FeedListFilterBar(
+                filter = viewState.filter,
+                filterCallback = filterCallback,
+                grouping = viewState.feedListGrouping,
+                sorting = viewState.currentSorting,
+                onSelectGrouping = onSetFeedListGrouping,
+                onSelectSorting = onSetSorting,
+                showTabs = viewState.currentFeedOrTag.isNotSavedArticles,
+                unreadCount = viewState.feedScreenTitle.unreadCount,
+            )
 
             when (screenType) {
                 FeedScreenType.FeedGrid ->

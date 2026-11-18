@@ -11,6 +11,7 @@ import com.nononsenseapps.feeder.background.schedulePeriodicRssSync
 import com.nononsenseapps.feeder.db.room.BlocklistDao
 import com.nononsenseapps.feeder.db.room.ID_UNSET
 import com.nononsenseapps.feeder.ui.compose.feedarticle.FeedListFilter
+import com.nononsenseapps.feeder.ui.compose.feedarticle.FeedListShow
 import com.nononsenseapps.feeder.ui.compose.settings.FontSelection
 import com.nononsenseapps.feeder.ui.compose.settings.getFontSelectionFromPath
 import com.nononsenseapps.feeder.util.FilePathProvider
@@ -173,9 +174,9 @@ class SettingsStore(
             PrefsFeedListFilter(
                 saved = sp.getBoolean(PREFS_FILTER_SAVED, false),
                 recentlyRead = sp.getBoolean(PREFS_FILTER_RECENTLY_READ, true),
-                read = sp.getBoolean(PREFS_FILTER_READ, true),
+                // Unread is the default Show tab
+                read = sp.getBoolean(PREFS_FILTER_READ, false),
                 today = sp.getBoolean(PREFS_FILTER_TODAY, false),
-                shortReads = sp.getBoolean(PREFS_FILTER_SHORT_READS, false),
             ),
         )
     val feedListFilter: StateFlow<FeedListFilter> = _feedListFilter.asStateFlow()
@@ -200,9 +201,22 @@ class SettingsStore(
         sp.edit().putBoolean(PREFS_FILTER_TODAY, value).apply()
     }
 
-    fun setFeedListFilterShortReads(value: Boolean) {
-        _feedListFilter.update { it.copy(shortReads = value) }
-        sp.edit().putBoolean(PREFS_FILTER_SHORT_READS, value).apply()
+    /**
+     * Sets the Show tab. Stored as the filter flags so settings exports and older imports keep
+     * working, see [FeedListShow].
+     */
+    fun setFeedListShow(value: FeedListShow) {
+        val saved = value == FeedListShow.SAVED
+        val recentlyRead = value != FeedListShow.SAVED
+        val read = value == FeedListShow.ALL
+        _feedListFilter.update { it.copy(saved = saved, recentlyRead = recentlyRead, read = read) }
+        val editor = sp.edit()
+        editor.putBoolean(PREFS_FILTER_SAVED, saved)
+        editor.putBoolean(PREFS_FILTER_RECENTLY_READ, recentlyRead)
+        editor.putBoolean(PREFS_FILTER_READ, read)
+        // The Short reads filter is gone
+        editor.remove(PREFS_FILTER_SHORT_READS)
+        editor.apply()
     }
 
     private val _currentTheme =
@@ -804,6 +818,8 @@ const val PREFS_FILTER_SAVED = "prefs_filter_saved"
 const val PREFS_FILTER_RECENTLY_READ = "prefs_filter_recently_read"
 const val PREFS_FILTER_READ = "prefs_filter_read"
 const val PREFS_FILTER_TODAY = "prefs_filter_today"
+
+// No longer used: the Short reads filter was removed. Cleared when the Show tab changes.
 const val PREFS_FILTER_SHORT_READS = "prefs_filter_short_reads"
 
 const val PREF_LIST_SHOW_ONLY_TITLES = "prefs_list_show_only_titles"
@@ -953,13 +969,16 @@ enum class FeedListGrouping(
     FEED(R.string.group_by_feed),
     TAG(R.string.group_by_tag),
     LENGTH(R.string.group_by_length),
-    STATUS(R.string.group_by_status),
     SITE(R.string.group_by_site),
 }
 
 fun feedListGroupingFromString(value: String): FeedListGrouping =
     try {
-        FeedListGrouping.valueOf(value.uppercase())
+        when (value.uppercase()) {
+            // Group by Status went away: the Show tabs cover it
+            "STATUS" -> FeedListGrouping.DATE
+            else -> FeedListGrouping.valueOf(value.uppercase())
+        }
     } catch (_: Exception) {
         FeedListGrouping.NONE
     }
@@ -1096,7 +1115,6 @@ data class PrefsFeedListFilter(
     override val recentlyRead: Boolean,
     override val read: Boolean,
     override val today: Boolean = false,
-    override val shortReads: Boolean = false,
 ) : FeedListFilter {
     override val unread: Boolean = true
 }

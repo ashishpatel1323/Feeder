@@ -5,45 +5,45 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Label
-import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.MarkEmailUnread
-import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.RadioButtonChecked
-import androidx.compose.material.icons.filled.RadioButtonUnchecked
-import androidx.compose.material.icons.filled.RssFeed
-import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.ViewAgenda
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.stateDescription
@@ -56,139 +56,14 @@ import com.nononsenseapps.feeder.archmodel.SortingOptions
 import com.nononsenseapps.feeder.ui.compose.components.safeSemantics
 import com.nononsenseapps.feeder.ui.compose.feedarticle.FeedListFilter
 import com.nononsenseapps.feeder.ui.compose.feedarticle.FeedListFilterCallback
-import com.nononsenseapps.feeder.ui.compose.feedarticle.onlyUnread
-import com.nononsenseapps.feeder.ui.compose.utils.onKeyEventLikeEscape
+import com.nononsenseapps.feeder.ui.compose.feedarticle.FeedListShow
+import com.nononsenseapps.feeder.ui.compose.feedarticle.show
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 import java.time.format.FormatStyle
 import java.util.Locale
-
-private val FeedListGrouping.icon: ImageVector
-    get() =
-        when (this) {
-            FeedListGrouping.NONE -> Icons.Default.ViewAgenda
-            FeedListGrouping.DATE -> Icons.Default.CalendarToday
-            FeedListGrouping.FEED -> Icons.Default.RssFeed
-            FeedListGrouping.TAG -> Icons.AutoMirrored.Filled.Label
-            FeedListGrouping.LENGTH -> Icons.Default.Timer
-            FeedListGrouping.STATUS -> Icons.Default.MarkEmailUnread
-            FeedListGrouping.SITE -> Icons.Default.Public
-        }
-
-/**
- * Top bar button holding the list's view options: how it is grouped and how it is sorted. The
- * icon shows the current grouping, so it is visible at a glance without opening anything.
- */
-@Composable
-fun FeedListGroupingButton(
-    current: FeedListGrouping,
-    onSelect: (FeedListGrouping) -> Unit,
-    modifier: Modifier = Modifier,
-    currentSorting: SortingOptions = SortingOptions.NEWEST_FIRST,
-    onSelectSorting: (SortingOptions) -> Unit = {},
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val label = stringResource(R.string.group_by)
-
-    PlainTooltipBox(tooltip = { Text(label) }, modifier = modifier) {
-        Box {
-            IconButton(onClick = { expanded = true }) {
-                Icon(
-                    current.icon,
-                    contentDescription = "$label: ${stringResource(current.stringId)}",
-                    tint =
-                        when (current) {
-                            FeedListGrouping.NONE -> LocalContentColor.current
-                            else -> MaterialTheme.colorScheme.primary
-                        },
-                )
-            }
-            DropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
-                modifier = Modifier.onKeyEventLikeEscape { expanded = false },
-            ) {
-                MenuSectionTitle(label)
-                FeedListGrouping.entries.forEach { option ->
-                    RadioMenuItem(
-                        text = stringResource(option.stringId),
-                        selected = option == current,
-                        trailingIcon = option.icon,
-                        onClick = {
-                            onSelect(option)
-                            // Closing it is important for accessibility
-                            expanded = false
-                        },
-                    )
-                }
-                HorizontalDivider()
-                MenuSectionTitle(stringResource(R.string.sort))
-                SortingOptions.entries.forEach { option ->
-                    RadioMenuItem(
-                        text = stringResource(option.stringId),
-                        selected = option == currentSorting,
-                        trailingIcon = null,
-                        onClick = {
-                            onSelectSorting(option)
-                            expanded = false
-                        },
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MenuSectionTitle(
-    text: String,
-    modifier: Modifier = Modifier,
-) {
-    Text(
-        text,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier =
-            modifier
-                .padding(horizontal = 12.dp, vertical = 8.dp)
-                .safeSemantics { heading() },
-    )
-}
-
-@Composable
-private fun RadioMenuItem(
-    text: String,
-    selected: Boolean,
-    trailingIcon: ImageVector?,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val selectedString = stringResource(androidx.compose.ui.R.string.selected)
-    val notSelectedString = stringResource(androidx.compose.ui.R.string.not_selected)
-    DropdownMenuItem(
-        onClick = onClick,
-        leadingIcon = {
-            Icon(
-                if (selected) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
-                contentDescription = null,
-            )
-        },
-        trailingIcon =
-            if (trailingIcon != null) {
-                { Icon(trailingIcon, contentDescription = null) }
-            } else {
-                null
-            },
-        text = { Text(text) },
-        modifier =
-            modifier.safeSemantics {
-                stateDescription = if (selected) selectedString else notSelectedString
-                role = Role.RadioButton
-            },
-    )
-}
 
 /**
  * Key used to remember which groups are collapsed. Includes the grouping so a key from one
@@ -209,9 +84,6 @@ data class GroupHeaderLabels(
     val quickReads: String,
     val mediumReads: String,
     val longReads: String,
-    val unread: String,
-    val saved: String,
-    val read: String,
     val unknownSite: String,
     val noFeed: String,
 )
@@ -225,9 +97,6 @@ fun rememberGroupHeaderLabels(): GroupHeaderLabels =
         quickReads = stringResource(R.string.group_quick_reads),
         mediumReads = stringResource(R.string.group_medium_reads),
         longReads = stringResource(R.string.group_long_reads),
-        unread = stringResource(R.string.group_status_unread),
-        saved = stringResource(R.string.group_status_saved),
-        read = stringResource(R.string.group_status_read),
         unknownSite = stringResource(R.string.group_unknown_site),
         noFeed = stringResource(R.string.group_no_feed),
     )
@@ -278,12 +147,6 @@ internal fun groupHeaderText(
                 "0" -> labels.quickReads
                 "1" -> labels.mediumReads
                 else -> labels.longReads
-            }
-        FeedListGrouping.STATUS ->
-            when (groupKey) {
-                "0" -> labels.unread
-                "1" -> labels.saved
-                else -> labels.read
             }
         FeedListGrouping.SITE -> groupKey.ifBlank { labels.unknownSite }
     }
@@ -381,48 +244,211 @@ fun FeedListGroupHeader(
     }
 }
 
+private val SortingOptions.shortStringId: Int
+    get() =
+        when (this) {
+            SortingOptions.NEWEST_FIRST -> R.string.sort_newest_short
+            SortingOptions.OLDEST_FIRST -> R.string.sort_oldest_short
+            SortingOptions.SHORTEST_FIRST -> R.string.sort_shortest_short
+            SortingOptions.LONGEST_FIRST -> R.string.sort_longest_short
+        }
+
+private val FeedListGrouping.shortStringId: Int
+    get() =
+        when (this) {
+            FeedListGrouping.LENGTH -> R.string.group_by_length_short
+            else -> stringId
+        }
+
+private val FeedListShow.stringId: Int
+    get() =
+        when (this) {
+            FeedListShow.UNREAD -> R.string.show_unread
+            FeedListShow.ALL -> R.string.show_all
+            FeedListShow.SAVED -> R.string.show_saved
+        }
+
+/** Order of the group options in the sort and group sheet. */
+private val GROUPING_ORDER =
+    listOf(
+        FeedListGrouping.NONE,
+        FeedListGrouping.DATE,
+        FeedListGrouping.FEED,
+        FeedListGrouping.TAG,
+        FeedListGrouping.SITE,
+        FeedListGrouping.LENGTH,
+    )
+
 /**
- * Always visible row of quick filters under the top bar.
+ * Always visible controls under the top bar: the Show tabs (Unread, All, Saved), the Today chip
+ * and a Sort and group button whose label says what is active. The button opens a bottom sheet.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FeedListFilterChips(
+fun FeedListFilterBar(
     filter: FeedListFilter,
     filterCallback: FeedListFilterCallback,
+    grouping: FeedListGrouping,
+    sorting: SortingOptions,
+    onSelectGrouping: (FeedListGrouping) -> Unit,
+    onSelectSorting: (SortingOptions) -> Unit,
     modifier: Modifier = Modifier,
+    showTabs: Boolean = true,
+    unreadCount: Int = 0,
 ) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    var showSheet by rememberSaveable { mutableStateOf(false) }
+    Column(
+        verticalArrangement = Arrangement.spacedBy(4.dp),
         modifier =
             modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 4.dp),
     ) {
-        FilterChip(
-            selected = filter.onlyUnread,
-            onClick = { filterCallback.setOnlyUnread() },
-            label = { Text(stringResource(R.string.filter_chip_unread_only)) },
+        if (showTabs) {
+            val current = filter.show
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                FeedListShow.entries.forEachIndexed { index, option ->
+                    SegmentedButton(
+                        selected = option == current,
+                        onClick = { filterCallback.setShow(option) },
+                        shape = SegmentedButtonDefaults.itemShape(index = index, count = FeedListShow.entries.size),
+                        colors =
+                            SegmentedButtonDefaults.colors(
+                                activeContainerColor = MaterialTheme.colorScheme.primary,
+                                activeContentColor = MaterialTheme.colorScheme.onPrimary,
+                            ),
+                        icon = {},
+                        label = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Text(stringResource(option.stringId), maxLines = 1)
+                                if (option == FeedListShow.UNREAD && unreadCount > 0) {
+                                    Text(
+                                        unreadCount.toString(),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        maxLines = 1,
+                                    )
+                                }
+                            }
+                        },
+                    )
+                }
+            }
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+        ) {
+            FilterChip(
+                selected = filter.today,
+                onClick = { filterCallback.setToday(!filter.today) },
+                label = { Text(stringResource(R.string.today)) },
+                leadingIcon =
+                    if (filter.today) {
+                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+                    } else {
+                        null
+                    },
+            )
+            val sortLabel = stringResource(sorting.shortStringId)
+            val groupLabel = stringResource(grouping.shortStringId)
+            val buttonDescription = stringResource(R.string.sort_and_group)
+            AssistChip(
+                onClick = { showSheet = true },
+                label = { Text("$sortLabel · $groupLabel", maxLines = 1) },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.SwapVert,
+                        contentDescription = null,
+                        modifier = Modifier.size(AssistChipDefaults.IconSize),
+                    )
+                },
+                modifier =
+                    Modifier.safeSemantics {
+                        contentDescription = "$buttonDescription: $sortLabel, $groupLabel"
+                    },
+            )
+        }
+    }
+
+    if (showSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showSheet = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        ) {
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(start = 24.dp, end = 24.dp, bottom = 32.dp),
+            ) {
+                SheetChoiceChips(
+                    title = stringResource(R.string.sort),
+                    options = SortingOptions.entries,
+                    selected = sorting,
+                    label = { stringResource(it.shortStringId) },
+                    onSelect = onSelectSorting,
+                )
+                SheetChoiceChips(
+                    title = stringResource(R.string.group_by),
+                    options = GROUPING_ORDER,
+                    selected = grouping,
+                    label = { stringResource(it.shortStringId) },
+                    onSelect = onSelectGrouping,
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun <T> SheetChoiceChips(
+    title: String,
+    options: List<T>,
+    selected: T,
+    label: @Composable (T) -> String,
+    onSelect: (T) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val selectedString = stringResource(androidx.compose.ui.R.string.selected)
+    val notSelectedString = stringResource(androidx.compose.ui.R.string.not_selected)
+    Column(modifier = modifier.padding(vertical = 8.dp)) {
+        Text(
+            title.uppercase(),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier =
+                Modifier
+                    .padding(bottom = 8.dp)
+                    .safeSemantics { heading() },
         )
-        FilterChip(
-            selected = filter.saved,
-            onClick = { filterCallback.setSaved(!filter.saved) },
-            label = { Text(stringResource(R.string.saved_adjective)) },
-        )
-        FilterChip(
-            selected = filter.today,
-            onClick = { filterCallback.setToday(!filter.today) },
-            label = { Text(stringResource(R.string.today)) },
-        )
-        FilterChip(
-            selected = filter.shortReads,
-            onClick = { filterCallback.setShortReads(!filter.shortReads) },
-            label = { Text(stringResource(R.string.filter_chip_short_reads)) },
-        )
-        FilterChip(
-            selected = filter.read,
-            onClick = { filterCallback.setRead(!filter.read) },
-            label = { Text(stringResource(R.string.read_adjective)) },
-        )
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            options.forEach { option ->
+                val isSelected = option == selected
+                FilterChip(
+                    selected = isSelected,
+                    onClick = { onSelect(option) },
+                    label = { Text(label(option)) },
+                    leadingIcon =
+                        if (isSelected) {
+                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+                        } else {
+                            null
+                        },
+                    modifier =
+                        Modifier.safeSemantics {
+                            stateDescription = if (isSelected) selectedString else notSelectedString
+                            role = Role.RadioButton
+                        },
+                )
+            }
+        }
     }
 }
