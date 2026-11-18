@@ -26,12 +26,14 @@ export function isFootnoteLink(href: string, content: string): boolean {
 }
 
 /** Ids and classes of footnote and reference sections, which read aloud skips entirely. */
-export const FOOTNOTE_SECTION = /^(?:fn[:_-]?\d|footnote|endnote|cite_note|references?$)/i
+export const FOOTNOTE_SECTION = /^(?:(?:fn[:_-]?\d|footnote|endnote|cite_note)(?!.*ref)|references?$)/i
 
-const COPYRIGHT = /^\s*(?:©|\(c\)\s|copyright\b)|all rights reserved/i
+// "© 2026 …", "Copyright 2026 …", "… All rights reserved." but not "Copyright law is changing."
+const COPYRIGHT = /^\s*(?:©|\(c\)\s*\d{4}|copyright\s*(?:©|\(c\)|\d{4}))|\ball rights reserved\W*$/i
 const CREDIT =
-  /^\s*(?:(?:(?:header|featured|lead|top|cover|hero)\s+)?(?:photo|image|picture|illustration|graphic|video)s?(?:\s+credits?)?\s*:|(?:photo|image|illustration)s?\s+(?:by|courtesy of|via)\s|credits?\s*:)/i
-const AGENCY_CREDIT = /(?:getty images|shutterstock|ap photo|reuters|afp|unsplash|istock)\W*$/i
+  /^\s*(?:(?:(?:header|featured|lead|top|cover|hero)\s+)?(?:photo|image|picture|illustration|graphic|video)s?(?:\s+credits?)?\s*:|(?:photo(?:graph)?|image|illustration)s?\s+(?:by|courtesy of|via)\s|credits?\s*:)/i
+// "Jane Doe / Getty Images", "(Photo via Reuters)" but not "… in a statement to Reuters."
+const AGENCY_CREDIT = /(?:[/|©]|\bvia\b|\bcourtesy\b)[^/|]*?(?:getty images|shutterstock|ap photo|reuters|afp|unsplash|istock)\W*$/i
 
 /** A whole paragraph that is only a copyright notice or a photo credit. */
 export function isSkippedLine(text: string): boolean {

@@ -93,15 +93,18 @@ internal fun isFootnoteLink(
     content: String,
 ): Boolean = FOOTNOTE_HREF.containsMatchIn(href) && SHORT_MARKER.matches(content)
 
-private val COPYRIGHT = Regex("""^\s*(?:©|\(c\)\s|copyright\b)|all rights reserved""", RegexOption.IGNORE_CASE)
+// "© 2026 …", "Copyright 2026 …", "… All rights reserved." but not "Copyright law is changing."
+private val COPYRIGHT =
+    Regex("""^\s*(?:©|\(c\)\s*\d{4}|copyright\s*(?:©|\(c\)|\d{4}))|\ball rights reserved\W*$""", RegexOption.IGNORE_CASE)
 private val CREDIT =
     Regex(
         """^\s*(?:(?:(?:header|featured|lead|top|cover|hero)\s+)?(?:photo|image|picture|illustration|graphic|video)s?(?:\s+credits?)?\s*:""" +
-            """|(?:photo|image|illustration)s?\s+(?:by|courtesy of|via)\s|credits?\s*:)""",
+            """|(?:photo(?:graph)?|image|illustration)s?\s+(?:by|courtesy of|via)\s|credits?\s*:)""",
         RegexOption.IGNORE_CASE,
     )
 private val AGENCY_CREDIT =
-    Regex("""(?:getty images|shutterstock|ap photo|reuters|afp|unsplash|istock)\W*$""", RegexOption.IGNORE_CASE)
+    // "Jane Doe / Getty Images", "(Photo via Reuters)" but not "… in a statement to Reuters."
+    Regex("""(?:[/|©]|\bvia\b|\bcourtesy\b)[^/|]*?(?:getty images|shutterstock|ap photo|reuters|afp|unsplash|istock)\W*$""", RegexOption.IGNORE_CASE)
 
 /** A whole paragraph that is only a copyright notice or a photo credit. */
 internal fun isSkippedLine(text: String): Boolean {

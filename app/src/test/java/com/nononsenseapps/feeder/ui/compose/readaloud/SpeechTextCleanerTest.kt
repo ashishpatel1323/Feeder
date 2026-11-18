@@ -76,11 +76,14 @@ class SpeechTextCleanerTest {
         assertTrue(isSkippedLine("Photo: Jane Doe / Getty Images"))
         assertTrue(isSkippedLine("Image credit: NASA"))
         assertFalse(isSkippedLine("The photo shows a cat sitting on a wall in the sun."))
+        assertFalse(isSkippedLine("The company denied the allegations in a statement to Reuters."))
+        assertFalse(isSkippedLine("Copyright law is changing for artists."))
         assertEquals("", clean("Photo: Jane Doe / Getty Images"))
     }
 
     @Test fun tablesAndFootnoteSectionsNotRead() {
-        val intro = text("Intro.[1]")
+        val intro = LinearText(setOf("footnote-ref-1"), "Intro.[1]", emptyList(), LinearTextBlockStyle.TEXT)
+        val quoteWithRef = LinearListItem(setOf("fnref1"), null, listOf(text("Item.")))
         val cell = text("Cell")
         val table =
             LinearTable(
@@ -91,8 +94,8 @@ class SpeechTextCleanerTest {
                 leftToRight = true,
             )
         val note = LinearListItem(setOf("fn1"), null, listOf(text("The footnote.")))
-        val article = LinearArticle(listOf(intro, table, note))
-        assertEquals("Intro.", article.speechText())
+        val article = LinearArticle(listOf(intro, quoteWithRef, table, note))
+        assertEquals("Intro.\n\nItem.", article.speechText())
     }
 
     @Test fun highlightsAndTapsStayOnTheWordsShown() {

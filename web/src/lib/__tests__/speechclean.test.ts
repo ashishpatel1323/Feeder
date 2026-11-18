@@ -43,6 +43,9 @@ describe('speech text cleaning', () => {
     expect(isSkippedLine('Image credit: NASA')).toBe(true)
     expect(isSkippedLine('Photograph by John Smith for Reuters')).toBe(true)
     expect(isSkippedLine('The photo shows a cat sitting on a wall in the sun.')).toBe(false)
+    expect(isSkippedLine('The company denied the allegations in a statement to Reuters.')).toBe(false)
+    expect(isSkippedLine('Copyright law is changing for artists.')).toBe(false)
+    expect(isSkippedLine('Copyright 2026 Example Media')).toBe(true)
     expect(isSkippedLine('Copyright law is changing, and here is what that means for the many artists who make a living online. ' .repeat(4))).toBe(false)
   })
 })
@@ -52,7 +55,7 @@ describe('read aloud text', () => {
     const el = document.createElement('div')
     el.innerHTML = `
       <h2>Heading</h2>
-      <p>Cats sleep a lot.<sup><a href="#fn1">1</a></sup> They are 10<sup>6</sup> times cuter[2] (Smith, 2020).</p>
+      <p id="footnote-ref-1">Cats sleep a lot.<sup><a href="#fn1">1</a></sup> They are 10<sup>6</sup> times cuter[2] (Smith, 2020).</p>
       <figure><img alt="a cat"><figcaption>A cat. Photo: Getty Images</figcaption></figure>
       <table><caption>Table 1</caption><tr><td>Col A</td><td>Col B</td></tr></table>
       <p>Photo: Jane Doe / Getty Images</p>

@@ -152,16 +152,16 @@ internal val LocalSpeechFocusTarget = compositionLocalOf<SpeechFocusTarget?> { n
 
 /**
  * The text elements of an article in reading order that read aloud speaks, the same ones that can be highlighted.
- * Tables and footnote sections are left out: read aloud keeps to the article's paragraphs and headings.
+ * Tables and footnote list items are left out: read aloud keeps to the article's paragraphs and headings.
  */
 internal fun LinearArticle.speakableTexts(): List<LinearText> {
     val result = mutableListOf<LinearText>()
 
     fun visit(element: LinearElement) {
         when (element) {
-            is LinearText -> if (!isFootnoteSection(element.ids)) result += element
-            is LinearBlockQuote -> if (!isFootnoteSection(element.ids)) element.content.forEach(::visit)
-            is LinearListItem -> if (!isFootnoteSection(element.ids)) element.content.forEach(::visit)
+            is LinearText -> result += element
+            is LinearBlockQuote -> element.content.forEach(::visit)
+            is LinearListItem -> if (!isFootnoteItem(element.ids)) element.content.forEach(::visit)
             else -> Unit
         }
     }
@@ -169,9 +169,11 @@ internal fun LinearArticle.speakableTexts(): List<LinearText> {
     return result
 }
 
-private val FOOTNOTE_ID = Regex("""^(?:fn[:_-]?\d|footnote|endnote|cite_note)""", RegexOption.IGNORE_CASE)
+// Footnote list items ("fn1", "fn:1", "footnote-1", "cite_note-3"), not the in-text anchors ("fnref1", "footnote-ref-1"),
+// whose ids the linearizer also collects on the list item or paragraph around them
+private val FOOTNOTE_ID = Regex("""^(?:fn[:_-]?\d|footnote|endnote|cite_note)(?!.*ref)""", RegexOption.IGNORE_CASE)
 
-private fun isFootnoteSection(ids: Set<String>): Boolean = ids.any { FOOTNOTE_ID.containsMatchIn(it) }
+private fun isFootnoteItem(ids: Set<String>): Boolean = ids.any { FOOTNOTE_ID.containsMatchIn(it) }
 
 /**
  * The text to read aloud for an article, built from what is shown so highlights always match.
