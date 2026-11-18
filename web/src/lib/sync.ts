@@ -22,6 +22,8 @@ export interface SyncState {
   lastFeedsRemoteHash: number
   /** Hash of our own feed list right after the last successful exchange (see sendUpdatedFeeds). */
   localFeedsHashAtLastSync: number | null
+  /** Set by Force sync: upload the feed list on the next sync even if it looks unchanged. */
+  forceFeedUpload?: boolean
   lastSyncAt?: number
   lastError?: string | null
 }
@@ -352,8 +354,8 @@ async function getFeeds(state: SyncState, keys: SecretKeys): Promise<string[]> {
 async function sendUpdatedFeeds(state: SyncState, keys: SecretKeys): Promise<void> {
   const feeds = (await localFeedsSorted()).map(toEncryptedFeed)
   const currentHash = javaHash(JSON.stringify(feeds))
-  if (state.localFeedsHashAtLastSync === currentHash) return
-  if (state.localFeedsHashAtLastSync === null && feeds.length === 0) {
+  if (!state.forceFeedUpload && state.localFeedsHashAtLastSync === currentHash) return
+  if (!state.forceFeedUpload && state.localFeedsHashAtLastSync === null && feeds.length === 0) {
     state.localFeedsHashAtLastSync = currentHash
     await saveRunState(state)
     return
@@ -368,6 +370,7 @@ async function sendUpdatedFeeds(state: SyncState, keys: SecretKeys): Promise<voi
     )
     state.lastFeedsRemoteHash = res.hash
     state.localFeedsHashAtLastSync = currentHash
+    state.forceFeedUpload = false
     await db.remoteFeeds.clear()
     await db.remoteFeeds.bulkPut(feeds.map((f) => ({ url: f.url })))
     await saveRunState(state)
@@ -442,6 +445,22 @@ export interface SyncResult {
   addedFeeds: string[]
   readMarksApplied: number
   readMarksSent: number
+}
+
+/**
+ * Force sync: forget what this browser thinks it already exchanged, then run a full sync.
+ * Pulls the whole feed list and every read mark again, and re-sends this browser's feed
+ * list and all of its read marks. Deletions seen before still count (remoteFeeds is kept),
+ * and so do local feed edits not yet sent.
+ */
+export async function forceSync(): Promise<SyncResult | null> {
+  if (running) await running.catch(() => undefined)
+  const state = await getSyncState()
+  if (!state) return null
+  await db.items.where('read').equals(1).modify({ readSynced: 0 })
+  // Keep localFeedsHashAtLastSync, so a local edit not yet sent (even deleting the last feed) still counts as one
+  await saveSyncState({ ...state, latestMessageTimestamp: 0, lastFeedsRemoteHash: 0, forceFeedUpload: true })
+  return syncNow()
 }
 
 let running: Promise<SyncResult | null> | null = null
