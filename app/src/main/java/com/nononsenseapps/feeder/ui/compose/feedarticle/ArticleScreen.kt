@@ -33,6 +33,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.FormatBold
+import androidx.compose.material.icons.filled.KeyboardDoubleArrowDown
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Pause
@@ -377,6 +378,13 @@ fun ArticleScreen(
     val focusArticle = remember { FocusRequester() }
     val focusTopBar = remember { FocusRequester() }
 
+    // Hands-free reading; read aloud keeps the spoken text in view itself, so it takes over
+    val autoScroll = rememberAutoScrollState()
+    AutoScrollEffect(autoScroll, articleScrollState)
+    LaunchedEffect(readingAloud, showOriginalPage) {
+        if (readingAloud || showOriginalPage) autoScroll.stop()
+    }
+
     Scaffold(
         modifier =
             modifier
@@ -544,6 +552,8 @@ fun ArticleScreen(
                         onTranslate = onTranslate,
                         fastReading = fastReading,
                         onToggleFastReading = onToggleFastReading,
+                        autoScrolling = autoScroll.active,
+                        onToggleAutoScroll = autoScroll::toggle,
                     )
                 }
             }
@@ -645,6 +655,10 @@ fun ArticleScreen(
                                         },
                             )
                         }
+                    }
+
+                    if (autoScroll.active) {
+                        AutoScrollControls(autoScroll, modifier = Modifier.align(Alignment.BottomCenter))
                     }
                 }
             }
@@ -990,6 +1004,8 @@ private fun ArticleActionBar(
     onTranslate: () -> Unit,
     fastReading: Boolean,
     onToggleFastReading: () -> Unit,
+    autoScrolling: Boolean,
+    onToggleAutoScroll: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -1048,6 +1064,13 @@ private fun ArticleActionBar(
                     label = stringResource(R.string.fast_reading),
                     onClick = onToggleFastReading,
                     selected = fastReading,
+                    modifier = Modifier.weight(1f),
+                )
+                ArticleAction(
+                    icon = Icons.Default.KeyboardDoubleArrowDown,
+                    label = stringResource(R.string.auto_scroll_short),
+                    onClick = onToggleAutoScroll,
+                    selected = autoScrolling,
                     modifier = Modifier.weight(1f),
                 )
             }

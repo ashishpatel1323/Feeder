@@ -31,6 +31,8 @@ export interface ReadAloudState {
   sentences: number
   rate: number
   wordTiming: 'exact' | 'estimated' | null
+  /** Auto scroll: the article keeps the spoken text in view until the reader scrolls away. */
+  following: boolean
 }
 
 type Listener = (s: ReadAloudState) => void
@@ -108,7 +110,9 @@ export class ReadAloudEngine {
   /** Use the GPU for the natural voice when the browser supports WebGPU. */
   kokoroGpu = false
 
-  state: ReadAloudState = { status: 'idle', itemId: null, sentence: 0, sentences: 0, rate: 1, wordTiming: null }
+  state: ReadAloudState = { status: 'idle', itemId: null, sentence: 0, sentences: 0, rate: 1, wordTiming: null, following: true }
+  private scroller: HTMLElement | null = null
+  private lastWord: { start: number; end: number } | null = null
   voiceURI = ''
   onFinished: ((itemId: string) => void) | null = null
   onError: ((message: string) => void) | null = null
@@ -145,6 +149,7 @@ export class ReadAloudEngine {
   attach(container: HTMLElement, itemId: string, lang?: string) {
     if (this.state.itemId && this.state.itemId !== itemId && this.state.status !== 'idle') this.stop()
     this.container = container
+    this.watchUserScroll(container.closest('[data-scroll]') as HTMLElement | null)
     this.lang = lang || document.documentElement.lang || navigator.language || 'en'
     this.segments = []
     let text = ''
@@ -263,6 +268,7 @@ export class ReadAloudEngine {
   play(fromOffset?: number) {
     if (!this.supported || !this.sentences.length) return
     this.startMedia()
+    if (!this.state.following) this.set({ following: true })
     if (fromOffset !== undefined && fromOffset >= 0) {
       this.speakFrom(this.sentenceIndexAt(fromOffset), fromOffset)
     } else {
@@ -295,7 +301,7 @@ export class ReadAloudEngine {
     highlights()?.delete('ra-word')
     this.silentAudio?.pause()
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none'
-    this.set({ status: 'idle', sentence: 0, wordTiming: null })
+    this.set({ status: 'idle', sentence: 0, wordTiming: null, following: true })
   }
 
   skip(delta: number) {
@@ -340,21 +346,69 @@ export class ReadAloudEngine {
     if (!r) return
     hl.set('ra-sentence', new Highlight(r))
     hl.delete('ra-word')
-    // Keep the sentence in view
-    const rect = r.getBoundingClientRect()
-    const scroller = this.container?.closest('[data-scroll]') as HTMLElement | null
-    const view = scroller?.getBoundingClientRect() ?? { top: 0, bottom: window.innerHeight }
-    if (rect.top < view.top + 60 || rect.bottom > view.bottom - 120) {
-      const el = (r.startContainer.parentElement ?? this.container) as HTMLElement
-      el.scrollIntoView({ block: 'center', behavior: 'smooth' })
-    }
+    this.lastWord = null
+    // Keep the start of the sentence in view (not its whole paragraph, which can be taller than the screen)
+    const start = this.wordAt(s.start) ?? { start: s.start, end: Math.min(s.end, s.start + 1) }
+    this.keepInView(this.rangeFor(start.start, start.end) ?? r)
   }
 
   private highlightWord(start: number, end: number) {
     const hl = highlights()
     if (!hl) return
     const r = this.rangeFor(start, end)
-    if (r) hl.set('ra-word', new Highlight(r))
+    if (!r) return
+    hl.set('ra-word', new Highlight(r))
+    this.lastWord = { start, end }
+    // Long sentences keep scrolling with the voice
+    this.keepInView(r)
+  }
+
+  /**
+   * Auto scroll: when the spoken text leaves the comfortable reading band, scroll it back to
+   * about a third of the way down. The reader scrolling away pauses this until "Go to spoken text".
+   */
+  private keepInView(r: Range, force = false) {
+    if (!this.state.following && !force) return
+    const scroller = this.scroller ?? (this.container?.closest('[data-scroll]') as HTMLElement | null)
+    const rect = r.getClientRects()[0] ?? r.getBoundingClientRect()
+    if (!rect || (rect.width === 0 && rect.height === 0)) return
+    const view = scroller?.getBoundingClientRect() ?? { top: 0, height: window.innerHeight }
+    const top = rect.top - view.top
+    if (!force && top > view.height * 0.12 && rect.bottom - view.top < view.height * 0.72) return
+    // An absolute target stays right when called again while a smooth scroll is still moving
+    const by = top - view.height * 0.33
+    if (scroller) scroller.scrollTo({ top: Math.max(0, scroller.scrollTop + by), behavior: 'smooth' })
+    else window.scrollTo({ top: Math.max(0, window.scrollY + by), behavior: 'smooth' })
+  }
+
+  /** Scrolls back to the spoken text and follows it again. */
+  goToSpokenText() {
+    this.set({ following: true })
+    const s = this.sentences[this.state.sentence]
+    const w = this.lastWord ?? (s ? this.wordAt(s.start) : null)
+    const r = w && this.rangeFor(w.start, w.end)
+    if (r) this.keepInView(r, true)
+  }
+
+  /** A wheel, swipe or scroll key on the article means the reader wants to look elsewhere. */
+  private watchUserScroll(scroller: HTMLElement | null) {
+    if (scroller === this.scroller) return
+    const opts: AddEventListenerOptions = { passive: true }
+    this.scroller?.removeEventListener('wheel', this.onUserScroll, opts)
+    this.scroller?.removeEventListener('touchmove', this.onUserScroll, opts)
+    this.scroller?.removeEventListener('keydown', this.onScrollKey)
+    this.scroller = scroller
+    scroller?.addEventListener('wheel', this.onUserScroll, opts)
+    scroller?.addEventListener('touchmove', this.onUserScroll, opts)
+    scroller?.addEventListener('keydown', this.onScrollKey)
+  }
+
+  private onUserScroll = () => {
+    if (this.state.following && this.state.status === 'playing') this.set({ following: false })
+  }
+
+  private onScrollKey = (e: KeyboardEvent) => {
+    if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(e.key)) this.onUserScroll()
   }
 
   private speakFrom(index: number, fromOffset: number | null) {

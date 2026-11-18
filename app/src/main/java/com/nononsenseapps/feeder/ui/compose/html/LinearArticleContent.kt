@@ -707,7 +707,8 @@ fun LinearTextContent(
             val original = linearText.toAnnotatedString(idToIndex = idToIndex, onLinkClick = onLinkClick)
             val range = LocalSpeechHighlights.current[linearText]
             val wordRange = LocalSpeechWordHighlights.current[linearText]
-            val focusTarget = LocalSpeechFocusTarget.current?.takeIf { it.text === linearText }
+            val following = LocalSpeechFocusTarget.current
+            val focusTarget = following?.takeIf { it.text === linearText }
             val bringIntoView = remember { BringIntoViewRequester() }
             var speechLines by remember { mutableStateOf<List<Pair<Int, Rect>>>(emptyList()) }
             var focusedRequest by remember { mutableStateOf<Triple<Long, IntRange, Rect>?>(null) }
@@ -718,6 +719,24 @@ fun LinearTextContent(
                 if (focusedRequest != request && original.isNotEmpty()) {
                     bringIntoView.bringIntoView(bounds)
                     focusedRequest = request
+                }
+            }
+            // Auto scroll: keep the line with the spoken word in view, so long sentences and
+            // speed reading keep moving instead of stopping at the sentence's first line
+            val wordLine =
+                if (following == null || wordRange == null || speechLines.isEmpty()) {
+                    -1
+                } else {
+                    speechLines.indexOfFirst { wordRange.first < it.first }.let { if (it < 0) speechLines.lastIndex else it }
+                }
+            var followedLine by remember { mutableStateOf<Pair<Long, Int>?>(null) }
+            LaunchedEffect(following?.requestId, wordLine) {
+                val requestId = following?.requestId ?: return@LaunchedEffect
+                val bounds = speechLines.getOrNull(wordLine)?.second ?: return@LaunchedEffect
+                val key = requestId to wordLine
+                if (followedLine != key && original.isNotEmpty()) {
+                    bringIntoView.bringIntoView(bounds)
+                    followedLine = key
                 }
             }
             val highlightColor =

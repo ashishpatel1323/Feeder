@@ -6,6 +6,7 @@ import { htmlToText } from '../lib/feedparse'
 import { readAloud, type ReadAloudState } from '../lib/readaloud'
 import { updateSettings, type Settings } from '../lib/settings'
 import { applyFastReading } from '../lib/fastReading'
+import { AUTO_SCROLL_SPEEDS, useAutoScroll } from '../lib/autoscroll'
 import { Icon, IconButton } from './Icon'
 import { Player } from './Player'
 import { Rsvp } from './Rsvp'
@@ -98,6 +99,13 @@ export function Reader(p: Props) {
 
   const playing = ra.status !== 'idle' && ra.itemId === item.id
 
+  // Hands-free auto scroll; read aloud and speed reading move through the text themselves
+  const auto = useAutoScroll(scrollRef)
+  const stopAuto = auto.stop
+  useEffect(() => {
+    if (playing || rsvp) stopAuto()
+  }, [playing, rsvp, stopAuto])
+
   const onBodyClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement
     if (target.closest('a')) return
@@ -147,15 +155,16 @@ export function Reader(p: Props) {
     scroller.scrollTo({ top: Math.max(0, top - scroller.clientHeight / 3) })
   }
 
-  // V opens speed reading (the overlay handles its own keys once open)
+  // V opens speed reading (the overlay handles its own keys once open), A toggles auto scroll
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'v' || e.ctrlKey || e.metaKey || e.altKey || rsvp) return
+      if ((e.key !== 'v' && e.key !== 'a') || e.ctrlKey || e.metaKey || e.altKey || rsvp) return
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
       if (document.querySelector('.modal-backdrop')) return
       e.preventDefault()
-      openSpeedReading()
+      if (e.key === 'v') openSpeedReading()
+      else if (!playing) auto.toggle()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -234,58 +243,74 @@ export function Reader(p: Props) {
         ) : null}
       </header>
 
-      <div className="reader-scroll" ref={scrollRef} data-scroll onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-        <article className="article" style={{ fontSize: p.settings.textSize }}>
-          <h1 className="article-title">
-            {item.link ? (
-              <a href={item.link} target="_blank" rel="noopener noreferrer">
-                {item.title || '(no title)'}
-              </a>
-            ) : (
-              item.title || '(no title)'
-            )}
-          </h1>
-          <div className="article-meta">
-            <span>{feedDisplayTitle(feed)}</span>
-            {item.author ? <span>{item.author}</span> : null}
-            <span>{date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</span>
-            <span>{readingMinutes(words)} min read</span>
-            {p.settings.showHnScore && item.hnId ? (
-              <a className="hn-badge" href={hnDiscussionUrl(item.hnId)} target="_blank" rel="noopener noreferrer">
-                ▲ {formatPoints(item.hnPoints ?? 0)} · {item.hnComments ?? 0} comments
-              </a>
+      <div className="reader-stage">
+        <div className="reader-scroll" ref={scrollRef} data-scroll onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+          <article className="article" style={{ fontSize: p.settings.textSize }}>
+            <h1 className="article-title">
+              {item.link ? (
+                <a href={item.link} target="_blank" rel="noopener noreferrer">
+                  {item.title || '(no title)'}
+                </a>
+              ) : (
+                item.title || '(no title)'
+              )}
+            </h1>
+            <div className="article-meta">
+              <span>{feedDisplayTitle(feed)}</span>
+              {item.author ? <span>{item.author}</span> : null}
+              <span>{date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</span>
+              <span>{readingMinutes(words)} min read</span>
+              {p.settings.showHnScore && item.hnId ? (
+                <a className="hn-badge" href={hnDiscussionUrl(item.hnId)} target="_blank" rel="noopener noreferrer">
+                  ▲ {formatPoints(item.hnPoints ?? 0)} · {item.hnComments ?? 0} comments
+                </a>
+              ) : null}
+            </div>
+            {item.imageUrl && !html.includes(item.imageUrl) ? (
+              <img className="lead-image" src={item.imageUrl} alt="" referrerPolicy="no-referrer" onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
             ) : null}
-          </div>
-          {item.imageUrl && !html.includes(item.imageUrl) ? (
-            <img className="lead-image" src={item.imageUrl} alt="" referrerPolicy="no-referrer" onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
+            {item.summary ? (
+              <aside className="summary">
+                <div className="summary-head">
+                  <Icon name="summarize" size={18} /> Summary
+                  <button className="link-btn" onClick={() => db.items.update(item.id, { summary: null })}>
+                    Hide
+                  </button>
+                </div>
+                <div className="summary-text">{item.summary}</div>
+              </aside>
+            ) : null}
+            {fullMode && fullState === 'loading' ? <p className="notice">Loading full text…</p> : null}
+            {fullMode && fullState === 'error' ? (
+              <p className="notice error">
+                Couldn't load the full text: {fullError}. Showing the feed's text instead.
+              </p>
+            ) : null}
+            <div className="article-body" ref={bodyRef} onClick={onBodyClick} dangerouslySetInnerHTML={{ __html: html }} />
+          </article>
+          {pill ? (
+            <div className="read-pill-group" style={{ left: pill.x, top: pill.y + 18 }}>
+              <button className="read-pill" onClick={readFromHere}>
+                <Icon name="play" size={16} /> Read from here
+              </button>
+              <button className="read-pill secondary" onClick={() => openSpeedReading(pill.offset)}>
+                <Icon name="speed" size={16} /> Speed read
+              </button>
+            </div>
           ) : null}
-          {item.summary ? (
-            <aside className="summary">
-              <div className="summary-head">
-                <Icon name="summarize" size={18} /> Summary
-                <button className="link-btn" onClick={() => db.items.update(item.id, { summary: null })}>
-                  Hide
-                </button>
-              </div>
-              <div className="summary-text">{item.summary}</div>
-            </aside>
-          ) : null}
-          {fullMode && fullState === 'loading' ? <p className="notice">Loading full text…</p> : null}
-          {fullMode && fullState === 'error' ? (
-            <p className="notice error">
-              Couldn't load the full text: {fullError}. Showing the feed's text instead.
-            </p>
-          ) : null}
-          <div className="article-body" ref={bodyRef} onClick={onBodyClick} dangerouslySetInnerHTML={{ __html: html }} />
-        </article>
-        {pill ? (
-          <div className="read-pill-group" style={{ left: pill.x, top: pill.y + 18 }}>
-            <button className="read-pill" onClick={readFromHere}>
-              <Icon name="play" size={16} /> Read from here
-            </button>
-            <button className="read-pill secondary" onClick={() => openSpeedReading(pill.offset)}>
-              <Icon name="speed" size={16} /> Speed read
-            </button>
+        </div>
+        {playing && !ra.following ? (
+          <button className="read-pill follow-pill" onClick={() => readAloud.goToSpokenText()}>
+            <Icon name="autoScroll" size={16} /> Go to spoken text
+          </button>
+        ) : null}
+        {auto.active ? (
+          <div className="auto-scroll-bar" role="toolbar" aria-label="Auto scroll">
+            <IconButton icon={auto.playing ? 'pause' : 'play'} label={auto.playing ? 'Pause auto scroll' : 'Resume auto scroll'} onClick={() => auto.setPlaying(!auto.playing)} />
+            <IconButton icon="remove" label="Slower" onClick={() => auto.changeLevel(-1)} disabled={auto.level <= 1} />
+            <span className="auto-scroll-speed">Speed {auto.level}</span>
+            <IconButton icon="add" label="Faster" onClick={() => auto.changeLevel(1)} disabled={auto.level >= AUTO_SCROLL_SPEEDS.length} />
+            <IconButton icon="close" label="Stop auto scroll (A)" onClick={auto.stop} />
           </div>
         ) : null}
       </div>
@@ -307,6 +332,15 @@ export function Reader(p: Props) {
           title={fastReading ? 'Turn off bold word starts (B)' : 'Bold word starts to read faster (B)'}
           active={fastReading}
           onClick={() => updateSettings({ fastReading: !fastReading })}
+          showLabel
+        />
+        <IconButton
+          icon="autoScroll"
+          label="Scroll"
+          title={auto.active ? 'Stop auto scroll (A)' : 'Scroll the article on its own while you read (A)'}
+          active={auto.active}
+          onClick={auto.toggle}
+          disabled={playing}
           showLabel
         />
       </footer>
