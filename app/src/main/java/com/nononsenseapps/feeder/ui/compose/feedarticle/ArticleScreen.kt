@@ -63,13 +63,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -103,9 +99,9 @@ import com.nononsenseapps.feeder.ui.compose.navigation.ArticleSwipeDirection
 import com.nononsenseapps.feeder.ui.compose.readaloud.HideableCompactTTSPlayer
 import com.nononsenseapps.feeder.ui.compose.readaloud.SpeechFollowViewport
 import com.nononsenseapps.feeder.ui.compose.readaloud.SpeechHighlight
+import com.nononsenseapps.feeder.ui.compose.readaloud.WordModeState
 import com.nononsenseapps.feeder.ui.compose.readaloud.stopSpeechFollowingOnAccessibilityScroll
 import com.nononsenseapps.feeder.ui.compose.readaloud.stopSpeechFollowingOnUserScroll
-import com.nononsenseapps.feeder.ui.compose.rsvp.RsvpReader
 import com.nononsenseapps.feeder.ui.compose.theme.SensibleTopAppBar
 import com.nononsenseapps.feeder.ui.compose.utils.ImmutableHolder
 import com.nononsenseapps.feeder.ui.compose.utils.ScreenType
@@ -150,6 +146,7 @@ fun ArticleScreen(
     val readAloudNeighbors by viewModel.readAloudNeighbors.collectAsStateWithLifecycle()
     val readAloudAutoContinue by viewModel.readAloudAutoContinue.collectAsStateWithLifecycle()
     val fastReading by viewModel.fastReading.collectAsStateWithLifecycle()
+    val wordMode by viewModel.wordMode.collectAsStateWithLifecycle()
 
     // Previous / next and auto-continue in read aloud open the article being read
     val currentOnSwipeToArticle by rememberUpdatedState(onSwipeToArticle)
@@ -194,24 +191,6 @@ fun ArticleScreen(
     }
 
     val toolbarColor = MaterialTheme.colorScheme.surface.toArgb()
-
-    // Speed reading opens over the article and continues where it was left
-    var speedReadingOpen by rememberSaveable { mutableStateOf(false) }
-    var speedReadingOffset by rememberSaveable { mutableIntStateOf(0) }
-    if (speedReadingOpen) {
-        // Snapshot the text once it exists (it can still be loading when opened), but don't swap it mid-read
-        val latestText = viewModel.speedReadingText()
-        val speedReadingText = remember(latestText.isEmpty()) { latestText }
-        RsvpReader(
-            text = speedReadingText,
-            title = viewState.articleTitle,
-            startOffset = speedReadingOffset,
-            onClose = { offset ->
-                speedReadingOpen = false
-                speedReadingOffset = offset
-            },
-        )
-    }
 
     ArticleScreen(
         viewState = viewState,
@@ -307,10 +286,13 @@ fun ArticleScreen(
         ttsOnSkipArticle = viewModel::ttsSkipArticle,
         readAloudAutoContinue = readAloudAutoContinue,
         ttsOnSetAutoContinue = viewModel::ttsSetAutoContinue,
-        onSpeedRead = {
-            viewModel.prepareSpeedReading()
-            speedReadingOpen = true
-        },
+        onSpeedRead = viewModel::startSpeedReading,
+        wordMode = wordMode,
+        onSetShowWord = viewModel::setShowWord,
+        onSetMuted = viewModel::setVoiceMuted,
+        onSetWpm = viewModel::speedReadSetWpm,
+        onSkipWords = viewModel::speedReadSkipWords,
+        onJumpToWord = viewModel::speedReadJumpToWord,
         fastReading = fastReading,
         onToggleFastReading = { viewModel.setFastReading(!fastReading) },
     )
@@ -371,6 +353,12 @@ fun ArticleScreen(
     readAloudAutoContinue: Boolean = false,
     ttsOnSetAutoContinue: (Boolean) -> Unit = {},
     onSpeedRead: () -> Unit = {},
+    wordMode: WordModeState = WordModeState(),
+    onSetShowWord: ((Boolean) -> Unit)? = null,
+    onSetMuted: ((Boolean) -> Unit)? = null,
+    onSetWpm: (Int) -> Unit = {},
+    onSkipWords: (Int) -> Unit = {},
+    onJumpToWord: (Int) -> Unit = {},
     fastReading: Boolean = false,
     onToggleFastReading: () -> Unit = {},
 ) {
@@ -520,6 +508,12 @@ fun ArticleScreen(
                     onSkipArticle = ttsOnSkipArticle,
                     autoContinue = readAloudAutoContinue,
                     onSetAutoContinue = ttsOnSetAutoContinue,
+                    wordMode = wordMode,
+                    onSetShowWord = onSetShowWord,
+                    onSetMuted = onSetMuted,
+                    onSetWpm = onSetWpm,
+                    onSkipWords = onSkipWords,
+                    onJumpToWord = onJumpToWord,
                 )
             } else {
                 Column {
