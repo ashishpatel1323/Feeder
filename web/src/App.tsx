@@ -188,6 +188,8 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement
       if (dialog || e.ctrlKey || e.metaKey || e.altKey || /INPUT|TEXTAREA|SELECT/.test(t.tagName)) return
+      // Any other modal (e.g. the Sort & group sheet) owns the keyboard while open
+      if (document.querySelector('[aria-modal="true"]') || t.closest?.('[aria-modal="true"]')) return
       const order = visibleOrder
       const startFromList = () => {
         const i = openId ? order.indexOf(openId) : -1
