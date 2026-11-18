@@ -76,6 +76,7 @@ import com.nononsenseapps.feeder.ui.compose.coil.RestrainedCropScaling
 import com.nononsenseapps.feeder.ui.compose.coil.rememberTintedVectorPainter
 import com.nononsenseapps.feeder.ui.compose.components.safeSemantics
 import com.nononsenseapps.feeder.ui.compose.feed.HnScoreBadge
+import com.nononsenseapps.feeder.ui.compose.images.rememberImageViewer
 import com.nononsenseapps.feeder.ui.compose.text.WithBidiDeterminedLayoutDirection
 import com.nononsenseapps.feeder.ui.compose.text.WithTooltipIfNotBlank
 import com.nononsenseapps.feeder.ui.compose.text.rememberMaxImageWidth
@@ -400,6 +401,7 @@ fun ReaderView(
                 }
 
                 if (image != null && shouldShowHeaderImage(showHeaderImage, image, contentImageUrls)) {
+                    val openImage = rememberImageViewer(image.url, enclosure.name)
                     val imageWidth: Int =
                         if (image.width?.let { it < 640 } == true) {
                             // Zero or too small, do not show
@@ -419,7 +421,11 @@ fun ReaderView(
                                 modifier =
                                     Modifier
                                         .clip(RectangleShape)
-                                        .width(dimens.maxReaderWidth),
+                                        .width(dimens.maxReaderWidth)
+                                        .clickable(
+                                            onClickLabel = stringResource(R.string.view_image),
+                                            onClick = openImage,
+                                        ),
                             ) {
                                 WithTooltipIfNotBlank(tooltip = stringResource(id = R.string.article_image)) {
                                     val maxImageWidth by rememberMaxImageWidth()
