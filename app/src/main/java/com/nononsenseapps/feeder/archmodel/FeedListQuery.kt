@@ -53,8 +53,6 @@ internal fun FeedListGrouping.keyExpr(): String =
         FeedListGrouping.LENGTH ->
             "(CASE WHEN $WORD_COUNT_EXPR < $SHORT_READ_MAX_WORDS THEN '0' " +
                 "WHEN $WORD_COUNT_EXPR <= $MEDIUM_READ_MAX_WORDS THEN '1' ELSE '2' END)"
-        FeedListGrouping.STATUS ->
-            "(CASE WHEN feed_items.read_time IS NULL THEN '0' WHEN feed_items.bookmarked = 1 THEN '1' ELSE '2' END)"
         FeedListGrouping.SITE -> SITE_EXPR
     }
 
@@ -79,7 +77,7 @@ internal fun FeedListGrouping.orderTerms(sorting: SortingOptions): List<OrderTer
                 OrderTerm("($TAG_EXPR COLLATE NOCASE)", ascending = true),
                 OrderTerm(TAG_EXPR, ascending = true),
             )
-        FeedListGrouping.LENGTH, FeedListGrouping.STATUS ->
+        FeedListGrouping.LENGTH ->
             listOf(OrderTerm(keyExpr(), ascending = true))
         FeedListGrouping.SITE ->
             listOf(
@@ -146,8 +144,7 @@ internal fun StringBuilder.appendRangeCondition(
  * One group of the current article list, in list order.
  *
  * [key] formats: DATE "yyyy-MM-dd" (local date); FEED the feed id ("0" = no feed); TAG the tag
- * ("" = untagged); LENGTH "0" quick (under 3 min), "1" medium (3 to 10 min), "2" long; STATUS
- * "0" unread, "1" saved, "2" read; SITE the host without "www." ("" = unknown).
+ * ("" = untagged); LENGTH "0" quick (under 3 min), "1" medium (3 to 10 min), "2" long; SITE the host without "www." ("" = unknown).
  */
 data class FeedListGroup(
     @ColumnInfo(name = "group_key") val key: String,

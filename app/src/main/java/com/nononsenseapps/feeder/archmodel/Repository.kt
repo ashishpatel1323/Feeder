@@ -33,6 +33,7 @@ import com.nononsenseapps.feeder.sync.ErrorResponse
 import com.nononsenseapps.feeder.sync.SyncRestClient
 import com.nononsenseapps.feeder.ui.compose.feed.FeedListItem
 import com.nononsenseapps.feeder.ui.compose.feedarticle.FeedListFilter
+import com.nononsenseapps.feeder.ui.compose.feedarticle.FeedListShow
 import com.nononsenseapps.feeder.ui.compose.feedarticle.emptyFeedListFilter
 import com.nononsenseapps.feeder.ui.compose.settings.FontSelection
 import com.nononsenseapps.feeder.util.Either
@@ -196,32 +197,12 @@ class Repository(
 
     val feedListFilter: StateFlow<FeedListFilter> = settingsStore.feedListFilter
 
-    fun setFeedListFilterSaved(value: Boolean) {
-        settingsStore.setFeedListFilterSaved(value)
-    }
-
-    fun setFeedListFilterRecentlyRead(value: Boolean) {
-        settingsStore.setFeedListFilterRecentlyRead(value)
-        // Implies read too
-        if (!value) {
-            settingsStore.setFeedListFilterRead(false)
-        }
-    }
-
-    fun setFeedListFilterRead(value: Boolean) {
-        settingsStore.setFeedListFilterRead(value)
-        // Implies recently read too
-        if (value) {
-            settingsStore.setFeedListFilterRecentlyRead(true)
-        }
+    fun setFeedListShow(value: FeedListShow) {
+        settingsStore.setFeedListShow(value)
     }
 
     fun setFeedListFilterToday(value: Boolean) {
         settingsStore.setFeedListFilterToday(value)
-    }
-
-    fun setFeedListFilterShortReads(value: Boolean) {
-        settingsStore.setFeedListFilterShortReads(value)
     }
 
     val search: MutableStateFlow<String> = MutableStateFlow("")

@@ -689,30 +689,12 @@ class FeedViewModel(
         }
     }
 
-    override fun setSaved(value: Boolean) {
-        repository.setFeedListFilterSaved(value)
-    }
-
-    override fun setRecentlyRead(value: Boolean) {
-        repository.setFeedListFilterRecentlyRead(value)
-    }
-
-    override fun setRead(value: Boolean) {
-        repository.setFeedListFilterRead(value)
-    }
-
-    override fun setOnlyUnread() {
-        repository.setFeedListFilterSaved(false)
-        repository.setFeedListFilterRecentlyRead(false)
-        repository.setFeedListFilterRead(false)
+    override fun setShow(value: FeedListShow) {
+        repository.setFeedListShow(value)
     }
 
     override fun setToday(value: Boolean) {
         repository.setFeedListFilterToday(value)
-    }
-
-    override fun setShortReads(value: Boolean) {
-        repository.setFeedListFilterShortReads(value)
     }
 }
 
@@ -857,9 +839,8 @@ interface FeedListFilter {
     val recentlyRead: Boolean
     val read: Boolean
 
-    // Restrictive filters: only articles from today / only articles under 3 minutes
+    // Restrictive filter: only articles from today
     val today: Boolean
-    val shortReads: Boolean
 }
 
 val emptyFeedListFilter =
@@ -869,22 +850,32 @@ val emptyFeedListFilter =
         override val recentlyRead: Boolean = false
         override val read: Boolean = false
         override val today: Boolean = false
-        override val shortReads: Boolean = false
     }
+
+/**
+ * The Show tabs above the list, a single choice. Stored as the filter flags:
+ * Unread is unread plus recently read (so an article just read doesn't vanish at once),
+ * All is everything, Saved is saved articles only, read or unread.
+ */
+enum class FeedListShow {
+    UNREAD,
+    ALL,
+    SAVED,
+}
+
+val FeedListFilter.show: FeedListShow
+    get() =
+        when {
+            saved -> FeedListShow.SAVED
+            read -> FeedListShow.ALL
+            else -> FeedListShow.UNREAD
+        }
 
 @Immutable
 interface FeedListFilterCallback {
-    fun setSaved(value: Boolean)
-
-    fun setRecentlyRead(value: Boolean)
-
-    fun setRead(value: Boolean)
-
-    fun setOnlyUnread()
+    fun setShow(value: FeedListShow)
 
     fun setToday(value: Boolean)
-
-    fun setShortReads(value: Boolean)
 }
 
 val FeedListFilter.onlyUnread: Boolean

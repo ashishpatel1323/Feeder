@@ -262,7 +262,10 @@ class FeedItemStore(
         // Always blocklist
         append("block_time is null\n")
         // List filter
-        if (!onlySavedArticles) {
+        if (!onlySavedArticles && filter.saved) {
+            // Saved tab: saved articles only, read or unread
+            append("AND bookmarked = 1\n")
+        } else if (!onlySavedArticles) {
             append("AND (\n")
             if (filter.unread && !filter.recentlyRead && !filter.read) {
                 append("read_time is null\n")
@@ -275,9 +278,6 @@ class FeedItemStore(
                         }.toEpochMilli(),
                     )
                 }
-            }
-            if (filter.saved) {
-                append("OR (bookmarked = 1)\n")
             }
             append(")\n")
         }
@@ -292,9 +292,6 @@ class FeedItemStore(
                         .toEpochMilli(),
                 )
             }
-        }
-        if (filter.shortReads) {
-            append("AND $WORD_COUNT_EXPR < $SHORT_READ_MAX_WORDS\n")
         }
 
         when {

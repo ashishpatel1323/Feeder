@@ -1,9 +1,9 @@
 /**
- * Builds the article list: selection, filter chips, grouping and sorting.
+ * Builds the article list: selection, Show tabs, the Today chip, grouping and sorting.
  * Mirrors the Android fork's archmodel/FeedListQuery.kt (grouping v2).
  */
 import { feedDisplayTitle, type Feed, type Item } from './db'
-import type { FilterChip, Grouping, Sorting } from './settings'
+import type { Grouping, ShowFilter, Sorting } from './settings'
 
 // Reading time is words * 60 / 220 seconds: 3 minutes = 660 words, 10 minutes = 2200 words
 export const SHORT_READ_MAX_WORDS = 660
@@ -63,19 +63,43 @@ export function selectItems(items: Item[], feeds: Map<string, Feed>, selection: 
   }
 }
 
-export function applyFilters(items: Item[], feeds: Map<string, Feed>, filters: FilterChip[], keepId?: string): Item[] {
-  if (!filters.length) return items
+export interface ListFilters {
+  show: ShowFilter
+  today: boolean
+}
+
+/** Today chip: only items from today (local time). */
+export function applyToday(items: Item[], today: boolean, keepId?: string): Item[] {
+  if (!today) return items
   const startOfToday = new Date().setHours(0, 0, 0, 0)
-  return items.filter((i) => {
-    if (i.id === keepId) return true
-    // Unread and Read together mean "both"
-    if (filters.includes('unread') && !filters.includes('read') && i.read) return false
-    if (filters.includes('read') && !filters.includes('unread') && !i.read) return false
-    if (filters.includes('saved') && !i.saved) return false
-    if (filters.includes('today') && i.sortTime < startOfToday) return false
-    if (filters.includes('short') && wordsOf(i, feeds.get(i.feedUrl)) >= SHORT_READ_MAX_WORDS) return false
-    return true
-  })
+  return items.filter((i) => i.id === keepId || i.sortTime >= startOfToday)
+}
+
+/** Show tabs: Unread, All or Saved (read or unread). */
+export function applyShow(items: Item[], show: ShowFilter, keepId?: string): Item[] {
+  switch (show) {
+    case 'all':
+      return items
+    case 'unread':
+      return items.filter((i) => i.id === keepId || !i.read)
+    case 'saved':
+      return items.filter((i) => i.id === keepId || i.saved)
+  }
+}
+
+export function applyFilters(items: Item[], filters: ListFilters, keepId?: string): Item[] {
+  return applyShow(applyToday(items, filters.today, keepId), filters.show, keepId)
+}
+
+/** Counts shown on the Unread and Saved tabs, for the items the other filters leave. */
+export function showCounts(items: Item[]): { unread: number; saved: number } {
+  let unread = 0
+  let saved = 0
+  for (const i of items) {
+    if (!i.read) unread++
+    if (i.saved) saved++
+  }
+  return { unread, saved }
 }
 
 function compareWithin(sorting: Sorting, feeds: Map<string, Feed>) {
@@ -107,8 +131,6 @@ function groupKey(grouping: Grouping, item: Item, feeds: Map<string, Feed>): str
       const w = wordsOf(item, feed)
       return w < SHORT_READ_MAX_WORDS ? '0' : w <= MEDIUM_READ_MAX_WORDS ? '1' : '2'
     }
-    case 'status':
-      return !item.read ? '0' : item.saved ? '1' : '2'
     case 'site':
       return siteOf(item)
   }
@@ -126,8 +148,6 @@ function groupLabel(grouping: Grouping, key: string, feeds: Map<string, Feed>): 
       return key || 'Untagged'
     case 'length':
       return ['Quick reads (under 3 min)', 'Medium (3 to 10 min)', 'Long reads (over 10 min)'][Number(key)]
-    case 'status':
-      return ['Unread', 'Saved', 'Read'][Number(key)]
     case 'site':
       return key || 'Unknown site'
   }

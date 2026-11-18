@@ -2,6 +2,8 @@ package com.nononsenseapps.feeder.archmodel
 
 import android.content.SharedPreferences
 import com.nononsenseapps.feeder.db.room.BlocklistDao
+import com.nononsenseapps.feeder.ui.compose.feedarticle.FeedListShow
+import com.nononsenseapps.feeder.ui.compose.feedarticle.show
 import com.nononsenseapps.feeder.util.PREF_MAX_ITEM_COUNT_PER_FEED
 import io.mockk.MockKAnnotations
 import io.mockk.clearMocks
@@ -128,6 +130,66 @@ class SettingsStoreTest : DIAware {
         }
 
         assertEquals(false, store.feedListFilter.value.saved)
+    }
+
+    @Test
+    fun setShowSaved() {
+        store.setFeedListShow(FeedListShow.SAVED)
+
+        verify {
+            sp.edit().putBoolean(PREFS_FILTER_SAVED, true)
+            sp.edit().putBoolean(PREFS_FILTER_RECENTLY_READ, false)
+            sp.edit().putBoolean(PREFS_FILTER_READ, false)
+        }
+        assertEquals(FeedListShow.SAVED, store.feedListFilter.value.show)
+    }
+
+    @Test
+    fun setShowUnreadKeepsRecentlyRead() {
+        store.setFeedListShow(FeedListShow.UNREAD)
+
+        val filter = store.feedListFilter.value
+        assertEquals(FeedListShow.UNREAD, filter.show)
+        assertEquals(true, filter.recentlyRead)
+        assertEquals(false, filter.read)
+        assertEquals(false, filter.saved)
+    }
+
+    @Test
+    fun setShowAll() {
+        store.setFeedListShow(FeedListShow.ALL)
+
+        val filter = store.feedListFilter.value
+        assertEquals(FeedListShow.ALL, filter.show)
+        assertEquals(true, filter.recentlyRead)
+        assertEquals(true, filter.read)
+    }
+
+    @Test
+    fun showFromOldFilterSettings() {
+        // Saved chip on wins
+        assertEquals(FeedListShow.SAVED, PrefsFeedListFilter(saved = true, recentlyRead = true, read = true).show)
+        // Unread only, with or without recently read
+        assertEquals(FeedListShow.UNREAD, PrefsFeedListFilter(saved = false, recentlyRead = false, read = false).show)
+        assertEquals(FeedListShow.UNREAD, PrefsFeedListFilter(saved = false, recentlyRead = true, read = false).show)
+        // Read on means everything
+        assertEquals(FeedListShow.ALL, PrefsFeedListFilter(saved = false, recentlyRead = true, read = true).show)
+    }
+
+    @Test
+    fun showDefaultsToUnread() {
+        every { sp.getBoolean(PREFS_FILTER_SAVED, false) } returns false
+        every { sp.getBoolean(PREFS_FILTER_RECENTLY_READ, true) } returns true
+        every { sp.getBoolean(PREFS_FILTER_READ, false) } returns false
+
+        assertEquals(FeedListShow.UNREAD, store.feedListFilter.value.show)
+    }
+
+    @Test
+    fun groupByStatusBecomesDate() {
+        assertEquals(FeedListGrouping.DATE, feedListGroupingFromString("status"))
+        assertEquals(FeedListGrouping.FEED, feedListGroupingFromString("feed"))
+        assertEquals(FeedListGrouping.NONE, feedListGroupingFromString("bogus"))
     }
 
     @Test

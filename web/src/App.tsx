@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, feedDisplayTitle, type Feed, type Item } from './lib/db'
-import { applyFilters, buildGroups, selectItems, type Selection } from './lib/listquery'
+import { applyShow, applyToday, buildGroups, selectItems, showCounts, type Selection } from './lib/listquery'
 import { getSettings, updateSettings, useSettings } from './lib/settings'
 import { refreshFeeds } from './lib/refresh'
 import { getSyncState, syncNow } from './lib/sync'
@@ -85,12 +85,13 @@ export default function App() {
     if (readAloud.state.rate !== settings.readAloudRate && readAloud.state.status === 'idle') readAloud.setRate(settings.readAloudRate)
   }, [settings.readAloudVoice, settings.readAloudRate, settings.readAloudKokoroGpu])
 
-  const groups = useMemo(() => {
-    const selected = selectItems(items, feeds, selection)
+  const [groups, counts] = useMemo(() => {
     // Keep the open article in the list even after it's marked read
-    const filtered = applyFilters(selected, feeds, settings.filters, openId ?? undefined)
-    return buildGroups(filtered, feeds, settings.grouping, settings.sorting)
-  }, [items, feeds, selection, settings.filters, settings.grouping, settings.sorting, openId])
+    const keep = openId ?? undefined
+    const base = applyToday(selectItems(items, feeds, selection), settings.today, keep)
+    const filtered = applyShow(base, settings.show, keep)
+    return [buildGroups(filtered, feeds, settings.grouping, settings.sorting), showCounts(base)] as const
+  }, [items, feeds, selection, settings.show, settings.today, settings.grouping, settings.sorting, openId])
 
   const visibleOrder = useMemo(() => {
     const collapsed = new Set(settings.collapsedGroups)
@@ -207,6 +208,8 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement
       if (dialog || e.ctrlKey || e.metaKey || e.altKey || /INPUT|TEXTAREA|SELECT/.test(t.tagName)) return
+      // Any other modal (e.g. the Sort & group sheet) owns the keyboard while open
+      if (document.querySelector('[aria-modal="true"]') || t.closest?.('[aria-modal="true"]')) return
       const order = visibleOrder
       const startFromList = () => {
         const i = openId ? order.indexOf(openId) : -1
@@ -295,6 +298,7 @@ export default function App() {
       <ArticleList
         title={selectionTitle(selection, feeds)}
         groups={groups}
+        counts={counts}
         feeds={feeds}
         settings={settings}
         selectedId={openId}

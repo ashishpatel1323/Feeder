@@ -172,7 +172,6 @@
   <string name="group_by_feed">Feed</string>
   <string name="group_by_tag">Tag</string>
   <string name="group_by_length">Reading length</string>
-  <string name="group_by_status">Status</string>
   <string name="group_by_site">Site</string>
   <string name="today">Today</string>
   <string name="yesterday">Yesterday</string>
