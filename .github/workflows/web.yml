@@ -46,6 +46,9 @@ jobs:
           cache-dependency-path: web/package-lock.json
 
       - run: npm ci
+        env:
+          # The CUDA binaries it downloads are not needed and the download now 404s
+          ONNXRUNTIME_NODE_INSTALL_CUDA: skip
       - run: npm test
       - run: npm run build
 
