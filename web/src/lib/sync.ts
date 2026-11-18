@@ -9,7 +9,11 @@ import { db, getKv, itemId, newFeed, setKv, type Feed } from './db'
 
 export interface SyncState {
   syncCode: string
-  deviceId: number
+  /**
+   * The server picks a random 64-bit id (Go rand.Int63), far past what a JS number holds
+   * exactly, so it is kept as the exact decimal string. Older saved states held a number.
+   */
+  deviceId: string
   deviceName: string
   secretKey: string
   /** Custom sync server; empty = the default one the backend is configured with. */
@@ -41,7 +45,12 @@ interface EncryptedFeed {
 const SYNC_KEY = 'sync'
 const DEVICE_NOT_REGISTERED = 'device not registered'
 
-export const getSyncState = () => getKv<SyncState | null>(SYNC_KEY, null)
+export async function getSyncState(): Promise<SyncState | null> {
+  const s = await getKv<SyncState | null>(SYNC_KEY, null)
+  // States saved before ids were kept as strings
+  if (s && typeof s.deviceId === 'number') s.deviceId = String(s.deviceId)
+  return s
+}
 const saveSyncState = (s: SyncState | null) => setKv(SYNC_KEY, s)
 
 class ChainChanged extends Error {}
@@ -83,6 +92,18 @@ function browserDeviceName(): string {
   return `Feeder Web (${browser}${os ? ` on ${os}` : ''})`
 }
 
+/**
+ * JSON.parse, except that integer values of the given keys come back as exact strings.
+ * Device ids are random 64-bit numbers; plain JSON.parse rounds them (9123456789012345678
+ * becomes 9123456789012345000), and the server then answers "Device not registered".
+ */
+export function parseSyncJson<T>(text: string, bigKeys: string[] = ['deviceId']): T {
+  if (!text) return {} as T
+  const keys = bigKeys.map((k) => k.replace(/[^A-Za-z0-9_]/g, '')).join('|')
+  const quoted = text.replace(new RegExp(`("(?:${keys})"\\s*:\\s*)(-?\\d+)`, 'g'), '$1"$2"')
+  return JSON.parse(quoted) as T
+}
+
 async function call<T>(
   state: Pick<SyncState, 'server' | 'syncCode' | 'deviceId'> | null,
   method: 'GET' | 'POST' | 'DELETE',
@@ -92,7 +113,7 @@ async function call<T>(
   const headers = apiHeaders({ 'content-type': 'application/json' })
   const code = options.syncCode ?? state?.syncCode
   if (code) headers.set('x-feeder-id', code)
-  if (state && state.deviceId) headers.set('x-feeder-device-id', String(state.deviceId))
+  if (state && state.deviceId && state.deviceId !== '0') headers.set('x-feeder-device-id', String(state.deviceId))
   if (state?.server) headers.set('x-sync-server', state.server)
   if (options.ifMatch) headers.set('if-match', options.ifMatch)
   const qs = options.query ? `?${new URLSearchParams(options.query)}` : ''
@@ -103,7 +124,7 @@ async function call<T>(
   })
   const text = await res.text()
   if (!res.ok) throw new HttpError(res.status, text)
-  return (text ? JSON.parse(text) : {}) as T
+  return parseSyncJson<T>(text)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -112,13 +133,13 @@ async function call<T>(
 export async function joinChain(syncCode: string, secretKey: string, server = ''): Promise<SyncState> {
   const keys = await decodeKey(secretKey)
   const deviceName = browserDeviceName()
-  const res = await call<{ syncCode: string; deviceId: number }>({ server, syncCode, deviceId: 0 }, 'POST', 'join', {
+  const res = await call<{ syncCode: string; deviceId: string }>({ server, syncCode, deviceId: '0' }, 'POST', 'join', {
     syncCode,
     body: { deviceName: await encryptString(deviceName, keys) },
   })
   const state: SyncState = {
     syncCode: res.syncCode,
-    deviceId: res.deviceId,
+    deviceId: String(res.deviceId),
     deviceName,
     secretKey: keys.encoded,
     server,
@@ -137,12 +158,12 @@ export async function createChain(server = ''): Promise<SyncState> {
   const secretKey = `${b64encode(aes)}:${b64encode(hmac)}`
   const keys = await decodeKey(secretKey)
   const deviceName = browserDeviceName()
-  const res = await call<{ syncCode: string; deviceId: number }>({ server, syncCode: '', deviceId: 0 }, 'POST', 'create', {
+  const res = await call<{ syncCode: string; deviceId: string }>({ server, syncCode: '', deviceId: '0' }, 'POST', 'create', {
     body: { deviceName: await encryptString(deviceName, keys) },
   })
   const state: SyncState = {
     syncCode: res.syncCode,
-    deviceId: res.deviceId,
+    deviceId: String(res.deviceId),
     deviceName,
     secretKey,
     server,
@@ -178,7 +199,7 @@ export async function leaveChain(): Promise<void> {
 }
 
 export interface Device {
-  deviceId: number
+  deviceId: string
   deviceName: string
 }
 
@@ -187,7 +208,7 @@ export async function getDevices(): Promise<Device[]> {
   if (!state) return []
   const keys = await decodeKey(state.secretKey)
   const res = await guarded(state, () =>
-    call<{ devices: { deviceId: number; deviceName: string }[] }>(state, 'GET', 'devices'),
+    call<{ devices: { deviceId: string; deviceName: string }[] }>(state, 'GET', 'devices'),
   )
   return Promise.all(
     res.devices.map(async (d) => ({
@@ -197,7 +218,7 @@ export async function getDevices(): Promise<Device[]> {
   )
 }
 
-export async function removeDevice(deviceId: number): Promise<void> {
+export async function removeDevice(deviceId: string): Promise<void> {
   const state = await getSyncState()
   if (!state) return
   await guarded(state, () => call(state, 'DELETE', `devices/${deviceId}`))
