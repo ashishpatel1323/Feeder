@@ -121,6 +121,7 @@ import com.nononsenseapps.feeder.db.room.ID_SAVED_ARTICLES
 import com.nononsenseapps.feeder.db.room.ID_UNSET
 import com.nononsenseapps.feeder.localtranslation.BergamotModelDownloadProgress
 import com.nononsenseapps.feeder.model.LocaleOverride
+import com.nononsenseapps.feeder.model.ReadAloudNeighbors
 import com.nononsenseapps.feeder.model.ReadAloudProgress
 import com.nononsenseapps.feeder.model.export.exportSavedArticles
 import com.nononsenseapps.feeder.model.export.importSavedArticles
@@ -152,7 +153,7 @@ import com.nononsenseapps.feeder.ui.compose.navigation.SettingsDestination
 import com.nononsenseapps.feeder.ui.compose.pullrefresh.PullRefreshIndicator
 import com.nononsenseapps.feeder.ui.compose.pullrefresh.pullRefresh
 import com.nononsenseapps.feeder.ui.compose.pullrefresh.rememberPullRefreshState
-import com.nononsenseapps.feeder.ui.compose.readaloud.HideableTTSPlayer
+import com.nononsenseapps.feeder.ui.compose.readaloud.HideableCompactTTSPlayer
 import com.nononsenseapps.feeder.ui.compose.theme.LocalDimens
 import com.nononsenseapps.feeder.ui.compose.theme.SensibleTopAppBar
 import com.nononsenseapps.feeder.ui.compose.utils.ImmutableHolder
@@ -188,6 +189,8 @@ fun FeedScreen(
     val toastMaker: ToastMaker by instance()
     val viewState: FeedScreenViewState by viewModel.viewState.collectAsStateWithLifecycle()
     val readAloudProgress = viewModel.readAloudProgress
+    val readAloudNeighbors by viewModel.readAloudNeighbors.collectAsStateWithLifecycle()
+    val readAloudAutoContinue by viewModel.readAloudAutoContinue.collectAsStateWithLifecycle()
     val translatedFeedCards by viewModel.translatedFeedCards.collectAsStateWithLifecycle()
     val pagedFeedItems = viewModel.currentFeedListItems.collectAsLazyPagingItems()
     val pagedNavDrawerItems = viewModel.pagedNavDrawerItems.collectAsLazyPagingItems()
@@ -330,6 +333,11 @@ fun FeedScreen(
             ttsOnGoToSpokenText = {
                 viewModel.ttsFocusSpokenText()?.let { ArticleDestination.navigate(navController, it) }
             },
+            readAloudNeighbors = readAloudNeighbors,
+            readAloudAutoContinue = readAloudAutoContinue,
+            ttsOnSkipArticle = viewModel::ttsSkipArticle,
+            ttsOnSetAutoContinue = viewModel::ttsSetAutoContinue,
+            ttsDiagnostics = viewModel::ttsDiagnostics,
             podcastOnPlay = viewModel::podcastPlay,
             podcastOnPause = viewModel::podcastPause,
             podcastOnStop = viewModel::podcastStop,
@@ -591,6 +599,11 @@ fun FeedScreen(
     ttsOnSeekTo: (Long) -> Unit = {},
     ttsOnSetSpeed: (Float) -> Unit = {},
     ttsOnGoToSpokenText: () -> Unit = {},
+    readAloudNeighbors: ReadAloudNeighbors = ReadAloudNeighbors(),
+    readAloudAutoContinue: Boolean = false,
+    ttsOnSkipArticle: (next: Boolean) -> Unit = {},
+    ttsOnSetAutoContinue: (Boolean) -> Unit = {},
+    ttsDiagnostics: () -> String = { "" },
     onSetFeedListGrouping: (FeedListGrouping) -> Unit = {},
     onSetSorting: (SortingOptions) -> Unit = {},
     onMarkGroupAsRead: (String) -> Unit = {},
@@ -629,6 +642,11 @@ fun FeedScreen(
         ttsOnSeekTo = ttsOnSeekTo,
         ttsOnSetSpeed = ttsOnSetSpeed,
         ttsOnGoToSpokenText = ttsOnGoToSpokenText,
+        readAloudNeighbors = readAloudNeighbors,
+        readAloudAutoContinue = readAloudAutoContinue,
+        ttsOnSkipArticle = ttsOnSkipArticle,
+        ttsOnSetAutoContinue = ttsOnSetAutoContinue,
+        ttsDiagnostics = ttsDiagnostics,
         podcastOnPlay = podcastOnPlay,
         podcastOnPause = podcastOnPause,
         podcastOnStop = podcastOnStop,
@@ -1184,6 +1202,11 @@ fun FeedScreen(
     ttsOnSeekTo: (Long) -> Unit = {},
     ttsOnSetSpeed: (Float) -> Unit = {},
     ttsOnGoToSpokenText: () -> Unit = {},
+    readAloudNeighbors: ReadAloudNeighbors = ReadAloudNeighbors(),
+    readAloudAutoContinue: Boolean = false,
+    ttsOnSkipArticle: (next: Boolean) -> Unit = {},
+    ttsOnSetAutoContinue: (Boolean) -> Unit = {},
+    ttsDiagnostics: () -> String = { "" },
     content: @Composable (Modifier) -> Unit,
 ) {
     var manuallyTriggeredRefresh by rememberSaveable {
@@ -1302,7 +1325,7 @@ fun FeedScreen(
                     onSeekTo = podcastOnSeekTo,
                 )
             } else {
-                HideableTTSPlayer(
+                HideableCompactTTSPlayer(
                     visibleState = bottomBarVisibleState,
                     currentlyPlaying = viewState.isTTSPlaying,
                     onPlay = ttsOnPlay,
@@ -1313,20 +1336,25 @@ fun FeedScreen(
                     onSelectLanguage = ttsOnSelectLanguage,
                     progress = readAloudProgress,
                     onSeekTo = ttsOnSeekTo,
-                    onSelectSpeed = ttsOnSetSpeed,
                     onGoToSpokenText = ttsOnGoToSpokenText,
-                    floatingActionButton =
-                        when (viewState.showFab) {
-                            true -> floatingActionButton
-                            false -> null
-                        },
+                    displayedArticleId = null,
+                    onSelectSpeed = ttsOnSetSpeed,
+                    diagnostics = ttsDiagnostics,
+                    neighbors = readAloudNeighbors,
+                    onSkipArticle = ttsOnSkipArticle,
+                    autoContinue = readAloudAutoContinue,
+                    onSetAutoContinue = ttsOnSetAutoContinue,
+                    showNowReading = true,
                 )
             }
         },
         floatingActionButton = {
             if (viewState.showFab) {
                 AnimatedVisibility(
-                    visible = bottomBarVisibleState.isIdle && !bottomBarVisibleState.targetState,
+                    // The read-aloud panel has no room for the button, so it floats above it
+                    visible =
+                        (bottomBarVisibleState.isIdle && !bottomBarVisibleState.targetState) ||
+                            (bottomBarVisibleState.targetState && !viewState.podcastPlayerState.isVisible),
                     enter = scaleIn(animationSpec = tween(256)),
                     exit = scaleOut(animationSpec = tween(256)),
                 ) {

@@ -35,6 +35,7 @@ import org.kodein.di.instance
 
 /** The articles before and after the one being read aloud, in the list it was opened from. */
 data class ReadAloudNeighbors(
+    val currentTitle: String = "",
     val previousId: Long? = null,
     val previousTitle: String = "",
     val nextId: Long? = null,
@@ -103,6 +104,7 @@ class ReadAloudQueue(
     private suspend fun loadNeighbors(articleId: Long): ReadAloudNeighbors {
         val (previous, next) = repository.getArticleSwipeNeighbors(articleId)
         return ReadAloudNeighbors(
+            currentTitle = repository.getArticle(articleId)?.title.orEmpty(),
             previousId = previous,
             previousTitle = previous?.let { repository.getArticle(it)?.title }.orEmpty(),
             nextId = next,

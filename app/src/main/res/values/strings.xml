@@ -7,6 +7,12 @@
   <string name="read_aloud_start_of_list">Start of list</string>
   <string name="read_aloud_end_of_list">End of list</string>
   <string name="read_aloud_auto_continue">Auto</string>
+  <string name="read_aloud_auto_play_next">Auto-play next</string>
+  <string name="read_aloud_up_next">Up next</string>
+  <string name="read_aloud_now_reading">Reading</string>
+  <string name="read_aloud_close">Close player</string>
+  <string name="read_aloud_more">More read-aloud options</string>
+  <string name="read_aloud_change_voice">Change voice</string>
   <string name="read_aloud_auto_continue_setting">Continue to the next article</string>
   <string name="read_aloud_auto_continue_description">When an article finishes, read the next one in the list in full text</string>
   <string name="read_aloud_position">Read-aloud position</string>

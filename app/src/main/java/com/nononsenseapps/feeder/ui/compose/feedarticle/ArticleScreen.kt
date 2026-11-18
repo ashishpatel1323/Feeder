@@ -101,7 +101,6 @@ import com.nononsenseapps.feeder.ui.compose.icons.CustomFilled
 import com.nononsenseapps.feeder.ui.compose.icons.TextToSpeech
 import com.nononsenseapps.feeder.ui.compose.navigation.ArticleSwipeDirection
 import com.nononsenseapps.feeder.ui.compose.readaloud.HideableCompactTTSPlayer
-import com.nononsenseapps.feeder.ui.compose.readaloud.HideableTTSPlayer
 import com.nononsenseapps.feeder.ui.compose.readaloud.SpeechFollowViewport
 import com.nononsenseapps.feeder.ui.compose.readaloud.SpeechHighlight
 import com.nononsenseapps.feeder.ui.compose.readaloud.stopSpeechFollowingOnAccessibilityScroll
@@ -536,22 +535,6 @@ fun ArticleScreen(
                                 onSeekBack = podcastOnSeekBack,
                                 onSeekForward = podcastOnSeekForward,
                                 onSeekTo = podcastOnSeekTo,
-                            )
-                        } else {
-                            HideableTTSPlayer(
-                                visibleState = bottomBarVisibleState,
-                                currentlyPlaying = viewState.isTTSPlaying,
-                                onPlay = ttsOnPlay,
-                                onPause = ttsOnPause,
-                                onStop = ttsOnStop,
-                                onSkipNext = ttsOnSkipNext,
-                                languages = ImmutableHolder(viewState.ttsLanguages),
-                                onSelectLanguage = ttsOnSelectLanguage,
-                                progress = readAloudProgress,
-                                onSeekTo = ttsOnSeekTo,
-                                onSelectSpeed = ttsOnSetSpeed,
-                                onGoToSpokenText = ttsOnGoToSpokenText,
-                                displayedArticleId = viewState.articleId,
                             )
                         }
                     }
