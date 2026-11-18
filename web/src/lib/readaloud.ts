@@ -471,14 +471,32 @@ export class ReadAloudEngine {
     }
   }
 
-  /** The word start at or after [offset]. */
+  /** Start of the last word in the text (0 when there is none). */
+  private lastWordStart(): number {
+    let i = this.text.length - 1
+    while (i > 0 && !/[\p{L}\p{N}]/u.test(this.text[i])) i--
+    return this.wordAt(i)?.start ?? Math.max(0, i)
+  }
+
+  /**
+   * The word start at or after [offset]. Past the last word (seek bar at the end, End key,
+   * +10 s near the end) it is the last word, so reading lands on the final word instead of
+   * falling back to the start of the last sentence.
+   */
   private snapToWord(offset: number): number {
+    const last = this.lastWordStart()
     const o = Math.max(0, Math.min(this.text.length, Math.round(offset)))
+    if (o >= last) return last
     const w = this.wordAt(o)
-    if (w) return w.start
+    if (w) return Math.min(w.start, last)
     let i = o
     while (i < this.text.length && !/[\p{L}\p{N}]/u.test(this.text[i])) i++
-    return i >= this.text.length ? o : i
+    return Math.min(i, last)
+  }
+
+  /** The silent reader reached the end: stop on the last word, still muted; play starts over. */
+  private endSilent() {
+    this.pause()
   }
 
   /** Moves the reading position to [offset]: reads on from there when playing, else waits there. */
@@ -611,7 +629,7 @@ export class ReadAloudEngine {
     if (gen !== this.generation) return
     const word = this.rsvp[index]
     if (!word) {
-      this.finish()
+      this.endSilent()
       return
     }
     this.showSilentWord(index)
@@ -619,7 +637,8 @@ export class ReadAloudEngine {
     this.silentShown++
     this.estimateTimer = window.setTimeout(() => {
       if (gen !== this.generation) return
-      if (index >= this.rsvp.length - 1) this.finish()
+      // Unlike the voice, the silent reader never auto-continues to the next article (as on Android)
+      if (index >= this.rsvp.length - 1) this.endSilent()
       else this.runSilent(gen, index + 1)
     }, wordDelay(word, this.state.wpm) * ramp)
   }

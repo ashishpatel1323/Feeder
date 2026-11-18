@@ -61,16 +61,59 @@ describe('muted (silent speed reading) mode', () => {
     expect(e.state.word).toBe('Eleven')
   })
 
-  it('finishes at the end and stop ends muted mode', () => {
+  it('stops on the last word at the end, still muted, without moving on', () => {
     const e = engineWith(TEXT)
     const done = vi.fn()
     e.onFinished = done
     e.setWpm(1000)
     e.speedReadFrom(e.indexedText.indexOf('fifteen'))
     vi.advanceTimersByTime(10000)
-    expect(done).toHaveBeenCalledWith('item-1')
+    expect(done).not.toHaveBeenCalled()
+    expect(e.state.status).toBe('paused')
+    expect(e.state.muted).toBe(true)
+    expect(e.state.wordIndex).toBe(15)
+    expect(e.state.word).toBe('sixteen.')
+    // Play starts over from the first word
+    e.play()
+    expect(e.state.status).toBe('playing')
+    expect(e.state.wordIndex).toBe(0)
+  })
+
+  it('stop ends muted mode', () => {
+    const e = engineWith(TEXT)
+    e.speedReadFrom(0)
+    e.stop()
     expect(e.state.status).toBe('idle')
     expect(e.state.muted).toBe(false)
+  })
+
+  it('seeking to the end clamps to the last word', () => {
+    const e = engineWith(TEXT)
+    const last = e.indexedText.lastIndexOf('sixteen')
+    e.seekToFraction(1)
+    expect(e.state.offset).toBe(last)
+    expect(e.state.word).toBe('sixteen')
+    e.moveTo(0)
+    e.seekBy(10_000)
+    expect(e.state.offset).toBe(last)
+    // Muted: the last word index
+    e.speedReadFrom(0)
+    e.pause()
+    e.seekBy(1000)
+    expect(e.state.wordIndex).toBe(15)
+    e.seekToFraction(1)
+    expect(e.state.wordIndex).toBe(15)
+  })
+
+  it('seeking to the end while paused keeps the endpoint for play', () => {
+    const e = engineWith(TEXT)
+    e.seekToFraction(1)
+    // Unmuting reads from the last word, it does not repeat the last sentence
+    e.setMuted(true)
+    expect(e.state.word).toBe('sixteen.')
+    e.setMuted(false)
+    e.setMuted(true)
+    expect(e.state.wordIndex).toBe(15)
   })
 
   it('clamps and steps the speed', () => {
@@ -88,5 +131,40 @@ describe('muted (silent speed reading) mode', () => {
     expect(e.state.sentence).toBe(1)
     e.seekToFraction(0)
     expect(e.state.offset).toBe(0)
+  })
+})
+
+describe('voice seeking to the end', () => {
+  const spoken: string[] = []
+  beforeEach(() => {
+    spoken.length = 0
+    ;(globalThis as Record<string, unknown>).SpeechSynthesisUtterance = class {
+      text: string
+      constructor(t: string) {
+        this.text = t
+      }
+    }
+    Object.defineProperty(window, 'speechSynthesis', {
+      configurable: true,
+      value: { speak: (u: { text: string }) => spoken.push(u.text), cancel() {}, getVoices: () => [] },
+    })
+  })
+  afterEach(() => {
+    delete (window as unknown as Record<string, unknown>).speechSynthesis
+    document.body.innerHTML = ''
+  })
+
+  it('speaks the final word, not the whole last sentence again', () => {
+    const e = engineWith(TEXT)
+    e.play()
+    expect(spoken[0]).toBe('One two three four five.')
+    e.seekToFraction(1)
+    expect(e.state.status).toBe('playing')
+    expect(spoken[spoken.length - 1]).toBe('sixteen.')
+    e.pause()
+    e.seekBy(-1000)
+    e.seekToFraction(1)
+    e.play()
+    expect(spoken[spoken.length - 1]).toBe('sixteen.')
   })
 })
