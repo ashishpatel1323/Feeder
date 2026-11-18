@@ -70,7 +70,8 @@ class FeederApplication :
     DIAware,
     SingletonImageLoader.Factory {
     private val applicationCoroutineScope = ApplicationCoroutineScope()
-    private val ttsStateHolder = TTSStateHolder(this, applicationCoroutineScope)
+    // Lazy: its init reads SharedPreferences, which needs the base context attached first
+    private val ttsStateHolder by lazy { TTSStateHolder(this, applicationCoroutineScope) }
     private val podcastPlayerStateHolder = PodcastPlayerStateHolder(this, applicationCoroutineScope)
 
     override val di by DI.lazy {
