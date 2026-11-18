@@ -1,5 +1,6 @@
 package com.nononsenseapps.feeder.ui.compose.feedarticle
 
+import android.content.Context
 import android.util.Log
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.text.AnnotatedString
@@ -39,7 +40,9 @@ import com.nononsenseapps.feeder.model.NotHTML
 import com.nononsenseapps.feeder.model.PlaybackStatus
 import com.nononsenseapps.feeder.model.PodcastPlayerState
 import com.nononsenseapps.feeder.model.PodcastPlayerStateHolder
+import com.nononsenseapps.feeder.model.ReadAloudProgress
 import com.nononsenseapps.feeder.model.ReadAloudQueue
+import com.nononsenseapps.feeder.model.SpeechSegment
 import com.nononsenseapps.feeder.model.SystemTranslationSettingsRequiredException
 import com.nononsenseapps.feeder.model.TTSStateHolder
 import com.nononsenseapps.feeder.model.ThumbnailImage
@@ -52,7 +55,15 @@ import com.nononsenseapps.feeder.openai.canSummarize
 import com.nononsenseapps.feeder.openai.canUseAsTranslationApi
 import com.nononsenseapps.feeder.openai.isLocalTranslation
 import com.nononsenseapps.feeder.ui.compose.readaloud.SpeechHighlight
+import com.nononsenseapps.feeder.ui.compose.readaloud.WordModeState
 import com.nononsenseapps.feeder.ui.compose.readaloud.speechText
+import com.nononsenseapps.feeder.ui.compose.rsvp.SPEED_READING_PREFS
+import com.nononsenseapps.feeder.ui.compose.rsvp.SilentSpeedReadState
+import com.nononsenseapps.feeder.ui.compose.rsvp.SilentSpeedReader
+import com.nononsenseapps.feeder.ui.compose.rsvp.millisLeft
+import com.nononsenseapps.feeder.ui.compose.rsvp.sentenceEndFrom
+import com.nononsenseapps.feeder.ui.compose.rsvp.sentenceStartOf
+import com.nononsenseapps.feeder.ui.compose.rsvp.wordEnd
 import com.nononsenseapps.feeder.ui.compose.text.htmlToAnnotatedString
 import com.nononsenseapps.feeder.ui.text.MarkdownToHtmlConverter
 import com.nononsenseapps.feeder.util.Either
@@ -87,13 +98,49 @@ class ArticleViewModel(
     private val repository: Repository by instance()
     private val ttsStateHolder: TTSStateHolder by instance()
     val readAloudProgress = ttsStateHolder.progress
+
+    // Speed reading runs inside the read-aloud player: the big word follows the voice, and with the
+    // voice muted a timer moves through the words instead, as fast as you like
+    private val speedReadingPrefs = application.getSharedPreferences(SPEED_READING_PREFS, Context.MODE_PRIVATE)
+    private val silentReader = SilentSpeedReader(viewModelScope, speedReadingPrefs)
+    private val voiceMuted = MutableStateFlow(false)
+    private val showWord = MutableStateFlow(speedReadingPrefs.getBoolean(PREF_SHOW_WORD, false))
+
+    // Unmuted while paused: the voice continues from here on the next play
+    private var resumeVoiceFrom: Int? = null
+
     val speechHighlight =
-        readAloudProgress
-            .map { progress ->
+        combine(readAloudProgress, silentReader.state, voiceMuted) { progress, silent, muted ->
+            if (muted && silent.active) {
+                silent.toHighlight()
+            } else {
                 progress.segment
                     ?.takeIf { progress.articleId == itemId && progress.error == null }
                     ?.let { SpeechHighlight(progress.text, it, progress.focusRequestId, progress.followSpokenText, progress.word) }
-            }.distinctUntilChanged()
+            }
+        }.distinctUntilChanged()
+
+    /** The big word in the read-aloud player and the muted speed reader's position. */
+    val wordMode: StateFlow<WordModeState> =
+        combine(readAloudProgress, silentReader.state, voiceMuted, showWord) { progress, silent, muted, show ->
+            WordModeState(
+                showWord = show,
+                muted = muted,
+                word = if (muted) silent.word?.text.orEmpty() else progress.voicedWord(),
+                wpm = silent.wpm,
+                wordIndex = silent.index,
+                wordCount = silent.words.size,
+                millisLeft = if (muted) silent.words.millisLeft(silent.index, silent.wpm) else 0L,
+                silentPlaying = muted && silent.playing,
+            )
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, WordModeState())
+
+    init {
+        // Read aloud stopped from elsewhere (the notification, another screen): end the silent reader too
+        viewModelScope.launch {
+            ttsStateHolder.ttsState.collect { if (it == PlaybackStatus.STOPPED && voiceMuted.value) endSilentReading() }
+        }
+    }
 
     val isReadingAloudHere =
         readAloudProgress
@@ -133,9 +180,18 @@ class ArticleViewModel(
 
     fun ttsDiagnostics(): String = ttsStateHolder.diagnostics()
 
-    fun ttsFocusSpokenText(): Long? = ttsStateHolder.requestSpokenTextFocus()
+    fun ttsFocusSpokenText(): Long? {
+        if (voiceMuted.value) {
+            silentReader.setFollow(true)
+            return itemId
+        }
+        return ttsStateHolder.requestSpokenTextFocus()
+    }
 
-    fun ttsStopFollowing() = ttsStateHolder.stopFollowingSpokenText()
+    fun ttsStopFollowing() {
+        silentReader.setFollow(false)
+        ttsStateHolder.stopFollowingSpokenText()
+    }
 
     private val readAloudQueue: ReadAloudQueue by instance()
 
@@ -147,7 +203,11 @@ class ArticleViewModel(
     /** Articles read aloud by previous / next or auto-continue, for the screen to open. */
     val readAloudOpenArticle = readAloudQueue.openArticle
 
-    fun ttsSkipArticle(next: Boolean) = readAloudQueue.skip(next)
+    fun ttsSkipArticle(next: Boolean) {
+        // The next article is read aloud with the voice on
+        endSilentReading()
+        readAloudQueue.skip(next)
+    }
 
     fun ttsSetAutoContinue(value: Boolean) = readAloudQueue.setAutoContinue(value)
 
@@ -594,14 +654,6 @@ class ArticleViewModel(
             ?.takeIf { it.isNotBlank() }
     }
 
-    /** Text for speed reading: exactly what is on screen, like read aloud. Empty when there is none yet. */
-    fun speedReadingText(): String = displayedSpeechText().orEmpty()
-
-    /** Speed reading and read aloud don't mix: pause the voice when speed reading opens. */
-    fun prepareSpeedReading() {
-        if (viewState.value.isTTSPlaying) ttsPause()
-    }
-
     private fun readAloud(
         text: String,
         startOffset: Int = 0,
@@ -620,6 +672,12 @@ class ArticleViewModel(
 
     /** Starts or moves read aloud to [speechOffset] in the text shown on screen. */
     fun ttsReadFrom(speechOffset: Int) {
+        if (voiceMuted.value) {
+            silentReader.jumpToOffset(speechOffset)
+            silentReader.setFollow(true)
+            return
+        }
+        resumeVoiceFrom = null
         val text = displayedSpeechText() ?: return
         stopPodcastPlayback()
         if (!ttsStateHolder.playFromPreparedText(itemId, text, speechOffset)) {
@@ -628,6 +686,14 @@ class ArticleViewModel(
     }
 
     fun ttsPlay() {
+        if (voiceMuted.value) {
+            silentReader.play()
+            return
+        }
+        resumeVoiceFrom?.let {
+            ttsReadFrom(it)
+            return
+        }
         stopPodcastPlayback()
         val displayedText = displayedSpeechText()
         val displayedVersion = displayedVersion()
@@ -718,11 +784,63 @@ class ArticleViewModel(
     }
 
     fun ttsPause() {
-        ttsStateHolder.pause()
+        if (voiceMuted.value) {
+            silentReader.pause()
+        } else {
+            ttsStateHolder.pause()
+        }
     }
 
     fun ttsStop() {
+        endSilentReading()
         ttsStateHolder.stop()
+    }
+
+    private fun endSilentReading() {
+        silentReader.stop()
+        voiceMuted.value = false
+        resumeVoiceFrom = null
+    }
+
+    fun setShowWord(show: Boolean) {
+        showWord.value = show
+        speedReadingPrefs.edit().putBoolean(PREF_SHOW_WORD, show).apply()
+    }
+
+    /**
+     * Muting hands the position over to the silent speed reader; unmuting gives it back to the
+     * voice, which continues from the word reached.
+     */
+    fun setVoiceMuted(muted: Boolean) {
+        if (muted == voiceMuted.value) return
+        if (muted) {
+            val progress = readAloudProgress.value
+            if (progress.articleId != itemId || progress.text.isBlank()) return
+            val offset = progress.word?.start ?: progress.segment?.start ?: 0
+            val wasPlaying = viewState.value.isTTSPlaying
+            ttsStateHolder.pause()
+            silentReader.start(progress.text, offset, play = wasPlaying)
+            voiceMuted.value = true
+        } else {
+            val silent = silentReader.state.value
+            val offset = silent.word?.start ?: 0
+            val wasPlaying = silent.playing
+            silentReader.stop()
+            voiceMuted.value = false
+            if (wasPlaying) ttsReadFrom(offset) else resumeVoiceFrom = offset
+        }
+    }
+
+    fun speedReadSetWpm(wpm: Int) = silentReader.setWpm(wpm)
+
+    fun speedReadSkipWords(count: Int) = silentReader.skipWords(count)
+
+    fun speedReadJumpToWord(index: Int) = silentReader.jumpTo(index)
+
+    /** The top bar's speed-read button: shows the big word, and starts reading aloud if it isn't yet. */
+    fun startSpeedReading() {
+        setShowWord(true)
+        if (!viewState.value.isBottomBarVisible || readAloudProgress.value.articleId != itemId) ttsPlay()
     }
 
     fun openPodcastPlayer(link: String) {
@@ -1218,3 +1336,27 @@ sealed class TSSError
 data object TTSFileNotFound : TSSError()
 
 data object TTSUnknownError : TSSError()
+
+private const val PREF_SHOW_WORD = "show_word"
+
+/** The word being spoken, for the big word in the player. */
+private fun ReadAloudProgress.voicedWord(): String {
+    val range = word ?: segment ?: return ""
+    val start = range.start.coerceIn(0, text.length)
+    val end = if (word != null) range.end.coerceIn(start, text.length) else wordEnd(text, start)
+    return text.substring(start, end).trim()
+}
+
+/** The muted speed reader's word and sentence, highlighted in the article like read aloud's. */
+private fun SilentSpeedReadState.toHighlight(): SpeechHighlight? {
+    val current = word ?: return null
+    val first = words[words.sentenceStartOf(index)]
+    val last = words[words.sentenceEndFrom(index)]
+    return SpeechHighlight(
+        text = text,
+        segment = SpeechSegment(first.start, wordEnd(text, last.start)),
+        focusRequestId = if (follow) focusRequest else 0L,
+        followSpokenText = follow,
+        word = SpeechSegment(current.start, wordEnd(text, current.start)),
+    )
+}

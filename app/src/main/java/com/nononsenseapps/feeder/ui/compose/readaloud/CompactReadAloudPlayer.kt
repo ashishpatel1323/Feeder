@@ -34,11 +34,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FastForward
@@ -47,10 +51,12 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -69,6 +75,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -87,6 +94,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
@@ -99,6 +107,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.model.AppSetting
@@ -110,12 +121,18 @@ import com.nononsenseapps.feeder.model.ReadAloudNeighbors
 import com.nononsenseapps.feeder.model.ReadAloudProgress
 import com.nononsenseapps.feeder.ui.compose.components.safeSemantics
 import com.nononsenseapps.feeder.ui.compose.feed.PlainTooltipBox
+import com.nononsenseapps.feeder.ui.compose.rsvp.RSVP_DEFAULT_WPM
+import com.nononsenseapps.feeder.ui.compose.rsvp.RSVP_MAX_WPM
+import com.nononsenseapps.feeder.ui.compose.rsvp.RSVP_MIN_WPM
+import com.nononsenseapps.feeder.ui.compose.rsvp.RSVP_WPM_STEP
+import com.nononsenseapps.feeder.ui.compose.rsvp.RsvpWordDisplay
 import com.nononsenseapps.feeder.ui.compose.theme.PreviewTheme
 import com.nononsenseapps.feeder.ui.compose.utils.ImmutableHolder
 import com.nononsenseapps.feeder.ui.compose.utils.onKeyEventLikeEscape
 import kotlinx.coroutines.flow.StateFlow
 import java.util.Locale
 import kotlin.math.PI
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
@@ -145,6 +162,12 @@ fun HideableCompactTTSPlayer(
     autoContinue: Boolean = false,
     onSetAutoContinue: (Boolean) -> Unit = {},
     showNowReading: Boolean = false,
+    wordMode: WordModeState = WordModeState(),
+    onSetShowWord: ((Boolean) -> Unit)? = null,
+    onSetMuted: ((Boolean) -> Unit)? = null,
+    onSetWpm: (Int) -> Unit = {},
+    onSkipWords: (Int) -> Unit = {},
+    onJumpToWord: (Int) -> Unit = {},
 ) {
     AnimatedVisibility(
         modifier = modifier,
@@ -172,9 +195,31 @@ fun HideableCompactTTSPlayer(
             autoContinue = autoContinue,
             onSetAutoContinue = onSetAutoContinue,
             showNowReading = showNowReading,
+            wordMode = wordMode,
+            onSetShowWord = onSetShowWord,
+            onSetMuted = onSetMuted,
+            onSetWpm = onSetWpm,
+            onSkipWords = onSkipWords,
+            onJumpToWord = onJumpToWord,
         )
     }
 }
+
+/**
+ * Speed reading inside the player: the big word, and the muted (timer driven) reader's position.
+ * While [muted], the word follows the timer at [wpm] instead of the voice.
+ */
+@Immutable
+data class WordModeState(
+    val showWord: Boolean = false,
+    val muted: Boolean = false,
+    val word: String = "",
+    val wpm: Int = RSVP_DEFAULT_WPM,
+    val wordIndex: Int = 0,
+    val wordCount: Int = 0,
+    val millisLeft: Long = 0,
+    val silentPlaying: Boolean = false,
+)
 
 /** Solid colors of the player panel: dark in both light and dark themes. */
 @Immutable
@@ -226,6 +271,12 @@ fun CompactTTSPlayer(
     autoContinue: Boolean = false,
     onSetAutoContinue: (Boolean) -> Unit = {},
     showNowReading: Boolean = false,
+    wordMode: WordModeState = WordModeState(),
+    onSetShowWord: ((Boolean) -> Unit)? = null,
+    onSetMuted: ((Boolean) -> Unit)? = null,
+    onSetWpm: (Int) -> Unit = {},
+    onSkipWords: (Int) -> Unit = {},
+    onJumpToWord: (Int) -> Unit = {},
 ) {
     var diagnosticsText by remember { mutableStateOf<String?>(null) }
     diagnosticsText?.let { text ->
@@ -246,8 +297,26 @@ fun CompactTTSPlayer(
         )
     }
     val colors = playerColors()
-    val preparing = progress.preparationProgress != null
-    val seekable = !preparing && progress.durationMillis > 0 && progress.error == null
+    val muted = wordMode.muted
+    // Muted, the silent speed reader plays instead of the voice
+    val playing = if (muted) wordMode.silentPlaying else currentlyPlaying
+    val preparing = !muted && progress.preparationProgress != null
+    val seekable = if (muted) wordMode.wordCount > 1 else !preparing && progress.durationMillis > 0 && progress.error == null
+    if (muted && playing) {
+        // Keep the screen on while words flow, and pause when the app goes to the background
+        val view = LocalView.current
+        DisposableEffect(view) {
+            view.keepScreenOn = true
+            onDispose { view.keepScreenOn = false }
+        }
+        val lifecycleOwner = LocalLifecycleOwner.current
+        val currentOnPause by rememberUpdatedState(onPause)
+        DisposableEffect(lifecycleOwner) {
+            val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_PAUSE) currentOnPause() }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        }
+    }
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = colors.container,
@@ -274,9 +343,49 @@ fun CompactTTSPlayer(
                 autoContinue = autoContinue,
                 onSetAutoContinue = onSetAutoContinue,
                 onClose = onStop,
+                wordMode = wordMode,
+                onSetShowWord = onSetShowWord,
+                onSetMuted = onSetMuted,
+                onSetWpm = onSetWpm,
             )
+            if (wordMode.showWord && onSetShowWord != null) {
+                RsvpWordDisplay(
+                    word = wordMode.word,
+                    textColor = colors.content,
+                    guideColor = colors.muted,
+                    focusColor = Color(0xFFFF8A80),
+                    modifier = Modifier.padding(end = 4.dp, bottom = 4.dp),
+                )
+            }
             Column(Modifier.padding(end = 4.dp)) {
-                if (preparing) {
+                if (muted) {
+                    var scrubIndex by remember { mutableStateOf<Int?>(null) }
+                    val last = (wordMode.wordCount - 1).coerceAtLeast(1)
+                    val shownIndex = scrubIndex ?: wordMode.wordIndex
+                    WavySeekBar(
+                        fraction = (shownIndex.toFloat() / last).coerceIn(0f, 1f),
+                        playing = playing,
+                        enabled = seekable,
+                        colors = colors,
+                        onScrub = { scrubIndex = (it * last).roundToInt() },
+                        onScrubFinished = {
+                            scrubIndex?.let(onJumpToWord)
+                            scrubIndex = null
+                        },
+                    )
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(
+                            stringResource(R.string.read_aloud_word_number, shownIndex + 1),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colors.muted,
+                        )
+                        Text(
+                            stringResource(R.string.read_aloud_word_count, wordMode.wordCount),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colors.muted,
+                        )
+                    }
+                } else if (preparing) {
                     val fraction = progress.preparationProgress ?: 0f
                     Box(Modifier.height(24.dp), contentAlignment = Alignment.Center) {
                         if (fraction > 0f) {
@@ -303,7 +412,7 @@ fun CompactTTSPlayer(
                     val shownMillis = scrubMillis ?: progress.positionMillis
                     WavySeekBar(
                         fraction = (shownMillis.toFloat() / duration).coerceIn(0f, 1f),
-                        playing = currentlyPlaying,
+                        playing = playing,
                         enabled = seekable,
                         colors = colors,
                         onScrub = { scrubMillis = (it * duration).toLong().coerceIn(0, seekableMillis) },
@@ -349,7 +458,9 @@ fun CompactTTSPlayer(
                     ArticleSkipButton(next = false, enabled = neighbors.previousId != null, colors = colors, onClick = { onSkipArticle(false) })
                     PlainTooltipBox(tooltip = { Text(stringResource(R.string.seek_back_10_seconds)) }) {
                         IconButton(
-                            onClick = { onSeekTo((progress.positionMillis - SEEK_STEP_MILLIS).coerceAtLeast(0)) },
+                            onClick = {
+                                if (muted) onSkipWords(-SKIP_WORDS) else onSeekTo((progress.positionMillis - SEEK_STEP_MILLIS).coerceAtLeast(0))
+                            },
                             enabled = seekable,
                             colors = IconButtonDefaults.iconButtonColors(contentColor = colors.content, disabledContentColor = colors.track),
                         ) {
@@ -357,7 +468,7 @@ fun CompactTTSPlayer(
                         }
                     }
                     PlayButton(
-                        currentlyPlaying = currentlyPlaying,
+                        currentlyPlaying = playing,
                         preparing = preparing,
                         colors = colors,
                         onPlay = onPlay,
@@ -366,7 +477,7 @@ fun CompactTTSPlayer(
                     )
                     PlainTooltipBox(tooltip = { Text(stringResource(R.string.seek_forward_10_seconds)) }) {
                         IconButton(
-                            onClick = { onSeekTo(progress.positionMillis + SEEK_STEP_MILLIS) },
+                            onClick = { if (muted) onSkipWords(SKIP_WORDS) else onSeekTo(progress.positionMillis + SEEK_STEP_MILLIS) },
                             enabled = seekable,
                             colors = IconButtonDefaults.iconButtonColors(contentColor = colors.content, disabledContentColor = colors.track),
                         ) {
@@ -399,6 +510,10 @@ private fun TopLine(
     autoContinue: Boolean,
     onSetAutoContinue: (Boolean) -> Unit,
     onClose: () -> Unit,
+    wordMode: WordModeState,
+    onSetShowWord: ((Boolean) -> Unit)?,
+    onSetMuted: ((Boolean) -> Unit)?,
+    onSetWpm: (Int) -> Unit,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -408,20 +523,31 @@ private fun TopLine(
                 .height(48.dp),
     ) {
         val nowReading = (showNowReading && neighbors.currentTitle.isNotBlank()) || neighbors.nextId == null
+        val left = wordMode.millisLeft
         val (label, title) =
             when {
+                // Room is short with the speed stepper, so muted shows only the time left
+                wordMode.muted ->
+                    "" to
+                        if (left < 60_000) {
+                            stringResource(R.string.rsvp_seconds_left, (left / 1000).toInt().coerceAtLeast(1))
+                        } else {
+                            stringResource(R.string.rsvp_minutes_left, (left / 60_000.0).roundToInt())
+                        }
                 nowReading && neighbors.currentTitle.isNotBlank() -> stringResource(R.string.read_aloud_now_reading) to neighbors.currentTitle
                 nowReading -> stringResource(R.string.read_aloud_up_next) to stringResource(R.string.read_aloud_end_of_list)
                 else -> stringResource(R.string.read_aloud_up_next) to neighbors.nextTitle
             }
-        Text(
-            label.uppercase(),
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            color = colors.accent,
-            maxLines = 1,
-        )
-        Spacer(Modifier.width(8.dp))
+        if (label.isNotEmpty()) {
+            Text(
+                label.uppercase(),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = colors.accent,
+                maxLines = 1,
+            )
+            Spacer(Modifier.width(8.dp))
+        }
         Text(
             title,
             style = MaterialTheme.typography.bodyMedium,
@@ -431,7 +557,22 @@ private fun TopLine(
             modifier = Modifier.weight(1f),
         )
         Spacer(Modifier.width(8.dp))
-        SpeedPill(speed = progress.speed, onSelectSpeed = onSelectSpeed, colors = colors)
+        if (wordMode.muted) {
+            WpmStepper(wpm = wordMode.wpm, onSetWpm = onSetWpm, colors = colors)
+        } else {
+            SpeedPill(speed = progress.speed, onSelectSpeed = onSelectSpeed, colors = colors)
+        }
+        if (onSetMuted != null) {
+            Spacer(Modifier.width(6.dp))
+            val label = stringResource(if (wordMode.muted) R.string.read_aloud_unmute else R.string.read_aloud_mute)
+            SmallRoundButton(colors = colors, label = label, onClick = { onSetMuted(!wordMode.muted) }) {
+                Icon(
+                    if (wordMode.muted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
         Spacer(Modifier.width(6.dp))
         MoreMenu(
             colors = colors,
@@ -443,6 +584,8 @@ private fun TopLine(
             onSelectLanguage = onSelectLanguage,
             autoContinue = autoContinue,
             onSetAutoContinue = onSetAutoContinue,
+            showWord = wordMode.showWord,
+            onSetShowWord = onSetShowWord,
         )
         Spacer(Modifier.width(6.dp))
         SmallRoundButton(
@@ -472,6 +615,46 @@ private fun SmallRoundButton(
                     .safeSemantics { contentDescription = label },
         ) {
             content()
+        }
+    }
+}
+
+/** Words per minute while muted: − and + around the value, in one pill. */
+@Composable
+private fun WpmStepper(
+    wpm: Int,
+    onSetWpm: (Int) -> Unit,
+    colors: PlayerColors,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            Modifier
+                .height(36.dp)
+                .background(colors.button, CircleShape),
+    ) {
+        IconButton(
+            onClick = { onSetWpm(wpm - RSVP_WPM_STEP) },
+            enabled = wpm > RSVP_MIN_WPM,
+            colors = IconButtonDefaults.iconButtonColors(contentColor = colors.content, disabledContentColor = colors.track),
+            modifier = Modifier.size(36.dp),
+        ) {
+            Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.rsvp_slower), modifier = Modifier.size(18.dp))
+        }
+        val wpmLabel = stringResource(R.string.rsvp_words_per_minute)
+        Text(
+            stringResource(R.string.rsvp_wpm, wpm),
+            style = MaterialTheme.typography.labelLarge,
+            maxLines = 1,
+            modifier = Modifier.safeSemantics { contentDescription = "$wpmLabel $wpm" },
+        )
+        IconButton(
+            onClick = { onSetWpm(wpm + RSVP_WPM_STEP) },
+            enabled = wpm < RSVP_MAX_WPM,
+            colors = IconButtonDefaults.iconButtonColors(contentColor = colors.content, disabledContentColor = colors.track),
+            modifier = Modifier.size(36.dp),
+        ) {
+            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.rsvp_faster), modifier = Modifier.size(18.dp))
         }
     }
 }
@@ -531,6 +714,8 @@ private fun MoreMenu(
     onSelectLanguage: (LocaleOverride) -> Unit,
     autoContinue: Boolean,
     onSetAutoContinue: (Boolean) -> Unit,
+    showWord: Boolean,
+    onSetShowWord: ((Boolean) -> Unit)?,
 ) {
     var showMenu by remember { mutableStateOf(false) }
     var showVoices by remember { mutableStateOf(false) }
@@ -552,6 +737,16 @@ private fun MoreMenu(
             modifier = Modifier.onKeyEventLikeEscape { close() },
         ) {
             if (!showVoices) {
+                if (onSetShowWord != null) {
+                    DropdownMenuItem(
+                        onClick = { onSetShowWord(!showWord) },
+                        leadingIcon = { Icon(Icons.Default.Speed, contentDescription = null) },
+                        text = { Text(stringResource(R.string.read_aloud_show_word)) },
+                        trailingIcon = {
+                            Switch(checked = showWord, onCheckedChange = null, modifier = Modifier.padding(start = 12.dp))
+                        },
+                    )
+                }
                 DropdownMenuItem(
                     onClick = { onSetAutoContinue(!autoContinue) },
                     leadingIcon = { Icon(Icons.Default.Repeat, contentDescription = null) },
@@ -784,6 +979,9 @@ private fun WavySeekBar(
 }
 
 private const val SEEK_STEP_MILLIS = 10_000L
+
+// Muted, the ±10 buttons move ten words
+private const val SKIP_WORDS = 10
 
 @Preview
 @Composable
