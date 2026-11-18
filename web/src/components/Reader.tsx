@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { db, feedDisplayTitle, type Feed, type Item } from '../lib/db'
 import { formatPoints, readingMinutes, wordsOf } from '../lib/listquery'
-import { hnDiscussionUrl, loadFullText, sanitize, summarize } from '../lib/extras'
+import { hnDiscussionUrl, loadFullText, refreshHnScores, sanitize, summarize } from '../lib/extras'
 import { htmlToText } from '../lib/feedparse'
 import { readAloud, type ReadAloudState } from '../lib/readaloud'
 import { updateSettings, type Settings } from '../lib/settings'
@@ -38,6 +38,12 @@ export function Reader(p: Props) {
   const touch = useRef<{ x: number; y: number; t: number } | null>(null)
 
   useEffect(() => readAloud.subscribe(setRa), [])
+
+  // Opened article: look up its Hacker News score if it's missing or stale
+  useEffect(() => {
+    if (p.settings.showHnScore) refreshHnScores([item], 1).catch(() => undefined)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id, p.settings.showHnScore])
 
   // New article: reset view state
   useEffect(() => {
