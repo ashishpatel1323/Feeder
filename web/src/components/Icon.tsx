@@ -1,5 +1,7 @@
 // Material Symbols-style outline icons (paths from Material Design Icons, Apache 2.0).
 const PATHS = {
+  panelClose: 'M18.41 7.41 17 6l-6 6 6 6 1.41-1.41L13.83 12l4.58-4.59m-6 0L11 6l-6 6 6 6 1.41-1.41L7.83 12l4.58-4.59Z',
+  panelOpen: 'M5.59 7.41 7 6l6 6-6 6-1.41-1.41L10.17 12 5.59 7.41m6 0L13 6l6 6-6 6-1.41-1.41L16.17 12l-4.58-4.59Z',
   menu: 'M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z',
   refresh:
     'M17.65 6.35A7.958 7.958 0 0 0 12 4a8 8 0 0 0-8 8 8 8 0 0 0 8 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18a6 6 0 0 1-6-6 6 6 0 0 1 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35Z',
