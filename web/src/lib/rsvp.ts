@@ -124,3 +124,9 @@ export function minutesLeft(words: RsvpWord[], index: number, wpm: number): numb
   for (let i = index; i < words.length; i++) ms += wordDelay(words[i], wpm)
   return ms / 60000
 }
+
+/** Length in UTF-16 units of the focus letter at [index] (2 for a surrogate pair). */
+export function focusLength(word: string, index: number): number {
+  const c = word.charCodeAt(index)
+  return c >= 0xd800 && c <= 0xdbff && index + 1 < word.length ? 2 : 1
+}

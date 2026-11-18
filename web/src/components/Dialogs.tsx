@@ -323,7 +323,7 @@ function SyncSection({ toast }: { toast: (m: string) => void }) {
 }
 
 /** Browser voices that are neural/network voices and sound natural. */
-const NATURAL_VOICE = /natural|neural|online|premium|enhanced|google|siri/i
+export const NATURAL_VOICE = /natural|neural|online|premium|enhanced|google|siri/i
 
 export function SettingsDialog({ settings, onClose, toast }: { settings: Settings; onClose: () => void; toast: (m: string) => void }) {
   const [token, setToken] = useState(getAccessToken())
