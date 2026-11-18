@@ -870,6 +870,23 @@ class Repository(
         syncRemoteStore.updateSyncRemoteMessageTimestamp(timestamp)
     }
 
+    /**
+     * Fork: makes the next sync a full one. Read marks are fetched from the beginning, the
+     * remote feed list is applied even if its hash looks unchanged, and every local read mark
+     * is sent again. Feeds already known to be deleted elsewhere stay deleted.
+     */
+    suspend fun prepareForceSync() {
+        val syncRemote = syncRemoteStore.getSyncRemote()
+        if (!syncRemote.hasSyncChain()) return
+        syncRemoteStore.deleteAllReadStatusSyncs()
+        syncRemoteStore.updateSyncRemote(
+            syncRemote.copy(
+                latestMessageTimestamp = Instant.EPOCH,
+                lastFeedsRemoteHash = 0,
+            ),
+        )
+    }
+
     suspend fun getFeedItemsWithoutSyncedReadMark(): List<FeedItemForReadMark> = syncRemoteStore.getFeedItemsWithoutSyncedReadMark()
 
     suspend fun setSynced(feedItemId: Long) {

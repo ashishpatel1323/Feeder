@@ -444,6 +444,20 @@ export interface SyncResult {
   readMarksSent: number
 }
 
+/**
+ * Force sync: forget what this browser thinks it already exchanged, then run a full sync.
+ * Pulls the whole feed list and every read mark again, and re-sends this browser's feed
+ * list and all of its read marks. Deletions seen before still count (remoteFeeds is kept).
+ */
+export async function forceSync(): Promise<SyncResult | null> {
+  if (running) await running.catch(() => undefined)
+  const state = await getSyncState()
+  if (!state) return null
+  await db.items.where('read').equals(1).modify({ readSynced: 0 })
+  await saveSyncState({ ...state, latestMessageTimestamp: 0, lastFeedsRemoteHash: 0, localFeedsHashAtLastSync: null })
+  return syncNow()
+}
+
 let running: Promise<SyncResult | null> | null = null
 
 /** One full exchange with the chain. Safe to call often; concurrent calls share one run. */

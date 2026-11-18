@@ -16,6 +16,7 @@ import com.nononsenseapps.feeder.db.room.SyncRemote
 import com.nononsenseapps.feeder.util.DEEP_LINK_BASE_URI
 import com.nononsenseapps.feeder.util.logDebug
 import com.nononsenseapps.feeder.util.urlEncode
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.kodein.di.DI
 import org.kodein.di.instance
 import java.net.URL
@@ -128,6 +130,27 @@ class SyncScreenViewModel(
             setSyncCode("")
             setSecretKey("")
             setScreen(SyncScreenToShow.SETUP)
+        }
+    }
+
+    /**
+     * Fork: forget what was already exchanged with the chain and run a full sync now.
+     * Pulls the whole feed list and every read mark again and re-sends all local read marks.
+     */
+    fun forceSync() {
+        applicationCoroutineScope.launch {
+            try {
+                repository.prepareForceSync()
+                runOnceRssSync(
+                    di = di,
+                    triggeredByUser = true,
+                )
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, R.string.force_sync_started, Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Log.e(LOG_TAG, "Error when forcing sync", e)
+            }
         }
     }
 

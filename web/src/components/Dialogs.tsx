@@ -11,6 +11,7 @@ import {
   leaveChain,
   removeDevice,
   syncNow,
+  forceSync,
   type Device,
 } from '../lib/sync'
 import { parseJoinLink } from '../lib/crypto'
@@ -288,6 +289,18 @@ function SyncSection({ toast }: { toast: (m: string) => void }) {
       <div className="form-actions wrap">
         <button onClick={() => run(async () => (await syncNow(), toast('Synced')))} disabled={busy}>
           Sync now
+        </button>
+        <button
+          onClick={() =>
+            run(async () => {
+              const r = await forceSync()
+              toast(r ? `Force sync done: ${r.readMarksApplied} read marks pulled, ${r.readMarksSent} sent` : 'Force sync done')
+            })
+          }
+          disabled={busy}
+          title="Pull and re-send everything: the full feed list and all read marks"
+        >
+          Force sync
         </button>
         <button onClick={() => setShowLink(!showLink)}>{showLink ? 'Hide add-device link' : 'Add another device'}</button>
         <button

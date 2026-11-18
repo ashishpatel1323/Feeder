@@ -44,6 +44,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -293,6 +294,9 @@ fun SyncScreen(
         },
         currentDeviceId = viewState.deviceId,
         devices = ImmutableHolder(viewState.deviceList),
+        onForceSync = {
+            viewModel.forceSync()
+        },
     )
 
     if (showLeaveSyncChainDialog) {
@@ -326,6 +330,7 @@ fun SyncScreen(
     currentDeviceId: Long,
     devices: ImmutableHolder<List<SyncDevice>>,
     onLeaveSyncChain: () -> Unit,
+    onForceSync: () -> Unit = {},
 ) {
     if (targetScreen == SyncScreenType.DUAL) {
         DualSyncScreen(
@@ -345,6 +350,7 @@ fun SyncScreen(
             secretKey = viewState.secretKey,
             onSetSecretKey = onSetSecretKey,
             onLeaveSyncChain = onLeaveSyncChain,
+            onForceSync = onForceSync,
         )
     }
 
@@ -408,6 +414,7 @@ fun SyncScreen(
             onAddNewDevice = onAddNewDevice,
             onDeleteDevice = onDeleteDevice,
             onLeaveSyncChain = onLeaveSyncChain,
+            onForceSync = onForceSync,
         )
     }
 
@@ -468,6 +475,7 @@ fun DualSyncScreen(
     onSetSecretKey: (String) -> Unit,
     onLeaveSyncChain: () -> Unit,
     modifier: Modifier = Modifier,
+    onForceSync: () -> Unit = {},
 ) {
     BackHandler(onBack = onNavigateUp)
 
@@ -507,6 +515,7 @@ fun DualSyncScreen(
                         onAddNewDevice = onAddNewDevice,
                         onDeleteDevice = onDeleteDevice,
                         showAddDeviceButton = false,
+                        onForceSync = onForceSync,
                         modifier =
                             Modifier
                                 .weight(1f, fill = true),
@@ -762,6 +771,7 @@ fun SyncDeviceListScreen(
     onDeleteDevice: (Long) -> Unit,
     onLeaveSyncChain: () -> Unit,
     modifier: Modifier = Modifier,
+    onForceSync: () -> Unit = {},
 ) {
     BackHandler(onBack = onNavigateUp)
     val scrollState = rememberScrollState()
@@ -779,6 +789,7 @@ fun SyncDeviceListScreen(
             onAddNewDevice = onAddNewDevice,
             onDeleteDevice = onDeleteDevice,
             showAddDeviceButton = true,
+            onForceSync = onForceSync,
             modifier = innerModifier.verticalScroll(scrollState),
         )
     }
@@ -792,6 +803,7 @@ fun SyncDeviceListContent(
     onDeleteDevice: (Long) -> Unit,
     showAddDeviceButton: Boolean,
     modifier: Modifier = Modifier,
+    onForceSync: () -> Unit = {},
 ) {
     var itemToDelete by remember {
         mutableStateOf(SyncDevice(deviceId = ID_UNSET, deviceName = ""))
@@ -860,6 +872,26 @@ fun SyncDeviceListContent(
                 )
             }
         }
+        // Fork: force sync, always visible on this screen
+        OutlinedButton(
+            onClick = onForceSync,
+            modifier = Modifier.padding(top = 8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.force_sync),
+                style = MaterialTheme.typography.labelLarge,
+                textAlign = TextAlign.Center,
+            )
+        }
+        Text(
+            text = stringResource(R.string.force_sync_description),
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Center,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+        )
         Spacer(modifier = Modifier.size(8.dp))
     }
 
