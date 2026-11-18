@@ -70,8 +70,9 @@ private fun FocusWord(
     focusColor: Color,
     modifier: Modifier = Modifier,
 ) {
-    val focus = focusIndex(word)
-    val length = focusLength(word, focus)
+    // The word can be empty for a moment (between articles): then all three parts are empty
+    val focus = focusIndex(word).coerceIn(0, word.length)
+    val length = focusLength(word, focus).coerceIn(0, word.length - focus)
     val style = TextStyle(fontSize = 40.sp, fontWeight = FontWeight.Medium, color = textColor)
     Layout(
         modifier = modifier.fillMaxWidth().padding(vertical = 4.dp),
