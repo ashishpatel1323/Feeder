@@ -6,6 +6,7 @@ import androidx.glance.action.ActionParameters
 import androidx.glance.appwidget.action.ActionCallback
 import com.nononsenseapps.feeder.FeederApplication
 import com.nononsenseapps.feeder.archmodel.Repository
+import com.nononsenseapps.feeder.db.room.ID_SAVED_ARTICLES
 import org.kodein.di.instance
 
 /**
@@ -21,6 +22,8 @@ class MarkAllAsReadAction : ActionCallback {
         val app = context.applicationContext as FeederApplication
         val repository: Repository by app.di.instance()
         val (feedId, tag) = repository.currentWidgetFeedAndTag.value
+        // The saved articles list has no feed or tag, so marking it would mark every article as read.
+        if (feedId == ID_SAVED_ARTICLES) return
         repository.markAllAsReadInFeedOrTag(feedId, tag)
     }
 }
