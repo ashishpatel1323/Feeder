@@ -11,6 +11,24 @@
 
 import { isKokoroVoice, kokoro, KOKORO_PREFIX, wavBlob, type KokoroAudio } from './kokoro'
 import { FOOTNOTE_SECTION, isFootnoteLink, isFootnoteMarker, isSkippedLine, speechRemovals } from './speechclean'
+import { minutesLeft, RSVP_DEFAULT_WPM, RSVP_MAX_WPM, RSVP_MIN_WPM, rsvpWords, wordDelay, wordIndexAt, type RsvpWord } from './rsvp'
+
+/** Speaking pace used to estimate times and seek by seconds: about 14 characters a second at 1x. */
+export const CHARS_PER_SECOND = 14
+export const RSVP_WPM_STEP = 25
+const WPM_KEY = 'feeder.rsvpWpm'
+// The first words after (re)starting the silent reader are shown a little longer so the eye can settle
+const RAMP = [1.8, 1.4, 1.15]
+
+function loadWpm(): number {
+  try {
+    const v = Number(localStorage.getItem(WPM_KEY))
+    if (v >= RSVP_MIN_WPM && v <= RSVP_MAX_WPM) return v
+  } catch {
+    // storage blocked
+  }
+  return RSVP_DEFAULT_WPM
+}
 
 interface Segment {
   node: Text
@@ -36,6 +54,24 @@ export interface ReadAloudState {
   wordTiming: 'exact' | 'estimated' | null
   /** Auto scroll: the article keeps the spoken text in view until the reader scrolls away. */
   following: boolean
+  /**
+   * Muted: the voice is off and a timer moves through the words at [wpm] (silent speed reading),
+   * still highlighting and scrolling the article.
+   */
+  muted: boolean
+  /** Offset of the current word in the indexed text, -1 for none. */
+  wordStart: number
+  /** The current word, for the speed reading word display. */
+  word: string
+  /** Reading position in the indexed text (current word, else the sentence start). */
+  offset: number
+  /** Length of the indexed text. */
+  textLength: number
+  /** Silent reader speed in words per minute. */
+  wpm: number
+  /** Silent reader position and word count (muted only). */
+  wordIndex: number
+  wordCount: number
 }
 
 type Listener = (s: ReadAloudState) => void
@@ -144,7 +180,29 @@ export class ReadAloudEngine {
   /** Use the GPU for the natural voice when the browser supports WebGPU. */
   kokoroGpu = false
 
-  state: ReadAloudState = { status: 'idle', itemId: null, sentence: 0, sentences: 0, rate: 1, wordTiming: null, following: true }
+  state: ReadAloudState = {
+    status: 'idle',
+    itemId: null,
+    sentence: 0,
+    sentences: 0,
+    rate: 1,
+    wordTiming: null,
+    following: true,
+    muted: false,
+    wordStart: -1,
+    word: '',
+    offset: 0,
+    textLength: 0,
+    wpm: loadWpm(),
+    wordIndex: 0,
+    wordCount: 0,
+  }
+  /** Silent reader words (muted only). */
+  private rsvp: RsvpWord[] = []
+  /** Words shown since the silent reader (re)started, for the slower start. */
+  private silentShown = 0
+  /** Where play() continues after a move while paused. */
+  private resumeOffset: number | null = null
   private scroller: HTMLElement | null = null
   private lastWord: { start: number; end: number } | null = null
   voiceURI = ''
@@ -181,7 +239,9 @@ export class ReadAloudEngine {
 
   /** Indexes the visible text of an article element. Call again when the text changes. */
   attach(container: HTMLElement, itemId: string, lang?: string) {
-    if (this.state.itemId && this.state.itemId !== itemId && this.state.status !== 'idle') this.stop()
+    const sameItem = this.state.itemId === itemId
+    if (this.state.itemId && !sameItem && (this.state.status !== 'idle' || this.state.muted)) this.stop()
+    if (!sameItem) this.resumeOffset = null
     this.container = container
     this.watchUserScroll(container.closest('[data-scroll]') as HTMLElement | null)
     this.lang = lang || document.documentElement.lang || navigator.language || 'en'
@@ -245,7 +305,20 @@ export class ReadAloudEngine {
     text = kept
     this.text = text
     this.sentences = this.splitSentences(text)
-    this.set({ itemId, sentences: this.sentences.length, sentence: Math.min(this.state.sentence, this.sentences.length) })
+    const patch: Partial<ReadAloudState> = {
+      itemId,
+      sentences: this.sentences.length,
+      sentence: Math.min(this.state.sentence, this.sentences.length),
+      textLength: text.length,
+    }
+    if (sameItem && this.state.muted) {
+      // The text changed under the silent reader (full text, fast reading): keep the place
+      const at = this.rsvp[this.state.wordIndex]?.start ?? 0
+      this.rsvp = rsvpWords(text)
+      patch.wordCount = this.rsvp.length
+      patch.wordIndex = Math.min(wordIndexAt(this.rsvp, at), Math.max(0, this.rsvp.length - 1))
+    }
+    this.set(patch)
   }
 
   private splitSentences(text: string): Sentence[] {
@@ -331,16 +404,22 @@ export class ReadAloudEngine {
 
   setRate(rate: number) {
     this.set({ rate })
-    if (this.state.status !== 'playing') return
+    if (this.state.status !== 'playing' || this.state.muted) return
     // Recorded audio just plays faster; browser voices restart the sentence at the new rate
     if (this.usingKokoro && this.kokoroEl) this.kokoroEl.playbackRate = rate
     else this.speakFrom(this.state.sentence, null)
   }
 
   play(fromOffset?: number) {
+    if (this.state.muted) {
+      this.playSilent(fromOffset)
+      return
+    }
     if (!this.supported || !this.sentences.length) return
     this.startMedia()
     if (!this.state.following) this.set({ following: true })
+    if ((fromOffset === undefined || fromOffset < 0) && this.resumeOffset !== null) fromOffset = this.resumeOffset
+    this.resumeOffset = null
     if (fromOffset !== undefined && fromOffset >= 0) {
       this.speakFrom(this.sentenceIndexAt(fromOffset), fromOffset)
     } else {
@@ -373,16 +452,191 @@ export class ReadAloudEngine {
     highlights()?.delete('ra-word')
     this.silentAudio?.pause()
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none'
-    this.set({ status: 'idle', sentence: 0, wordTiming: null, following: true })
+    this.rsvp = []
+    this.resumeOffset = null
+    this.set({ status: 'idle', sentence: 0, wordTiming: null, following: true, muted: false, wordStart: -1, word: '', offset: 0, wordIndex: 0, wordCount: 0 })
   }
 
   skip(delta: number) {
+    if (this.state.muted) {
+      this.jumpToWord(this.state.wordIndex + delta * 10)
+      return
+    }
     const i = Math.max(0, Math.min(this.sentences.length - 1, this.state.sentence + delta))
+    this.resumeOffset = null
     if (this.state.status === 'playing') this.speakFrom(i, null)
     else {
       this.set({ sentence: i })
       this.highlightSentence(i)
     }
+  }
+
+  /** The word start at or after [offset]. */
+  private snapToWord(offset: number): number {
+    const o = Math.max(0, Math.min(this.text.length, Math.round(offset)))
+    const w = this.wordAt(o)
+    if (w) return w.start
+    let i = o
+    while (i < this.text.length && !/[\p{L}\p{N}]/u.test(this.text[i])) i++
+    return i >= this.text.length ? o : i
+  }
+
+  /** Moves the reading position to [offset]: reads on from there when playing, else waits there. */
+  moveTo(offset: number) {
+    if (this.state.muted) {
+      this.jumpToWord(wordIndexAt(this.rsvp, offset))
+      return
+    }
+    const at = this.snapToWord(offset)
+    if (this.state.status === 'playing') {
+      this.play(at)
+      return
+    }
+    this.resumeOffset = at
+    const i = this.sentenceIndexAt(at)
+    this.set({ sentence: i })
+    this.highlightSentence(i)
+    const w = this.wordAt(at)
+    if (w) this.highlightWord(w.start, w.end)
+  }
+
+  /** Back or ahead by about [seconds] of speech; muted, by that many words. */
+  seekBy(seconds: number) {
+    if (this.state.muted) {
+      this.jumpToWord(this.state.wordIndex + Math.round(seconds))
+      return
+    }
+    this.moveTo(this.state.offset + seconds * CHARS_PER_SECOND * this.state.rate)
+  }
+
+  /** Jumps to a fraction (0..1) of the article. */
+  seekToFraction(fraction: number) {
+    const f = Math.max(0, Math.min(1, fraction))
+    if (this.state.muted) this.jumpToWord(Math.round(f * Math.max(0, this.rsvp.length - 1)))
+    else this.moveTo(f * this.text.length)
+  }
+
+  /** Changes the voice; a sentence being spoken starts again in the new voice. */
+  setVoice(voiceURI: string) {
+    if (voiceURI === this.voiceURI) return
+    this.voiceURI = voiceURI
+    if (this.state.status === 'playing' && !this.state.muted) this.restartSentence()
+  }
+
+  /** Speaks the current sentence again from its current word (after a voice change). */
+  restartSentence() {
+    if (this.state.status !== 'playing' || this.state.muted) return
+    this.speakFrom(this.state.sentence, this.lastWord?.start ?? null)
+  }
+
+  // --- Silent speed reading (muted) ---------------------------------------------------------
+
+  /** Mutes the voice and hands over to a timer that moves through the words, or back. */
+  setMuted(muted: boolean) {
+    if (muted === this.state.muted) return
+    const playing = this.state.status === 'playing'
+    if (muted) {
+      const s = this.sentences[this.state.sentence]
+      const offset = this.resumeOffset ?? this.lastWord?.start ?? s?.start ?? 0
+      this.generation++
+      cancelSpeech()
+      this.stopKokoroAudio()
+      this.clearEstimate()
+      this.resumeOffset = null
+      this.rsvp = rsvpWords(this.text)
+      const index = Math.min(wordIndexAt(this.rsvp, offset), Math.max(0, this.rsvp.length - 1))
+      this.set({ muted: true, wordCount: this.rsvp.length, wordIndex: index, wordTiming: null })
+      if (playing) {
+        this.silentShown = 0
+        this.runSilent(this.generation, index)
+      } else this.showSilentWord(index)
+    } else {
+      const offset = this.rsvp[this.state.wordIndex]?.start ?? this.state.offset
+      this.generation++
+      this.clearEstimate()
+      this.rsvp = []
+      this.set({ muted: false, wordCount: 0, wordIndex: 0 })
+      if (playing) this.speakFrom(this.sentenceIndexAt(offset), offset)
+      else this.resumeOffset = offset
+    }
+  }
+
+  /** Speed reads (muted) from [offset]. */
+  speedReadFrom(offset: number) {
+    if (!this.sentences.length) return
+    if (this.state.status === 'playing' && !this.state.muted) this.pause()
+    this.setMuted(true)
+    this.playSilent(offset)
+  }
+
+  setWpm(wpm: number) {
+    const v = Math.min(RSVP_MAX_WPM, Math.max(RSVP_MIN_WPM, Math.round(wpm / RSVP_WPM_STEP) * RSVP_WPM_STEP))
+    try {
+      localStorage.setItem(WPM_KEY, String(v))
+    } catch {
+      // storage blocked
+    }
+    this.set({ wpm: v })
+  }
+
+  /** Time left for the silent reader at the current speed. */
+  silentMillisLeft(): number {
+    return minutesLeft(this.rsvp, this.state.wordIndex, this.state.wpm) * 60000
+  }
+
+  private playSilent(fromOffset?: number) {
+    if (!this.rsvp.length) return
+    this.startMedia()
+    let index = this.state.wordIndex
+    if (fromOffset !== undefined && fromOffset >= 0) index = wordIndexAt(this.rsvp, fromOffset)
+    else if (index >= this.rsvp.length - 1) index = 0
+    this.set({ status: 'playing', following: true })
+    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing'
+    this.silentShown = 0
+    this.runSilent(++this.generation, index)
+  }
+
+  /** Jumps the silent reader to word [index]. */
+  private jumpToWord(index: number) {
+    if (!this.rsvp.length) return
+    const i = Math.max(0, Math.min(this.rsvp.length - 1, index))
+    if (this.state.status === 'playing') {
+      this.silentShown = 0
+      this.runSilent(++this.generation, i)
+    } else this.showSilentWord(i)
+  }
+
+  private runSilent(gen: number, index: number) {
+    this.clearEstimate()
+    if (gen !== this.generation) return
+    const word = this.rsvp[index]
+    if (!word) {
+      this.finish()
+      return
+    }
+    this.showSilentWord(index)
+    const ramp = RAMP[this.silentShown] ?? 1
+    this.silentShown++
+    this.estimateTimer = window.setTimeout(() => {
+      if (gen !== this.generation) return
+      if (index >= this.rsvp.length - 1) this.finish()
+      else this.runSilent(gen, index + 1)
+    }, wordDelay(word, this.state.wpm) * ramp)
+  }
+
+  /** Shows silent reader word [index] in the article (sentence and word highlight). */
+  private showSilentWord(index: number) {
+    const w = this.rsvp[index]
+    if (!w) return
+    const sentence = this.sentenceIndexAt(w.start)
+    if (sentence !== this.state.sentence || !this.lastWord) {
+      this.set({ sentence })
+      this.highlightSentence(sentence)
+    }
+    // The word as it stands in the text: a long word split in pieces still highlights whole
+    const whole = this.wordAt(w.start) ?? { start: w.start, end: w.start + w.text.length }
+    this.set({ wordIndex: index })
+    this.highlightWord(whole.start, Math.max(whole.end, w.start + 1), w.text)
   }
 
   private clearEstimate() {
@@ -413,6 +667,11 @@ export class ReadAloudEngine {
   private highlightSentence(i: number) {
     const hl = highlights()
     const s = this.sentences[i]
+    if (s && !this.state.muted) {
+      const first = this.wordAt(s.start)
+      this.set({ offset: s.start, wordStart: first?.start ?? -1, word: first ? this.text.slice(first.start, first.end) : '' })
+    }
+    this.lastWord = null
     if (!hl || !s) return
     const r = this.rangeFor(s.start, s.end)
     if (!r) return
@@ -424,7 +683,9 @@ export class ReadAloudEngine {
     this.keepInView(this.rangeFor(start.start, start.end) ?? r)
   }
 
-  private highlightWord(start: number, end: number) {
+  private highlightWord(start: number, end: number, shown?: string) {
+    this.lastWord = { start, end }
+    this.set({ wordStart: start, offset: start, word: shown ?? this.text.slice(start, end).trim() })
     const hl = highlights()
     if (!hl) return
     const r = this.rangeFor(start, end)
@@ -501,6 +762,11 @@ export class ReadAloudEngine {
 
     this.set({ status: 'playing', sentence: index })
     this.highlightSentence(index)
+    if (word && begin > sentence.start) {
+      // Starting mid-sentence: the position (and the word display) starts at the tapped word
+      this.lastWord = word
+      this.set({ offset: begin, wordStart: begin, word: this.text.slice(word.start, word.end) })
+    }
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing'
 
     if (this.usingKokoro) {
@@ -725,7 +991,7 @@ export class ReadAloudEngine {
       this.silentAudio.loop = true
       this.silentAudio.volume = 0.01
     }
-    this.silentAudio.play().catch(() => undefined)
+    this.silentAudio.play()?.catch(() => undefined)
     if (!('mediaSession' in navigator)) return
     const ms = navigator.mediaSession
     ms.metadata = new MediaMetadata({ title: this.title || 'Feeder', artist: this.artist || 'Read aloud', album: 'Feeder Web' })
@@ -733,8 +999,8 @@ export class ReadAloudEngine {
       ['play', () => this.play()],
       ['pause', () => this.pause()],
       ['stop', () => this.stop()],
-      ['seekbackward', () => this.skip(-1)],
-      ['seekforward', () => this.skip(1)],
+      ['seekbackward', () => this.seekBy(-10)],
+      ['seekforward', () => this.seekBy(10)],
       ['previoustrack', this.onMediaPrevious ? () => this.onMediaPrevious?.() : () => this.skip(-1)],
       ['nexttrack', this.onMediaNext ? () => this.onMediaNext?.() : () => this.skip(1)],
     ]

@@ -13,12 +13,16 @@ Feeder in the browser. It joins the same sync chain as Feeder on your phone, so 
 - Always-visible article buttons: read aloud, full text, open original; bottom bar with
   Share/Unread/Summarize/Save
 - Read aloud with the browser's voices: sentence and word highlight, tap a word for
-  "Read from here", tap while reading to jump, compact player with speed, previous/next
-  article, up-next strip and auto-continue, media keys (Media Session)
+  "Read from here", tap while reading to jump, and a player like the Android app's: dark
+  panel, wavy seek line (drag or tap), ±10 s, previous/next article, speed menu, up next,
+  ⋮ menu (Show word, Auto-play next, Go to spoken text, Skip to next, Change voice), media keys
+- Speed reading inside the player: "Show word" (speedometer button or V) shows the spoken word
+  big with a focus letter; Mute hands over to a silent reader at 100–1000 wpm that keeps
+  highlighting and scrolling the article, and unmuting reads aloud on from the word reached
 - Natural voice that runs on this device (Kokoro via kokoro-js, English): the model downloads
   once from Hugging Face (about 90 MB, or 310 MB with the GPU option) and runs in a worker
 - Next/previous follows the list order at the time you opened the article; swipe on touch,
-  J/K or arrow keys on a keyboard (also R read aloud, S save, M unread, O open original)
+  J/K or arrow keys on a keyboard (also R read aloud, V show word, S save, M unread, O open original)
 - Hacker News score badge (Settings, off by default), og:image thumbnails (per feed, synced)
 - Summaries through any OpenAI-compatible API (Ollama's `/v1`, OpenAI, LM Studio…)
 - Per-feed block/allow rules (synced), installable as an app (PWA)
