@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { feedDisplayTitle, type Feed, type Item } from '../lib/db'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { FEED_ORDER_KEY, feedDisplayTitle, getKv, sortFolder, type Feed, type Item } from '../lib/db'
 import type { Selection } from '../lib/listquery'
 import { Icon, IconButton } from './Icon'
 import { proxiedUrl } from '../lib/api'
@@ -10,8 +11,11 @@ interface Props {
   selection: Selection
   onSelect: (s: Selection) => void
   onEditFeed: (url: string) => void
-  /** Drag and drop: put the feed in another folder ("" = no folder). */
-  onMoveFeed: (url: string, tag: string) => void
+  /**
+   * Drag and drop: put the feed in folder `tag` ("" = no folder). With `beforeUrl` it also gets a
+   * manual position in that folder (null = at the end); `folderUrls` is the folder as shown.
+   */
+  onMoveFeed: (url: string, tag: string, place?: { beforeUrl: string | null; folderUrls: string[] }) => void
   onAddFeed: () => void
   onRefresh: () => void
   onSettings: () => void
@@ -39,13 +43,17 @@ function FeedIcon({ feed }: { feed: Feed }) {
 
 export function Sidebar(p: Props) {
   const [closedTags, setClosedTags] = useState<string[]>([])
+  const order = useLiveQuery(() => getKv<string[]>(FEED_ORDER_KEY, []), []) ?? []
   // Drag and drop of feeds between folders
   const [dragUrl, setDragUrl] = useState<string | null>(null)
   const [dropTag, setDropTag] = useState<string | null>(null)
+  /** Where a reorder drop would land: before or after this feed row. */
+  const [dropAt, setDropAt] = useState<{ url: string; after: boolean } | null>(null)
   const dragFeed = dragUrl ? p.feeds.find((f) => f.url === dragUrl) : undefined
   const endDrag = () => {
     setDragUrl(null)
     setDropTag(null)
+    setDropAt(null)
   }
   /** Handlers that make an element a drop target for the folder `tag`. */
   const dropProps = (tag: string) => ({
@@ -55,6 +63,7 @@ export function Sidebar(p: Props) {
       e.stopPropagation()
       e.dataTransfer.dropEffect = 'move'
       if (dropTag !== tag) setDropTag(tag)
+      if (dropAt) setDropAt(null)
     },
     onDrop: (e: React.DragEvent) => {
       if (!dragUrl) return
@@ -76,24 +85,49 @@ export function Sidebar(p: Props) {
   const tags = useMemo(() => {
     const byTag = new Map<string, Feed[]>()
     for (const f of p.feeds) byTag.set(f.tag, [...(byTag.get(f.tag) ?? []), f])
-    for (const list of byTag.values())
-      list.sort((a, b) => feedDisplayTitle(a).toLowerCase().localeCompare(feedDisplayTitle(b).toLowerCase()))
+    for (const [tag, list] of byTag) byTag.set(tag, sortFolder(list, order))
     return [...byTag.entries()].sort(([a], [b]) => (!a !== !b ? (a ? -1 : 1) : a.toLowerCase().localeCompare(b.toLowerCase())))
-  }, [p.feeds])
+  }, [p.feeds, order])
 
   const isSel = (s: Selection) => JSON.stringify(s) === JSON.stringify(p.selection)
 
-  const feedRow = (f: Feed) => (
+  const feedRow = (f: Feed, i: number, folder: Feed[]) => (
     <li
       key={f.url}
       draggable
-      className={dragUrl === f.url ? 'dragging' : undefined}
+      className={
+        [
+          dragUrl === f.url ? 'dragging' : '',
+          dropAt?.url === f.url && dragUrl !== f.url ? (dropAt.after ? 'drop-after' : 'drop-before') : '',
+        ]
+          .filter(Boolean)
+          .join(' ') || undefined
+      }
       onDragStart={(e) => {
         e.dataTransfer.effectAllowed = 'move'
         e.dataTransfer.setData('text/plain', f.url)
         setDragUrl(f.url)
       }}
       onDragEnd={endDrag}
+      onDragOver={(e) => {
+        if (!dragUrl) return
+        e.preventDefault()
+        e.stopPropagation()
+        e.dataTransfer.dropEffect = 'move'
+        const r = e.currentTarget.getBoundingClientRect()
+        const after = e.clientY > r.top + r.height / 2
+        if (dropAt?.url !== f.url || dropAt.after !== after) setDropAt({ url: f.url, after })
+        if (dropTag !== null) setDropTag(null)
+      }}
+      onDrop={(e) => {
+        if (!dragUrl) return
+        e.preventDefault()
+        e.stopPropagation()
+        const after = dropAt?.url === f.url ? dropAt.after : false
+        const beforeUrl = after ? (folder[i + 1]?.url ?? null) : f.url
+        if (dragUrl !== f.url) p.onMoveFeed(dragUrl, f.tag, { beforeUrl, folderUrls: folder.map((x) => x.url) })
+        endDrag()
+      }}
     >
       <button className={`nav-row feed${isSel({ kind: 'feed', url: f.url }) ? ' selected' : ''}`} onClick={() => p.onSelect({ kind: 'feed', url: f.url })}>
         <FeedIcon feed={f} />
@@ -183,10 +217,10 @@ export function Sidebar(p: Props) {
                   ) : null}
                 </button>
               </div>
-              {closedTags.includes(tag) ? null : <ul className="nav-list nested">{feeds.map(feedRow)}</ul>}
+              {closedTags.includes(tag) ? null : <ul className="nav-list nested">{feeds.map((f, i) => feedRow(f, i, feeds))}</ul>}
             </li>
           ) : (
-            feeds.map(feedRow)
+            feeds.map((f, i) => feedRow(f, i, feeds))
           ),
         )}
       </ul>
