@@ -10,11 +10,14 @@
  */
 
 import { isKokoroVoice, kokoro, KOKORO_PREFIX, wavBlob, type KokoroAudio } from './kokoro'
+import { FOOTNOTE_SECTION, isFootnoteLink, isFootnoteMarker, isSkippedLine, speechRemovals } from './speechclean'
 
 interface Segment {
   node: Text
   start: number
   end: number
+  // Where this piece starts inside its text node: skipped clutter can split a node into pieces
+  nodeStart: number
 }
 
 interface Sentence {
@@ -35,7 +38,38 @@ export interface ReadAloudState {
 
 type Listener = (s: ReadAloudState) => void
 
-const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'SVG', 'FIGCAPTION', 'BUTTON'])
+// Read aloud keeps to paragraphs and headings: no captions, tables or code listings' chrome
+const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'SVG', 'FIGCAPTION', 'BUTTON', 'TABLE', 'CAPTION'])
+
+/** Text before [el] in its paragraph, to tell an exponent (10⁶) from a footnote marker. */
+function charBefore(el: Element): string | undefined {
+  for (let n: Node | null = el; n; n = n.parentNode) {
+    for (let p = n.previousSibling; p; p = p.previousSibling) {
+      const t = p.textContent
+      if (t) return t[t.length - 1]
+    }
+    if (n.parentElement && BLOCK_TAGS.test(n.parentElement.tagName)) return undefined
+  }
+  return undefined
+}
+
+/** A paragraph-like block with no blocks inside, so a credit check never drops a whole short article. */
+function isLeafBlock(el: Element): boolean {
+  if (!BLOCK_TAGS.test(el.tagName)) return false
+  for (const c of el.children) if (BLOCK_TAGS.test(c.tagName) && c.tagName !== 'BR') return false
+  return true
+}
+
+/** Clutter elements that read aloud skips with everything inside them. */
+function isClutter(el: Element): boolean {
+  if (SKIP_TAGS.has(el.tagName) || el.getAttribute('aria-hidden') === 'true') return true
+  const role = el.getAttribute('role')
+  if (role === 'doc-noteref' || role === 'doc-endnotes' || role === 'doc-footnote') return true
+  if (el.id && FOOTNOTE_SECTION.test(el.id)) return true
+  if (el.tagName === 'SUP') return isFootnoteMarker(el.textContent ?? '', !!el.closest('a'), charBefore(el))
+  if (el.tagName === 'A') return isFootnoteLink(el.getAttribute('href') ?? '', el.textContent ?? '')
+  return false
+}
 const BLOCK_TAGS =
   /^(P|DIV|LI|H[1-6]|BLOCKQUOTE|PRE|TD|TH|SECTION|ARTICLE|HEADER|FOOTER|FIGURE|UL|OL|TABLE|TR|BR|HR|DT|DD)$/
 
@@ -146,20 +180,30 @@ export class ReadAloudEngine {
     if (this.state.itemId && this.state.itemId !== itemId && this.state.status !== 'idle') this.stop()
     this.container = container
     this.lang = lang || document.documentElement.lang || navigator.language || 'en'
-    this.segments = []
+    const raw: Segment[] = []
     let text = ''
     let lastBlock: Element | null = null
+    const clutter = new Map<Element, boolean>()
+    const blockOf = (n: Node): Element | null => {
+      let block: Element | null = n.parentElement
+      while (block && block !== container && !BLOCK_TAGS.test(block.tagName)) block = block.parentElement
+      return block
+    }
     const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
       acceptNode: (n) => {
         for (let p = n.parentElement; p && p !== container; p = p.parentElement) {
-          if (SKIP_TAGS.has(p.tagName) || p.getAttribute('aria-hidden') === 'true') return NodeFilter.FILTER_REJECT
+          let skip = clutter.get(p)
+          if (skip === undefined) {
+            skip = isClutter(p) || (isLeafBlock(p) && isSkippedLine(p.textContent ?? ''))
+            clutter.set(p, skip)
+          }
+          if (skip) return NodeFilter.FILTER_REJECT
         }
         return n.textContent && n.textContent.length ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
       },
     })
     for (let n = walker.nextNode() as Text | null; n; n = walker.nextNode() as Text | null) {
-      let block: Element | null = n.parentElement
-      while (block && block !== container && !BLOCK_TAGS.test(block.tagName)) block = block.parentElement
+      const block = blockOf(n)
       if (lastBlock && block !== lastBlock && text && !/\s$/.test(text)) {
         // Paragraph break: end the sentence here even without punctuation
         text += '\n\n'
@@ -167,8 +211,33 @@ export class ReadAloudEngine {
       lastBlock = block
       const start = text.length
       text += n.textContent!
-      this.segments.push({ node: n, start, end: text.length })
+      raw.push({ node: n, start, end: text.length, nodeStart: 0 })
     }
+    // Leave reference numbers, URLs and citations out of the spoken text; the pieces around them
+    // keep pointing at their text nodes so highlights and tap-to-read still land on the right words
+    const removed = new Uint8Array(text.length)
+    for (const [s, e] of speechRemovals(text)) removed.fill(1, s, e)
+    const newIndex = new Int32Array(text.length + 1)
+    let kept = ''
+    for (let i = 0; i < text.length; i++) {
+      newIndex[i] = kept.length
+      if (!removed[i]) kept += text[i]
+    }
+    newIndex[text.length] = kept.length
+    this.segments = []
+    for (const g of raw) {
+      for (let i = g.start; i < g.end; ) {
+        if (removed[i]) {
+          i++
+          continue
+        }
+        let j = i
+        while (j < g.end && !removed[j]) j++
+        this.segments.push({ node: g.node, start: newIndex[i], end: newIndex[i] + (j - i), nodeStart: i - g.start })
+        i = j
+      }
+    }
+    text = kept
     this.text = text
     this.sentences = this.splitSentences(text)
     this.set({ itemId, sentences: this.sentences.length, sentence: Math.min(this.state.sentence, this.sentences.length) })
@@ -201,15 +270,18 @@ export class ReadAloudEngine {
     const e = [...this.segments].reverse().find((g) => end > g.start && end <= g.end)
     if (!s || !e) return null
     const r = document.createRange()
-    r.setStart(s.node, start - s.start)
-    r.setEnd(e.node, end - e.start)
+    r.setStart(s.node, s.nodeStart + start - s.start)
+    r.setEnd(e.node, e.nodeStart + end - e.start)
     return r
   }
 
   /** Text offset of a DOM point inside the article, or -1. */
   offsetOf(node: Node, offset: number): number {
-    const seg = this.segments.find((g) => g.node === node)
-    return seg ? seg.start + Math.min(offset, seg.end - seg.start) : -1
+    const pieces = this.segments.filter((g) => g.node === node)
+    if (!pieces.length) return -1
+    // A point inside skipped clutter belongs to the next spoken piece of the node
+    const seg = pieces.find((g) => offset <= g.nodeStart + (g.end - g.start)) ?? pieces[pieces.length - 1]
+    return seg.start + Math.max(0, Math.min(offset - seg.nodeStart, seg.end - seg.start))
   }
 
   /** Text offset under a screen point (for tap-to-read). */

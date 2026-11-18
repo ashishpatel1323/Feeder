@@ -29,7 +29,6 @@ import com.nononsenseapps.feeder.model.html.LinearArticle
 import com.nononsenseapps.feeder.model.html.LinearBlockQuote
 import com.nononsenseapps.feeder.model.html.LinearElement
 import com.nononsenseapps.feeder.model.html.LinearListItem
-import com.nononsenseapps.feeder.model.html.LinearTable
 import com.nononsenseapps.feeder.model.html.LinearText
 import kotlinx.coroutines.launch
 import java.util.IdentityHashMap
@@ -152,7 +151,8 @@ internal class SpeechFocusTarget(
 internal val LocalSpeechFocusTarget = compositionLocalOf<SpeechFocusTarget?> { null }
 
 /**
- * The text elements of an article in reading order, the same ones that can be highlighted.
+ * The text elements of an article in reading order that read aloud speaks, the same ones that can be highlighted.
+ * Tables and footnote list items are left out: read aloud keeps to the article's paragraphs and headings.
  */
 internal fun LinearArticle.speakableTexts(): List<LinearText> {
     val result = mutableListOf<LinearText>()
@@ -161,12 +161,7 @@ internal fun LinearArticle.speakableTexts(): List<LinearText> {
         when (element) {
             is LinearText -> result += element
             is LinearBlockQuote -> element.content.forEach(::visit)
-            is LinearListItem -> element.content.forEach(::visit)
-            is LinearTable ->
-                element.cells.entries
-                    .sortedWith(compareBy({ it.key.row }, { it.key.col }))
-                    .filterNot { it.value.isFiller }
-                    .forEach { it.value.content.forEach(::visit) }
+            is LinearListItem -> if (!isFootnoteItem(element.ids)) element.content.forEach(::visit)
             else -> Unit
         }
     }
@@ -174,12 +169,18 @@ internal fun LinearArticle.speakableTexts(): List<LinearText> {
     return result
 }
 
+// Footnote list items ("fn1", "fn:1", "footnote-1", "cite_note-3"), not the in-text anchors ("fnref1", "footnote-ref-1"),
+// whose ids the linearizer also collects on the list item or paragraph around them
+private val FOOTNOTE_ID = Regex("""^(?:fn[:_-]?\d|footnote|endnote|cite_note)(?!.*ref)""", RegexOption.IGNORE_CASE)
+
+private fun isFootnoteItem(ids: Set<String>): Boolean = ids.any { FOOTNOTE_ID.containsMatchIn(it) }
+
 /**
  * The text to read aloud for an article, built from what is shown so highlights always match.
  */
 internal fun LinearArticle.speechText(): String =
     speakableTexts()
-        .map { it.text.trim() }
+        .map { spokenTextOf(it).text.trim() }
         .filter { it.isNotBlank() }
         .joinToString("\n\n")
 
@@ -193,14 +194,15 @@ internal fun LinearArticle.speechOffsetOf(
     var position = 0
     var first = true
     for (element in speakableTexts()) {
-        val trimmed = element.text.trim()
+        val spoken = spokenTextOf(element)
+        val trimmed = spoken.text.trim()
         if (element === text && trimmed.isEmpty()) return null
         if (trimmed.isEmpty()) continue
         if (!first) position += 2
         first = false
         if (element === text) {
-            val leading = element.text.indexOfFirst { !it.isWhitespace() }
-            return position + (index - leading).coerceIn(0, trimmed.length - 1)
+            val leading = spoken.text.indexOfFirst { !it.isWhitespace() }
+            return position + (spoken.spokenIndexOf(index) - leading).coerceIn(0, trimmed.length - 1)
         }
         position += trimmed.length
     }
@@ -252,7 +254,10 @@ internal class SpeechHighlightIndex(
     init {
         var cursor = 0
         article.speakableTexts().forEach { element ->
-            val normalized = normalizeSpeechText(element.text)
+            // Match the spoken version, but highlight characters of the text on screen
+            val spoken = spokenTextOf(element)
+            val normalized =
+                normalizeSpeechText(spoken.text).let { it.copy(offsets = it.offsets.map { i -> spoken.sourceIndex[i] }) }
             if (normalized.text.isNotBlank()) {
                 val start = source.text.indexOf(normalized.text, cursor)
                 if (start >= 0) {
