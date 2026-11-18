@@ -15,6 +15,9 @@ interface Props {
   onSettings: () => void
   refreshing: string | null
   syncLabel: string
+  /** Desktop only: the sidebar is shrunk to a slim rail of icons. */
+  collapsed: boolean
+  onToggleCollapsed: () => void
 }
 
 function FeedIcon({ feed }: { feed: Feed }) {
@@ -66,13 +69,40 @@ export function Sidebar(p: Props) {
     </li>
   )
 
+
   return (
     <nav className="sidebar">
+      <div className="sidebar-rail" aria-label="Feeds (collapsed)">
+        <IconButton icon="panelOpen" label="Show feeds" title="Show feeds ( [ )" onClick={p.onToggleCollapsed} />
+        <button
+          className={`rail-btn${isSel({ kind: 'all' }) ? ' selected' : ''}`}
+          title={`All articles${totalUnread ? ` (${totalUnread} unread)` : ''}`}
+          aria-label="All articles"
+          onClick={() => p.onSelect({ kind: 'all' })}
+        >
+          <Icon name="article" size={20} />
+        </button>
+        <button
+          className={`rail-btn${isSel({ kind: 'saved' }) ? ' selected' : ''}`}
+          title="Saved"
+          aria-label="Saved"
+          onClick={() => p.onSelect({ kind: 'saved' })}
+        >
+          <Icon name="bookmark" size={20} />
+        </button>
+        <span className="rail-gap" />
+        <IconButton icon="refresh" label={p.refreshing ? `Refreshing ${p.refreshing}` : 'Refresh'} onClick={p.onRefresh} disabled={!!p.refreshing} />
+        <IconButton icon="add" label="Add feed" onClick={p.onAddFeed} />
+        <IconButton icon="settings" label="Settings" onClick={p.onSettings} />
+      </div>
       <div className="sidebar-top">
         <span className="brand">Feeder</span>
         <IconButton icon="refresh" label={p.refreshing ? `Refreshing ${p.refreshing}` : 'Refresh'} onClick={p.onRefresh} disabled={!!p.refreshing} />
         <IconButton icon="add" label="Add feed" onClick={p.onAddFeed} />
         <IconButton icon="settings" label="Settings" onClick={p.onSettings} />
+        <span className="only-wide">
+          <IconButton icon="panelClose" label="Hide feeds" title="Hide feeds ( [ )" onClick={p.onToggleCollapsed} />
+        </span>
       </div>
       {p.refreshing ? <div className="sidebar-status">Refreshing {p.refreshing}</div> : null}
       <ul className="nav-list">

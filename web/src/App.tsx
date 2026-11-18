@@ -40,6 +40,24 @@ export default function App() {
   const [snapshot, setSnapshot] = useState<string[]>([])
   const [pane, setPane] = useState<'list' | 'reader'>('list')
   const [drawer, setDrawer] = useState(false)
+  // Desktop only: shrink the feed sidebar to a slim icon rail. Remembered per browser.
+  const [navCollapsed, setNavCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(NAV_COLLAPSED_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+  const toggleNav = useCallback(() => {
+    setNavCollapsed((c) => {
+      try {
+        localStorage.setItem(NAV_COLLAPSED_KEY, c ? '0' : '1')
+      } catch {
+        /* private mode */
+      }
+      return !c
+    })
+  }, [])
   const [dialog, setDialog] = useState<Dialog>(null)
   const [refreshing, setRefreshing] = useState<string | null>(null)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
@@ -221,6 +239,9 @@ export default function App() {
         case 'r':
           if (openItem) readAloud.state.status === 'idle' ? readAloud.play() : readAloud.stop()
           break
+        case '[':
+          toggleNav()
+          break
         case 'Escape':
           if (pane === 'reader') setPane('list')
           break
@@ -231,7 +252,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [dialog, visibleOrder, openId, nextId, prevId, goNext, goPrev, open, openItem, pane])
+  }, [dialog, visibleOrder, openId, nextId, prevId, goNext, goPrev, open, openItem, pane, toggleNav])
 
   const markAllRead = async () => {
     const ids = groups.flatMap((g) => g.items).filter((i) => !i.read).map((i) => i.id)
@@ -249,7 +270,7 @@ export default function App() {
     : 'Not syncing'
 
   return (
-    <div className={`app pane-${pane}${drawer ? ' drawer-open' : ''}`}>
+    <div className={`app pane-${pane}${drawer ? ' drawer-open' : ''}${navCollapsed ? ' nav-collapsed' : ''}`}>
       <div className="drawer-scrim" onClick={() => setDrawer(false)} />
       <Sidebar
         feeds={feedList}
@@ -266,6 +287,8 @@ export default function App() {
         onSettings={() => setDialog({ kind: 'settings' })}
         refreshing={refreshing}
         syncLabel={syncLabel}
+        collapsed={navCollapsed}
+        onToggleCollapsed={toggleNav}
       />
       <ArticleList
         title={selectionTitle(selection, feeds)}
@@ -294,7 +317,7 @@ export default function App() {
         />
       ) : (
         <section className="reader-pane empty-reader">
-          <p>Select an article. Keyboard: J / K next and previous, R read aloud, S save, M unread, O open original.</p>
+          <p>Select an article. Keyboard: J / K next and previous, R read aloud, S save, M unread, O open original, [ hide or show feeds.</p>
         </section>
       )}
       {dialog?.kind === 'settings' ? <SettingsDialog settings={settings} onClose={() => setDialog(null)} toast={toast} /> : null}
