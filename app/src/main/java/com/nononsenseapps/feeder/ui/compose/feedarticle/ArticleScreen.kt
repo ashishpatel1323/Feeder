@@ -554,6 +554,8 @@ fun ArticleScreen(
                         onToggleFastReading = onToggleFastReading,
                         autoScrolling = autoScroll.active,
                         onToggleAutoScroll = autoScroll::toggle,
+                        // Auto scroll moves the reader view, not the original page
+                        showAutoScroll = !showOriginalPage,
                     )
                 }
             }
@@ -1006,6 +1008,7 @@ private fun ArticleActionBar(
     onToggleFastReading: () -> Unit,
     autoScrolling: Boolean,
     onToggleAutoScroll: () -> Unit,
+    showAutoScroll: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -1066,13 +1069,15 @@ private fun ArticleActionBar(
                     selected = fastReading,
                     modifier = Modifier.weight(1f),
                 )
-                ArticleAction(
-                    icon = Icons.Default.KeyboardDoubleArrowDown,
-                    label = stringResource(R.string.auto_scroll_short),
-                    onClick = onToggleAutoScroll,
-                    selected = autoScrolling,
-                    modifier = Modifier.weight(1f),
-                )
+                if (showAutoScroll) {
+                    ArticleAction(
+                        icon = Icons.Default.KeyboardDoubleArrowDown,
+                        label = stringResource(R.string.auto_scroll_short),
+                        onClick = onToggleAutoScroll,
+                        selected = autoScrolling,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
         }
     }

@@ -1,6 +1,9 @@
 package com.nononsenseapps.feeder.ui.compose.feedarticle
 
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
+import android.view.WindowManager
 import androidx.compose.foundation.MutatePriority
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Row
@@ -33,7 +36,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.nononsenseapps.feeder.R
@@ -89,6 +91,13 @@ class AutoScrollState(
     }
 }
 
+private tailrec fun Context.findActivity(): Activity? =
+    when (this) {
+        is Activity -> this
+        is ContextWrapper -> baseContext.findActivity()
+        else -> null
+    }
+
 @Composable
 fun rememberAutoScrollState(): AutoScrollState {
     val context = LocalContext.current.applicationContext
@@ -105,11 +114,16 @@ fun AutoScrollEffect(
     scrollState: ScrollState,
 ) {
     val density = LocalDensity.current
-    val view = LocalView.current
-    DisposableEffect(state.active) {
-        // The screen must not turn off while reading hands-free
-        view.keepScreenOn = state.active
-        onDispose { view.keepScreenOn = false }
+    val window = LocalContext.current.findActivity()?.window
+    DisposableEffect(state.active, window) {
+        // The screen must not turn off while reading hands-free. A window flag, so it never clears
+        // the view's keepScreenOn that the read-aloud player sets for speed reading.
+        if (state.active && window != null) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            onDispose { window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+        } else {
+            onDispose { }
+        }
     }
     LaunchedEffect(state.playing, state.level) {
         if (!state.playing) return@LaunchedEffect
