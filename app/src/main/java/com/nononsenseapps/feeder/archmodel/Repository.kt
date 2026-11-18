@@ -27,6 +27,7 @@ import com.nononsenseapps.feeder.db.room.SyncRemote
 import com.nononsenseapps.feeder.model.FeedUnreadCount
 import com.nononsenseapps.feeder.model.HackerNewsScores
 import com.nononsenseapps.feeder.model.ThumbnailImage
+import com.nononsenseapps.feeder.model.syncMutex
 import com.nononsenseapps.feeder.sync.DeviceListResponse
 import com.nononsenseapps.feeder.sync.ErrorResponse
 import com.nononsenseapps.feeder.sync.SyncRestClient
@@ -50,6 +51,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import org.kodein.di.DI
 import org.kodein.di.DIAware
 import org.kodein.di.instance
@@ -876,15 +878,18 @@ class Repository(
      * is sent again. Feeds already known to be deleted elsewhere stay deleted.
      */
     suspend fun prepareForceSync() {
-        val syncRemote = syncRemoteStore.getSyncRemote()
-        if (!syncRemote.hasSyncChain()) return
-        syncRemoteStore.deleteAllReadStatusSyncs()
-        syncRemoteStore.updateSyncRemote(
-            syncRemote.copy(
-                latestMessageTimestamp = Instant.EPOCH,
-                lastFeedsRemoteHash = 0,
-            ),
-        )
+        // Under the sync lock, so a sync already in flight can't write its older SyncRemote back over this reset
+        syncMutex.withLock {
+            val syncRemote = syncRemoteStore.getSyncRemote()
+            if (!syncRemote.hasSyncChain()) return
+            syncRemoteStore.deleteAllReadStatusSyncs()
+            syncRemoteStore.updateSyncRemote(
+                syncRemote.copy(
+                    latestMessageTimestamp = Instant.EPOCH,
+                    lastFeedsRemoteHash = 0,
+                ),
+            )
+        }
     }
 
     suspend fun getFeedItemsWithoutSyncedReadMark(): List<FeedItemForReadMark> = syncRemoteStore.getFeedItemsWithoutSyncedReadMark()
