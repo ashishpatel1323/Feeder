@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { feedDisplayTitle, type Feed, type Item } from '../lib/db'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { FEED_ORDER_KEY, feedDisplayTitle, getKv, sortFolder, type Feed, type Item } from '../lib/db'
 import type { Selection } from '../lib/listquery'
 import { Icon, IconButton } from './Icon'
 import { proxiedUrl } from '../lib/api'
@@ -10,6 +11,11 @@ interface Props {
   selection: Selection
   onSelect: (s: Selection) => void
   onEditFeed: (url: string) => void
+  /**
+   * Drag and drop: put the feed in folder `tag` ("" = no folder). With `beforeUrl` it also gets a
+   * manual position in that folder (null = at the end); `folderUrls` is the folder as shown.
+   */
+  onMoveFeed: (url: string, tag: string, place?: { beforeUrl: string | null; folderUrls: string[] }) => void
   onAddFeed: () => void
   onRefresh: () => void
   onSettings: () => void
@@ -37,6 +43,37 @@ function FeedIcon({ feed }: { feed: Feed }) {
 
 export function Sidebar(p: Props) {
   const [closedTags, setClosedTags] = useState<string[]>([])
+  const order = useLiveQuery(() => getKv<string[]>(FEED_ORDER_KEY, []), []) ?? []
+  // Drag and drop of feeds between folders
+  const [dragUrl, setDragUrl] = useState<string | null>(null)
+  const [dropTag, setDropTag] = useState<string | null>(null)
+  /** Where a reorder drop would land: before or after this feed row. */
+  const [dropAt, setDropAt] = useState<{ url: string; after: boolean } | null>(null)
+  const dragFeed = dragUrl ? p.feeds.find((f) => f.url === dragUrl) : undefined
+  const endDrag = () => {
+    setDragUrl(null)
+    setDropTag(null)
+    setDropAt(null)
+  }
+  /** Handlers that make an element a drop target for the folder `tag`. */
+  const dropProps = (tag: string) => ({
+    onDragOver: (e: React.DragEvent) => {
+      if (!dragUrl) return
+      e.preventDefault()
+      e.stopPropagation()
+      e.dataTransfer.dropEffect = 'move'
+      if (dropTag !== tag) setDropTag(tag)
+      if (dropAt) setDropAt(null)
+    },
+    onDrop: (e: React.DragEvent) => {
+      if (!dragUrl) return
+      e.preventDefault()
+      e.stopPropagation()
+      p.onMoveFeed(dragUrl, tag)
+      endDrag()
+    },
+  })
+  const isDropTarget = (tag: string) => dropTag === tag && !!dragFeed && dragFeed.tag !== tag
   const unreadByFeed = useMemo(() => {
     const m = new Map<string, number>()
     for (const i of p.items) if (!i.read) m.set(i.feedUrl, (m.get(i.feedUrl) ?? 0) + 1)
@@ -48,15 +85,50 @@ export function Sidebar(p: Props) {
   const tags = useMemo(() => {
     const byTag = new Map<string, Feed[]>()
     for (const f of p.feeds) byTag.set(f.tag, [...(byTag.get(f.tag) ?? []), f])
-    for (const list of byTag.values())
-      list.sort((a, b) => feedDisplayTitle(a).toLowerCase().localeCompare(feedDisplayTitle(b).toLowerCase()))
+    for (const [tag, list] of byTag) byTag.set(tag, sortFolder(list, order))
     return [...byTag.entries()].sort(([a], [b]) => (!a !== !b ? (a ? -1 : 1) : a.toLowerCase().localeCompare(b.toLowerCase())))
-  }, [p.feeds])
+  }, [p.feeds, order])
 
   const isSel = (s: Selection) => JSON.stringify(s) === JSON.stringify(p.selection)
 
-  const feedRow = (f: Feed) => (
-    <li key={f.url}>
+  const feedRow = (f: Feed, i: number, folder: Feed[]) => (
+    <li
+      key={f.url}
+      draggable
+      className={
+        [
+          dragUrl === f.url ? 'dragging' : '',
+          dropAt?.url === f.url && dragUrl !== f.url ? (dropAt.after ? 'drop-after' : 'drop-before') : '',
+        ]
+          .filter(Boolean)
+          .join(' ') || undefined
+      }
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = 'move'
+        e.dataTransfer.setData('text/plain', f.url)
+        setDragUrl(f.url)
+      }}
+      onDragEnd={endDrag}
+      onDragOver={(e) => {
+        if (!dragUrl) return
+        e.preventDefault()
+        e.stopPropagation()
+        e.dataTransfer.dropEffect = 'move'
+        const r = e.currentTarget.getBoundingClientRect()
+        const after = e.clientY > r.top + r.height / 2
+        if (dropAt?.url !== f.url || dropAt.after !== after) setDropAt({ url: f.url, after })
+        if (dropTag !== null) setDropTag(null)
+      }}
+      onDrop={(e) => {
+        if (!dragUrl) return
+        e.preventDefault()
+        e.stopPropagation()
+        const after = dropAt?.url === f.url ? dropAt.after : false
+        const beforeUrl = after ? (folder[i + 1]?.url ?? null) : f.url
+        if (dragUrl !== f.url) p.onMoveFeed(dragUrl, f.tag, { beforeUrl, folderUrls: folder.map((x) => x.url) })
+        endDrag()
+      }}
+    >
       <button className={`nav-row feed${isSel({ kind: 'feed', url: f.url }) ? ' selected' : ''}`} onClick={() => p.onSelect({ kind: 'feed', url: f.url })}>
         <FeedIcon feed={f} />
         <span className="nav-title">{feedDisplayTitle(f)}</span>
@@ -120,10 +192,16 @@ export function Sidebar(p: Props) {
           </button>
         </li>
       </ul>
-      <ul className="nav-list feeds">
+      <ul
+        className={`nav-list feeds${isDropTarget('') ? ' drop-target' : ''}`}
+        {...dropProps('')}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropTag(null)
+        }}
+      >
         {tags.map(([tag, feeds]) =>
           tag ? (
-            <li key={`tag:${tag}`} className="tag-block">
+            <li key={`tag:${tag}`} className={`tag-block${isDropTarget(tag) ? ' drop-target' : ''}`} {...dropProps(tag)}>
               <div className="tag-row-wrap">
                 <button
                   className="tag-toggle"
@@ -139,10 +217,10 @@ export function Sidebar(p: Props) {
                   ) : null}
                 </button>
               </div>
-              {closedTags.includes(tag) ? null : <ul className="nav-list nested">{feeds.map(feedRow)}</ul>}
+              {closedTags.includes(tag) ? null : <ul className="nav-list nested">{feeds.map((f, i) => feedRow(f, i, feeds))}</ul>}
             </li>
           ) : (
-            feeds.map(feedRow)
+            feeds.map((f, i) => feedRow(f, i, feeds))
           ),
         )}
       </ul>

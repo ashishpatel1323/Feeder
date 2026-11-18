@@ -134,3 +134,45 @@ export function newFeed(url: string, partial: Partial<Feed> = {}): Feed {
 
 export const feedDisplayTitle = (f: Pick<Feed, 'customTitle' | 'title' | 'url'> | undefined) =>
   f ? f.customTitle.trim() || f.title || f.url : ''
+
+/**
+ * Moves a feed into another folder (tag); "" means no folder. Bumps whenModified so the move
+ * wins over the older tag in the sync chain. Returns false when nothing changed.
+ */
+export async function moveFeedToTag(url: string, tag: string): Promise<boolean> {
+  return db.transaction('rw', db.feeds, async () => {
+    const feed = await db.feeds.get(url)
+    if (!feed || feed.tag === tag) return false
+    await db.feeds.put({ ...feed, tag, whenModified: Math.max(Date.now(), feed.whenModified + 1) })
+    return true
+  })
+}
+
+/**
+ * The manual order of feeds inside their folders, as a list of feed URLs. Kept in this browser
+ * only: the sync chain (EncryptedFeed in the Android app) has no field for it.
+ */
+export const FEED_ORDER_KEY = 'feedOrder'
+
+/** Sorts one folder's feeds: by manual position first, then the rest alphabetically. */
+export function sortFolder(feeds: Feed[], order: string[]): Feed[] {
+  const pos = new Map(order.map((u, i) => [u, i]))
+  return [...feeds].sort((a, b) => {
+    const pa = pos.get(a.url) ?? Infinity
+    const pb = pos.get(b.url) ?? Infinity
+    if (pa !== pb) return pa < pb ? -1 : 1
+    return feedDisplayTitle(a).toLowerCase().localeCompare(feedDisplayTitle(b).toLowerCase())
+  })
+}
+
+/**
+ * Puts `url` into a folder whose feeds are currently shown as `folderUrls`, just before
+ * `beforeUrl` (null = at the end). Returns the new manual order for every feed.
+ */
+export function placeInOrder(order: string[], folderUrls: string[], url: string, beforeUrl: string | null): string[] {
+  const folder = folderUrls.filter((u) => u !== url)
+  const at = beforeUrl === null ? -1 : folder.indexOf(beforeUrl)
+  folder.splice(at < 0 ? folder.length : at, 0, url)
+  const inFolder = new Set(folder)
+  return [...order.filter((u) => !inFolder.has(u)), ...folder]
+}
