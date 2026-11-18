@@ -32,6 +32,7 @@ import com.nononsenseapps.feeder.model.LocaleOverride
 import com.nononsenseapps.feeder.model.PlaybackStatus
 import com.nononsenseapps.feeder.model.PodcastPlayerState
 import com.nononsenseapps.feeder.model.PodcastPlayerStateHolder
+import com.nononsenseapps.feeder.model.ReadAloudQueue
 import com.nononsenseapps.feeder.model.TTSStateHolder
 import com.nononsenseapps.feeder.model.TranslationManager
 import com.nononsenseapps.feeder.openai.canUseAsTranslationApi
@@ -72,6 +73,19 @@ class FeedViewModel(
     fun ttsSeekTo(positionMillis: Long) = ttsStateHolder.seekTo(positionMillis)
 
     fun ttsSetSpeed(speed: Float) = ttsStateHolder.setSpeed(speed)
+
+    fun ttsDiagnostics(): String = ttsStateHolder.diagnostics()
+
+    private val readAloudQueue: ReadAloudQueue by instance()
+
+    /** Previous / next article for the player's skip buttons. */
+    val readAloudNeighbors = readAloudQueue.neighbors
+
+    val readAloudAutoContinue = readAloudQueue.autoContinue
+
+    fun ttsSkipArticle(next: Boolean) = readAloudQueue.skip(next)
+
+    fun ttsSetAutoContinue(value: Boolean) = readAloudQueue.setAutoContinue(value)
 
     private val podcastPlayerStateHolder: PodcastPlayerStateHolder by instance()
     private val filePathProvider: FilePathProvider by instance()
