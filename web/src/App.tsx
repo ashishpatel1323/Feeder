@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, feedDisplayTitle, type Feed, type Item } from './lib/db'
+import { db, feedDisplayTitle, moveFeedToTag, type Feed, type Item } from './lib/db'
 import { applyShow, applyToday, buildGroups, selectItems, showCounts, type Selection } from './lib/listquery'
 import { getSettings, updateSettings, useSettings } from './lib/settings'
 import { refreshFeeds } from './lib/refresh'
@@ -287,6 +287,11 @@ export default function App() {
           setPane('list')
         }}
         onEditFeed={(url) => setDialog({ kind: 'edit', url })}
+        onMoveFeed={async (url, tag) => {
+          if (!(await moveFeedToTag(url, tag))) return
+          syncNow().catch(() => undefined)
+          toast(tag ? `Moved to ${tag}` : 'Moved out of its folder')
+        }}
         onAddFeed={() => setDialog({ kind: 'add' })}
         onRefresh={fullRefresh}
         onSettings={() => setDialog({ kind: 'settings' })}

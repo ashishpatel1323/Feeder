@@ -134,3 +134,16 @@ export function newFeed(url: string, partial: Partial<Feed> = {}): Feed {
 
 export const feedDisplayTitle = (f: Pick<Feed, 'customTitle' | 'title' | 'url'> | undefined) =>
   f ? f.customTitle.trim() || f.title || f.url : ''
+
+/**
+ * Moves a feed into another folder (tag); "" means no folder. Bumps whenModified so the move
+ * wins over the older tag in the sync chain. Returns false when nothing changed.
+ */
+export async function moveFeedToTag(url: string, tag: string): Promise<boolean> {
+  return db.transaction('rw', db.feeds, async () => {
+    const feed = await db.feeds.get(url)
+    if (!feed || feed.tag === tag) return false
+    await db.feeds.put({ ...feed, tag, whenModified: Math.max(Date.now(), feed.whenModified + 1) })
+    return true
+  })
+}

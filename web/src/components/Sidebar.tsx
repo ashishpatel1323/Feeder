@@ -10,6 +10,8 @@ interface Props {
   selection: Selection
   onSelect: (s: Selection) => void
   onEditFeed: (url: string) => void
+  /** Drag and drop: put the feed in another folder ("" = no folder). */
+  onMoveFeed: (url: string, tag: string) => void
   onAddFeed: () => void
   onRefresh: () => void
   onSettings: () => void
@@ -37,6 +39,32 @@ function FeedIcon({ feed }: { feed: Feed }) {
 
 export function Sidebar(p: Props) {
   const [closedTags, setClosedTags] = useState<string[]>([])
+  // Drag and drop of feeds between folders
+  const [dragUrl, setDragUrl] = useState<string | null>(null)
+  const [dropTag, setDropTag] = useState<string | null>(null)
+  const dragFeed = dragUrl ? p.feeds.find((f) => f.url === dragUrl) : undefined
+  const endDrag = () => {
+    setDragUrl(null)
+    setDropTag(null)
+  }
+  /** Handlers that make an element a drop target for the folder `tag`. */
+  const dropProps = (tag: string) => ({
+    onDragOver: (e: React.DragEvent) => {
+      if (!dragUrl) return
+      e.preventDefault()
+      e.stopPropagation()
+      e.dataTransfer.dropEffect = 'move'
+      if (dropTag !== tag) setDropTag(tag)
+    },
+    onDrop: (e: React.DragEvent) => {
+      if (!dragUrl) return
+      e.preventDefault()
+      e.stopPropagation()
+      p.onMoveFeed(dragUrl, tag)
+      endDrag()
+    },
+  })
+  const isDropTarget = (tag: string) => dropTag === tag && !!dragFeed && dragFeed.tag !== tag
   const unreadByFeed = useMemo(() => {
     const m = new Map<string, number>()
     for (const i of p.items) if (!i.read) m.set(i.feedUrl, (m.get(i.feedUrl) ?? 0) + 1)
@@ -56,7 +84,17 @@ export function Sidebar(p: Props) {
   const isSel = (s: Selection) => JSON.stringify(s) === JSON.stringify(p.selection)
 
   const feedRow = (f: Feed) => (
-    <li key={f.url}>
+    <li
+      key={f.url}
+      draggable
+      className={dragUrl === f.url ? 'dragging' : undefined}
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = 'move'
+        e.dataTransfer.setData('text/plain', f.url)
+        setDragUrl(f.url)
+      }}
+      onDragEnd={endDrag}
+    >
       <button className={`nav-row feed${isSel({ kind: 'feed', url: f.url }) ? ' selected' : ''}`} onClick={() => p.onSelect({ kind: 'feed', url: f.url })}>
         <FeedIcon feed={f} />
         <span className="nav-title">{feedDisplayTitle(f)}</span>
@@ -120,10 +158,16 @@ export function Sidebar(p: Props) {
           </button>
         </li>
       </ul>
-      <ul className="nav-list feeds">
+      <ul
+        className={`nav-list feeds${isDropTarget('') ? ' drop-target' : ''}`}
+        {...dropProps('')}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropTag(null)
+        }}
+      >
         {tags.map(([tag, feeds]) =>
           tag ? (
-            <li key={`tag:${tag}`} className="tag-block">
+            <li key={`tag:${tag}`} className={`tag-block${isDropTarget(tag) ? ' drop-target' : ''}`} {...dropProps(tag)}>
               <div className="tag-row-wrap">
                 <button
                   className="tag-toggle"

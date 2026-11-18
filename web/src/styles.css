@@ -1505,3 +1505,15 @@ details summary {
   box-shadow: var(--shadow);
   max-width: calc(100vw - 32px);
 }
+
+/* Dragging a feed onto another folder */
+.nav-list li.dragging {
+  opacity: 0.4;
+}
+.nav-list.feeds.drop-target,
+.tag-block.drop-target {
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+}
