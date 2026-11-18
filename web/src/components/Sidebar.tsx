@@ -69,7 +69,6 @@ export function Sidebar(p: Props) {
     </li>
   )
 
-
   return (
     <nav className="sidebar">
       <div className="sidebar-rail" aria-label="Feeds (collapsed)">

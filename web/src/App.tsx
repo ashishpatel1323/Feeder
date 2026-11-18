@@ -12,6 +12,8 @@ import { ArticleList } from './components/ArticleList'
 import { Reader } from './components/Reader'
 import { AddFeedDialog, EditFeedDialog, SettingsDialog } from './components/Dialogs'
 
+const NAV_COLLAPSED_KEY = 'feeder.navCollapsed'
+
 type Dialog = { kind: 'settings' } | { kind: 'add' } | { kind: 'edit'; url: string } | null
 
 function selectionTitle(s: Selection, feeds: Map<string, Feed>): string {
