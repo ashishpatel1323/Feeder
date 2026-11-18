@@ -80,7 +80,7 @@ export default function App() {
   }, [settings.theme])
 
   useEffect(() => {
-    readAloud.voiceURI = settings.readAloudVoice
+    readAloud.setVoice(settings.readAloudVoice)
     readAloud.kokoroGpu = settings.readAloudKokoroGpu
     if (readAloud.state.rate !== settings.readAloudRate && readAloud.state.status === 'idle') readAloud.setRate(settings.readAloudRate)
   }, [settings.readAloudVoice, settings.readAloudRate, settings.readAloudKokoroGpu])

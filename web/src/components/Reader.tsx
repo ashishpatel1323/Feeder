@@ -9,7 +9,6 @@ import { applyFastReading } from '../lib/fastReading'
 import { AUTO_SCROLL_SPEEDS, useAutoScroll } from '../lib/autoscroll'
 import { Icon, IconButton } from './Icon'
 import { Player } from './Player'
-import { Rsvp } from './Rsvp'
 
 interface Props {
   item: Item
@@ -37,8 +36,6 @@ export function Reader(p: Props) {
   const [ra, setRa] = useState<ReadAloudState>(readAloud.state)
   const [pill, setPill] = useState<{ x: number; y: number; offset: number } | null>(null)
   const touch = useRef<{ x: number; y: number; t: number } | null>(null)
-  // Speed reading: the indexed text and where to start in it
-  const [rsvp, setRsvp] = useState<{ text: string; offset: number } | null>(null)
 
   useEffect(() => readAloud.subscribe(setRa), [])
 
@@ -47,7 +44,6 @@ export function Reader(p: Props) {
     setFullMode(!!feed?.fullTextByDefault)
     setFullState('idle')
     setPill(null)
-    setRsvp(null)
     readAloud.showTapWord(null)
     scrollRef.current?.scrollTo({ top: 0 })
   }, [item.id, feed?.fullTextByDefault])
@@ -103,8 +99,8 @@ export function Reader(p: Props) {
   const auto = useAutoScroll(scrollRef)
   const stopAuto = auto.stop
   useEffect(() => {
-    if (playing || rsvp) stopAuto()
-  }, [playing, rsvp, stopAuto])
+    if (playing) stopAuto()
+  }, [playing, stopAuto])
 
   const onBodyClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement
@@ -117,7 +113,7 @@ export function Reader(p: Props) {
       return
     }
     if (playing && ra.status === 'playing') {
-      // While reading, a tap jumps there
+      // While reading (aloud or the silent speed reader), a tap jumps there
       readAloud.play(offset)
       return
     }
@@ -134,37 +130,43 @@ export function Reader(p: Props) {
     setPill(null)
   }
 
-  const openSpeedReading = (offset = 0) => {
-    // Read the same text read aloud uses, so the stopping point maps back onto the article
+  const ensureAttached = () => {
     if (readAloud.state.itemId !== item.id && bodyRef.current) readAloud.attach(bodyRef.current, item.id)
-    if (readAloud.state.status === 'playing') readAloud.toggle()
+  }
+
+  /** Speedometer (V): show the big word in the player, reading aloud if not already. */
+  const showWord = () => {
     setPill(null)
     readAloud.showTapWord(null)
-    setRsvp({ text: readAloud.indexedText, offset })
+    void updateSettings({ readAloudShowWord: true })
+    if (!playing) {
+      ensureAttached()
+      readAloud.play()
+    }
   }
 
-  const closeSpeedReading = (offset: number) => {
-    setRsvp(null)
-    // Scroll the article to where speed reading stopped and mark that word
-    const w = readAloud.wordAt(offset)
-    const range = w && readAloud.rangeFor(w.start, w.end)
-    const scroller = scrollRef.current
-    if (!range || !scroller || offset <= 0) return
-    readAloud.showTapWord(offset)
-    const top = range.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop
-    scroller.scrollTo({ top: Math.max(0, top - scroller.clientHeight / 3) })
+  /** "Speed read" on a tapped word: the silent speed reader from there, word shown. */
+  const speedReadFromPill = () => {
+    if (!pill) return
+    ensureAttached()
+    readAloud.showTapWord(null)
+    void updateSettings({ readAloudShowWord: true })
+    readAloud.speedReadFrom(pill.offset)
+    setPill(null)
   }
 
-  // V opens speed reading (the overlay handles its own keys once open), A toggles auto scroll
+  // V shows the word (or hides it again while reading), A toggles auto scroll
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.key !== 'v' && e.key !== 'a') || e.ctrlKey || e.metaKey || e.altKey || rsvp) return
+      if ((e.key !== 'v' && e.key !== 'a') || e.ctrlKey || e.metaKey || e.altKey) return
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
       if (document.querySelector('.modal-backdrop')) return
       e.preventDefault()
-      if (e.key === 'v') openSpeedReading()
-      else if (!playing) auto.toggle()
+      if (e.key === 'v') {
+        if (playing && ra.status === 'playing' && p.settings.readAloudShowWord) void updateSettings({ readAloudShowWord: false })
+        else showWord()
+      } else if (!playing) auto.toggle()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -227,14 +229,13 @@ export function Reader(p: Props) {
         <IconButton icon="prev" label="Previous article (K)" onClick={p.onPrev} disabled={!p.hasPrev} />
         <IconButton icon="next" label="Next article (J)" onClick={p.onNext} disabled={!p.hasNext} />
         <span className="spacer" />
-        <IconButton
-          icon="headphones"
-          label={playing ? 'Stop reading aloud' : 'Read aloud (R)'}
-          active={playing}
-          onClick={() => (playing ? readAloud.stop() : readAloud.play())}
-          disabled={!readAloud.supported}
-        />
-        <IconButton icon="speed" label="Speed read (V)" active={!!rsvp} onClick={() => openSpeedReading()} />
+        {/* Like the Android app, these hide while the player is open: it has the same controls */}
+        {playing ? null : (
+          <>
+            <IconButton icon="headphones" label="Read aloud (R)" onClick={() => readAloud.play()} disabled={!readAloud.supported} />
+            <IconButton icon="speed" label="Speed read: show the word as it is read (V)" onClick={showWord} disabled={!readAloud.supported} />
+          </>
+        )}
         <IconButton icon="article" label={fullMode ? 'Show feed text (F)' : 'Full text (F)'} active={fullMode} onClick={() => setFullMode(!fullMode)} />
         {item.link ? (
           <a className="icon-btn" href={item.link} target="_blank" rel="noopener noreferrer" title="Open original page (O)" aria-label="Open original page">
@@ -293,7 +294,7 @@ export function Reader(p: Props) {
               <button className="read-pill" onClick={readFromHere}>
                 <Icon name="play" size={16} /> Read from here
               </button>
-              <button className="read-pill secondary" onClick={() => openSpeedReading(pill.offset)}>
+              <button className="read-pill secondary" onClick={speedReadFromPill}>
                 <Icon name="speed" size={16} /> Speed read
               </button>
             </div>
@@ -314,12 +315,6 @@ export function Reader(p: Props) {
           </div>
         ) : null}
       </div>
-
-      {playing ? (
-        <Player state={ra} hasPrev={p.hasPrev} hasNext={p.hasNext} onPrev={p.onPrev} onNext={p.onNext} nextTitle={p.nextTitle} settings={p.settings} />
-      ) : null}
-
-      {rsvp ? <Rsvp text={rsvp.text} startOffset={rsvp.offset} title={item.title} onClose={closeSpeedReading} /> : null}
 
       <footer className="action-bar">
         <IconButton icon="share" label="Share" onClick={share} showLabel />
@@ -344,6 +339,20 @@ export function Reader(p: Props) {
           showLabel
         />
       </footer>
+
+      {playing ? (
+        <Player
+          state={ra}
+          settings={p.settings}
+          currentTitle={item.title}
+          hasPrev={p.hasPrev}
+          hasNext={p.hasNext}
+          nextTitle={p.nextTitle}
+          // Keeps reading in the article it moves to, like the media keys
+          onPrev={() => (readAloud.onMediaPrevious ? readAloud.onMediaPrevious() : p.onPrev())}
+          onNext={() => (readAloud.onMediaNext ? readAloud.onMediaNext() : p.onNext())}
+        />
+      ) : null}
     </section>
   )
 }
