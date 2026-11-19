@@ -272,6 +272,19 @@ fun RowScope.FeedItemText(
                 onDismissRequest = onDismissDropdown,
                 modifier = Modifier.onKeyEventLikeEscape(onDismissDropdown),
             ) {
+                LocalFeedItemSelect.current?.let { select ->
+                    DropdownMenuItem(
+                        onClick = {
+                            onDismissDropdown()
+                            select()
+                        },
+                        text = {
+                            Text(
+                                text = stringResource(id = R.string.select_article),
+                            )
+                        },
+                    )
+                }
                 DropdownMenuItem(
                     onClick = {
                         onDismissDropdown()

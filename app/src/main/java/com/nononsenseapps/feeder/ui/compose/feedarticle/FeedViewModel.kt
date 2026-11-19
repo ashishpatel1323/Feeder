@@ -180,11 +180,21 @@ class FeedViewModel(
         }
 
     /** Swipe to delete in the list: deleted for good on every device. Returns what Undo needs. */
-    suspend fun deleteForGood(itemId: Long): DeletedArticles =
+    suspend fun deleteForGood(itemIds: List<Long>): DeletedArticles =
         applicationCoroutineScope
             .async {
-                repository.deleteArticlesForGood(listOf(itemId))
+                repository.deleteArticlesForGood(itemIds)
             }.await()
+
+    /** Multi-select: marks every selected article read or unread (synced like a single one). */
+    fun setReadState(
+        itemIds: Collection<Long>,
+        read: Boolean,
+    ) = applicationCoroutineScope.launch {
+        for (id in itemIds) {
+            if (read) repository.markAsReadAndNotified(id) else repository.markAsUnread(id)
+        }
+    }
 
     fun undoDelete(deleted: DeletedArticles) =
         applicationCoroutineScope.launch {

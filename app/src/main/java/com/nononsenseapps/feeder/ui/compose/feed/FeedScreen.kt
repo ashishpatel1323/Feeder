@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -52,6 +53,8 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -260,8 +263,33 @@ fun FeedScreen(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-    val articleDeletedText = stringResource(R.string.article_deleted_everywhere)
     val undoText = stringResource(R.string.undo_delete_article)
+    val resources = LocalContext.current.resources
+
+    // Multi-select: started from "Select" in an article's long-press menu
+    var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
+    LaunchedEffect(viewState.currentFeedOrTag, viewState.filter) {
+        selectedIds = emptySet()
+    }
+    BackHandler(enabled = selectedIds.isNotEmpty()) {
+        selectedIds = emptySet()
+    }
+
+    fun deleteWithUndo(itemIds: List<Long>) {
+        coroutineScope.launch {
+            val deleted = viewModel.deleteForGood(itemIds)
+            snackbarHostState.currentSnackbarData?.dismiss()
+            val result =
+                snackbarHostState.showSnackbar(
+                    message = resources.getQuantityString(R.plurals.n_articles_deleted_everywhere, itemIds.size, itemIds.size),
+                    actionLabel = undoText,
+                    duration = SnackbarDuration.Short,
+                )
+            if (result == SnackbarResult.ActionPerformed) {
+                viewModel.undoDelete(deleted)
+            }
+        }
+    }
 
     val focusNavDrawer = remember { FocusRequester() }
 
@@ -540,22 +568,70 @@ fun FeedScreen(
             translatedFeedCards = translatedFeedCards,
             onTranslateFeedCard = viewModel::translateFeedCardIfNeeded,
             snackbarHostState = snackbarHostState,
-            onDeleteItem = { itemId ->
-                coroutineScope.launch {
-                    val deleted = viewModel.deleteForGood(itemId)
-                    snackbarHostState.currentSnackbarData?.dismiss()
-                    val result =
-                        snackbarHostState.showSnackbar(
-                            message = articleDeletedText,
-                            actionLabel = undoText,
-                            duration = SnackbarDuration.Short,
-                        )
-                    if (result == SnackbarResult.ActionPerformed) {
-                        viewModel.undoDelete(deleted)
-                    }
-                }
-            },
+            onDeleteItem = { itemId -> deleteWithUndo(listOf(itemId)) },
+            selection =
+                FeedSelection(
+                    ids = selectedIds,
+                    onToggle = { id -> selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id },
+                    onClear = { selectedIds = emptySet() },
+                    onMarkRead = { read ->
+                        viewModel.setReadState(selectedIds, read)
+                        selectedIds = emptySet()
+                    },
+                    onDelete = {
+                        deleteWithUndo(selectedIds.toList())
+                        selectedIds = emptySet()
+                    },
+                ),
         )
+    }
+}
+
+/** Articles picked with multi-select, and what can be done to all of them at once. */
+@Immutable
+class FeedSelection(
+    val ids: Set<Long>,
+    val onToggle: (Long) -> Unit,
+    val onClear: () -> Unit,
+    val onMarkRead: (Boolean) -> Unit,
+    val onDelete: () -> Unit,
+) {
+    val active: Boolean get() = ids.isNotEmpty()
+}
+
+/** Shown under the list while articles are selected. */
+@Composable
+fun FeedSelectionBar(
+    selection: FeedSelection,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        tonalElevation = 3.dp,
+        shadowElevation = 3.dp,
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+        ) {
+            IconButton(onClick = selection.onClear) {
+                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear_selection))
+            }
+            Text(
+                text = stringResource(R.string.n_selected, selection.ids.size),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = { selection.onMarkRead(true) }) {
+                Icon(Icons.Default.VisibilityOff, contentDescription = stringResource(R.string.mark_as_read))
+            }
+            IconButton(onClick = { selection.onMarkRead(false) }) {
+                Icon(Icons.Default.Visibility, contentDescription = stringResource(R.string.mark_as_unread))
+            }
+            IconButton(onClick = selection.onDelete) {
+                Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.delete_selected))
+            }
+        }
     }
 }
 
@@ -626,6 +702,7 @@ fun FeedScreen(
     onMarkGroupAsRead: (String) -> Unit = {},
     snackbarHostState: SnackbarHostState? = null,
     onDeleteItem: ((Long) -> Unit)? = null,
+    selection: FeedSelection? = null,
 ) {
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -642,6 +719,7 @@ fun FeedScreen(
         modifier = modifier,
         viewState = viewState,
         snackbarHostState = snackbarHostState,
+        hideFab = selection?.active == true,
         onRefreshVisible = onRefreshVisible,
         onOpenNavDrawer = {
             coroutineScope.launch {
@@ -990,6 +1068,7 @@ fun FeedScreen(
                         onOpenFeedItemInBrowser = onOpenFeedItemInBrowser,
                         onSetBookmark = onSetBookmark,
                         onDeleteItem = onDeleteItem,
+                        selection = selection,
                         gridState = feedGridState,
                         pagedFeedItems = pagedFeedItems,
                         translatedFeedCards = translatedFeedCards,
@@ -1020,6 +1099,7 @@ fun FeedScreen(
                         onOpenFeedItemInBrowser = onOpenFeedItemInBrowser,
                         onSetBookmark = onSetBookmark,
                         onDeleteItem = onDeleteItem,
+                        selection = selection,
                         listState = feedListState,
                         onMarkGroupAsRead = onMarkGroupAsRead,
                         pagedFeedItems = pagedFeedItems,
@@ -1027,6 +1107,10 @@ fun FeedScreen(
                         onTranslateFeedCard = onTranslateFeedCard,
                         modifier = Modifier.weight(1f),
                     )
+            }
+
+            if (selection?.active == true) {
+                FeedSelectionBar(selection = selection)
             }
         }
     }
@@ -1071,6 +1155,8 @@ fun FeedScreen(
     ttsOnSetAutoContinue: (Boolean) -> Unit = {},
     ttsDiagnostics: () -> String = { "" },
     snackbarHostState: SnackbarHostState? = null,
+    // While articles are selected, the selection bar takes the button's place
+    hideFab: Boolean = false,
     content: @Composable (Modifier) -> Unit,
 ) {
     var manuallyTriggeredRefresh by rememberSaveable {
@@ -1216,7 +1302,7 @@ fun FeedScreen(
             }
         },
         floatingActionButton = {
-            if (viewState.showFab) {
+            if (viewState.showFab && !hideFab) {
                 AnimatedVisibility(
                     // The read-aloud panel has no room for the button, so it floats above it
                     visible =
@@ -1326,6 +1412,7 @@ fun FeedListContent(
     modifier: Modifier = Modifier,
     onMarkGroupAsRead: (String) -> Unit = {},
     onDeleteItem: ((Long) -> Unit)? = null,
+    selection: FeedSelection? = null,
 ) {
     val coroutineScope = rememberCoroutineScope()
     val activityLauncher: ActivityLauncher by LocalDI.current.instance()
@@ -1504,6 +1591,9 @@ fun FeedListContent(
                                 )
                             },
                             onDelete = onDeleteItem?.let { delete -> { delete(previewItem.id) } },
+                            selectionMode = selection?.active == true,
+                            selected = selection?.ids?.contains(previewItem.id) == true,
+                            onToggleSelect = selection?.let { sel -> { sel.onToggle(previewItem.id) } },
                             filter = viewState.filter,
                             item = previewItem,
                             showThumbnail = viewState.showThumbnails,
@@ -1700,6 +1790,7 @@ fun FeedGridContent(
     onTranslateFeedCard: (FeedListItem) -> Unit,
     modifier: Modifier = Modifier,
     onDeleteItem: ((Long) -> Unit)? = null,
+    selection: FeedSelection? = null,
 ) {
     val coroutineScope = rememberCoroutineScope()
     val activityLauncher: ActivityLauncher by LocalDI.current.instance()
@@ -1799,6 +1890,9 @@ fun FeedGridContent(
                             )
                         },
                         onDelete = onDeleteItem?.let { delete -> { delete(previewItem.id) } },
+                        selectionMode = selection?.active == true,
+                        selected = selection?.ids?.contains(previewItem.id) == true,
+                        onToggleSelect = selection?.let { sel -> { sel.onToggle(previewItem.id) } },
                         filter = viewState.filter,
                         item = previewItem,
                         showThumbnail = viewState.showThumbnails,
