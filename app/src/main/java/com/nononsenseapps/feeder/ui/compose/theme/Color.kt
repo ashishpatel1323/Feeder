@@ -95,3 +95,4 @@ val NavBarScrimDark = Color(0xC3000000)
 
 val SwipingItemToReadColor = Color(0xffff5252)
 val SwipingItemToUnreadColor = Color(0xff1C9255)
+val SwipingItemToDeleteColor = Color(0xffb71c1c)

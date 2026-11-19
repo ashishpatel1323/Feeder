@@ -64,6 +64,10 @@ import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SearchBar
 import androidx.compose.material3.SearchBarDefaults
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TooltipBox
@@ -255,6 +259,9 @@ fun FeedScreen(
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val articleDeletedText = stringResource(R.string.article_deleted_everywhere)
+    val undoText = stringResource(R.string.undo_delete_article)
 
     val focusNavDrawer = remember { FocusRequester() }
 
@@ -532,6 +539,22 @@ fun FeedScreen(
             pagedFeedItems = pagedFeedItems,
             translatedFeedCards = translatedFeedCards,
             onTranslateFeedCard = viewModel::translateFeedCardIfNeeded,
+            snackbarHostState = snackbarHostState,
+            onDeleteItem = { itemId ->
+                coroutineScope.launch {
+                    val deleted = viewModel.deleteForGood(itemId)
+                    snackbarHostState.currentSnackbarData?.dismiss()
+                    val result =
+                        snackbarHostState.showSnackbar(
+                            message = articleDeletedText,
+                            actionLabel = undoText,
+                            duration = SnackbarDuration.Short,
+                        )
+                    if (result == SnackbarResult.ActionPerformed) {
+                        viewModel.undoDelete(deleted)
+                    }
+                }
+            },
         )
     }
 }
@@ -601,6 +624,8 @@ fun FeedScreen(
     onSetFeedListGrouping: (FeedListGrouping) -> Unit = {},
     onSetSorting: (SortingOptions) -> Unit = {},
     onMarkGroupAsRead: (String) -> Unit = {},
+    snackbarHostState: SnackbarHostState? = null,
+    onDeleteItem: ((Long) -> Unit)? = null,
 ) {
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -616,6 +641,7 @@ fun FeedScreen(
     FeedScreen(
         modifier = modifier,
         viewState = viewState,
+        snackbarHostState = snackbarHostState,
         onRefreshVisible = onRefreshVisible,
         onOpenNavDrawer = {
             coroutineScope.launch {
@@ -963,6 +989,7 @@ fun FeedScreen(
                         onOpenFeedItemInCustomTab = onOpenFeedItemInCustomTab,
                         onOpenFeedItemInBrowser = onOpenFeedItemInBrowser,
                         onSetBookmark = onSetBookmark,
+                        onDeleteItem = onDeleteItem,
                         gridState = feedGridState,
                         pagedFeedItems = pagedFeedItems,
                         translatedFeedCards = translatedFeedCards,
@@ -992,6 +1019,7 @@ fun FeedScreen(
                         onOpenFeedItemInCustomTab = onOpenFeedItemInCustomTab,
                         onOpenFeedItemInBrowser = onOpenFeedItemInBrowser,
                         onSetBookmark = onSetBookmark,
+                        onDeleteItem = onDeleteItem,
                         listState = feedListState,
                         onMarkGroupAsRead = onMarkGroupAsRead,
                         pagedFeedItems = pagedFeedItems,
@@ -1042,6 +1070,7 @@ fun FeedScreen(
     ttsOnSkipArticle: (next: Boolean) -> Unit = {},
     ttsOnSetAutoContinue: (Boolean) -> Unit = {},
     ttsDiagnostics: () -> String = { "" },
+    snackbarHostState: SnackbarHostState? = null,
     content: @Composable (Modifier) -> Unit,
 ) {
     var manuallyTriggeredRefresh by rememberSaveable {
@@ -1110,6 +1139,9 @@ fun FeedScreen(
         )
 
     Scaffold(
+        snackbarHost = {
+            if (snackbarHostState != null) SnackbarHost(snackbarHostState)
+        },
         topBar = {
             SensibleTopAppBar(
                 scrollBehavior = scrollBehavior,
@@ -1293,6 +1325,7 @@ fun FeedListContent(
     onTranslateFeedCard: (FeedListItem) -> Unit,
     modifier: Modifier = Modifier,
     onMarkGroupAsRead: (String) -> Unit = {},
+    onDeleteItem: ((Long) -> Unit)? = null,
 ) {
     val coroutineScope = rememberCoroutineScope()
     val activityLauncher: ActivityLauncher by LocalDI.current.instance()
@@ -1470,6 +1503,7 @@ fun FeedListContent(
                                     previewItem.bookmarked,
                                 )
                             },
+                            onDelete = onDeleteItem?.let { delete -> { delete(previewItem.id) } },
                             filter = viewState.filter,
                             item = previewItem,
                             showThumbnail = viewState.showThumbnails,
@@ -1665,6 +1699,7 @@ fun FeedGridContent(
     translatedFeedCards: TranslatedFeedCards,
     onTranslateFeedCard: (FeedListItem) -> Unit,
     modifier: Modifier = Modifier,
+    onDeleteItem: ((Long) -> Unit)? = null,
 ) {
     val coroutineScope = rememberCoroutineScope()
     val activityLauncher: ActivityLauncher by LocalDI.current.instance()
@@ -1763,6 +1798,7 @@ fun FeedGridContent(
                                 previewItem.bookmarked,
                             )
                         },
+                        onDelete = onDeleteItem?.let { delete -> { delete(previewItem.id) } },
                         filter = viewState.filter,
                         item = previewItem,
                         showThumbnail = viewState.showThumbnails,

@@ -37,12 +37,14 @@ import com.nononsenseapps.feeder.model.TTSStateHolder
 import com.nononsenseapps.feeder.model.TranslationManager
 import com.nononsenseapps.feeder.openai.canUseAsTranslationApi
 import com.nononsenseapps.feeder.openai.isLocalTranslation
+import com.nononsenseapps.feeder.sync2.DeletedArticles
 import com.nononsenseapps.feeder.ui.compose.feed.FeedListItem
 import com.nononsenseapps.feeder.ui.compose.feed.FeedOrTag
 import com.nononsenseapps.feeder.ui.compose.text.htmlToAnnotatedString
 import com.nononsenseapps.feeder.util.Either
 import com.nononsenseapps.feeder.util.FilePathProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -175,6 +177,18 @@ class FeedViewModel(
     fun markAsRead(itemId: Long) =
         applicationCoroutineScope.launch {
             repository.markAsReadAndNotified(itemId)
+        }
+
+    /** Swipe to delete in the list: deleted for good on every device. Returns what Undo needs. */
+    suspend fun deleteForGood(itemId: Long): DeletedArticles =
+        applicationCoroutineScope
+            .async {
+                repository.deleteArticlesForGood(listOf(itemId))
+            }.await()
+
+    fun undoDelete(deleted: DeletedArticles) =
+        applicationCoroutineScope.launch {
+            repository.undoDeleteArticles(deleted)
         }
 
     fun markAsReadOnSwipe(itemId: Long) =

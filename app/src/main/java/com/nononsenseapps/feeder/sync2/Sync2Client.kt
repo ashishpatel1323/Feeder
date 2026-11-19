@@ -5,8 +5,10 @@ import com.nononsenseapps.feeder.archmodel.Repository
 import com.nononsenseapps.feeder.crypto.AesCbcWithIntegrity
 import com.nononsenseapps.feeder.crypto.SecretKeys
 import com.nononsenseapps.feeder.db.room.Feed
+import com.nononsenseapps.feeder.db.room.FeedItem
 import com.nononsenseapps.feeder.db.room.HiddenItem
 import com.nononsenseapps.feeder.db.room.Sync2Dao
+import com.nononsenseapps.feeder.db.room.Sync2ItemKey
 import com.nononsenseapps.feeder.db.room.Sync2Known
 import com.nononsenseapps.feeder.sync.SyncRestClient
 import com.nononsenseapps.feeder.util.logDebug
@@ -429,11 +431,21 @@ class Sync2Client(
     // -----------------------------------------------------------------------------------------
     // Deleting articles
 
-    /** Deletes articles for good here; the next sync deletes them everywhere. */
-    suspend fun hideItems(itemIds: List<Long>) {
+    /**
+     * Deletes articles for good here; the next sync deletes them everywhere.
+     * Returns what is needed to undo it with [unhideItems].
+     */
+    suspend fun hideItems(itemIds: List<Long>): DeletedArticles {
         val now = System.currentTimeMillis()
         val items = dao.getItemKeys(itemIds)
+        val rows = dao.getFeedItems(itemIds)
         dao.hide(items.map { HiddenItem(it.feedUrl, it.guid, now) }, items.map { it.id })
+        return DeletedArticles(items, rows)
+    }
+
+    /** Undo for [hideItems]: brings the articles back here, and the next sync brings them back elsewhere. */
+    suspend fun unhideItems(deleted: DeletedArticles) {
+        dao.unhide(deleted.keys, deleted.rows)
     }
 
     // -----------------------------------------------------------------------------------------
@@ -505,3 +517,9 @@ class Sync2Client(
         }
     }
 }
+
+/** Articles deleted with [Sync2Client.hideItems], kept so Undo can bring them back as they were. */
+class DeletedArticles(
+    val keys: List<Sync2ItemKey>,
+    val rows: List<FeedItem>,
+)

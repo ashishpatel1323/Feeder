@@ -3,4 +3,6 @@
     <!-- Fork: Feeder's own sync, deleting articles for good -->
     <string name="action_delete_article">Delete</string>
     <string name="article_deleted_everywhere">Article deleted on all your devices</string>
+    <string name="undo_delete_article">Undo</string>
+    <string name="swipe_to_delete_article">Delete article on all devices</string>
 </resources>
