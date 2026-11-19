@@ -25,7 +25,7 @@ import {
 } from '../lib/db'
 import { computeFeedStats, formatRate, noStats, STATS_DAYS, timeAgo, type FeedStats } from '../lib/feedstats'
 import { addFeed, exportOpml, importOpml, refreshFeeds } from '../lib/refresh'
-import { syncNow } from '../lib/sync'
+import { syncNow } from '../lib/sync2'
 import { FeedIcon } from './Sidebar'
 import { Icon, type IconName } from './Icon'
 

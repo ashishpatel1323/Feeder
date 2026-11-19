@@ -2,18 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Feed } from '../lib/db'
 import { addFeed, deleteFeed, exportOpml, importOpml, refreshFeeds } from '../lib/refresh'
-import {
-  addDeviceLink,
-  createChain,
-  getDevices,
-  getSyncState,
-  joinChain,
-  leaveChain,
-  removeDevice,
-  syncNow,
-  forceSync,
-  type Device,
-} from '../lib/sync'
+import { addDeviceLink, createSync, forceSync, getSyncState, joinSync, leaveSync, syncNow } from '../lib/sync2'
 import { parseJoinLink } from '../lib/crypto'
 import { getAccessToken, health, setAccessToken } from '../lib/api'
 import { updateSettings, type Settings } from '../lib/settings'
@@ -181,16 +170,9 @@ export function EditFeedDialog({ url, onClose, toast }: { url: string; onClose: 
 function SyncSection({ toast }: { toast: (m: string) => void }) {
   const state = useLiveQuery(() => getSyncState(), [])
   const [link, setLink] = useState('')
-  const [server, setServer] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [devices, setDevices] = useState<Device[] | null>(null)
   const [showLink, setShowLink] = useState(false)
-
-  useEffect(() => {
-    if (state) getDevices().then(setDevices).catch(() => setDevices(null))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state?.syncCode])
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true)
@@ -208,12 +190,12 @@ function SyncSection({ toast }: { toast: (m: string) => void }) {
     run(async () => {
       const parsed = parseJoinLink(link)
       if (!parsed) throw new Error('Paste the whole "add device" link from Feeder on your phone (it has sync_code= and key=).')
-      await joinChain(parsed.syncCode, parsed.key, server.trim())
+      await joinSync(parsed.syncCode, parsed.key)
       await syncNow()
       await refreshFeeds()
       await syncNow()
       setLink('')
-      toast('Joined your sync chain')
+      toast('Sync is on')
     })
 
   if (state === undefined) return null
@@ -223,25 +205,18 @@ function SyncSection({ toast }: { toast: (m: string) => void }) {
       <section className="settings-section">
         <h3>Sync with Feeder on your phone</h3>
         <p className="muted">
-          In Feeder on your phone, open Device sync and tap Add new device. Share or copy the link it shows and paste it here. This browser joins the
-          same chain, so feeds and read status stay in step. (No chain on the phone yet? Start one there first, or start one here and open the
-          add-device link on the phone.)
+          Syncs feeds and their settings, read marks, Saved, deleted articles and the order of feeds and folders, end-to-end encrypted. In Feeder on
+          your phone, open Sync and copy the add-device link, then paste it here. No sync anywhere yet? Start one here and open its link on the
+          phone.
         </p>
         <label>
           Add-device link
           <textarea rows={3} value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://feederapp.nononsenseapps.com/sync/join?sync_code=…&key=…" />
         </label>
-        <details>
-          <summary>Self-hosted sync server</summary>
-          <label>
-            Server address (leave empty for Feeder's default)
-            <input value={server} onChange={(e) => setServer(e.target.value)} placeholder="https://feeder-sync.nononsenseapps.com" />
-          </label>
-        </details>
         {error ? <p className="error">{error}</p> : null}
         <div className="form-actions">
-          <button onClick={() => run(async () => (await createChain(server.trim()), toast('New sync chain created')))} disabled={busy}>
-            Start a new chain here
+          <button onClick={() => run(async () => (await createSync(), await syncNow(), toast('New sync started')))} disabled={busy}>
+            Start a new sync here
           </button>
           <button className="primary" onClick={join} disabled={busy || !link.trim()}>
             {busy ? 'Joining…' : 'Join'}
@@ -255,37 +230,12 @@ function SyncSection({ toast }: { toast: (m: string) => void }) {
     <section className="settings-section">
       <h3>Sync</h3>
       <p>
-        This browser is <strong>{state.deviceName}</strong> in your sync chain.
+        Sync is on: feeds, read marks, Saved, deleted articles and feed order.
         {state.lastSyncAt ? ` Last synced ${new Date(state.lastSyncAt).toLocaleString()}.` : ''}
       </p>
+      {state.fromChain ? <p className="muted small">Moved over from Feeder's old sync chain, with the same link and key.</p> : null}
       {state.lastError ? <p className="error small">Last sync failed: {state.lastError}</p> : null}
       {error ? <p className="error">{error}</p> : null}
-      <h4>Devices</h4>
-      {devices === null ? (
-        <p className="muted small">Couldn't load the device list.</p>
-      ) : (
-        <ul className="device-list">
-          {devices.map((d) => (
-            <li key={d.deviceId}>
-              <span>
-                {d.deviceName}
-                {d.deviceId === state.deviceId ? ' (this browser)' : ''}
-              </span>
-              {d.deviceId !== state.deviceId ? (
-                <button
-                  className="link-btn"
-                  onClick={() =>
-                    confirm(`Remove ${d.deviceName} from the chain?`) &&
-                    run(async () => (await removeDevice(d.deviceId), setDevices(await getDevices())))
-                  }
-                >
-                  Remove
-                </button>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      )}
       <div className="form-actions wrap">
         <button onClick={() => run(async () => (await syncNow(), toast('Synced')))} disabled={busy}>
           Sync now
@@ -294,21 +244,21 @@ function SyncSection({ toast }: { toast: (m: string) => void }) {
           onClick={() =>
             run(async () => {
               const r = await forceSync()
-              toast(r ? `Force sync done: ${r.readMarksApplied} read marks pulled, ${r.readMarksSent} sent` : 'Force sync done')
+              toast(r ? `Force sync done: ${r.sent} sent, ${r.applied} received` : 'Force sync done')
             })
           }
           disabled={busy}
-          title="Pull and re-send everything: the full feed list and all read marks"
+          title="Send everything this browser has again and pull everything"
         >
           Force sync
         </button>
         <button onClick={() => setShowLink(!showLink)}>{showLink ? 'Hide add-device link' : 'Add another device'}</button>
         <button
           className="danger"
-          onClick={() => confirm('Leave the sync chain? Your feeds stay in this browser.') && run(async () => (await leaveChain(), toast('Left the chain')))}
+          onClick={() => confirm('Turn sync off in this browser? Your feeds stay here.') && run(async () => (await leaveSync(), toast('Sync is off')))}
           disabled={busy}
         >
-          Leave chain
+          Turn off sync
         </button>
       </div>
       {showLink ? (

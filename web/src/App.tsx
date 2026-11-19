@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, FEED_ORDER_KEY, feedDisplayTitle, getKv, moveFeedToTag, opensInBrowser, placeInOrder, setKv, type Feed, type Item } from './lib/db'
+import { db, FEED_ORDER_KEY, feedDisplayTitle, getKv, hideItems, moveFeedToTag, opensInBrowser, placeInOrder, setKv, unhideItems, type Feed, type Item } from './lib/db'
+import type { ToastAction } from './lib/toast'
 import { applyShow, applyToday, buildGroups, selectItems, showCounts, type Selection } from './lib/listquery'
 import { getSettings, updateSettings, useSettings } from './lib/settings'
 import { refreshFeeds } from './lib/refresh'
-import { getSyncState, syncNow } from './lib/sync'
+import { getSyncState, syncNow } from './lib/sync2'
 import { fetchOgImages } from './lib/extras'
 import { readAloud } from './lib/readaloud'
 import { Sidebar } from './components/Sidebar'
@@ -106,14 +107,14 @@ export default function App() {
     if (on) setManaging(false)
   }, [])
   const [refreshing, setRefreshing] = useState<string | null>(null)
-  const [toastMsg, setToastMsg] = useState<string | null>(null)
+  const [toastMsg, setToastMsg] = useState<{ msg: string; action?: ToastAction } | null>(null)
   const [autoplay, setAutoplay] = useState(false)
   const toastTimer = useRef<number | null>(null)
 
-  const toast = useCallback((msg: string) => {
-    setToastMsg(msg)
+  const toast = useCallback((msg: string, action?: ToastAction) => {
+    setToastMsg({ msg, action })
     if (toastTimer.current) clearTimeout(toastTimer.current)
-    toastTimer.current = window.setTimeout(() => setToastMsg(null), 4000)
+    toastTimer.current = window.setTimeout(() => setToastMsg(null), action ? 7000 : 4000)
   }, [])
 
   // Theme
@@ -232,8 +233,9 @@ export default function App() {
     }
   }, [settings.refreshMinutes])
 
-  // Send read marks shortly after they change
-  const pendingMarks = items.filter((i) => i.read && !i.readSynced).length
+  // Send read marks, saves and deletions shortly after they change
+  const deletedCount = useLiveQuery(() => db.hidden.count(), []) ?? 0
+  const pendingMarks = items.filter((i) => !i.readSynced).length + deletedCount
   useEffect(() => {
     if (!pendingMarks || !syncState) return
     const t = window.setTimeout(() => syncNow().catch(() => undefined), 5000)
@@ -281,7 +283,7 @@ export default function App() {
           if (prevId) goPrev()
           break
         case 's':
-          if (openItem) db.items.update(openItem.id, { saved: openItem.saved ? 0 : 1 })
+          if (openItem) db.items.update(openItem.id, { saved: openItem.saved ? 0 : 1, readSynced: 0 })
           break
         case 'm':
           if (openItem) db.items.update(openItem.id, { read: openItem.read ? 0 : 1, readTime: openItem.read ? null : Date.now(), readSynced: 0 })
@@ -317,13 +319,23 @@ export default function App() {
     toast(`Marked ${ids.length} as read`)
   }
 
+  /** Deletes the read articles in the list for good, on every device. Saved ones stay. */
+  const deleteRead = async () => {
+    const gone = groups.flatMap((g) => g.items).filter((i) => i.read && !i.saved)
+    if (!gone.length) return toast('No read articles to delete (saved ones are kept)')
+    if (!confirm(`Delete ${gone.length} read article${gone.length === 1 ? '' : 's'} on all your devices? Saved articles are kept.`)) return
+    await hideItems(gone.map((i) => i.id))
+    syncNow().catch(() => undefined)
+    toast(`Deleted ${gone.length}`, { label: 'Undo', run: () => void unhideItems(gone).then(() => syncNow().catch(() => undefined)) })
+  }
+
   /** Drag and drop in the sidebar and on the Manage feeds page. */
   const moveFeed = async (url: string, tag: string, place?: { beforeUrl: string | null; folderUrls: string[] }) => {
     if (place) {
       const order = await getKv<string[]>(FEED_ORDER_KEY, [])
       await setKv(FEED_ORDER_KEY, placeInOrder(order, place.folderUrls, url, place.beforeUrl))
     }
-    if (!(await moveFeedToTag(url, tag))) return
+    if (!(await moveFeedToTag(url, tag))) return void syncNow().catch(() => undefined)
     syncNow().catch(() => undefined)
     toast(tag ? `Moved to ${tag}` : 'Moved out of its folder')
   }
@@ -434,6 +446,7 @@ export default function App() {
         onOpen={openFromList}
         onMenu={() => setDrawer(true)}
         onMarkAllRead={markAllRead}
+        onDeleteRead={deleteRead}
         />
       )}
       {managing || highlightsPage ? null : openItem ? (
@@ -472,7 +485,18 @@ export default function App() {
       {pageShare ? <ShareDialog subject={pageShare} onClose={() => setPageShare(null)} toast={toast} /> : null}
       {toastMsg ? (
         <div className="toast" role="status">
-          {toastMsg}
+          {toastMsg.msg}
+          {toastMsg.action ? (
+            <button
+              className="toast-action"
+              onClick={() => {
+                toastMsg.action!.run()
+                setToastMsg(null)
+              }}
+            >
+              {toastMsg.action.label}
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

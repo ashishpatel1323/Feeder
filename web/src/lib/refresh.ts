@@ -3,7 +3,7 @@ import { proxyFetch } from './api'
 import { db, getKv, itemId, newFeed, type Feed, type Item } from './db'
 import { countWords, findFeedLinks, htmlToText, parseFeed } from './feedparse'
 import { makeFilter } from './filterrules'
-import { getSyncState } from './sync'
+import { getSyncState, knownStateFor } from './sync2'
 
 export const MAX_ITEMS_PER_FEED_KEY = 'maxItemsPerFeed'
 
@@ -17,7 +17,7 @@ async function fetchOne(feed: Feed): Promise<number> {
   const max = await getKv<number>(MAX_ITEMS_PER_FEED_KEY, 200)
   const syncing = (await getSyncState()) !== null
 
-  await db.transaction('rw', db.items, db.feeds, db.remoteReadMarks, async () => {
+  await db.transaction('rw', [db.items, db.feeds, db.remoteReadMarks, db.syncKnown, db.hidden], async () => {
     // The feed may have been deleted while it was downloading
     if (!(await db.feeds.get(feed.url))) return
     const ids = articles.map((a) => itemId(feed.url, a.guid))
@@ -25,10 +25,15 @@ async function fetchOne(feed: Feed): Promise<number> {
     const remoteRead = new Set(
       (await db.remoteReadMarks.bulkGet(ids)).filter(Boolean).map((r) => r!.key),
     )
+    // Deleted for good, here or on another device
+    const hidden = new Set((await db.hidden.bulkGet(ids)).filter(Boolean).map((h) => h!.id))
+    // Read/saved from other devices before this article was fetched here
+    const known = await knownStateFor(ids.filter((id) => !existing.has(id)))
     const rows: Item[] = []
     // Feeds list newest first; give undated items a slightly older time the further down they are
     articles.forEach((a, index) => {
       const id = itemId(feed.url, a.guid)
+      if (hidden.has(id)) return
       const old = existing.get(id)
       const fallback = old?.sortTime ?? now - index * 1000
       const words = countWords(htmlToText(a.contentHtml))
@@ -46,7 +51,8 @@ async function fetchOne(feed: Feed): Promise<number> {
           sortTime: a.published ?? fallback,
         })
       } else {
-        const read = remoteRead.has(id)
+        const k = known.get(id)
+        const read = remoteRead.has(id) || !!k?.read
         rows.push({
           id,
           feedUrl: feed.url,
@@ -61,9 +67,9 @@ async function fetchOne(feed: Feed): Promise<number> {
           firstSeen: now,
           wordCount: words,
           read: read ? 1 : 0,
-          readTime: read ? now : null,
-          readSynced: read ? 1 : 0,
-          saved: 0,
+          readTime: read ? (k?.readTs ?? now) : null,
+          readSynced: 1,
+          saved: k?.saved ? 1 : 0,
           enclosureUrl: a.enclosureUrl,
         })
         added++

@@ -9,7 +9,9 @@
  *    the Android app uses). Everything sent through here is already encrypted in the browser.
  */
 
-export interface Env {
+import { handleSync2, syncStoreKind, type Sync2Env } from './sync2'
+
+export interface Env extends Sync2Env {
   /** When set, every request must carry it in the X-Access-Token header. */
   ACCESS_TOKEN?: string
   /** Defaults to Feeder's public sync server. */
@@ -184,6 +186,17 @@ export async function handle(request: Request, env: Env): Promise<Response> {
   const path = url.searchParams.get('__path') ?? url.pathname.replace(/^\/api\/?/, '')
 
   if (path === 'health') return json(200, { ok: true, tokenRequired: Boolean(env.ACCESS_TOKEN) })
+
+  // Feeder's own sync. Not behind ACCESS_TOKEN: the Android app doesn't have it, and every
+  // request is proved with a secret derived from the sync key (see sync2.ts).
+  if (path === 'v2/sync') {
+    try {
+      return await handleSync2(request, env)
+    } catch (e) {
+      return json(502, { error: e instanceof Error ? e.message : String(e) })
+    }
+  }
+  if (path === 'v2/status') return json(200, { store: syncStoreKind(env) })
 
   const token = request.headers.get('x-access-token') ?? url.searchParams.get('t')
   if (env.ACCESS_TOKEN && token !== env.ACCESS_TOKEN) {

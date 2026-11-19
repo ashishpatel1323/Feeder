@@ -80,6 +80,21 @@ export interface Highlight {
 
 export type HighlightColor = 'yellow' | 'green' | 'blue' | 'pink'
 
+/** The last value exchanged for one sync record (sync2.ts): kind + "\n" + key. */
+export interface SyncKnown {
+  k: string
+  v: unknown
+  ts: number
+  a?: unknown
+}
+
+/** An article deleted for good: never shown again, even when its feed still lists it. */
+export interface HiddenItem {
+  /** feedUrl + "\n" + guid */
+  id: string
+  ts: number
+}
+
 export interface KeyValue {
   key: string
   value: unknown
@@ -94,6 +109,8 @@ class FeederDb extends Dexie {
   remoteFeeds!: EntityTable<RemoteFeed, 'url'>
   kv!: EntityTable<KeyValue, 'key'>
   highlights!: EntityTable<Highlight, 'id'>
+  syncKnown!: EntityTable<SyncKnown, 'k'>
+  hidden!: EntityTable<HiddenItem, 'id'>
 
   constructor() {
     super('feeder-web')
@@ -119,6 +136,12 @@ class FeederDb extends Dexie {
         })
     })
     this.version(3).stores({ highlights: '&id, itemId, createdAt' })
+    // Feeder's own sync (sync2.ts) and deleting articles for good
+    this.version(4).stores({
+      items: '&id, feedUrl, sortTime, read, saved, readSynced, [read+readSynced]',
+      syncKnown: '&k',
+      hidden: '&id',
+    })
   }
 }
 
@@ -326,3 +349,24 @@ export async function deleteTag(tag: string, feedsMode: 'keep' | 'unsubscribe'):
 export const OPEN_WITH_READER = '0'
 export const OPEN_WITH_BROWSER = '2'
 export const opensInBrowser = (f: Pick<Feed, 'openArticlesWith'> | undefined) => !!f && ['1', '2', '3'].includes(f.openArticlesWith)
+
+/**
+ * Deletes articles for good: they disappear here, never come back when their feed is
+ * refreshed, and the next sync deletes them on every other device too.
+ */
+export async function hideItems(ids: string[]): Promise<void> {
+  if (!ids.length) return
+  const now = Date.now()
+  await db.transaction('rw', db.items, db.hidden, async () => {
+    await db.items.bulkDelete(ids)
+    await db.hidden.bulkPut(ids.map((id) => ({ id, ts: now })))
+  })
+}
+
+/** Undo for hideItems: brings the articles back here, and the next sync brings them back elsewhere. */
+export async function unhideItems(items: Item[]): Promise<void> {
+  await db.transaction('rw', db.items, db.hidden, async () => {
+    await db.hidden.bulkDelete(items.map((i) => i.id))
+    await db.items.bulkPut(items.map((i) => ({ ...i, readSynced: 0 })))
+  })
+}

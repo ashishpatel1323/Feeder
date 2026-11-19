@@ -1,12 +1,13 @@
 # Feeder Web
 
-Feeder in the browser. It joins the same sync chain as Feeder on your phone, so your feeds
-(with their per-feed settings) and read status stay in step. Fork-only, not for upstream.
+Feeder in the browser. It syncs with Feeder on your phone, so your feeds (with their per-feed
+settings), read status, Saved and deleted articles stay in step. Fork-only, not for upstream.
 
 ## What it has
 
 - Feeds, tags, article list and reader, full text (Readability), OPML import/export
-- Sync with Feeder's sync chain: join with the phone's "add device" link, or start a chain here
+- Sync (feeds, read marks, Saved, deleted articles, feed order): join with the phone's
+  "add device" link, or start one here
 - Grouping (None/Date/Feed/Tag/Length/Status/Site), collapsible sticky group headers with
   unread counts and mark-group-read, long-press a header to collapse all, filter chips
   (Unread only/Saved/Today/Short reads/Read), Newest/Oldest/Shortest/Longest sort
@@ -29,20 +30,30 @@ Feeder in the browser. It joins the same sync chain as Feeder on your phone, so 
 
 ## What syncs
 
-Exactly what Feeder's sync carries: the feed list with per-feed settings, and "marked as
-read". Saved articles, marking unread again, and app settings stay on each device.
-
-## How it works
+Feeder's own sync (`server/sync2.ts` + `src/lib/sync2.ts`, shared with the Android app): the
+feed list with per-feed settings and unsubscribes, read and unread, Saved, deleted articles
+(Delete in the reader, or "Delete read articles" above the list; both have Undo), and the order
+of feeds and folders. App settings stay on each device.
 
 ```
-browser (React + IndexedDB)  ──/api/fetch──▶  /api function   ──▶  feed / article sites
-       │ encrypts with your key            └──/api/sync──▶  feeder-sync server
+browser / phone  ──POST /api/v2/sync──▶  /api function  ──▶  Postgres (Neon)
+  encrypts every record with your key        stores opaque records, never the key
 ```
 
-The `/api` function (`server/handler.ts`) stores nothing. It fetches feeds and pages the
-browser can't fetch itself (CORS), and forwards sync calls with the fixed login the Android
-app uses. Sync data is encrypted in the browser (`src/lib/crypto.ts`, byte-compatible with
-the app's `AesCbcWithIntegrity`), so the function only sees ciphertext.
+- Every fact is one record: `{ id, ts, data }`. `id` is an HMAC of kind + entity made on the
+  device, `data` is encrypted with the same AES-CBC + HMAC format as Feeder's old sync, and the
+  higher `ts` wins. One request sends local changes and returns everything changed since the
+  device's cursor.
+- The account and its secret are derived from the sync code and key the devices already share,
+  so the add-device link is the same as before and moving over needs no re-pairing.
+- Moving over from Feeder's old sync chain happens once per device: one last pull from the old
+  chain, then everything the device has is uploaded (feeds, unsubscribes, read marks, Saved).
+- New record kinds (Read later links, …) need no server change; devices keep kinds they don't
+  know.
+
+Server environment: `DATABASE_URL` (or `POSTGRES_URL`) for the Neon database; the tables are
+created on first use. `SYNC_MAX_ACCOUNTS` (default 3) caps how many sync accounts can exist.
+`npm run dev` without `DATABASE_URL` keeps sync data in memory until the dev server restarts.
 
 ## Develop
 

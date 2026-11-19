@@ -7,5 +7,7 @@ export default function handler(request: Request): Promise<Response> {
   return handle(request, {
     ACCESS_TOKEN: process.env.ACCESS_TOKEN,
     SYNC_SERVER: process.env.SYNC_SERVER,
+    DATABASE_URL: process.env.DATABASE_URL ?? process.env.POSTGRES_URL,
+    SYNC_MAX_ACCOUNTS: process.env.SYNC_MAX_ACCOUNTS,
   })
 }

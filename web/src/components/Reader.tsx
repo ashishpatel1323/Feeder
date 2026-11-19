@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, feedDisplayTitle, type Feed, type Highlight, type HighlightColor, type Item } from '../lib/db'
+import { db, feedDisplayTitle, hideItems, unhideItems, type Feed, type Highlight, type HighlightColor, type Item } from '../lib/db'
 import { anchorOf, articlePicture, applyHighlights, deleteHighlight, newHighlight, quoteText, saveHighlight, updateHighlight } from '../lib/highlights'
+import { syncNow } from '../lib/sync2'
+import type { Toast } from '../lib/toast'
 import { copyText, HighlightBar, HighlightsRail } from './Highlights'
 import { combinedSubject, ShareDialog, type ShareSubject } from './ShareDialog'
 import { readingMinutes, wordsOf } from '../lib/listquery'
@@ -27,7 +29,7 @@ interface Props {
   onBack: () => void
   autoplay: boolean
   onAutoplayConsumed: () => void
-  toast: (msg: string) => void
+  toast: Toast
   /** A highlight to scroll to once the article shows (from the Highlights page). */
   focusHighlight: string | null
   onFocusConsumed: () => void
@@ -301,15 +303,16 @@ export function Reader(p: Props) {
     setPill(null)
   }
 
-  // V shows the word (or hides it again while reading), A toggles auto scroll
+  // V shows the word (or hides it again while reading), A toggles auto scroll, Delete deletes
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.key !== 'v' && e.key !== 'a') || e.ctrlKey || e.metaKey || e.altKey) return
+      if ((e.key !== 'v' && e.key !== 'a' && e.key !== 'Delete') || e.ctrlKey || e.metaKey || e.altKey) return
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
       if (document.querySelector('.modal-backdrop')) return
       e.preventDefault()
-      if (e.key === 'v') {
+      if (e.key === 'Delete') void remove()
+      else if (e.key === 'v') {
         if (playing && ra.status === 'playing' && p.settings.readAloudShowWord) void updateSettings({ readAloudShowWord: false })
         else showWord()
       } else if (!playing) auto.toggle()
@@ -319,7 +322,16 @@ export function Reader(p: Props) {
   })
 
   const toggleRead = () => db.items.update(item.id, { read: item.read ? 0 : 1, readTime: item.read ? null : Date.now(), readSynced: 0 })
-  const toggleSave = () => db.items.update(item.id, { saved: item.saved ? 0 : 1 })
+  const toggleSave = () => db.items.update(item.id, { saved: item.saved ? 0 : 1, readSynced: 0 })
+  /** Deletes the article for good on every device, then moves on to the next one. */
+  const remove = async () => {
+    const copy = item
+    if (p.hasNext) p.onNext()
+    else p.onBack()
+    await hideItems([copy.id])
+    syncNow().catch(() => undefined)
+    p.toast('Article deleted on all devices', { label: 'Undo', run: () => void unhideItems([copy]).then(() => syncNow().catch(() => undefined)) })
+  }
 
   const shareLink = async () => {
     const url = item.link ?? ''
@@ -522,6 +534,7 @@ export function Reader(p: Props) {
         <IconButton icon={item.read ? 'unread' : 'read'} label={item.read ? 'Mark unread' : 'Mark read'} onClick={toggleRead} showLabel />
         <IconButton icon="summarize" label={summaryState === 'loading' ? 'Summarizing…' : 'Summarize'} onClick={doSummary} disabled={summaryState === 'loading'} showLabel />
         <IconButton icon={item.saved ? 'bookmarkFilled' : 'bookmark'} label={item.saved ? 'Saved' : 'Save'} active={!!item.saved} onClick={toggleSave} showLabel />
+        <IconButton icon="delete" label="Delete" title="Delete this article on all your devices (Delete key)" onClick={remove} showLabel />
         <IconButton
           icon="formatBold"
           label="Fast read"

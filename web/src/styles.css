@@ -1526,6 +1526,18 @@ details summary {
   z-index: 60;
   box-shadow: var(--shadow);
   max-width: calc(100vw - 32px);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.toast-action {
+  background: none;
+  border: 0;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
 }
 
 /* Dragging a feed onto another folder */
