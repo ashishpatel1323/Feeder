@@ -16,6 +16,8 @@ export interface Env extends Sync2Env {
   ACCESS_TOKEN?: string
   /** Defaults to Feeder's public sync server. */
   SYNC_SERVER?: string
+  /** Development only: forward /api/v2/* to this deployed app when there is no DATABASE_URL. */
+  SYNC_UPSTREAM?: string
   /** Development only: allow fetching localhost/private addresses. */
   ALLOW_PRIVATE_HOSTS?: string
 }
@@ -189,6 +191,18 @@ export async function handle(request: Request, env: Env): Promise<Response> {
 
   // Feeder's own sync. Not behind ACCESS_TOKEN: the Android app doesn't have it, and every
   // request is proved with a secret derived from the sync key (see sync2.ts).
+  // Development without a database: use the deployed sync server, so a local copy of the
+  // app syncs with your real devices instead of a throwaway in-memory store.
+  if (path.startsWith('v2/') && env.SYNC_UPSTREAM && !env.DATABASE_URL) {
+    const target = `${env.SYNC_UPSTREAM.replace(/\/+$/, '')}/api/${path}`
+    const res = await fetch(target, {
+      method: request.method,
+      headers: { 'content-type': 'application/json' },
+      body: request.method === 'POST' ? await request.text() : undefined,
+      redirect: 'manual',
+    })
+    return new Response(res.body, { status: res.status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } })
+  }
   if (path === 'v2/sync') {
     try {
       return await handleSync2(request, env)
