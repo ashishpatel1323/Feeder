@@ -46,10 +46,6 @@ export interface Item {
   fullHtml?: string | null
   fullWordCount?: number
   ogChecked?: number
-  hnPoints?: number | null
-  hnComments?: number | null
-  hnId?: string | null
-  hnChecked?: number
   summary?: string | null
 }
 

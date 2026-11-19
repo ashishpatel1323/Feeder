@@ -15,7 +15,6 @@ export interface Settings {
   collapsedGroups: string[]
   snippetLines: number
   showThumbnails: boolean
-  showHnScore: boolean
   markReadOnOpen: boolean
   refreshMinutes: number
   theme: 'system' | 'light' | 'dark'
@@ -44,7 +43,6 @@ export const DEFAULT_SETTINGS: Settings = {
   collapsedGroups: [],
   snippetLines: 2,
   showThumbnails: true,
-  showHnScore: false,
   markReadOnOpen: true,
   refreshMinutes: 30,
   theme: 'system',

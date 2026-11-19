@@ -2,7 +2,6 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Feed } from '../lib/db'
 import { addFeed, deleteFeed, exportOpml, importOpml, refreshFeeds } from '../lib/refresh'
-import { refreshHnScores } from '../lib/extras'
 import {
   addDeviceLink,
   createChain,
@@ -388,17 +387,6 @@ export function SettingsDialog({
         <label className="check">
           <input type="checkbox" checked={s.showThumbnails} onChange={(e) => updateSettings({ showThumbnails: e.target.checked })} />
           Show thumbnails in the list
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={s.showHnScore} onChange={(e) => {
-              const on = e.target.checked
-              void updateSettings({ showHnScore: on }).then(async () => {
-                if (!on) return
-                const recent = await db.items.where('sortTime').above(Date.now() - 3 * 86_400_000).reverse().toArray()
-                await refreshHnScores(recent)
-              }).catch(() => undefined)
-            }} />
-          Show Hacker News score (sends article links to hn.algolia.com)
         </label>
         <label className="row-label">
           Snippet lines
