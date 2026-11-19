@@ -6,8 +6,8 @@ import { syncNow } from '../lib/sync2'
 import type { Toast } from '../lib/toast'
 import { copyText, HighlightBar, HighlightsRail } from './Highlights'
 import { combinedSubject, ShareDialog, type ShareSubject } from './ShareDialog'
-import { formatPoints, readingMinutes, wordsOf } from '../lib/listquery'
-import { hnDiscussionUrl, loadFullText, refreshHnScores, sanitize, summarize } from '../lib/extras'
+import { readingMinutes, wordsOf } from '../lib/listquery'
+import { loadFullText, sanitize, summarize } from '../lib/extras'
 import { htmlToText } from '../lib/feedparse'
 import { readAloud, type ReadAloudState } from '../lib/readaloud'
 import { updateSettings, type Settings } from '../lib/settings'
@@ -56,12 +56,6 @@ export function Reader(p: Props) {
   const touch = useRef<{ x: number; y: number; t: number } | null>(null)
 
   useEffect(() => readAloud.subscribe(setRa), [])
-
-  // Opened article: look up its Hacker News score if it's missing or stale
-  useEffect(() => {
-    if (p.settings.showHnScore) refreshHnScores([item], 1).catch(() => undefined)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item.id, p.settings.showHnScore])
 
   // New article: reset view state
   useEffect(() => {
@@ -435,11 +429,6 @@ export function Reader(p: Props) {
               {item.author ? <span>{item.author}</span> : null}
               <span>{date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</span>
               <span>{readingMinutes(words)} min read</span>
-              {p.settings.showHnScore && item.hnId ? (
-                <a className="hn-badge" href={hnDiscussionUrl(item.hnId)} target="_blank" rel="noopener noreferrer">
-                  ▲ {formatPoints(item.hnPoints ?? 0)} · {item.hnComments ?? 0} comments
-                </a>
-              ) : null}
             </div>
             {videoId ? (
               <div className="video-block">

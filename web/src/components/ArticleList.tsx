@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { db, feedDisplayTitle, type Feed, type Item } from '../lib/db'
-import { formatPoints, readingMinutes, wordsOf, type Group } from '../lib/listquery'
+import { readingMinutes, wordsOf, type Group } from '../lib/listquery'
 import { updateSettings, type Grouping, type Settings, type ShowFilter, type Sorting } from '../lib/settings'
 import { proxiedUrl } from '../lib/api'
 import { Icon, IconButton } from './Icon'
@@ -246,11 +246,6 @@ export function ArticleList(p: Props) {
                             <span className="row-feed">{feedDisplayTitle(feed)}</span>
                             <span>{relativeTime(item.sortTime)}</span>
                             <span>{readingMinutes(wordsOf(item, feed))} min</span>
-                            {s.showHnScore && item.hnPoints ? (
-                              <span className="hn-badge" title={`${item.hnPoints} points, ${item.hnComments ?? 0} comments on Hacker News`}>
-                                ▲ {formatPoints(item.hnPoints)}
-                              </span>
-                            ) : null}
                             {item.saved ? <Icon name="bookmarkFilled" size={14} title="Saved" /> : null}
                           </div>
                           {s.snippetLines > 0 && item.snippet ? (

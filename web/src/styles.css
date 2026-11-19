@@ -718,18 +718,6 @@ a {
   flex: none;
   background: var(--surface-2);
 }
-.hn-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 0 6px;
-  border-radius: 6px;
-  background: #ff660022;
-  color: #c24e00;
-  font-weight: 600;
-  font-size: 12px;
-  text-decoration: none;
-}
 
 /* ---------------------------------------------------------------- reader */
 
