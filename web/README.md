@@ -53,7 +53,8 @@ browser / phone  ──POST /api/v2/sync──▶  /api function  ──▶  Pos
 
 Server environment: `DATABASE_URL` (or `POSTGRES_URL`) for the Neon database; the tables are
 created on first use. `SYNC_MAX_ACCOUNTS` (default 3) caps how many sync accounts can exist.
-`npm run dev` without `DATABASE_URL` keeps sync data in memory until the dev server restarts.
+`npm run dev` without `DATABASE_URL` syncs through the deployed app (feeder-web-snowy.vercel.app), so a
+local copy stays in step with your devices; `SYNC_UPSTREAM=none` keeps sync data in memory instead.
 
 ## Develop
 
