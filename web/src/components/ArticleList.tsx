@@ -16,6 +16,7 @@ interface Props {
   onOpen: (item: Item) => void
   onMenu: () => void
   onMarkAllRead: () => void
+  onDeleteRead: () => void
 }
 
 const SHOWS: [ShowFilter, string][] = [
@@ -136,6 +137,7 @@ export function ArticleList(p: Props) {
         <h1 className="pane-title" title={p.title}>
           {p.title}
         </h1>
+        <IconButton icon="delete" label="Delete read articles on all devices" onClick={p.onDeleteRead} />
         <IconButton icon="doneAll" label="Mark all as read" onClick={p.onMarkAllRead} />
       </header>
       <div className="list-filters">
