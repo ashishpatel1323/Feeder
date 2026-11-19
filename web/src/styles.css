@@ -2628,3 +2628,21 @@ mark.hl.flash {
 .hl-group-bar { display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
 .hl-group-bar .hl-group-head { margin-bottom: 0; flex: 1; min-width: 200px; }
 .hl-group-actions { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.row-video {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.row-video-bar {
+  width: 48px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+}
+.row-video-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}

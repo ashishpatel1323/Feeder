@@ -10,6 +10,7 @@
  *   saved    feedUrl \n guid      true / false (with a small copy of the article in `a`)
  *   hidden   feedUrl \n guid      true = deleted for good on every device
  *   layout   "main"               { feedOrder, folderOrder, emptyFolders } (web only so far)
+ *   video    feedUrl \n guid      { t, d }: where a YouTube video was left, in seconds (web only so far)
  *
  * New kinds (Read later links, …) can be added later: devices keep records of kinds they
  * don't know and the server never looks inside.
@@ -45,7 +46,7 @@ export interface SyncState {
   lastError?: string | null
 }
 
-export type Kind = 'feed' | 'read' | 'saved' | 'hidden' | 'layout'
+export type Kind = 'feed' | 'read' | 'saved' | 'hidden' | 'layout' | 'video'
 
 /** The plaintext inside a record. */
 export interface Payload {
@@ -76,6 +77,13 @@ export interface FeedValue {
   fetchOgImages: boolean
   blockRules: string
   allowRules: string
+}
+
+export interface VideoValue {
+  /** Seconds watched */
+  t: number
+  /** Video length in seconds, 0 when not known */
+  d: number
 }
 
 export interface LayoutValue {
@@ -241,6 +249,15 @@ export async function collectChanges(now = Date.now()): Promise<Pending[]> {
   if (kl ? !same(kl.v, layout) : !emptyLayout) {
     out.push({ k: 'layout', key: LAYOUT_KEY, v: layout, ts: Math.max(now, (kl?.ts ?? 0) + 1) })
   }
+
+  // Video positions saved here since they were last exchanged
+  const videos = await db.videoPos.toArray()
+  const knownVideos = await db.syncKnown.bulkGet(videos.map((v) => knownKey('video', v.id)))
+  videos.forEach((v, n) => {
+    const kn = knownVideos[n]
+    const value: VideoValue = { t: v.t, d: v.d }
+    if (!kn || (v.ts > kn.ts && !same(kn.v, value))) out.push({ k: 'video', key: v.id, v: value, ts: Math.max(v.ts, (kn?.ts ?? 0) + 1) })
+  })
   return out
 }
 
@@ -259,7 +276,7 @@ export interface ApplyResult {
 /** Applies one record from another device, unless what this device knows is newer. */
 export async function applyRemote(p: Payload, ts: number, result: ApplyResult): Promise<void> {
   const k = knownKey(p.k, p.key)
-  await db.transaction('rw', [db.feeds, db.items, db.syncKnown, db.hidden, db.kv], async () => {
+  await db.transaction('rw', [db.feeds, db.items, db.syncKnown, db.hidden, db.kv, db.videoPos], async () => {
     const kn = await db.syncKnown.get(k)
     if (kn && kn.ts > ts) return
     if (kn && kn.ts === ts && same(kn.v, p.v)) return
@@ -312,6 +329,16 @@ export async function applyRemote(p: Payload, ts: number, result: ApplyResult): 
         await setKv(FEED_ORDER_KEY, Array.isArray(v?.feedOrder) ? v.feedOrder : [])
         await setKv(FOLDER_ORDER_KEY, Array.isArray(v?.folderOrder) ? v.folderOrder : [])
         await setKv(EMPTY_FOLDERS_KEY, Array.isArray(v?.emptyFolders) ? v.emptyFolders : [])
+        break
+      }
+      case 'video': {
+        const v = p.v as Partial<VideoValue> | null
+        if (v && typeof v.t === 'number' && Number.isFinite(v.t)) {
+          const local = await db.videoPos.get(p.key)
+          if (!local || local.ts <= ts) {
+            await db.videoPos.put({ id: p.key, t: v.t, d: typeof v.d === 'number' && Number.isFinite(v.d) ? v.d : 0, ts })
+          }
+        }
         break
       }
       // Unknown kinds are only remembered (a newer version of the app will use them)

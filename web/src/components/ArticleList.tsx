@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { db, feedDisplayTitle, type Feed, type Item } from '../lib/db'
 import { readingMinutes, wordsOf, type Group } from '../lib/listquery'
 import { updateSettings, type Grouping, type Settings, type ShowFilter, type Sorting } from '../lib/settings'
 import { proxiedUrl } from '../lib/api'
+import { isWatched, positionLabel } from '../lib/videopos'
 import { Icon, IconButton } from './Icon'
 
 interface Props {
@@ -106,6 +108,8 @@ export function ArticleList(p: Props) {
   const grouped = s.grouping !== 'none'
 
   const [sheet, setSheet] = useState(false)
+  // Where YouTube videos were left, shown in place of the reading time
+  const videoPos = useLiveQuery(async () => new Map((await db.videoPos.toArray()).map((v) => [v.id, v])), [])
   const countOf = (v: ShowFilter) => (v === 'unread' ? p.counts.unread : v === 'saved' ? p.counts.saved : 0)
 
   const toggleGroup = (key: string) => {
@@ -234,6 +238,7 @@ export function ArticleList(p: Props) {
                 ? null
                 : g.items.map((item) => {
                     const feed = p.feeds.get(item.feedUrl)
+                    const pos = videoPos?.get(item.id)
                     return (
                       <button
                         key={item.id}
@@ -245,7 +250,18 @@ export function ArticleList(p: Props) {
                           <div className="row-meta">
                             <span className="row-feed">{feedDisplayTitle(feed)}</span>
                             <span>{relativeTime(item.sortTime)}</span>
-                            <span>{readingMinutes(wordsOf(item, feed))} min</span>
+                            {pos ? (
+                              <span className="row-video" title="Where you left this video">
+                                {pos.d > 0 && !isWatched(pos) ? (
+                                  <span className="row-video-bar" aria-hidden="true">
+                                    <span style={{ width: `${Math.min(100, (pos.t / pos.d) * 100)}%` }} />
+                                  </span>
+                                ) : null}
+                                {positionLabel(pos)}
+                              </span>
+                            ) : (
+                              <span>{readingMinutes(wordsOf(item, feed))} min</span>
+                            )}
                             {item.saved ? <Icon name="bookmarkFilled" size={14} title="Saved" /> : null}
                           </div>
                           {s.snippetLines > 0 && item.snippet ? (

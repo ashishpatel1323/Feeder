@@ -15,7 +15,8 @@ import { applyFastReading } from '../lib/fastReading'
 import { AUTO_SCROLL_SPEEDS, useAutoScroll } from '../lib/autoscroll'
 import { Icon, IconButton } from './Icon'
 import { Player } from './Player'
-import { youtubeEmbedUrl, youtubeVideoId, youtubeWatchUrl } from '../lib/youtube'
+import { youtubeVideoId, youtubeWatchUrl } from '../lib/youtube'
+import { YouTubeFrame } from './YouTubeFrame'
 
 interface Props {
   item: Item
@@ -432,18 +433,7 @@ export function Reader(p: Props) {
             </div>
             {videoId ? (
               <div className="video-block">
-                <div className="video-frame">
-                  {/* youtube.com (not -nocookie) so the browser's YouTube sign-in applies: Premium, history, Watch later.
-                      The embed needs the referrer, so no no-referrer policy here. */}
-                  <iframe
-                    key={videoId}
-                    src={youtubeEmbedUrl(videoId)}
-                    title={item.title || 'YouTube video'}
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    referrerPolicy="strict-origin-when-cross-origin"
-                    allowFullScreen
-                  />
-                </div>
+                <YouTubeFrame key={`${item.id}|${videoId}`} itemId={item.id} videoId={videoId} title={item.title || 'YouTube video'} />
                 <a className="open-youtube" href={youtubeWatchUrl(videoId)} target="_blank" rel="noopener noreferrer">
                   <Icon name="open" size={18} /> Open on YouTube
                 </a>
