@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, FEED_ORDER_KEY, feedDisplayTitle, getKv, moveFeedToTag, placeInOrder, setKv, type Feed, type Item } from './lib/db'
+import { db, FEED_ORDER_KEY, feedDisplayTitle, getKv, moveFeedToTag, opensInBrowser, placeInOrder, setKv, type Feed, type Item } from './lib/db'
 import { applyShow, applyToday, buildGroups, selectItems, showCounts, type Selection } from './lib/listquery'
 import { getSettings, updateSettings, useSettings } from './lib/settings'
 import { refreshFeeds } from './lib/refresh'
@@ -11,8 +11,12 @@ import { Sidebar } from './components/Sidebar'
 import { ArticleList } from './components/ArticleList'
 import { Reader } from './components/Reader'
 import { AddFeedDialog, EditFeedDialog, SettingsDialog } from './components/Dialogs'
+import { ManageFeeds } from './components/ManageFeeds'
 
 const NAV_COLLAPSED_KEY = 'feeder.navCollapsed'
+/** The Manage feeds page has its own address so it can be bookmarked and Back works. */
+const FEEDS_HASH = '#/feeds'
+const isFeedsHash = () => window.location.hash === FEEDS_HASH
 
 type Dialog = { kind: 'settings' } | { kind: 'add' } | { kind: 'edit'; url: string } | null
 
@@ -61,6 +65,23 @@ export default function App() {
     })
   }, [])
   const [dialog, setDialog] = useState<Dialog>(null)
+  const [managing, setManaging] = useState(isFeedsHash)
+  useEffect(() => {
+    const onHash = () => setManaging(isFeedsHash())
+    window.addEventListener('hashchange', onHash)
+    window.addEventListener('popstate', onHash)
+    return () => {
+      window.removeEventListener('hashchange', onHash)
+      window.removeEventListener('popstate', onHash)
+    }
+  }, [])
+  const showManage = useCallback((on: boolean) => {
+    if (on !== isFeedsHash()) {
+      if (on) window.location.hash = FEEDS_HASH
+      else history.pushState(null, '', window.location.pathname + window.location.search)
+    }
+    setManaging(on)
+  }, [])
   const [refreshing, setRefreshing] = useState<string | null>(null)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [autoplay, setAutoplay] = useState(false)
@@ -210,6 +231,13 @@ export default function App() {
       if (dialog || e.ctrlKey || e.metaKey || e.altKey || /INPUT|TEXTAREA|SELECT/.test(t.tagName)) return
       // Any other modal (e.g. the Sort & group sheet) owns the keyboard while open
       if (document.querySelector('[aria-modal="true"]') || t.closest?.('[aria-modal="true"]')) return
+      if (managing) {
+        if (e.key === 'Escape') {
+          showManage(false)
+          e.preventDefault()
+        }
+        return
+      }
       const order = visibleOrder
       const startFromList = () => {
         const i = openId ? order.indexOf(openId) : -1
@@ -257,13 +285,34 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [dialog, visibleOrder, openId, nextId, prevId, goNext, goPrev, open, openItem, pane, toggleNav])
+  }, [dialog, visibleOrder, openId, nextId, prevId, goNext, goPrev, open, openItem, pane, toggleNav, managing, showManage])
 
   const markAllRead = async () => {
     const ids = groups.flatMap((g) => g.items).filter((i) => !i.read).map((i) => i.id)
     if (!ids.length) return
     await db.items.bulkUpdate(ids.map((key) => ({ key, changes: { read: 1, readTime: Date.now(), readSynced: 0 } })))
     toast(`Marked ${ids.length} as read`)
+  }
+
+  /** Drag and drop in the sidebar and on the Manage feeds page. */
+  const moveFeed = async (url: string, tag: string, place?: { beforeUrl: string | null; folderUrls: string[] }) => {
+    if (place) {
+      const order = await getKv<string[]>(FEED_ORDER_KEY, [])
+      await setKv(FEED_ORDER_KEY, placeInOrder(order, place.folderUrls, url, place.beforeUrl))
+    }
+    if (!(await moveFeedToTag(url, tag))) return
+    syncNow().catch(() => undefined)
+    toast(tag ? `Moved to ${tag}` : 'Moved out of its folder')
+  }
+
+  /** Clicking an article: feeds set to open in the browser go straight to the original page. */
+  const openFromList = (item: Item) => {
+    if (item.link && opensInBrowser(feeds.get(item.feedUrl))) {
+      window.open(item.link, '_blank', 'noopener')
+      if (settings.markReadOnOpen && !item.read) db.items.update(item.id, { read: 1, readTime: Date.now(), readSynced: 0 })
+      return
+    }
+    open(item.id, visibleOrder)
   }
 
   const syncLabel = syncState
@@ -275,7 +324,7 @@ export default function App() {
     : 'Not syncing'
 
   return (
-    <div className={`app pane-${pane}${drawer ? ' drawer-open' : ''}${navCollapsed ? ' nav-collapsed' : ''}`}>
+    <div className={`app pane-${pane}${drawer ? ' drawer-open' : ''}${navCollapsed ? ' nav-collapsed' : ''}${managing ? ' page-feeds' : ''}`}>
       <div className="drawer-scrim" onClick={() => setDrawer(false)} />
       <Sidebar
         feeds={feedList}
@@ -285,18 +334,16 @@ export default function App() {
           setSelection(s)
           setDrawer(false)
           setPane('list')
+          showManage(false)
         }}
         onEditFeed={(url) => setDialog({ kind: 'edit', url })}
-        onMoveFeed={async (url, tag, place) => {
-          if (place) {
-            const order = await getKv<string[]>(FEED_ORDER_KEY, [])
-            await setKv(FEED_ORDER_KEY, placeInOrder(order, place.folderUrls, url, place.beforeUrl))
-          }
-          if (!(await moveFeedToTag(url, tag))) return
-          syncNow().catch(() => undefined)
-          toast(tag ? `Moved to ${tag}` : 'Moved out of its folder')
-        }}
+        onMoveFeed={moveFeed}
         onAddFeed={() => setDialog({ kind: 'add' })}
+        onManageFeeds={() => {
+          setDrawer(false)
+          showManage(!managing)
+        }}
+        managing={managing}
         onRefresh={fullRefresh}
         onSettings={() => setDialog({ kind: 'settings' })}
         refreshing={refreshing}
@@ -304,18 +351,29 @@ export default function App() {
         collapsed={navCollapsed}
         onToggleCollapsed={toggleNav}
       />
-      <ArticleList
+      {managing ? (
+        <ManageFeeds
+          feeds={feedList}
+          items={items}
+          onBack={() => showManage(false)}
+          onEditFeed={(url) => setDialog({ kind: 'edit', url })}
+          onMoveFeed={moveFeed}
+          toast={toast}
+        />
+      ) : (
+        <ArticleList
         title={selectionTitle(selection, feeds)}
         groups={groups}
         counts={counts}
         feeds={feeds}
         settings={settings}
         selectedId={openId}
-        onOpen={(item: Item) => open(item.id, visibleOrder)}
+        onOpen={openFromList}
         onMenu={() => setDrawer(true)}
         onMarkAllRead={markAllRead}
-      />
-      {openItem ? (
+        />
+      )}
+      {managing ? null : openItem ? (
         <Reader
           item={openItem}
           feed={feeds.get(openItem.feedUrl)}
@@ -335,7 +393,15 @@ export default function App() {
           <p>Select an article. Keyboard: J / K next and previous, R read aloud, S save, M unread, O open original, [ hide or show feeds.</p>
         </section>
       )}
-      {dialog?.kind === 'settings' ? <SettingsDialog settings={settings} onClose={() => setDialog(null)} toast={toast} /> : null}
+      {dialog?.kind === 'settings' ? <SettingsDialog
+          settings={settings}
+          onClose={() => setDialog(null)}
+          toast={toast}
+          onManageFeeds={() => {
+            setDialog(null)
+            showManage(true)
+          }}
+        /> : null}
       {dialog?.kind === 'add' ? <AddFeedDialog onClose={() => setDialog(null)} toast={toast} /> : null}
       {dialog?.kind === 'edit' ? <EditFeedDialog url={dialog.url} onClose={() => setDialog(null)} toast={toast} /> : null}
       {toastMsg ? (
