@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { HighlightColor } from '../lib/db'
 import { allQuotesText, quoteText } from '../lib/highlights'
 import { proxiedUrl } from '../lib/api'
+import { findOgImage } from '../lib/extras'
 import {
   canvasToPng,
   fileToImage,
@@ -61,9 +62,11 @@ export function ShareDialog(p: { subject: ShareSubject; onClose: () => void; toa
   const s = p.subject
   const [prefs, setPrefs] = useState<Prefs>(loadPrefs)
   const [articleImg, setArticleImg] = useState<ImageBitmap | null>(null)
-  const [articleState, setArticleState] = useState<'loading' | 'ok' | 'none'>(s.imageUrl ? 'loading' : 'none')
+  // No picture in the feed or the article text: look for the page's og:image, like link previews do
+  const [pictureUrl, setPictureUrl] = useState<string | null>(s.imageUrl)
+  const [articleState, setArticleState] = useState<'loading' | 'ok' | 'none'>(s.imageUrl || s.itemLink ? 'loading' : 'none')
   const [customImg, setCustomImg] = useState<ImageBitmap | null>(null)
-  const [bg, setBg] = useState<Bg>(s.imageUrl ? { kind: 'article' } : { kind: 'gradient', id: prefs.gradient })
+  const [bg, setBg] = useState<Bg>(s.imageUrl || s.itemLink ? { kind: 'article' } : { kind: 'gradient', id: prefs.gradient })
   const [showNote, setShowNote] = useState(!!s.note)
   const [busy, setBusy] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -79,9 +82,14 @@ export function ShareDialog(p: { subject: ShareSubject; onClose: () => void; toa
   }, [prefs])
 
   useEffect(() => {
-    if (!s.imageUrl) return
     let cancelled = false
-    loadShareImage(s.imageUrl).then((img) => {
+    const find = async () => (s.imageUrl ? s.imageUrl : s.itemLink ? await findOgImage(s.itemLink).catch(() => null) : null)
+    find()
+      .then((url) => {
+        if (!cancelled) setPictureUrl(url)
+        return url ? loadShareImage(url) : null
+      })
+      .then((img) => {
       if (cancelled) return
       setArticleImg(img)
       setArticleState(img ? 'ok' : 'none')
@@ -91,7 +99,7 @@ export function ShareDialog(p: { subject: ShareSubject; onClose: () => void; toa
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [s.imageUrl])
+  }, [s.imageUrl, s.itemLink])
 
   const image = prefs.layout === 'color' ? null : bg.kind === 'article' ? articleImg : bg.kind === 'custom' ? customImg : null
   const gradient = bg.kind === 'gradient' ? bg.id : prefs.gradient
@@ -247,14 +255,14 @@ export function ShareDialog(p: { subject: ShareSubject; onClose: () => void; toa
             </div>
             <div className="share-label">Background</div>
             <div className="share-row share-bgs">
-              {s.imageUrl ? (
+              {s.imageUrl || s.itemLink ? (
                 <button
                   type="button"
                   className={`share-bg${isBg({ kind: 'article' }) ? ' on' : ''}`}
                   disabled={articleState !== 'ok'}
                   onClick={() => pickBg({ kind: 'article' })}
                   title={articleState === 'none' ? "The article's picture couldn't be loaded" : "The article's picture"}
-                  style={articleState === 'ok' ? { backgroundImage: `url(${JSON.stringify(proxiedUrl(s.imageUrl))})` } : undefined}
+                  style={articleState === 'ok' && pictureUrl ? { backgroundImage: `url(${JSON.stringify(proxiedUrl(pictureUrl))})` } : undefined}
                 >
                   <span>{articleState === 'loading' ? 'Loading…' : 'Article'}</span>
                 </button>

@@ -14,7 +14,7 @@ import { AddFeedDialog, EditFeedDialog, SettingsDialog } from './components/Dial
 import { ManageFeeds } from './components/ManageFeeds'
 import { HighlightsPage } from './components/Highlights'
 import { combinedSubject, ShareDialog, type ShareSubject } from './components/ShareDialog'
-import { deleteHighlight } from './lib/highlights'
+import { articlePicture, deleteHighlight } from './lib/highlights'
 import type { Highlight } from './lib/db'
 
 const NAV_COLLAPSED_KEY = 'feeder.navCollapsed'
@@ -339,6 +339,13 @@ export default function App() {
     open(item.id, visibleOrder)
   }
 
+  /** The picture for a share from the Highlights page; older highlights didn't save one from the article text. */
+  const pictureFor = async (h: Highlight) => {
+    if (h.imageUrl) return h.imageUrl
+    const it = await db.items.get(h.itemId)
+    return it ? articlePicture(it.imageUrl, it.fullHtml || it.contentHtml) : null
+  }
+
   /** From the Highlights page: open the article and scroll to the highlight. */
   const openHighlight = async (h: Highlight) => {
     if (!(await db.items.get(h.itemId))) {
@@ -400,8 +407,8 @@ export default function App() {
           onBack={() => showHighlights(false)}
           onMenu={() => setDrawer(true)}
           onOpenArticle={openHighlight}
-          onShare={(h) => setPageShare({ text: h.text, note: h.note, color: h.color, itemTitle: h.itemTitle, feedTitle: h.feedTitle, itemLink: h.itemLink, imageUrl: h.imageUrl })}
-          onShareMany={(hs) => setPageShare(combinedSubject(hs, { itemTitle: hs[0].itemTitle, feedTitle: hs[0].feedTitle, itemLink: hs[0].itemLink, imageUrl: hs[0].imageUrl }))}
+          onShare={async (h) => setPageShare({ text: h.text, note: h.note, color: h.color, itemTitle: h.itemTitle, feedTitle: h.feedTitle, itemLink: h.itemLink, imageUrl: await pictureFor(h) })}
+          onShareMany={async (hs) => setPageShare(combinedSubject(hs, { itemTitle: hs[0].itemTitle, feedTitle: hs[0].feedTitle, itemLink: hs[0].itemLink, imageUrl: await pictureFor(hs[0]) }))}
           onDelete={async (h) => {
             await deleteHighlight(h.id)
             toast('Highlight deleted')

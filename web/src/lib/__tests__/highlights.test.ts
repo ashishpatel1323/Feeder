@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
 import type { Highlight } from '../db'
-import { anchorOf, applyHighlights, locate, quoteText, textOf } from '../highlights'
+import { anchorOf, applyHighlights, articlePicture, locate, quoteText, textOf } from '../highlights'
 
 const hl = (over: Partial<Highlight>): Highlight => ({
   id: 'h1',
@@ -64,5 +64,18 @@ describe('anchorOf', () => {
 describe('quoteText', () => {
   it('puts the quote, the source and the link on separate lines', () => {
     expect(quoteText(hl({ text: 'Ship it' }))).toBe('“Ship it”\n— Why small teams ship faster, The Verge\nhttps://example.com/a')
+  })
+})
+
+describe('articlePicture', () => {
+  it("prefers the feed's image", () => {
+    expect(articlePicture('https://a/img.jpg', '<img src="https://b/x.jpg">')).toBe('https://a/img.jpg')
+  })
+  it('falls back to the first real picture in the text, skipping icons and pixels', () => {
+    const html = '<img src="https://s/pixel.gif" width="1" height="1"><img src="https://s/icon.png" width="32"><p><img src="https://s/photo.jpg"></p>'
+    expect(articlePicture(null, html)).toBe('https://s/photo.jpg')
+  })
+  it('gives null when there is no picture', () => {
+    expect(articlePicture(null, '<p>text</p>')).toBeNull()
   })
 })

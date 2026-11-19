@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, feedDisplayTitle, type Feed, type Highlight, type HighlightColor, type Item } from '../lib/db'
-import { anchorOf, applyHighlights, deleteHighlight, newHighlight, quoteText, saveHighlight, updateHighlight } from '../lib/highlights'
+import { anchorOf, articlePicture, applyHighlights, deleteHighlight, newHighlight, quoteText, saveHighlight, updateHighlight } from '../lib/highlights'
 import { copyText, HighlightBar, HighlightsRail } from './Highlights'
 import { combinedSubject, ShareDialog, type ShareSubject } from './ShareDialog'
 import { formatPoints, readingMinutes, wordsOf } from '../lib/listquery'
@@ -165,6 +165,7 @@ export function Reader(p: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p.focusHighlight, highlights, html])
 
+  const picture = useMemo(() => articlePicture(item.imageUrl, html), [item.imageUrl, html])
   const subjectOf = (h: Pick<Highlight, 'text' | 'note' | 'color'>): ShareSubject => ({
     text: h.text,
     note: h.note,
@@ -172,13 +173,13 @@ export function Reader(p: Props) {
     itemTitle: item.title,
     feedTitle: feedDisplayTitle(feed),
     itemLink: item.link,
-    imageUrl: item.imageUrl,
+    imageUrl: picture,
   })
 
   const saveFromBar = async (color: HighlightColor, note: string) => {
     if (!bar) return
     if (bar.kind === 'new') {
-      await saveHighlight(newHighlight(item, feed, bar.anchor, color, note))
+      await saveHighlight(newHighlight(item, feed, bar.anchor, color, note, picture))
       p.toast('Highlighted')
       closeBar()
     } else {
@@ -190,7 +191,7 @@ export function Reader(p: Props) {
     if (!bar) return
     if (bar.kind === 'new') {
       // Sharing a selection saves it as a highlight too
-      const h = newHighlight(item, feed, bar.anchor, color, note)
+      const h = newHighlight(item, feed, bar.anchor, color, note, picture)
       await saveHighlight(h)
       closeBar()
       setShare(subjectOf(h))
@@ -508,7 +509,7 @@ export function Reader(p: Props) {
               if (window.matchMedia('(max-width: 1100px)').matches) setRailOpen(false)
             }}
             onDelete={removeHighlight}
-            onShareMany={(hs) => setShare(combinedSubject(hs, { itemTitle: item.title, feedTitle: feedDisplayTitle(feed), itemLink: item.link, imageUrl: item.imageUrl }))}
+            onShareMany={(hs) => setShare(combinedSubject(hs, { itemTitle: item.title, feedTitle: feedDisplayTitle(feed), itemLink: item.link, imageUrl: picture }))}
             toast={p.toast}
           />
         ) : null}

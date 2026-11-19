@@ -64,18 +64,23 @@ export async function loadFullText(item: Item): Promise<string> {
 // ---------------------------------------------------------------------------------------------
 // og:image ("Enhance thumbnails from article metadata")
 
+/** The og:image (or twitter:image) of a page, or null. Throws when the page can't be loaded. */
+export async function findOgImage(link: string): Promise<string | null> {
+  const { text, finalUrl } = await proxyFetch(link)
+  const head = text.slice(0, 200_000)
+  const m =
+    head.match(/<meta[^>]+property=["']og:image(?::url)?["'][^>]*content=["']([^"']+)["']/i) ??
+    head.match(/<meta[^>]+content=["']([^"']+)["'][^>]*property=["']og:image(?::url)?["']/i) ??
+    head.match(/<meta[^>]+name=["']twitter:image["'][^>]*content=["']([^"']+)["']/i)
+  return m ? new URL(m[1].replace(/&amp;/g, '&'), finalUrl).toString() : null
+}
+
 export async function fetchOgImages(items: Item[], limit = 12): Promise<void> {
   const todo = items.filter((i) => !i.imageUrl && !i.ogChecked && i.link).slice(0, limit)
   await Promise.all(
     todo.map(async (item) => {
       try {
-        const { text, finalUrl } = await proxyFetch(item.link!)
-        const head = text.slice(0, 200_000)
-        const m =
-          head.match(/<meta[^>]+property=["']og:image(?::url)?["'][^>]*content=["']([^"']+)["']/i) ??
-          head.match(/<meta[^>]+content=["']([^"']+)["'][^>]*property=["']og:image(?::url)?["']/i) ??
-          head.match(/<meta[^>]+name=["']twitter:image["'][^>]*content=["']([^"']+)["']/i)
-        const url = m ? new URL(m[1].replace(/&amp;/g, '&'), finalUrl).toString() : null
+        const url = await findOgImage(item.link!)
         await db.items.update(item.id, { ogChecked: Date.now(), ...(url ? { imageUrl: url } : {}) })
       } catch {
         await db.items.update(item.id, { ogChecked: Date.now() })

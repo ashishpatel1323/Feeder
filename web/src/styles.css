@@ -2514,6 +2514,7 @@ mark.hl.flash {
 .share-head h2 { flex: 1; margin: 0; font-size: 20px; }
 .share-body {
   display: flex;
+  flex-wrap: wrap;
   gap: 20px;
   padding: 12px 22px 22px;
   align-items: flex-start;
@@ -2522,7 +2523,8 @@ mark.hl.flash {
   display: flex;
   align-items: center;
   gap: 4px;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 .share-canvas {
   height: min(68vh, 620px);
@@ -2532,8 +2534,8 @@ mark.hl.flash {
   background: var(--surface-2);
 }
 .share-controls {
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 300px;
+  min-width: 280px;
   display: flex;
   flex-direction: column;
   gap: 12px;

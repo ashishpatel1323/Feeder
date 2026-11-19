@@ -220,7 +220,7 @@ export function renderShareImage(canvas: HTMLCanvasElement, c: ShareContent, o: 
       drawLines(ctx, n, pad, bottom, 'rgba(255,255,255,0.88)')
       bottom -= 32
     }
-    const t = fitText(ctx, quote, (px) => `700 ${px}px ${SERIF}`, W - pad * 2, bottom - H * 0.3, 76, 40)
+    const t = fitText(ctx, quote, (px) => `700 ${px}px ${SERIF}`, W - pad * 2, bottom - H * 0.2, 76, 30)
     const top = bottom - t.lines.length * t.lh
     drawLines(ctx, t, pad, top, '#fff', ink)
     return
@@ -235,7 +235,7 @@ export function renderShareImage(canvas: HTMLCanvasElement, c: ShareContent, o: 
     const cardW = W - cardX * 2
     const inner = cardW - 120
     ctx.font = `600 60px ${SERIF}`
-    const t = fitText(ctx, c.text, (px) => `600 ${px}px ${SERIF}`, inner - 28, H * 0.5, 64, 36, 1.4)
+    const t = fitText(ctx, c.text, (px) => `600 ${px}px ${SERIF}`, inner - 28, H * 0.55, 64, 26, 1.4)
     ctx.font = `400 34px ${SANS}`
     const n = note ? fitText(ctx, note, (px) => `italic 400 ${px}px ${SANS}`, inner, 220, 34, 26, 1.35) : null
     ctx.font = `700 38px ${SANS}`
@@ -289,7 +289,7 @@ export function renderShareImage(canvas: HTMLCanvasElement, c: ShareContent, o: 
       n = fitText(ctx, note, (px) => `italic 400 ${px}px ${SANS}`, W - pad * 2, 200, 34, 26, 1.35)
       avail -= n.lines.length * n.lh + 32
     }
-    const t = fitText(ctx, c.text, (px) => `500 ${px}px ${SERIF}`, W - pad * 2, avail, 62, 34, 1.42)
+    const t = fitText(ctx, c.text, (px) => `500 ${px}px ${SERIF}`, W - pad * 2, avail, 62, 26, 1.42)
     drawLines(ctx, t, pad, top, '#1d1d1b')
     if (n) drawLines(ctx, n, pad, top + t.lines.length * t.lh + 32, '#6c6a60')
     return
@@ -302,7 +302,7 @@ export function renderShareImage(canvas: HTMLCanvasElement, c: ShareContent, o: 
   const room = H - pad * 2 - 120 - srcH - 80
   const n = note ? fitText(ctx, note, (px) => `italic 400 ${px}px ${SANS}`, W - pad * 2, 200, 36, 28, 1.35) : null
   const noteH = n ? n.lines.length * n.lh + 36 : 0
-  const t = fitText(ctx, quote, (px) => `700 ${px}px ${SANS}`, W - pad * 2, room - noteH, 80, 40, 1.3)
+  const t = fitText(ctx, quote, (px) => `700 ${px}px ${SANS}`, W - pad * 2, room - noteH, 80, 30, 1.3)
   const blockH = t.lines.length * t.lh + noteH
   const top = pad + 120 + (room - blockH) / 2
   drawLines(ctx, t, pad, top, '#fff')

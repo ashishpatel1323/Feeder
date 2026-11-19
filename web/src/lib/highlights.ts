@@ -129,14 +129,34 @@ export function applyHighlights(html: string, highlights: Highlight[]): string {
   return template.innerHTML
 }
 
-export function newHighlight(item: Item, feed: Feed | undefined, anchor: { start: number; text: string; prefix: string }, color: HighlightColor, note: string): Highlight {
+/**
+ * The article's picture for share images: the feed's image, else the first real picture in the
+ * article text (many feeds, like TechCrunch, only put it there). Skips icons and tracking pixels.
+ */
+export function articlePicture(imageUrl: string | null, html: string): string | null {
+  if (imageUrl) return imageUrl
+  const template = document.createElement('template')
+  template.innerHTML = html
+  for (const img of template.content.querySelectorAll('img')) {
+    const src = img.getAttribute('src') ?? ''
+    if (!/^https?:/i.test(src)) continue
+    const w = Number(img.getAttribute('width')) || 0
+    const h = Number(img.getAttribute('height')) || 0
+    if ((w && w < 120) || (h && h < 120)) continue
+    if (/\b(pixel|tracking|spacer|emoji|avatar|gravatar)\b|\.gif(\?|$)/i.test(src)) continue
+    return src
+  }
+  return null
+}
+
+export function newHighlight(item: Item, feed: Feed | undefined, anchor: { start: number; text: string; prefix: string }, color: HighlightColor, note: string, picture: string | null = item.imageUrl): Highlight {
   return {
     id: crypto.randomUUID(),
     itemId: item.id,
     itemTitle: item.title,
     itemLink: item.link,
     feedTitle: feedDisplayTitle(feed),
-    imageUrl: item.imageUrl,
+    imageUrl: picture,
     text: anchor.text,
     start: anchor.start,
     prefix: anchor.prefix,
