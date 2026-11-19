@@ -1,5 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { db, feedDisplayTitle, type Feed, type Item } from '../lib/db'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { db, feedDisplayTitle, type Feed, type Highlight, type HighlightColor, type Item } from '../lib/db'
+import { allQuotesText, anchorOf, applyHighlights, deleteHighlight, newHighlight, quoteText, saveHighlight, updateHighlight } from '../lib/highlights'
+import { copyText, HighlightBar, HighlightsRail } from './Highlights'
+import { ShareDialog, type ShareSubject } from './ShareDialog'
 import { formatPoints, readingMinutes, wordsOf } from '../lib/listquery'
 import { hnDiscussionUrl, loadFullText, refreshHnScores, sanitize, summarize } from '../lib/extras'
 import { htmlToText } from '../lib/feedparse'
@@ -23,7 +27,16 @@ interface Props {
   autoplay: boolean
   onAutoplayConsumed: () => void
   toast: (msg: string) => void
+  /** A highlight to scroll to once the article shows (from the Highlights page). */
+  focusHighlight: string | null
+  onFocusConsumed: () => void
 }
+
+type Anchor = { start: number; text: string; prefix: string }
+/** What the highlight bar is working on: a fresh selection or a saved highlight. */
+type BarTarget = { kind: 'new'; anchor: Anchor } | { kind: 'edit'; id: string }
+
+const pendingHighlightsSupported = typeof CSS !== 'undefined' && 'highlights' in CSS
 
 export function Reader(p: Props) {
   const { item, feed } = p
@@ -72,12 +85,128 @@ export function Reader(p: Props) {
   }, [fullMode, item.id, item.fullHtml, item])
 
   const fastReading = p.settings.fastReading
+  const highlights = useLiveQuery(() => db.highlights.where('itemId').equals(item.id).toArray(), [item.id])
   const html = useMemo(() => {
     const source = fullMode && item.fullHtml ? item.fullHtml : item.contentHtml
     const clean = sanitize(source || `<p>${item.snippet}</p>`, item.link ?? feed?.url ?? null)
-    // Bold word starts only add elements, so read aloud and tap-to-read see the same text
-    return fastReading ? applyFastReading(clean) : clean
-  }, [fullMode, item.fullHtml, item.contentHtml, item.snippet, item.link, feed?.url, fastReading])
+    // Bold word starts and highlight marks only add elements, so read aloud and tap-to-read see the same text
+    const marked = applyHighlights(clean, highlights ?? [])
+    return fastReading ? applyFastReading(marked) : marked
+  }, [fullMode, item.fullHtml, item.contentHtml, item.snippet, item.link, feed?.url, fastReading, highlights])
+
+  // Highlights, in reading order
+  const [bar, setBar] = useState<BarTarget | null>(null)
+  const [railOpen, setRailOpen] = useState(false)
+  const [share, setShare] = useState<ShareSubject | null>(null)
+  const ordered = useMemo(() => [...(highlights ?? [])].sort((a, b) => a.start - b.start), [highlights])
+  const editing = bar?.kind === 'edit' ? (highlights?.find((h) => h.id === bar.id) ?? null) : null
+
+  const clearPending = () => {
+    if (pendingHighlightsSupported) CSS.highlights.delete('hl-pending')
+  }
+
+  // A text selection in the article opens the highlight bar
+  useEffect(() => {
+    const onSel = () => {
+      const sel = window.getSelection()
+      const body = bodyRef.current
+      if (!sel || sel.isCollapsed || !sel.rangeCount || !body) return
+      const range = sel.getRangeAt(0)
+      if (!body.contains(range.commonAncestorContainer)) return
+      const anchor = anchorOf(body, range)
+      if (!anchor) return
+      setPill(null)
+      readAloud.showTapWord(null)
+      setBar({ kind: 'new', anchor })
+      // Keep the chosen text marked while typing a note, when the selection itself goes away
+      if (pendingHighlightsSupported) CSS.highlights.set('hl-pending', new window.Highlight(range.cloneRange()))
+    }
+    document.addEventListener('selectionchange', onSel)
+    return () => document.removeEventListener('selectionchange', onSel)
+  }, [])
+
+  // New article: close the bar and the share screen
+  useEffect(() => {
+    setBar(null)
+    setShare(null)
+    clearPending()
+  }, [item.id])
+
+  const closeBar = useCallback(() => {
+    setBar(null)
+    clearPending()
+    window.getSelection()?.removeAllRanges()
+  }, [])
+
+  const flash = (id: string) => {
+    const marks = bodyRef.current?.querySelectorAll<HTMLElement>(`mark[data-hl="${CSS.escape(id)}"]`)
+    if (!marks?.length) return false
+    marks[0].scrollIntoView({ behavior: 'smooth', block: 'center' })
+    marks.forEach((m) => {
+      m.classList.remove('flash')
+      void m.offsetWidth
+      m.classList.add('flash')
+    })
+    return true
+  }
+
+  // From the Highlights page: scroll to the highlight once it's in the text
+  useEffect(() => {
+    if (!p.focusHighlight || !highlights) return
+    const id = p.focusHighlight
+    const t = window.setTimeout(() => {
+      if (!flash(id)) p.toast("This highlight isn't in the text shown. Try switching full text (F).")
+      p.onFocusConsumed()
+    }, 250)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.focusHighlight, highlights, html])
+
+  const subjectOf = (h: Pick<Highlight, 'text' | 'note' | 'color'>): ShareSubject => ({
+    text: h.text,
+    note: h.note,
+    color: h.color,
+    itemTitle: item.title,
+    feedTitle: feedDisplayTitle(feed),
+    itemLink: item.link,
+    imageUrl: item.imageUrl,
+  })
+
+  const saveFromBar = async (color: HighlightColor, note: string) => {
+    if (!bar) return
+    if (bar.kind === 'new') {
+      await saveHighlight(newHighlight(item, feed, bar.anchor, color, note))
+      p.toast('Highlighted')
+      closeBar()
+    } else {
+      await updateHighlight(bar.id, { color, note: note.trim() })
+    }
+  }
+
+  const shareFromBar = async (color: HighlightColor, note: string) => {
+    if (!bar) return
+    if (bar.kind === 'new') {
+      // Sharing a selection saves it as a highlight too
+      const h = newHighlight(item, feed, bar.anchor, color, note)
+      await saveHighlight(h)
+      closeBar()
+      setShare(subjectOf(h))
+    } else if (editing) {
+      setShare(subjectOf({ ...editing, color, note: note.trim() }))
+    }
+  }
+
+  const copyFromBar = (note: string) => {
+    const text = bar?.kind === 'new' ? bar.anchor.text : editing?.text
+    if (!text) return
+    copyText(quoteText({ text, itemTitle: item.title, feedTitle: feedDisplayTitle(feed), itemLink: item.link }, note.trim()), p.toast)
+  }
+
+  const removeHighlight = async (h: Highlight) => {
+    await deleteHighlight(h.id)
+    if (bar?.kind === 'edit' && bar.id === h.id) setBar(null)
+    p.toast('Highlight deleted')
+  }
 
   // (Re)index text for read aloud whenever what's shown changes
   useEffect(() => {
@@ -112,6 +241,19 @@ export function Reader(p: Props) {
     const target = e.target as HTMLElement
     if (target.closest('a')) return
     if (window.getSelection()?.toString()) return
+    // Tapping a highlight opens it in the bar (recolor, note, share, delete)
+    const mark = target.closest<HTMLElement>('mark.hl')
+    if (mark?.dataset.hl && !(playing && ra.status === 'playing')) {
+      setPill(null)
+      readAloud.showTapWord(null)
+      clearPending()
+      setBar({ kind: 'edit', id: mark.dataset.hl })
+      return
+    }
+    if (bar) {
+      closeBar()
+      return
+    }
     const offset = readAloud.offsetAtPoint(e.clientX, e.clientY)
     if (offset < 0 || !readAloud.wordAt(offset)) {
       setPill(null)
@@ -181,7 +323,7 @@ export function Reader(p: Props) {
   const toggleRead = () => db.items.update(item.id, { read: item.read ? 0 : 1, readTime: item.read ? null : Date.now(), readSynced: 0 })
   const toggleSave = () => db.items.update(item.id, { saved: item.saved ? 0 : 1 })
 
-  const share = async () => {
+  const shareLink = async () => {
     const url = item.link ?? ''
     if (navigator.share) {
       try {
@@ -242,6 +384,15 @@ export function Reader(p: Props) {
             <IconButton icon="speed" label="Speed read: show the word as it is read (V)" onClick={showWord} disabled={!readAloud.supported} />
           </>
         )}
+        <button
+          type="button"
+          className={`hl-chip${railOpen ? ' on' : ''}`}
+          onClick={() => setRailOpen(!railOpen)}
+          title={railOpen ? 'Hide highlights' : 'Show highlights in this article'}
+          aria-pressed={railOpen}
+        >
+          <Icon name="highlight" size={18} /> {highlights?.length ?? 0}
+        </button>
         <IconButton icon="article" label={fullMode ? 'Show feed text (F)' : 'Full text (F)'} active={fullMode} onClick={() => setFullMode(!fullMode)} />
         {item.link ? (
           <a className="icon-btn" href={item.link} target="_blank" rel="noopener noreferrer" title="Open original page (O)" aria-label="Open original page">
@@ -250,7 +401,7 @@ export function Reader(p: Props) {
         ) : null}
       </header>
 
-      <div className="reader-stage">
+      <div className={`reader-stage${railOpen ? ' with-rail' : ''}`}>
         <div className="reader-scroll" ref={scrollRef} data-scroll onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
           <article className="article" style={{ fontSize: p.settings.textSize }}>
             <h1 className="article-title">
@@ -320,10 +471,42 @@ export function Reader(p: Props) {
             <IconButton icon="close" label="Stop auto scroll (A)" onClick={auto.stop} />
           </div>
         ) : null}
+        {railOpen ? (
+          <HighlightsRail
+            highlights={ordered}
+            onClose={() => setRailOpen(false)}
+            onJump={(h) => {
+              if (!flash(h.id)) p.toast("This highlight isn't in the text shown. Try switching full text (F).")
+              if (window.matchMedia('(max-width: 1100px)').matches) setRailOpen(false)
+            }}
+            onShare={(h) => setShare(subjectOf(h))}
+            onEdit={(h) => {
+              setBar({ kind: 'edit', id: h.id })
+              flash(h.id)
+              if (window.matchMedia('(max-width: 1100px)').matches) setRailOpen(false)
+            }}
+            onDelete={removeHighlight}
+            onCopyAll={() => copyText(allQuotesText(ordered), p.toast, 'Copied all highlights')}
+            toast={p.toast}
+          />
+        ) : null}
       </div>
 
+      {bar && (bar.kind === 'new' || editing) ? (
+        <HighlightBar
+          text={bar.kind === 'new' ? bar.anchor.text : editing!.text}
+          existing={editing}
+          onSave={saveFromBar}
+          onShare={shareFromBar}
+          onCopyText={copyFromBar}
+          onDelete={() => editing && removeHighlight(editing)}
+          onClose={closeBar}
+        />
+      ) : null}
+      {share ? <ShareDialog subject={share} onClose={() => setShare(null)} toast={p.toast} /> : null}
+
       <footer className="action-bar">
-        <IconButton icon="share" label="Share" onClick={share} showLabel />
+        <IconButton icon="share" label="Share" onClick={shareLink} showLabel />
         <IconButton icon={item.read ? 'unread' : 'read'} label={item.read ? 'Mark unread' : 'Mark read'} onClick={toggleRead} showLabel />
         <IconButton icon="summarize" label={summaryState === 'loading' ? 'Summarizing…' : 'Summarize'} onClick={doSummary} disabled={summaryState === 'loading'} showLabel />
         <IconButton icon={item.saved ? 'bookmarkFilled' : 'bookmark'} label={item.saved ? 'Saved' : 'Save'} active={!!item.saved} onClick={toggleSave} showLabel />

@@ -12,11 +12,18 @@ import { ArticleList } from './components/ArticleList'
 import { Reader } from './components/Reader'
 import { AddFeedDialog, EditFeedDialog, SettingsDialog } from './components/Dialogs'
 import { ManageFeeds } from './components/ManageFeeds'
+import { HighlightsPage } from './components/Highlights'
+import { ShareDialog, type ShareSubject } from './components/ShareDialog'
+import { deleteHighlight } from './lib/highlights'
+import type { Highlight } from './lib/db'
 
 const NAV_COLLAPSED_KEY = 'feeder.navCollapsed'
 /** The Manage feeds page has its own address so it can be bookmarked and Back works. */
 const FEEDS_HASH = '#/feeds'
 const isFeedsHash = () => window.location.hash === FEEDS_HASH
+/** The Highlights page, also bookmarkable. */
+const HIGHLIGHTS_HASH = '#/highlights'
+const isHighlightsHash = () => window.location.hash === HIGHLIGHTS_HASH
 
 type Dialog = { kind: 'settings' } | { kind: 'add' } | { kind: 'edit'; url: string } | null
 
@@ -66,8 +73,15 @@ export default function App() {
   }, [])
   const [dialog, setDialog] = useState<Dialog>(null)
   const [managing, setManaging] = useState(isFeedsHash)
+  const [highlightsPage, setHighlightsPage] = useState(isHighlightsHash)
+  const [focusHighlight, setFocusHighlight] = useState<string | null>(null)
+  const [pageShare, setPageShare] = useState<ShareSubject | null>(null)
+  const allHighlights = useLiveQuery(() => db.highlights.toArray(), []) ?? []
   useEffect(() => {
-    const onHash = () => setManaging(isFeedsHash())
+    const onHash = () => {
+      setManaging(isFeedsHash())
+      setHighlightsPage(isHighlightsHash())
+    }
     window.addEventListener('hashchange', onHash)
     window.addEventListener('popstate', onHash)
     return () => {
@@ -78,9 +92,18 @@ export default function App() {
   const showManage = useCallback((on: boolean) => {
     if (on !== isFeedsHash()) {
       if (on) window.location.hash = FEEDS_HASH
-      else history.pushState(null, '', window.location.pathname + window.location.search)
+      else if (isFeedsHash()) history.pushState(null, '', window.location.pathname + window.location.search)
     }
     setManaging(on)
+    if (on) setHighlightsPage(false)
+  }, [])
+  const showHighlights = useCallback((on: boolean) => {
+    if (on !== isHighlightsHash()) {
+      if (on) window.location.hash = HIGHLIGHTS_HASH
+      else if (isHighlightsHash()) history.pushState(null, '', window.location.pathname + window.location.search)
+    }
+    setHighlightsPage(on)
+    if (on) setManaging(false)
   }, [])
   const [refreshing, setRefreshing] = useState<string | null>(null)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
@@ -231,9 +254,10 @@ export default function App() {
       if (dialog || e.ctrlKey || e.metaKey || e.altKey || /INPUT|TEXTAREA|SELECT/.test(t.tagName)) return
       // Any other modal (e.g. the Sort & group sheet) owns the keyboard while open
       if (document.querySelector('[aria-modal="true"]') || t.closest?.('[aria-modal="true"]')) return
-      if (managing) {
+      if (managing || highlightsPage) {
         if (e.key === 'Escape') {
           showManage(false)
+          showHighlights(false)
           e.preventDefault()
         }
         return
@@ -285,7 +309,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [dialog, visibleOrder, openId, nextId, prevId, goNext, goPrev, open, openItem, pane, toggleNav, managing, showManage])
+  }, [dialog, visibleOrder, openId, nextId, prevId, goNext, goPrev, open, openItem, pane, toggleNav, managing, showManage, highlightsPage, showHighlights])
 
   const markAllRead = async () => {
     const ids = groups.flatMap((g) => g.items).filter((i) => !i.read).map((i) => i.id)
@@ -315,6 +339,18 @@ export default function App() {
     open(item.id, visibleOrder)
   }
 
+  /** From the Highlights page: open the article and scroll to the highlight. */
+  const openHighlight = async (h: Highlight) => {
+    if (!(await db.items.get(h.itemId))) {
+      if (h.itemLink) window.open(h.itemLink, '_blank', 'noopener')
+      else toast('That article is no longer in Feeder')
+      return
+    }
+    showHighlights(false)
+    setFocusHighlight(h.id)
+    open(h.itemId, visibleOrder.includes(h.itemId) ? visibleOrder : [h.itemId])
+  }
+
   const syncLabel = syncState
     ? syncState.lastError
       ? 'Sync problem, see Settings'
@@ -324,7 +360,7 @@ export default function App() {
     : 'Not syncing'
 
   return (
-    <div className={`app pane-${pane}${drawer ? ' drawer-open' : ''}${navCollapsed ? ' nav-collapsed' : ''}${managing ? ' page-feeds' : ''}`}>
+    <div className={`app pane-${pane}${drawer ? ' drawer-open' : ''}${navCollapsed ? ' nav-collapsed' : ''}${managing || highlightsPage ? ' page-feeds' : ''}`}>
       <div className="drawer-scrim" onClick={() => setDrawer(false)} />
       <Sidebar
         feeds={feedList}
@@ -335,6 +371,13 @@ export default function App() {
           setDrawer(false)
           setPane('list')
           showManage(false)
+          showHighlights(false)
+        }}
+        highlightCount={allHighlights.length}
+        showingHighlights={highlightsPage}
+        onHighlights={() => {
+          setDrawer(false)
+          showHighlights(!highlightsPage)
         }}
         onEditFeed={(url) => setDialog({ kind: 'edit', url })}
         onMoveFeed={moveFeed}
@@ -351,7 +394,20 @@ export default function App() {
         collapsed={navCollapsed}
         onToggleCollapsed={toggleNav}
       />
-      {managing ? (
+      {highlightsPage ? (
+        <HighlightsPage
+          highlights={allHighlights}
+          onBack={() => showHighlights(false)}
+          onMenu={() => setDrawer(true)}
+          onOpenArticle={openHighlight}
+          onShare={(h) => setPageShare({ text: h.text, note: h.note, color: h.color, itemTitle: h.itemTitle, feedTitle: h.feedTitle, itemLink: h.itemLink, imageUrl: h.imageUrl })}
+          onDelete={async (h) => {
+            await deleteHighlight(h.id)
+            toast('Highlight deleted')
+          }}
+          toast={toast}
+        />
+      ) : managing ? (
         <ManageFeeds
           feeds={feedList}
           items={items}
@@ -373,7 +429,7 @@ export default function App() {
         onMarkAllRead={markAllRead}
         />
       )}
-      {managing ? null : openItem ? (
+      {managing || highlightsPage ? null : openItem ? (
         <Reader
           item={openItem}
           feed={feeds.get(openItem.feedUrl)}
@@ -387,6 +443,8 @@ export default function App() {
           autoplay={autoplay}
           onAutoplayConsumed={() => setAutoplay(false)}
           toast={toast}
+          focusHighlight={focusHighlight}
+          onFocusConsumed={() => setFocusHighlight(null)}
         />
       ) : (
         <section className="reader-pane empty-reader">
@@ -404,6 +462,7 @@ export default function App() {
         /> : null}
       {dialog?.kind === 'add' ? <AddFeedDialog onClose={() => setDialog(null)} toast={toast} /> : null}
       {dialog?.kind === 'edit' ? <EditFeedDialog url={dialog.url} onClose={() => setDialog(null)} toast={toast} /> : null}
+      {pageShare ? <ShareDialog subject={pageShare} onClose={() => setPageShare(null)} toast={toast} /> : null}
       {toastMsg ? (
         <div className="toast" role="status">
           {toastMsg}
