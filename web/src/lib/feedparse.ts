@@ -120,6 +120,23 @@ function mediaImage(el: Element): string | null {
   return null
 }
 
+/** media:description (YouTube puts the video description there), as simple HTML. */
+function mediaDescription(el: Element): string {
+  const group = child(el, 'group')
+  const text = ((group && childText(group, 'description')) ?? childText(el, 'description') ?? '').trim()
+  if (!text) return ''
+  const escape = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  return text
+    .split(/\n\s*\n/)
+    .map((para) => {
+      const body = escape(para.trim())
+        .replace(/https?:\/\/[^\s<]+/g, (url) => `<a href="${url}">${url}</a>`)
+        .replace(/\n/g, '<br>')
+      return `<p>${body}</p>`
+    })
+    .join('')
+}
+
 interface RawItem {
   rawGuid: string | null
   rawLink: string | null
@@ -203,7 +220,7 @@ function parseXml(text: string, feedUrl: string, alternateId: boolean): ParsedFe
         rawLink: linkOf(e),
         title: child(e, 'title')?.textContent ?? '',
         contentHtml: atomText(child(e, 'content')),
-        summaryHtml: atomText(child(e, 'summary')),
+        summaryHtml: atomText(child(e, 'summary')) || mediaDescription(e),
         imageUrl: mediaImage(e),
         author: (child(e, 'author') && childText(child(e, 'author')!, 'name')) || null,
         published: parseDate(childText(e, 'published') ?? childText(e, 'updated')),
