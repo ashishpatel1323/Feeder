@@ -63,6 +63,27 @@ export interface RemoteFeed {
   url: string
 }
 
+/** A highlighted passage of an article, with an optional note. Kept in this browser only. */
+export interface Highlight {
+  id: string
+  itemId: string
+  /** Copied from the article so the Highlights page still works after the article is cleaned up. */
+  itemTitle: string
+  itemLink: string | null
+  feedTitle: string
+  imageUrl: string | null
+  /** The highlighted text, and where it starts in the article body's text. */
+  text: string
+  start: number
+  /** A few characters before the text, to find it again if the article text shifted. */
+  prefix: string
+  color: HighlightColor
+  note: string
+  createdAt: number
+}
+
+export type HighlightColor = 'yellow' | 'green' | 'blue' | 'pink'
+
 export interface KeyValue {
   key: string
   value: unknown
@@ -76,6 +97,7 @@ class FeederDb extends Dexie {
   remoteReadMarks!: EntityTable<RemoteReadMark, 'key'>
   remoteFeeds!: EntityTable<RemoteFeed, 'url'>
   kv!: EntityTable<KeyValue, 'key'>
+  highlights!: EntityTable<Highlight, 'id'>
 
   constructor() {
     super('feeder-web')
@@ -100,6 +122,7 @@ class FeederDb extends Dexie {
           }
         })
     })
+    this.version(3).stores({ highlights: '&id, itemId, createdAt' })
   }
 }
 
