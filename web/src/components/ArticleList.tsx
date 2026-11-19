@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, feedDisplayTitle, type Feed, type Item } from '../lib/db'
 import { readingMinutes, wordsOf, type Group } from '../lib/listquery'
@@ -19,9 +19,9 @@ interface Props {
   onMenu: () => void
   onMarkAllRead: () => void
   onDeleteRead: () => void
-  /** From the right-click menu on an article. */
-  onToggleRead: (item: Item) => void
-  onDelete: (item: Item) => void
+  /** From the right-click menu and the selection bar: one article or all selected ones. */
+  onSetRead: (items: Item[], read: boolean) => void
+  onDelete: (items: Item[]) => void
 }
 
 const SHOWS: [ShowFilter, string][] = [
@@ -103,8 +103,8 @@ function Thumb({ src }: { src: string }) {
   )
 }
 
-/** Right-click menu on an article: Mark read or unread, and Delete. */
-function RowMenu(p: { item: Item; x: number; y: number; onClose: () => void; onToggleRead: () => void; onDelete: () => void }) {
+/** Right-click menu on an article, or on all selected articles: Mark read or unread, and Delete. */
+function RowMenu(p: { items: Item[]; x: number; y: number; onClose: () => void; onSetRead: (read: boolean) => void; onDelete: () => void }) {
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState({ left: p.x, top: p.y })
   useEffect(() => {
@@ -135,6 +135,10 @@ function RowMenu(p: { item: Item; x: number; y: number; onClose: () => void; onT
     p.onClose()
     f()
   }
+  const n = p.items.length
+  const some = n > 1 ? ` ${n}` : ''
+  const anyUnread = p.items.some((i) => !i.read)
+  const anyRead = p.items.some((i) => i.read)
   return (
     <div
       className="ctx-backdrop"
@@ -145,14 +149,23 @@ function RowMenu(p: { item: Item; x: number; y: number; onClose: () => void; onT
       }}
       onWheel={p.onClose}
     >
-      <div ref={ref} className="ctx-menu" role="menu" aria-label={p.item.title || 'Article'} style={pos}>
-        <button role="menuitem" className="ctx-item" onClick={act(p.onToggleRead)}>
-          <Icon name={p.item.read ? 'unread' : 'read'} size={20} />
-          {p.item.read ? 'Mark unread' : 'Mark as read'}
-        </button>
+      <div ref={ref} className="ctx-menu" role="menu" aria-label={n > 1 ? `${n} articles` : p.items[0]?.title || 'Article'} style={pos}>
+        {n > 1 ? <div className="ctx-heading">{n} articles selected</div> : null}
+        {anyUnread ? (
+          <button role="menuitem" className="ctx-item" onClick={act(() => p.onSetRead(true))}>
+            <Icon name="read" size={20} />
+            {`Mark${some} as read`}
+          </button>
+        ) : null}
+        {anyRead ? (
+          <button role="menuitem" className="ctx-item" onClick={act(() => p.onSetRead(false))}>
+            <Icon name="unread" size={20} />
+            {`Mark${some} unread`}
+          </button>
+        ) : null}
         <button role="menuitem" className="ctx-item danger" onClick={act(p.onDelete)}>
           <Icon name="delete" size={20} />
-          Delete
+          {`Delete${some}`}
         </button>
       </div>
     </div>
@@ -160,7 +173,10 @@ function RowMenu(p: { item: Item; x: number; y: number; onClose: () => void; onT
 }
 
 export function ArticleList(p: Props) {
-  const [menu, setMenu] = useState<{ item: Item; x: number; y: number } | null>(null)
+  const [menu, setMenu] = useState<{ items: Item[]; x: number; y: number } | null>(null)
+  // Multi-select: Ctrl/Cmd-click adds or removes one article, Shift-click selects a range
+  const [picked, setPicked] = useState<Set<string>>(() => new Set())
+  const anchor = useRef<string | null>(null)
   const longPress = useRef<number | null>(null)
   const longPressed = useRef(false)
   const s = p.settings
@@ -187,6 +203,64 @@ export function ArticleList(p: Props) {
         : [...new Set([...s.collapsedGroups, ...ids])],
     })
   }
+  // Articles in list order, for Shift-click ranges, Select all, and dropping ones that left the list
+  const shown = p.groups.flatMap((g) => (grouped && s.collapsedGroups.includes(`${s.grouping}:${g.key}`) ? [] : g.items))
+  const selected = shown.filter((i) => picked.has(i.id))
+  useEffect(() => {
+    if (picked.size && selected.length !== picked.size) setPicked(new Set(selected.map((i) => i.id)))
+  }, [selected.length, picked.size]) // eslint-disable-line react-hooks/exhaustive-deps
+  const clearSelection = () => {
+    setPicked(new Set())
+    anchor.current = null
+  }
+  useEffect(() => {
+    if (!picked.size) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !menu) {
+        e.stopPropagation()
+        clearSelection()
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [picked.size, menu])
+
+  const clickRow = (e: MouseEvent, item: Item) => {
+    if (e.shiftKey && anchor.current) {
+      e.preventDefault()
+      const a = shown.findIndex((i) => i.id === anchor.current)
+      const b = shown.findIndex((i) => i.id === item.id)
+      if (a >= 0 && b >= 0) {
+        const [from, to] = a < b ? [a, b] : [b, a]
+        setPicked(new Set([...picked, ...shown.slice(from, to + 1).map((i) => i.id)]))
+        return
+      }
+    }
+    if (e.metaKey || e.ctrlKey || e.shiftKey) {
+      e.preventDefault()
+      const openId = p.selectedId && p.selectedId !== item.id && shown.some((i) => i.id === p.selectedId) ? p.selectedId : null
+      anchor.current = item.id
+      setPicked((prev) => {
+        const next = new Set(prev)
+        if (next.has(item.id)) next.delete(item.id)
+        else next.add(item.id)
+        // Start with the open article, so Ctrl-clicking a second one selects both
+        if (!prev.size && openId) next.add(openId)
+        return next
+      })
+      return
+    }
+    if (picked.size) clearSelection()
+    p.onOpen(item)
+  }
+  const setRead = (items: Item[], read: boolean) => {
+    p.onSetRead(items, read)
+  }
+  const remove = (items: Item[]) => {
+    clearSelection()
+    p.onDelete(items)
+  }
+
   const markGroupRead = async (g: Group) => {
     const ids = g.items.filter((i) => !i.read).map((i) => i.id)
     await db.items.bulkUpdate(ids.map((key) => ({ key, changes: { read: 1, readTime: Date.now(), readSynced: 0 } })))
@@ -204,6 +278,21 @@ export function ArticleList(p: Props) {
         <IconButton icon="delete" label="Delete read articles on all devices" onClick={p.onDeleteRead} />
         <IconButton icon="doneAll" label="Mark all as read" onClick={p.onMarkAllRead} />
       </header>
+      {selected.length ? (
+        <div className="select-bar" role="toolbar" aria-label="Selected articles">
+          <IconButton icon="close" label="Clear selection (Esc)" onClick={clearSelection} />
+          <span className="select-count">{selected.length} selected</span>
+          {selected.length < shown.length ? (
+            <button className="select-all" onClick={() => setPicked(new Set(shown.map((i) => i.id)))}>
+              Select all
+            </button>
+          ) : null}
+          <span className="select-spacer" />
+          {selected.some((i) => !i.read) ? <IconButton icon="read" label="Mark as read" onClick={() => setRead(selected, true)} /> : null}
+          {selected.some((i) => i.read) ? <IconButton icon="unread" label="Mark unread" onClick={() => setRead(selected, false)} /> : null}
+          <IconButton icon="delete" label="Delete on all devices" onClick={() => remove(selected)} />
+        </div>
+      ) : null}
       <div className="list-filters">
         <div className="filter-row">
           <div className="segmented" role="radiogroup" aria-label="Show">
@@ -302,11 +391,17 @@ export function ArticleList(p: Props) {
                     return (
                       <button
                         key={item.id}
-                        className={`row${item.read ? ' read' : ''}${item.id === p.selectedId ? ' selected' : ''}`}
-                        onClick={() => p.onOpen(item)}
+                        className={`row${item.read ? ' read' : ''}${item.id === p.selectedId && !picked.size ? ' selected' : ''}${picked.has(item.id) ? ' picked' : ''}`}
+                        aria-pressed={picked.size ? picked.has(item.id) : undefined}
+                        onClick={(e) => clickRow(e, item)}
                         onContextMenu={(e) => {
                           e.preventDefault()
-                          setMenu({ item, x: e.clientX, y: e.clientY })
+                          // Right-click inside the selection acts on all of it; elsewhere, on that article only
+                          if (picked.has(item.id)) setMenu({ items: selected, x: e.clientX, y: e.clientY })
+                          else {
+                            if (picked.size) clearSelection()
+                            setMenu({ items: [item], x: e.clientX, y: e.clientY })
+                          }
                         }}
                       >
                         <div className="row-main">
@@ -344,12 +439,12 @@ export function ArticleList(p: Props) {
       </div>
       {menu ? (
         <RowMenu
-          item={menu.item}
+          items={menu.items}
           x={menu.x}
           y={menu.y}
           onClose={() => setMenu(null)}
-          onToggleRead={() => p.onToggleRead(menu.item)}
-          onDelete={() => p.onDelete(menu.item)}
+          onSetRead={(read) => setRead(menu.items, read)}
+          onDelete={() => remove(menu.items)}
         />
       ) : null}
     </section>
