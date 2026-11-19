@@ -329,6 +329,23 @@ export default function App() {
     toast(`Deleted ${gone.length}`, { label: 'Undo', run: () => void unhideItems(gone).then(() => syncNow().catch(() => undefined)) })
   }
 
+  /** Right-click menu in the list: the same change as the reader's button, synced to other devices. */
+  const toggleReadFromList = async (item: Item) => {
+    await db.items.update(item.id, { read: item.read ? 0 : 1, readTime: item.read ? null : Date.now(), readSynced: 0 })
+    syncNow().catch(() => undefined)
+  }
+
+  /** Right-click Delete in the list: deleted for good on every device, with Undo. */
+  const deleteFromList = async (item: Item) => {
+    if (item.id === openId) {
+      if (nextId) open(nextId)
+      else setOpenId(null)
+    }
+    await hideItems([item.id])
+    syncNow().catch(() => undefined)
+    toast('Article deleted on all devices', { label: 'Undo', run: () => void unhideItems([item]).then(() => syncNow().catch(() => undefined)) })
+  }
+
   /** Drag and drop in the sidebar and on the Manage feeds page. */
   const moveFeed = async (url: string, tag: string, place?: { beforeUrl: string | null; folderUrls: string[] }) => {
     if (place) {
@@ -447,6 +464,8 @@ export default function App() {
         onMenu={() => setDrawer(true)}
         onMarkAllRead={markAllRead}
         onDeleteRead={deleteRead}
+        onToggleRead={toggleReadFromList}
+        onDelete={deleteFromList}
         />
       )}
       {managing || highlightsPage ? null : openItem ? (

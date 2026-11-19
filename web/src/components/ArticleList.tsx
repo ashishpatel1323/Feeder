@@ -19,6 +19,9 @@ interface Props {
   onMenu: () => void
   onMarkAllRead: () => void
   onDeleteRead: () => void
+  /** From the right-click menu on an article. */
+  onToggleRead: (item: Item) => void
+  onDelete: (item: Item) => void
 }
 
 const SHOWS: [ShowFilter, string][] = [
@@ -100,7 +103,64 @@ function Thumb({ src }: { src: string }) {
   )
 }
 
+/** Right-click menu on an article: Mark read or unread, and Delete. */
+function RowMenu(p: { item: Item; x: number; y: number; onClose: () => void; onToggleRead: () => void; onDelete: () => void }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState({ left: p.x, top: p.y })
+  useEffect(() => {
+    // Keep the menu on screen near the window's edges
+    const el = ref.current
+    if (el) {
+      const r = el.getBoundingClientRect()
+      setPos({ left: Math.max(8, Math.min(p.x, window.innerWidth - r.width - 8)), top: Math.max(8, Math.min(p.y, window.innerHeight - r.height - 8)) })
+      el.querySelector<HTMLButtonElement>('button')?.focus()
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        p.onClose()
+      }
+    }
+    const close = () => p.onClose()
+    window.addEventListener('keydown', onKey, true)
+    window.addEventListener('resize', close)
+    window.addEventListener('blur', close)
+    return () => {
+      window.removeEventListener('keydown', onKey, true)
+      window.removeEventListener('resize', close)
+      window.removeEventListener('blur', close)
+    }
+  }, [p.x, p.y]) // eslint-disable-line react-hooks/exhaustive-deps
+  const act = (f: () => void) => () => {
+    p.onClose()
+    f()
+  }
+  return (
+    <div
+      className="ctx-backdrop"
+      onPointerDown={(e) => e.target === e.currentTarget && p.onClose()}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        p.onClose()
+      }}
+      onWheel={p.onClose}
+    >
+      <div ref={ref} className="ctx-menu" role="menu" aria-label={p.item.title || 'Article'} style={pos}>
+        <button role="menuitem" className="ctx-item" onClick={act(p.onToggleRead)}>
+          <Icon name={p.item.read ? 'unread' : 'read'} size={20} />
+          {p.item.read ? 'Mark unread' : 'Mark as read'}
+        </button>
+        <button role="menuitem" className="ctx-item danger" onClick={act(p.onDelete)}>
+          <Icon name="delete" size={20} />
+          Delete
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function ArticleList(p: Props) {
+  const [menu, setMenu] = useState<{ item: Item; x: number; y: number } | null>(null)
   const longPress = useRef<number | null>(null)
   const longPressed = useRef(false)
   const s = p.settings
@@ -244,6 +304,10 @@ export function ArticleList(p: Props) {
                         key={item.id}
                         className={`row${item.read ? ' read' : ''}${item.id === p.selectedId ? ' selected' : ''}`}
                         onClick={() => p.onOpen(item)}
+                        onContextMenu={(e) => {
+                          e.preventDefault()
+                          setMenu({ item, x: e.clientX, y: e.clientY })
+                        }}
                       >
                         <div className="row-main">
                           <div className="row-title">{item.title || '(no title)'}</div>
@@ -278,6 +342,16 @@ export function ArticleList(p: Props) {
           )
         })}
       </div>
+      {menu ? (
+        <RowMenu
+          item={menu.item}
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+          onToggleRead={() => p.onToggleRead(menu.item)}
+          onDelete={() => p.onDelete(menu.item)}
+        />
+      ) : null}
     </section>
   )
 }
