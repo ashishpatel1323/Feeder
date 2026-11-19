@@ -25,7 +25,6 @@ import com.nononsenseapps.feeder.db.room.RemoteFeed
 import com.nononsenseapps.feeder.db.room.SyncDevice
 import com.nononsenseapps.feeder.db.room.SyncRemote
 import com.nononsenseapps.feeder.model.FeedUnreadCount
-import com.nononsenseapps.feeder.model.HackerNewsScores
 import com.nononsenseapps.feeder.model.ThumbnailImage
 import com.nononsenseapps.feeder.model.syncMutex
 import com.nononsenseapps.feeder.sync.DeviceListResponse
@@ -39,7 +38,6 @@ import com.nononsenseapps.feeder.ui.compose.settings.FontSelection
 import com.nononsenseapps.feeder.util.Either
 import com.nononsenseapps.feeder.util.addDynamicShortcutToFeed
 import com.nononsenseapps.feeder.util.reportShortcutToFeedUsed
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -74,7 +72,6 @@ class Repository(
     private val syncRemoteStore: SyncRemoteStore by instance()
     private val syncClient: SyncRestClient by instance()
     private val fontStore: FontStore by instance()
-    private val hackerNewsScores: HackerNewsScores by instance()
 
     init {
         addFeederNewsIfInitialStart()
@@ -1044,41 +1041,6 @@ class Repository(
         settingsStore.setShowReadingTime(value)
     }
 
-    /**
-     * Hacker News popularity score. Off by default since every lookup sends
-     * the article's link to hn.algolia.com.
-     */
-    val showHnScore: StateFlow<Boolean> = settingsStore.showHnScore
-
-    fun setShowHnScore(value: Boolean) {
-        settingsStore.setShowHnScore(value)
-        applicationCoroutineScope.launch(Dispatchers.IO) {
-            if (value) {
-                hackerNewsScores.refreshRecent()
-            } else {
-                hackerNewsScores.clearAll()
-            }
-        }
-    }
-
-    suspend fun updateHnScore(
-        id: Long,
-        points: Int?,
-        comments: Int?,
-        hnId: String?,
-        checkedTime: Instant,
-    ) = feedItemStore.updateHnScore(id = id, points = points, comments = comments, hnId = hnId, checkedTime = checkedTime)
-
-    suspend fun getItemsNeedingHnScore(
-        since: Instant,
-        staleBefore: Instant,
-        limit: Int,
-    ): List<FeedItemIdWithLink> = feedItemStore.getItemsNeedingHnScore(since = since, staleBefore = staleBefore, limit = limit)
-
-    suspend fun clearHnScores() = feedItemStore.clearHnScores()
-
-    suspend fun getHnCheckedTime(id: Long): Instant? = feedItemStore.getHnCheckedTime(id)
-
     suspend fun updateWordCountFull(
         id: Long,
         wordCount: Int,
@@ -1186,9 +1148,6 @@ data class Article(
     val wordCountFull: Int = item?.wordCountFull ?: 0
     val image: ThumbnailImage? = item?.thumbnailImage
     val isUnread: Boolean = item?.readTime == null
-    val hnPoints: Int? = item?.hnPoints
-    val hnComments: Int? = item?.hnComments
-    val hnId: String? = item?.hnId
 }
 
 enum class TextToDisplay {

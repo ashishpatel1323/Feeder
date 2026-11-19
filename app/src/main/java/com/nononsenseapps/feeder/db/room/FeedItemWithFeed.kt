@@ -13,9 +13,6 @@ import com.nononsenseapps.feeder.db.COL_FEEDTITLE
 import com.nononsenseapps.feeder.db.COL_FEEDURL
 import com.nononsenseapps.feeder.db.COL_FULLTEXT_BY_DEFAULT
 import com.nononsenseapps.feeder.db.COL_GUID
-import com.nononsenseapps.feeder.db.COL_HN_COMMENTS
-import com.nononsenseapps.feeder.db.COL_HN_ID
-import com.nononsenseapps.feeder.db.COL_HN_POINTS
 import com.nononsenseapps.feeder.db.COL_ID
 import com.nononsenseapps.feeder.db.COL_IMAGEURL
 import com.nononsenseapps.feeder.db.COL_LINK
@@ -50,10 +47,7 @@ const val FEED_ITEM_COLUMNS_WITH_FEED = """
     $COL_BOOKMARKED,
     $COL_PRIMARYSORTTIME,
     $COL_WORD_COUNT,
-    $COL_WORD_COUNT_FULL,
-    $COL_HN_POINTS,
-    $COL_HN_COMMENTS,
-    $COL_HN_ID
+    $COL_WORD_COUNT_FULL
 """
 
 data class FeedItemWithFeed
@@ -82,9 +76,6 @@ data class FeedItemWithFeed
         @ColumnInfo(name = COL_PRIMARYSORTTIME) var primarySortTime: Instant = Instant.EPOCH,
         @ColumnInfo(name = COL_WORD_COUNT) var wordCount: Int = 0,
         @ColumnInfo(name = COL_WORD_COUNT_FULL) var wordCountFull: Int = 0,
-        @ColumnInfo(name = COL_HN_POINTS) var hnPoints: Int? = null,
-        @ColumnInfo(name = COL_HN_COMMENTS) var hnComments: Int? = null,
-        @ColumnInfo(name = COL_HN_ID) var hnId: String? = null,
     ) : FeedItemForFetching {
         constructor() : this(id = ID_UNSET)
 

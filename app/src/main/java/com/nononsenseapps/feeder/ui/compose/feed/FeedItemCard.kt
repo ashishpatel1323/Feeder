@@ -256,13 +256,6 @@ fun RowScope.FeedItemText(
                                     .weight(1f),
                         )
                     }
-                    item.hnPoints?.let { points ->
-                        HnScoreBadge(
-                            points = points,
-                            style = FeedListItemDateStyle(),
-                            iconSize = 14.dp,
-                        )
-                    }
                     WithBidiDeterminedLayoutDirection(paragraph = item.pubDate) {
                         Text(
                             text = item.pubDate,

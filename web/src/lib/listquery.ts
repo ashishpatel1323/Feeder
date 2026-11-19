@@ -188,10 +188,3 @@ export function buildGroups(items: Item[], feeds: Map<string, Feed>, grouping: G
     return { key, label: groupLabel(grouping, key, feeds), items: list, unread: list.filter((i) => !i.read).length }
   })
 }
-
-/** Short form of a points count, like Inoreader: 999, 1.2k, 15k. */
-export function formatPoints(points: number): string {
-  if (points < 1000) return String(points)
-  if (points < 10_000) return `${(points / 1000).toFixed(1)}k`.replace('.0k', 'k')
-  return `${Math.floor(points / 1000)}k`
-}
