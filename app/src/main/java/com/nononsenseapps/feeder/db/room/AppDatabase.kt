@@ -50,11 +50,13 @@ private const val LOG_TAG = "FEEDER_APPDB"
         RemoteReadMark::class,
         RemoteFeed::class,
         SyncDevice::class,
+        Sync2Known::class,
+        HiddenItem::class,
     ],
     views = [
         FeedsWithItemsForNavDrawer::class,
     ],
-    version = 41,
+    version = 42,
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -73,6 +75,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun remoteFeedDao(): RemoteFeedDao
 
     abstract fun syncDeviceDao(): SyncDeviceDao
+
+    abstract fun sync2Dao(): Sync2Dao
 
     companion object {
         // For Singleton instantiation
@@ -140,6 +144,7 @@ fun getAllMigrations(di: DI) =
         MIGRATION_38_39,
         MIGRATION_39_40,
         MIGRATION_40_41,
+        MIGRATION_41_42,
     )
 
 /*
@@ -254,6 +259,22 @@ object MIGRATION_40_41 : Migration(40, 41) {
         db.execSQL(
             """
             ALTER TABLE feed_items ADD COLUMN hn_checked_time INTEGER NOT NULL DEFAULT 0
+            """.trimIndent(),
+        )
+    }
+}
+
+/** Feeder's own sync: last exchanged values, and articles deleted for good. */
+object MIGRATION_41_42 : Migration(41, 42) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `sync2_known` (`k` TEXT NOT NULL, `v` TEXT NOT NULL, `ts` INTEGER NOT NULL, PRIMARY KEY(`k`))
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `hidden_items` (`feed_url` TEXT NOT NULL, `guid` TEXT NOT NULL, `ts` INTEGER NOT NULL, PRIMARY KEY(`feed_url`, `guid`))
             """.trimIndent(),
         )
     }

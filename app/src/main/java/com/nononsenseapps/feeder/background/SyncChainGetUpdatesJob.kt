@@ -9,7 +9,7 @@ import android.content.Context
 import android.util.Log
 import androidx.core.content.getSystemService
 import com.nononsenseapps.feeder.archmodel.Repository
-import com.nononsenseapps.feeder.sync.SyncRestClient
+import com.nononsenseapps.feeder.sync2.Sync2Client
 import com.nononsenseapps.feeder.util.logDebug
 import org.kodein.di.DI
 import org.kodein.di.DIAware
@@ -23,7 +23,7 @@ class SyncChainGetUpdatesJob(
     DIAware {
     override val di: DI by closestDI(context)
 
-    private val syncClient: SyncRestClient by instance()
+    private val sync2Client: Sync2Client by instance()
     private val repository: Repository by instance()
 
     override val jobId: Int = params.jobId
@@ -31,9 +31,7 @@ class SyncChainGetUpdatesJob(
     override suspend fun doWork() {
         try {
             Log.d(LOG_TAG, "Doing work")
-            syncClient.getRead()
-            repository.applyRemoteReadMarks()
-            syncClient.getDevices()
+            sync2Client.sync()
         } catch (e: Exception) {
             Log.e(LOG_TAG, "Error when getting updates", e)
         }

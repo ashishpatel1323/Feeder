@@ -9,7 +9,7 @@ import android.content.Context
 import android.util.Log
 import androidx.core.content.getSystemService
 import com.nononsenseapps.feeder.archmodel.Repository
-import com.nononsenseapps.feeder.sync.SyncRestClient
+import com.nononsenseapps.feeder.sync2.Sync2Client
 import org.kodein.di.DI
 import org.kodein.di.DIAware
 import org.kodein.di.android.closestDI
@@ -23,22 +23,14 @@ class SyncChainSendReadJob(
     DIAware {
     override val di: DI by closestDI(context)
 
-    private val syncClient: SyncRestClient by di.instance()
+    private val sync2Client: Sync2Client by di.instance()
 
     override val jobId: Int = params.jobId
 
     override suspend fun doWork() {
         try {
             Log.d(LOG_TAG, "Doing work")
-            syncClient
-                .markAsRead()
-                .onLeft {
-                    Log.e(
-                        LOG_TAG,
-                        "Error when sending readmarks ${it.code}, ${it.body}",
-                        it.throwable,
-                    )
-                }
+            sync2Client.sync()
         } catch (e: Exception) {
             Log.e(LOG_TAG, "Error when sending read marks", e)
         }

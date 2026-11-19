@@ -621,6 +621,12 @@ class ArticleViewModel(
             repository.setBookmarked(itemId, bookmarked)
         }
 
+    /** Deletes this article for good, on every device. */
+    fun deleteForGood() =
+        applicationCoroutineScope.launch {
+            repository.deleteArticlesForGood(listOf(itemId))
+        }
+
     fun setToolbarMenuVisible(visible: Boolean) {
         state["toolbarMenuVisible"] = visible
         toolbarVisible.update { visible }

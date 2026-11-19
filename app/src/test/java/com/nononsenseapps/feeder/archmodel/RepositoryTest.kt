@@ -9,6 +9,7 @@ import com.nononsenseapps.feeder.db.room.ID_SAVED_ARTICLES
 import com.nononsenseapps.feeder.db.room.ID_UNSET
 import com.nononsenseapps.feeder.db.room.RemoteReadMarkReadyToBeApplied
 import com.nononsenseapps.feeder.sync.SyncRestClient
+import com.nononsenseapps.feeder.sync2.Sync2Client
 import com.nononsenseapps.feeder.util.addDynamicShortcutToFeed
 import com.nononsenseapps.feeder.util.reportShortcutToFeedUsed
 import io.mockk.MockKAnnotations
@@ -70,6 +71,9 @@ class RepositoryTest : DIAware {
     @MockK
     private lateinit var syncRestClient: SyncRestClient
 
+    @MockK
+    private lateinit var sync2Client: Sync2Client
+
     override val di by DI.lazy {
         bind<Repository>() with singleton { spyk(Repository(di)) }
         bind<FeedItemStore>() with instance(feedItemStore)
@@ -80,6 +84,7 @@ class RepositoryTest : DIAware {
         bind<FontStore>() with instance(fontStore)
         bind<AndroidSystemStore>() with instance(androidSystemStore)
         bind<SyncRestClient>() with instance(syncRestClient)
+        bind<Sync2Client>() with instance(sync2Client)
         bind<Application>() with instance(application)
         bind<ApplicationCoroutineScope>() with singleton { ApplicationCoroutineScope() }
     }
@@ -96,6 +101,7 @@ class RepositoryTest : DIAware {
         every { feedItemStore.getFeedItemCountRaw(any(), any(), any(), any(), any()) } returns flowOf(0)
 
         every { syncRestClient.isConfigured } returns false
+        every { sync2Client.isConfigured } returns false
     }
 
     @Test
