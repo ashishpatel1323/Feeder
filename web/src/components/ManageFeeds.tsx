@@ -238,27 +238,32 @@ export function ManageFeeds(p: Props) {
         return [...byTag.entries()].map(([tag, list]) => [tag, sortFolder(list, feedOrder)] as const)
     }, [p.feeds, allTags, feedOrder])
 
-    const flat = useMemo(() => {
-        if (sort === 'folder') return []
+    /**
+     * With a sort other than Folder order the folder cards stay; feeds are sorted inside each one
+     * (and Not updated / Errors only keep the matching feeds).
+     */
+    const shownFolders = useMemo(() => {
         const s = (f: Feed) => stats.get(f.url) ?? noStats()
-        let list = p.feeds.filter(matches)
-        if (sort === 'stale') list = list.filter((f) => s(f).recent === 0)
-        if (sort === 'errors') list = list.filter((f) => f.lastError)
         const readRate = (f: Feed) => (s(f).recent ? s(f).recentRead / s(f).recent : 2)
-        const by: Record<Sort, (a: Feed, b: Feed) => number> = {
-            folder: () => 0,
+        const by: Record<Sort, ((a: Feed, b: Feed) => number) | null> = {
+            folder: null,
             active: (a, b) => s(b).rate - s(a).rate,
             least: (a, b) => s(a).rate - s(b).rate,
             unread: (a, b) => s(b).unread - s(a).unread,
             readLeast: (a, b) => readRate(a) - readRate(b),
             stale: (a, b) => (s(a).lastArticle ?? 0) - (s(b).lastArticle ?? 0),
-            errors: (a, b) => feedDisplayTitle(a).localeCompare(feedDisplayTitle(b)),
+            errors: null,
         }
-        return [...list].sort(by[sort])
+        const keep = (f: Feed) => matches(f) && (sort !== 'stale' || s(f).recent === 0) && (sort !== 'errors' || !!f.lastError)
+        const cmp = by[sort]
+        return folders.map(([tag, list]) => {
+            const shown = list.filter(keep)
+            return [tag, list, cmp ? [...shown].sort(cmp) : shown] as const
+        })
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [sort, p.feeds, stats, q])
+    }, [sort, folders, stats, q])
 
-    const visibleUrls = sort === 'folder' ? folders.flatMap(([, list]) => list.filter(matches).map((f) => f.url)) : flat.map((f) => f.url)
+    const visibleUrls = shownFolders.flatMap(([, , shown]) => shown.map((f) => f.url))
     const allVisibleSelected = visibleUrls.length > 0 && visibleUrls.every((u) => selected.has(u))
 
     const toggleSel = (url: string) =>
@@ -498,7 +503,7 @@ export function ManageFeeds(p: Props) {
                 >
                     <span
                         className={`mf-handle${inFolder ? '' : ' off'}`}
-                        title={inFolder ? 'Drag to reorder or move to another folder' : 'Switch to Folder order to drag'}
+                        title={inFolder ? 'Drag to reorder or move to another folder' : 'Switch to Folder order to reorder by dragging'}
                     >
                         <Icon name="dragHandle" size={18} />
                     </span>
@@ -604,9 +609,8 @@ export function ManageFeeds(p: Props) {
         )
     }
 
-    const folderCard = (tag: string, list: Feed[]) => {
-        const shown = list.filter(matches)
-        if (q && !shown.length) return null
+    const folderCard = (tag: string, list: Feed[], shown: Feed[]) => {
+        if ((q || sort === 'stale' || sort === 'errors') && !shown.length) return null
         if (!tag && !list.length) return null
         const unread = list.reduce((n, f) => n + statsOf(f.url).unread, 0)
         const isRenaming = renamingTag?.tag === tag
@@ -683,7 +687,7 @@ export function ManageFeeds(p: Props) {
                         </>
                     ) : null}
                 </div>
-                {shown.map((f, i) => feedRow(f, i, list, true))}
+                {shown.map((f, i) => feedRow(f, i, list, sort === 'folder'))}
                 {!list.length ? <div className="mf-emptyrow">Drop feeds here</div> : null}
             </section>
         )
@@ -832,19 +836,12 @@ export function ManageFeeds(p: Props) {
                     <span className="r">Actions</span>
                 </div>
 
-                {sort === 'folder' ? (
-                    folders.map(([tag, list]) => folderCard(tag, list))
-                ) : flat.length ? (
-                    <section className="mf-card">{flat.map((f, i) => feedRow(f, i, flat, false))}</section>
-                ) : (
+                {shownFolders.map(([tag, list, shown]) => folderCard(tag, list, shown))}
+                {p.feeds.length > 0 && !visibleUrls.length && (sort === 'errors' || sort === 'stale' || q) ? (
                     <p className="mf-nothing">
-                        {sort === 'errors'
-                            ? 'No feed has an error right now.'
-                            : sort === 'stale'
-                              ? 'Every feed posted in the last 30 days.'
-                              : 'No feeds match.'}
+                        {q ? 'No feeds match.' : sort === 'errors' ? 'No feed has an error right now.' : 'Every feed posted in the last 30 days.'}
                     </p>
-                )}
+                ) : null}
                 {!p.feeds.length ? <p className="mf-nothing">No feeds yet. Paste an address above, or import an OPML file.</p> : null}
             </div>
         </section>

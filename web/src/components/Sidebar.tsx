@@ -20,6 +20,9 @@ interface Props {
   onManageFeeds: () => void
   /** The Manage feeds page is open. */
   managing: boolean
+  highlightCount: number
+  showingHighlights: boolean
+  onHighlights: () => void
   onRefresh: () => void
   onSettings: () => void
   refreshing: string | null
@@ -95,7 +98,7 @@ export function Sidebar(p: Props) {
     return [...named, ...(byTag.has('') ? [''] : [])].map((t) => [t, byTag.get(t)!] as const)
   }, [p.feeds, order, folderOrder])
 
-  const isSel = (s: Selection) => !p.managing && JSON.stringify(s) === JSON.stringify(p.selection)
+  const isSel = (s: Selection) => !p.managing && !p.showingHighlights && JSON.stringify(s) === JSON.stringify(p.selection)
 
   const feedRow = (f: Feed, i: number, folder: Feed[]) => (
     <li
@@ -167,6 +170,14 @@ export function Sidebar(p: Props) {
         >
           <Icon name="bookmark" size={20} />
         </button>
+        <button
+          className={`rail-btn${p.showingHighlights ? ' selected' : ''}`}
+          title="Highlights"
+          aria-label="Highlights"
+          onClick={p.onHighlights}
+        >
+          <Icon name="highlight" size={20} />
+        </button>
         <span className="rail-gap" />
         <IconButton icon="refresh" label={p.refreshing ? `Refreshing ${p.refreshing}` : 'Refresh'} onClick={p.onRefresh} disabled={!!p.refreshing} />
         <IconButton icon="add" label="Add feed" onClick={p.onAddFeed} />
@@ -197,6 +208,13 @@ export function Sidebar(p: Props) {
             <Icon name="bookmark" size={20} />
             <span className="nav-title">Saved</span>
             {savedCount ? <span className="count muted">{savedCount}</span> : null}
+          </button>
+        </li>
+        <li>
+          <button className={`nav-row${p.showingHighlights ? ' selected' : ''}`} onClick={p.onHighlights}>
+            <Icon name="highlight" size={20} />
+            <span className="nav-title">Highlights</span>
+            {p.highlightCount ? <span className="count muted">{p.highlightCount}</span> : null}
           </button>
         </li>
       </ul>
