@@ -22,11 +22,14 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.UnfoldLess
+import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.minimumInteractiveComponentSize
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -83,6 +86,9 @@ fun ScreenWithNavDrawer(
     focusRequester: FocusRequester,
     navDrawerListState: LazyListState,
     modifier: Modifier = Modifier,
+    showFolderControls: Boolean = false,
+    onExpandAllTags: () -> Unit = {},
+    onCollapseAllTags: () -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -117,6 +123,9 @@ fun ScreenWithNavDrawer(
                     modifier =
                         Modifier
                             .focusRequester(focusRequester),
+                    showFolderControls = showFolderControls,
+                    onExpandAllTags = onExpandAllTags,
+                    onCollapseAllTags = onCollapseAllTags,
                 )
             }
         },
@@ -132,6 +141,9 @@ fun ListOfFeedsAndTags(
     state: LazyListState,
     onItemClick: (FeedIdTag) -> Unit,
     modifier: Modifier = Modifier,
+    showFolderControls: Boolean = false,
+    onExpandAllTags: () -> Unit = {},
+    onCollapseAllTags: () -> Unit = {},
 ) {
     LazyColumn(
         state = state,
@@ -144,6 +156,14 @@ fun ListOfFeedsAndTags(
                     collectionInfo = CollectionInfo(feedsAndTags.itemCount, 1)
                 },
     ) {
+        if (showFolderControls) {
+            item(key = "folder-controls", contentType = "folder-controls") {
+                FolderControls(
+                    onExpandAll = onExpandAllTags,
+                    onCollapseAll = onCollapseAllTags,
+                )
+            }
+        }
         items(
             count = feedsAndTags.itemCount,
             key =
@@ -349,6 +369,41 @@ private fun ExpandableTag(
                         .semantics {
                             contentDescription = unreadLabel
                         },
+            )
+        }
+    }
+}
+
+/** Always visible expand all / collapse all buttons at the top of the drawer. */
+@Preview(showBackground = true)
+@Composable
+private fun FolderControls(
+    onExpandAll: () -> Unit = {},
+    onCollapseAll: () -> Unit = {},
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 8.dp),
+    ) {
+        Text(
+            text = stringResource(id = R.string.folders),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        IconButton(onClick = onExpandAll) {
+            Icon(
+                Icons.Filled.UnfoldMore,
+                contentDescription = stringResource(id = R.string.expand_all_folders),
+            )
+        }
+        IconButton(onClick = onCollapseAll) {
+            Icon(
+                Icons.Filled.UnfoldLess,
+                contentDescription = stringResource(id = R.string.collapse_all_folders),
             )
         }
     }

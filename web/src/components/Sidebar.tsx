@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { FEED_ORDER_KEY, feedDisplayTitle, FOLDER_ORDER_KEY, getKv, sortFolder, sortFolders, type Feed, type Item } from '../lib/db'
 import type { Selection } from '../lib/listquery'
 import { Icon, IconButton } from './Icon'
 import { proxiedUrl } from '../lib/api'
+import { collapseAllFolders, loadClosedFolders, saveClosedFolders, toggleFolder } from '../lib/folders'
 
 interface Props {
   feeds: Feed[]
@@ -48,7 +49,8 @@ export function FeedIcon({ feed }: { feed: Feed }) {
 }
 
 export function Sidebar(p: Props) {
-  const [closedTags, setClosedTags] = useState<string[]>([])
+  const [closedTags, setClosedTags] = useState<string[]>(loadClosedFolders)
+  useEffect(() => saveClosedFolders(closedTags), [closedTags])
   const order = useLiveQuery(() => getKv<string[]>(FEED_ORDER_KEY, []), []) ?? []
   const folderOrder = useLiveQuery(() => getKv<string[]>(FOLDER_ORDER_KEY, []), []) ?? []
   // Drag and drop of feeds between folders
@@ -97,6 +99,8 @@ export function Sidebar(p: Props) {
     const named = sortFolders([...byTag.keys()].filter(Boolean), folderOrder)
     return [...named, ...(byTag.has('') ? [''] : [])].map((t) => [t, byTag.get(t)!] as const)
   }, [p.feeds, order, folderOrder])
+
+  const folderNames = tags.map(([t]) => t).filter(Boolean)
 
   const isSel = (s: Selection) => !p.managing && !p.showingHighlights && JSON.stringify(s) === JSON.stringify(p.selection)
 
@@ -218,6 +222,17 @@ export function Sidebar(p: Props) {
           </button>
         </li>
       </ul>
+      {folderNames.length ? (
+        <div className="folder-tools">
+          <span className="folder-tools-label">Folders</span>
+          <IconButton icon="unfoldMore" label="Expand all folders" onClick={() => setClosedTags([])} />
+          <IconButton
+            icon="unfoldLess"
+            label="Collapse all folders"
+            onClick={() => setClosedTags((t) => collapseAllFolders(t, folderNames))}
+          />
+        </div>
+      ) : null}
       <ul
         className={`nav-list feeds${isDropTarget('') ? ' drop-target' : ''}`}
         {...dropProps('')}
@@ -232,7 +247,7 @@ export function Sidebar(p: Props) {
                 <button
                   className="tag-toggle"
                   aria-label={closedTags.includes(tag) ? `Expand ${tag}` : `Collapse ${tag}`}
-                  onClick={() => setClosedTags((t) => (t.includes(tag) ? t.filter((x) => x !== tag) : [...t, tag]))}
+                  onClick={() => setClosedTags((t) => toggleFolder(t, tag))}
                 >
                   <Icon name={closedTags.includes(tag) ? 'next' : 'expand'} size={18} />
                 </button>

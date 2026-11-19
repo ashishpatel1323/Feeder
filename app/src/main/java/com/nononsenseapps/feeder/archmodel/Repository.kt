@@ -47,6 +47,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -822,6 +823,15 @@ class Repository(
     val expandedTags: StateFlow<Set<String>> = sessionStore.expandedTags
 
     fun toggleTagExpansion(tag: String) = sessionStore.toggleTagExpansion(tag)
+
+    /** Opens every tag (folder) in the navigation drawer. */
+    suspend fun expandAllTags() {
+        val tags = feedStore.allTags.first()
+        sessionStore.setExpandedTags(tags.filterTo(mutableSetOf()) { it.isNotEmpty() })
+    }
+
+    /** Closes every tag (folder) in the navigation drawer. */
+    fun collapseAllTags() = sessionStore.setExpandedTags(emptySet())
 
     fun ensurePeriodicSyncConfigured() {
         schedulePeriodicRssSync(di = di, replace = false)
