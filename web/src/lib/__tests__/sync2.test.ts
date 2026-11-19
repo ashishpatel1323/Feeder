@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { handleSync2, MemoryStore, type SyncRecord } from '../../../server/sync2'
 import { db, FEED_ORDER_KEY, getKv, hideItems, itemId, newFeed, setKv, unhideItems, type Item } from '../db'
 import { decryptString, encryptString } from '../crypto'
+import { saveVideoPos } from '../videopos'
 import {
   addDeviceLink,
   deriveKeys,
@@ -214,6 +215,30 @@ describe('sync client', () => {
     expect((await db.feeds.get('https://a/feed'))?.customTitle).toBe('Mine')
     const remote = (await other.all()).find((p) => p.k === 'feed')
     expect(remote?.v).toMatchObject({ customTitle: 'Mine' })
+  })
+
+  it('syncs video positions, newest wins', async () => {
+    await joinSync(CODE, KEY)
+    const a = itemId('https://yt/feed', 'a')
+    const b = itemId('https://yt/feed', 'b')
+    await saveVideoPos(a, 252, 859, 1000)
+    expect((await syncNow())?.sent).toBe(1)
+    const other = await otherDevice()
+    expect((await other.all()).find((p) => p.k === 'video')).toMatchObject({ key: a, v: { t: 252, d: 859 }, ts: 1000 })
+    expect((await syncNow())?.sent).toBe(0)
+
+    // Newer from elsewhere wins, older loses to what is here, and nothing echoes back
+    await saveVideoPos(b, 100, 600, 5000)
+    await other.push({ k: 'video', key: a, v: { t: 500, d: 859 }, ts: 2000 }, { k: 'video', key: b, v: { t: 40, d: 600 }, ts: 3000 })
+    await syncNow()
+    expect(await db.videoPos.get(a)).toEqual({ id: a, t: 500, d: 859, ts: 2000 })
+    expect(await db.videoPos.get(b)).toMatchObject({ t: 100, ts: 5000 })
+    expect((await other.all()).find((p) => p.k === 'video' && p.key === b)).toMatchObject({ v: { t: 100 }, ts: 5000 })
+    expect((await syncNow())?.sent).toBe(0)
+
+    // Watching on here again sends the new position
+    await saveVideoPos(a, 520, 859)
+    expect((await syncNow())?.sent).toBe(1)
   })
 
   it('undoing a delete brings the article back everywhere', async () => {

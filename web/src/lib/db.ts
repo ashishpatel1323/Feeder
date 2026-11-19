@@ -95,6 +95,18 @@ export interface HiddenItem {
   ts: number
 }
 
+/** Where a YouTube video in an article was left (videopos.ts), synced as kind "video". */
+export interface VideoPos {
+  /** feedUrl + "\n" + guid */
+  id: string
+  /** Seconds watched */
+  t: number
+  /** Video length in seconds (0 when not known yet) */
+  d: number
+  /** When it was saved, or the synced record's time when it came from another device */
+  ts: number
+}
+
 export interface KeyValue {
   key: string
   value: unknown
@@ -111,6 +123,7 @@ class FeederDb extends Dexie {
   highlights!: EntityTable<Highlight, 'id'>
   syncKnown!: EntityTable<SyncKnown, 'k'>
   hidden!: EntityTable<HiddenItem, 'id'>
+  videoPos!: EntityTable<VideoPos, 'id'>
 
   constructor() {
     super('feeder-web')
@@ -142,6 +155,8 @@ class FeederDb extends Dexie {
       syncKnown: '&k',
       hidden: '&id',
     })
+    // Watch positions of YouTube videos
+    this.version(5).stores({ videoPos: '&id' })
   }
 }
 

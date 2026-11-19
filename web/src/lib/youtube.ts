@@ -28,8 +28,15 @@ export function youtubeVideoId(url: string | null | undefined): string | null {
   return id && ID.test(id) ? id : null
 }
 
-export function youtubeEmbedUrl(id: string): string {
-  return `https://www.youtube.com/embed/${id}?rel=0&playsinline=1`
+/**
+ * enablejsapi lets the reader read the play position (IFrame Player API), and `start`
+ * resumes where the video was left. `origin` is this page, as the API asks.
+ */
+export function youtubeEmbedUrl(id: string, opts: { start?: number; origin?: string } = {}): string {
+  const q = new URLSearchParams({ rel: '0', playsinline: '1', enablejsapi: '1' })
+  if (opts.origin) q.set('origin', opts.origin)
+  if (opts.start && opts.start > 0) q.set('start', String(Math.floor(opts.start)))
+  return `https://www.youtube.com/embed/${id}?${q}`
 }
 
 export function youtubeWatchUrl(id: string): string {
