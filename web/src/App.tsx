@@ -329,21 +329,29 @@ export default function App() {
     toast(`Deleted ${gone.length}`, { label: 'Undo', run: () => void unhideItems(gone).then(() => syncNow().catch(() => undefined)) })
   }
 
-  /** Right-click menu in the list: the same change as the reader's button, synced to other devices. */
-  const toggleReadFromList = async (item: Item) => {
-    await db.items.update(item.id, { read: item.read ? 0 : 1, readTime: item.read ? null : Date.now(), readSynced: 0 })
+  /** Right-click menu and selection bar in the list: the same change as the reader's button, synced to other devices. */
+  const setReadFromList = async (list: Item[], read: boolean) => {
+    const now = Date.now()
+    const ids = list.filter((i) => !!i.read !== read).map((i) => i.id)
+    if (!ids.length) return
+    await db.items.bulkUpdate(ids.map((key) => ({ key, changes: { read: read ? 1 : 0, readTime: read ? now : null, readSynced: 0 } })))
     syncNow().catch(() => undefined)
+    if (ids.length > 1) toast(`Marked ${ids.length} as ${read ? 'read' : 'unread'}`)
   }
 
-  /** Right-click Delete in the list: deleted for good on every device, with Undo. */
-  const deleteFromList = async (item: Item) => {
-    if (item.id === openId) {
-      if (nextId) open(nextId)
+  /** Delete from the list (one article or all selected): deleted for good on every device, with Undo. */
+  const deleteFromList = async (list: Item[]) => {
+    if (!list.length) return
+    const gone = new Set(list.map((i) => i.id))
+    if (openId && gone.has(openId)) {
+      const after = snapshot.slice(snapshot.indexOf(openId) + 1).find((id) => !gone.has(id))
+      if (after) open(after)
       else setOpenId(null)
     }
-    await hideItems([item.id])
+    await hideItems([...gone])
     syncNow().catch(() => undefined)
-    toast('Article deleted on all devices', { label: 'Undo', run: () => void unhideItems([item]).then(() => syncNow().catch(() => undefined)) })
+    const msg = list.length === 1 ? 'Article deleted on all devices' : `${list.length} articles deleted on all devices`
+    toast(msg, { label: 'Undo', run: () => void unhideItems(list).then(() => syncNow().catch(() => undefined)) })
   }
 
   /** Drag and drop in the sidebar and on the Manage feeds page. */
@@ -464,7 +472,7 @@ export default function App() {
         onMenu={() => setDrawer(true)}
         onMarkAllRead={markAllRead}
         onDeleteRead={deleteRead}
-        onToggleRead={toggleReadFromList}
+        onSetRead={setReadFromList}
         onDelete={deleteFromList}
         />
       )}

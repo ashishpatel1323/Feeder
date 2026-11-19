@@ -3,6 +3,8 @@ package com.nononsenseapps.feeder.ui.compose.feed
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.AnchoredDraggableState
 import androidx.compose.foundation.gestures.DraggableAnchors
@@ -17,6 +19,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -24,7 +27,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -97,6 +102,10 @@ fun SwipeableFeedItemPreview(
     swipeEnabled: Boolean = true,
     // Swiping toward the end (right in left-to-right languages) deletes the article for good
     onDelete: (() -> Unit)? = null,
+    // Multi-select: "Select" in the long-press menu starts it, then taps add or remove articles
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
+    onToggleSelect: (() -> Unit)? = null,
 ) {
     val coroutineScope = rememberCoroutineScope()
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
@@ -199,9 +208,19 @@ fun SwipeableFeedItemPreview(
                         },
                 ).combinedClickable(
                     onLongClick = {
-                        dropDownMenuExpanded = true
+                        if (selectionMode && onToggleSelect != null) {
+                            onToggleSelect()
+                        } else {
+                            dropDownMenuExpanded = true
+                        }
                     },
-                    onClick = onItemClick,
+                    onClick = {
+                        if (selectionMode && onToggleSelect != null) {
+                            onToggleSelect()
+                        } else {
+                            onItemClick()
+                        }
+                    },
                 ).safeSemantics {
                     stateDescription = readStatusLabel
                     customActions =
@@ -309,128 +328,148 @@ fun SwipeableFeedItemPreview(
 
         val compactLandscape = isCompactLandscape()
 
-        when (feedItemStyle) {
-            FeedItemStyle.CARD -> {
-                FeedItemCard(
-                    item = item,
-                    showThumbnail = showThumbnail && !compactLandscape,
-                    onOpenFeedItemInReader = onOpenFeedItemInReader,
-                    onOpenFeedItemInCustomTab = onOpenFeedItemInCustomTab,
-                    onOpenFeedItemInBrowser = onOpenFeedItemInBrowser,
-                    onMarkAboveAsRead = onMarkAboveAsRead,
-                    onMarkBelowAsRead = onMarkBelowAsRead,
-                    onShareItem = onShareItem,
-                    onToggleBookmark = onToggleBookmark,
-                    dropDownMenuExpanded = dropDownMenuExpanded,
-                    onDismissDropdown = { dropDownMenuExpanded = false },
-                    bookmarkIndicator = bookmarkIndicator,
-                    maxLines = maxLines,
-                    showOnlyTitle = showOnlyTitle,
-                    showReadingTime = showReadingTime,
-                    modifier =
-                        Modifier.offset {
-                            try {
-                                IntOffset(anchoredDraggableState.requireOffset().roundToInt(), 0)
-                            } catch (_: IllegalStateException) {
-                                IntOffset(0, 0)
-                            }
-                        },
-                )
-            }
+        CompositionLocalProvider(LocalFeedItemSelect provides if (selectionMode) null else onToggleSelect) {
+            when (feedItemStyle) {
+                FeedItemStyle.CARD -> {
+                    FeedItemCard(
+                        item = item,
+                        showThumbnail = showThumbnail && !compactLandscape,
+                        onOpenFeedItemInReader = onOpenFeedItemInReader,
+                        onOpenFeedItemInCustomTab = onOpenFeedItemInCustomTab,
+                        onOpenFeedItemInBrowser = onOpenFeedItemInBrowser,
+                        onMarkAboveAsRead = onMarkAboveAsRead,
+                        onMarkBelowAsRead = onMarkBelowAsRead,
+                        onShareItem = onShareItem,
+                        onToggleBookmark = onToggleBookmark,
+                        dropDownMenuExpanded = dropDownMenuExpanded,
+                        onDismissDropdown = { dropDownMenuExpanded = false },
+                        bookmarkIndicator = bookmarkIndicator,
+                        maxLines = maxLines,
+                        showOnlyTitle = showOnlyTitle,
+                        showReadingTime = showReadingTime,
+                        modifier =
+                            Modifier.offset {
+                                try {
+                                    IntOffset(anchoredDraggableState.requireOffset().roundToInt(), 0)
+                                } catch (_: IllegalStateException) {
+                                    IntOffset(0, 0)
+                                }
+                            },
+                    )
+                }
 
-            FeedItemStyle.COMPACT_CARD -> {
-                FeedItemCompactCard(
-                    state =
-                        FeedItemState(
-                            item = item,
-                            showThumbnail = showThumbnail && !compactLandscape,
-                            dropDownMenuExpanded = dropDownMenuExpanded,
-                            bookmarkIndicator = bookmarkIndicator,
-                            maxLines = maxLines,
-                            showReadingTime = showReadingTime,
-                        ),
-                    modifier =
-                        Modifier.offset {
-                            try {
-                                IntOffset(anchoredDraggableState.requireOffset().roundToInt(), 0)
-                            } catch (_: IllegalStateException) {
-                                IntOffset(0, 0)
+                FeedItemStyle.COMPACT_CARD -> {
+                    FeedItemCompactCard(
+                        state =
+                            FeedItemState(
+                                item = item,
+                                showThumbnail = showThumbnail && !compactLandscape,
+                                dropDownMenuExpanded = dropDownMenuExpanded,
+                                bookmarkIndicator = bookmarkIndicator,
+                                maxLines = maxLines,
+                                showReadingTime = showReadingTime,
+                            ),
+                        modifier =
+                            Modifier.offset {
+                                try {
+                                    IntOffset(anchoredDraggableState.requireOffset().roundToInt(), 0)
+                                } catch (_: IllegalStateException) {
+                                    IntOffset(0, 0)
+                                }
+                            },
+                        onEvent = { event ->
+                            when (event) {
+                                FeedItemEvent.DismissDropdown -> {
+                                    dropDownMenuExpanded = false
+                                }
+                                FeedItemEvent.OpenInReader -> onOpenFeedItemInReader()
+                                FeedItemEvent.OpenInCustomTab -> onOpenFeedItemInCustomTab()
+                                FeedItemEvent.OpenInBrowser -> onOpenFeedItemInBrowser()
+                                FeedItemEvent.MarkAboveAsRead -> onMarkAboveAsRead()
+                                FeedItemEvent.MarkBelowAsRead -> onMarkBelowAsRead()
+                                FeedItemEvent.ShareItem -> onShareItem()
+                                FeedItemEvent.ToggleBookmarked -> onToggleBookmark()
                             }
                         },
-                    onEvent = { event ->
-                        when (event) {
-                            FeedItemEvent.DismissDropdown -> {
-                                dropDownMenuExpanded = false
-                            }
-                            FeedItemEvent.OpenInReader -> onOpenFeedItemInReader()
-                            FeedItemEvent.OpenInCustomTab -> onOpenFeedItemInCustomTab()
-                            FeedItemEvent.OpenInBrowser -> onOpenFeedItemInBrowser()
-                            FeedItemEvent.MarkAboveAsRead -> onMarkAboveAsRead()
-                            FeedItemEvent.MarkBelowAsRead -> onMarkBelowAsRead()
-                            FeedItemEvent.ShareItem -> onShareItem()
-                            FeedItemEvent.ToggleBookmarked -> onToggleBookmark()
-                        }
-                    },
-                )
-            }
+                    )
+                }
 
-            FeedItemStyle.COMPACT -> {
-                FeedItemCompact(
-                    item = item,
-                    showThumbnail = showThumbnail,
-                    onOpenFeedItemInReader = onOpenFeedItemInReader,
-                    onOpenFeedItemInCustomTab = onOpenFeedItemInCustomTab,
-                    onOpenFeedItemInBrowser = onOpenFeedItemInBrowser,
-                    onMarkAboveAsRead = onMarkAboveAsRead,
-                    onMarkBelowAsRead = onMarkBelowAsRead,
-                    onShareItem = onShareItem,
-                    onToggleBookmark = onToggleBookmark,
-                    dropDownMenuExpanded = dropDownMenuExpanded,
-                    onDismissDropdown = { dropDownMenuExpanded = false },
-                    bookmarkIndicator = bookmarkIndicator,
-                    maxLines = maxLines,
-                    showOnlyTitle = showOnlyTitle,
-                    showReadingTime = showReadingTime,
-                    modifier =
-                        Modifier.offset {
-                            try {
-                                IntOffset(anchoredDraggableState.requireOffset().roundToInt(), 0)
-                            } catch (_: IllegalStateException) {
-                                IntOffset(0, 0)
-                            }
-                        },
-                    imageWidth =
-                        when (compactLandscape) {
-                            true -> 196.dp
-                            false -> 64.dp
-                        },
-                )
-            }
+                FeedItemStyle.COMPACT -> {
+                    FeedItemCompact(
+                        item = item,
+                        showThumbnail = showThumbnail,
+                        onOpenFeedItemInReader = onOpenFeedItemInReader,
+                        onOpenFeedItemInCustomTab = onOpenFeedItemInCustomTab,
+                        onOpenFeedItemInBrowser = onOpenFeedItemInBrowser,
+                        onMarkAboveAsRead = onMarkAboveAsRead,
+                        onMarkBelowAsRead = onMarkBelowAsRead,
+                        onShareItem = onShareItem,
+                        onToggleBookmark = onToggleBookmark,
+                        dropDownMenuExpanded = dropDownMenuExpanded,
+                        onDismissDropdown = { dropDownMenuExpanded = false },
+                        bookmarkIndicator = bookmarkIndicator,
+                        maxLines = maxLines,
+                        showOnlyTitle = showOnlyTitle,
+                        showReadingTime = showReadingTime,
+                        modifier =
+                            Modifier.offset {
+                                try {
+                                    IntOffset(anchoredDraggableState.requireOffset().roundToInt(), 0)
+                                } catch (_: IllegalStateException) {
+                                    IntOffset(0, 0)
+                                }
+                            },
+                        imageWidth =
+                            when (compactLandscape) {
+                                true -> 196.dp
+                                false -> 64.dp
+                            },
+                    )
+                }
 
-            FeedItemStyle.SUPER_COMPACT -> {
-                FeedItemSuperCompact(
-                    item = item,
-                    onOpenFeedItemInReader = onOpenFeedItemInReader,
-                    onOpenFeedItemInCustomTab = onOpenFeedItemInCustomTab,
-                    onOpenFeedItemInBrowser = onOpenFeedItemInBrowser,
-                    onMarkAboveAsRead = onMarkAboveAsRead,
-                    onMarkBelowAsRead = onMarkBelowAsRead,
-                    onShareItem = onShareItem,
-                    onToggleBookmark = onToggleBookmark,
-                    dropDownMenuExpanded = dropDownMenuExpanded,
-                    onDismissDropdown = { dropDownMenuExpanded = false },
-                    bookmarkIndicator = bookmarkIndicator,
-                    maxLines = maxLines,
-                    showOnlyTitle = showOnlyTitle,
-                    showReadingTime = showReadingTime,
-                    modifier =
-                        Modifier.offset {
-                            try {
-                                IntOffset(anchoredDraggableState.requireOffset().roundToInt(), 0)
-                            } catch (_: IllegalStateException) {
-                                IntOffset(0, 0)
-                            }
-                        },
+                FeedItemStyle.SUPER_COMPACT -> {
+                    FeedItemSuperCompact(
+                        item = item,
+                        onOpenFeedItemInReader = onOpenFeedItemInReader,
+                        onOpenFeedItemInCustomTab = onOpenFeedItemInCustomTab,
+                        onOpenFeedItemInBrowser = onOpenFeedItemInBrowser,
+                        onMarkAboveAsRead = onMarkAboveAsRead,
+                        onMarkBelowAsRead = onMarkBelowAsRead,
+                        onShareItem = onShareItem,
+                        onToggleBookmark = onToggleBookmark,
+                        dropDownMenuExpanded = dropDownMenuExpanded,
+                        onDismissDropdown = { dropDownMenuExpanded = false },
+                        bookmarkIndicator = bookmarkIndicator,
+                        maxLines = maxLines,
+                        showOnlyTitle = showOnlyTitle,
+                        showReadingTime = showReadingTime,
+                        modifier =
+                            Modifier.offset {
+                                try {
+                                    IntOffset(anchoredDraggableState.requireOffset().roundToInt(), 0)
+                                } catch (_: IllegalStateException) {
+                                    IntOffset(0, 0)
+                                }
+                            },
+                    )
+                }
+            }
+        }
+
+        if (selected) {
+            Box(
+                contentAlignment = Alignment.TopEnd,
+                modifier =
+                    Modifier
+                        .matchParentSize()
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
+                        .border(2.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.medium)
+                        .padding(8.dp),
+            ) {
+                Icon(
+                    Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
                 )
             }
         }
@@ -473,7 +512,7 @@ fun SwipeableFeedItemPreview(
                                 state = anchoredDraggableState,
                                 orientation = Orientation.Horizontal,
                                 reverseDirection = isRtl,
-                                enabled = swipeEnabled,
+                                enabled = swipeEnabled && !selectionMode,
                             ),
                 )
 
@@ -498,6 +537,9 @@ fun SwipeableFeedItemPreview(
         }
     }
 }
+
+/** Set by [SwipeableFeedItemPreview] so the long-press menu can offer "Select". */
+val LocalFeedItemSelect = compositionLocalOf<(() -> Unit)?> { null }
 
 enum class FeedItemSwipeState {
     CENTER,

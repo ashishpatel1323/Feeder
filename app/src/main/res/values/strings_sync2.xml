@@ -5,4 +5,12 @@
     <string name="article_deleted_everywhere">Article deleted on all your devices</string>
     <string name="undo_delete_article">Undo</string>
     <string name="swipe_to_delete_article">Delete article on all devices</string>
+    <string name="select_article">Select</string>
+    <string name="n_selected">%1$d selected</string>
+    <string name="clear_selection">Clear selection</string>
+    <string name="delete_selected">Delete on all devices</string>
+    <plurals name="n_articles_deleted_everywhere">
+        <item quantity="one">Article deleted on all your devices</item>
+        <item quantity="other">%1$d articles deleted on all your devices</item>
+    </plurals>
 </resources>
