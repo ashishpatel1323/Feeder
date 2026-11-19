@@ -5,7 +5,7 @@ import { applyShow, applyToday, buildGroups, selectItems, showCounts, type Selec
 import { getSettings, updateSettings, useSettings } from './lib/settings'
 import { refreshFeeds } from './lib/refresh'
 import { getSyncState, syncNow } from './lib/sync'
-import { fetchOgImages, refreshHnScores } from './lib/extras'
+import { fetchOgImages } from './lib/extras'
 import { readAloud } from './lib/readaloud'
 import { Sidebar } from './components/Sidebar'
 import { ArticleList } from './components/ArticleList'
@@ -206,7 +206,6 @@ export default function App() {
       await syncNow().catch(() => undefined)
       if (added) toast(`${added} new article${added === 1 ? '' : 's'}`)
       const recent = await db.items.where('sortTime').above(Date.now() - 3 * 86_400_000).toArray()
-      refreshHnScores(recent).catch(() => undefined)
       const ogFeeds = new Set((await db.feeds.toArray()).filter((f) => f.fetchOgImages).map((f) => f.url))
       if (ogFeeds.size) fetchOgImages(recent.filter((i) => ogFeeds.has(i.feedUrl)), 40).catch(() => undefined)
     } finally {
