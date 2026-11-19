@@ -420,6 +420,18 @@ class FeedViewModel(
 
     fun toggleTagExpansion(tag: String) = repository.toggleTagExpansion(tag)
 
+    fun expandAllTags() {
+        viewModelScope.launch { repository.expandAllTags() }
+    }
+
+    fun collapseAllTags() = repository.collapseAllTags()
+
+    /** The drawer shows its expand/collapse all buttons only when there are folders. */
+    val hasTags: StateFlow<Boolean> =
+        repository.allTags
+            .map { tags -> tags.any { it.isNotEmpty() } }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     private val editDialogVisible = MutableStateFlow(false)
 
     fun setShowEditDialog(visible: Boolean) {

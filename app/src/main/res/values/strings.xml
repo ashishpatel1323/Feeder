@@ -188,6 +188,9 @@
   <string name="toggle_tag_expansion">Toggle tag expansion</string>
   <string name="expanded_tag">Open tag</string>
   <string name="contracted_tag">Closed tag</string>
+  <string name="folders">Folders</string>
+  <string name="expand_all_folders">Expand all folders</string>
+  <string name="collapse_all_folders">Collapse all folders</string>
 
   <string name="battery_optimization">Battery optimization</string>
   <string name="battery_optimization_disabled">Off</string>

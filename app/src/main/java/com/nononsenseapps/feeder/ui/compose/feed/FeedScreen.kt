@@ -281,6 +281,7 @@ fun FeedScreen(
     // This behavior/issue is resetting the LazyListState scroll position.
     // Below is a workaround. More info: https://issuetracker.google.com/issues/177245496.
     val workaroundNavDrawerListState = rememberLazyListState()
+    val hasTags by viewModel.hasTags.collectAsStateWithLifecycle()
 
     val navDrawerListStateToUse by remember {
         derivedStateOf {
@@ -296,6 +297,9 @@ fun FeedScreen(
         onToggleTagExpansion = { tag ->
             viewModel.toggleTagExpansion(tag)
         },
+        showFolderControls = hasTags,
+        onExpandAllTags = viewModel::expandAllTags,
+        onCollapseAllTags = viewModel::collapseAllTags,
         onDrawerItemSelect = { feedId, tag ->
             FeedDestination.navigate(navController, feedId = feedId, tag = tag)
         },

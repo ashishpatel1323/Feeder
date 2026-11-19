@@ -34,6 +34,10 @@ class SessionStore {
         }
     }
 
+    fun setExpandedTags(tags: Set<String>) {
+        _expandedTags.update { tags }
+    }
+
     private val _syncWorkerRunning = MutableStateFlow(false)
     val syncWorkerRunning: StateFlow<Boolean> = _syncWorkerRunning.asStateFlow()
 

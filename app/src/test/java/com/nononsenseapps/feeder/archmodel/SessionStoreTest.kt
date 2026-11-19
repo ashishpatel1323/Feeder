@@ -18,4 +18,17 @@ class SessionStoreTest {
 
         assertEquals(emptySet<String>(), store.expandedTags.value)
     }
+
+    @Test
+    fun setExpandedTagsReplacesAll() {
+        store.toggleTagExpansion("foo")
+
+        store.setExpandedTags(setOf("bar", "baz"))
+
+        assertEquals(setOf("bar", "baz"), store.expandedTags.value)
+
+        store.setExpandedTags(emptySet())
+
+        assertEquals(emptySet<String>(), store.expandedTags.value)
+    }
 }
