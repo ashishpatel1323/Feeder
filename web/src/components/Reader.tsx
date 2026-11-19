@@ -9,6 +9,7 @@ import { applyFastReading } from '../lib/fastReading'
 import { AUTO_SCROLL_SPEEDS, useAutoScroll } from '../lib/autoscroll'
 import { Icon, IconButton } from './Icon'
 import { Player } from './Player'
+import { youtubeEmbedUrl, youtubeVideoId, youtubeWatchUrl } from '../lib/youtube'
 
 interface Props {
   item: Item
@@ -29,7 +30,9 @@ export function Reader(p: Props) {
   const { item, feed } = p
   const bodyRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const [fullMode, setFullMode] = useState<boolean>(!!feed?.fullTextByDefault)
+  // A YouTube page has no article text to extract, so videos start on the feed's description
+  const fullByDefault = !!feed?.fullTextByDefault && !youtubeVideoId(item.link)
+  const [fullMode, setFullMode] = useState<boolean>(fullByDefault)
   const [fullState, setFullState] = useState<'idle' | 'loading' | 'error'>('idle')
   const [fullError, setFullError] = useState('')
   const [summaryState, setSummaryState] = useState<'idle' | 'loading'>('idle')
@@ -47,12 +50,12 @@ export function Reader(p: Props) {
 
   // New article: reset view state
   useEffect(() => {
-    setFullMode(!!feed?.fullTextByDefault)
+    setFullMode(fullByDefault)
     setFullState('idle')
     setPill(null)
     readAloud.showTapWord(null)
     scrollRef.current?.scrollTo({ top: 0 })
-  }, [item.id, feed?.fullTextByDefault])
+  }, [item.id, fullByDefault])
 
   // Load full text when needed
   useEffect(() => {
@@ -223,6 +226,7 @@ export function Reader(p: Props) {
     }
   }
 
+  const videoId = youtubeVideoId(item.link)
   const words = wordsOf(item, feed)
   const date = new Date(item.sortTime)
 
@@ -273,7 +277,25 @@ export function Reader(p: Props) {
                 </a>
               ) : null}
             </div>
-            {item.imageUrl && !html.includes(item.imageUrl) ? (
+            {videoId ? (
+              <div className="video-block">
+                <div className="video-frame">
+                  {/* youtube.com (not -nocookie) so the browser's YouTube sign-in applies: Premium, history, Watch later.
+                      The embed needs the referrer, so no no-referrer policy here. */}
+                  <iframe
+                    key={videoId}
+                    src={youtubeEmbedUrl(videoId)}
+                    title={item.title || 'YouTube video'}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    referrerPolicy="strict-origin-when-cross-origin"
+                    allowFullScreen
+                  />
+                </div>
+                <a className="open-youtube" href={youtubeWatchUrl(videoId)} target="_blank" rel="noopener noreferrer">
+                  <Icon name="open" size={18} /> Open on YouTube
+                </a>
+              </div>
+            ) : item.imageUrl && !html.includes(item.imageUrl) ? (
               <img className="lead-image" src={item.imageUrl} alt="" referrerPolicy="no-referrer" onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
             ) : null}
             {item.summary ? (
