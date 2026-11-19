@@ -13,7 +13,7 @@ import { Reader } from './components/Reader'
 import { AddFeedDialog, EditFeedDialog, SettingsDialog } from './components/Dialogs'
 import { ManageFeeds } from './components/ManageFeeds'
 import { HighlightsPage } from './components/Highlights'
-import { ShareDialog, type ShareSubject } from './components/ShareDialog'
+import { combinedSubject, ShareDialog, type ShareSubject } from './components/ShareDialog'
 import { deleteHighlight } from './lib/highlights'
 import type { Highlight } from './lib/db'
 
@@ -401,6 +401,7 @@ export default function App() {
           onMenu={() => setDrawer(true)}
           onOpenArticle={openHighlight}
           onShare={(h) => setPageShare({ text: h.text, note: h.note, color: h.color, itemTitle: h.itemTitle, feedTitle: h.feedTitle, itemLink: h.itemLink, imageUrl: h.imageUrl })}
+          onShareMany={(hs) => setPageShare(combinedSubject(hs, { itemTitle: hs[0].itemTitle, feedTitle: hs[0].feedTitle, itemLink: hs[0].itemLink, imageUrl: hs[0].imageUrl }))}
           onDelete={async (h) => {
             await deleteHighlight(h.id)
             toast('Highlight deleted')

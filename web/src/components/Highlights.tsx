@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Highlight, HighlightColor } from '../lib/db'
-import { HIGHLIGHT_COLORS, quoteText } from '../lib/highlights'
+import { allQuotesText, HIGHLIGHT_COLORS, quoteText } from '../lib/highlights'
 import { Icon, IconButton } from './Icon'
 
 /** Docked bar under the article: shown for a fresh selection or when an existing highlight is tapped. */
@@ -98,10 +98,18 @@ export function HighlightCard(p: {
   onEdit?: () => void
   onDelete: () => void
   showDate?: boolean
+  /** Shown with a checkbox when picking highlights to share together. */
+  selected?: boolean
+  onToggle?: () => void
 }) {
   const { h } = p
   return (
-    <div className={`hl-card hl-card-${h.color}`}>
+    <div className={`hl-card hl-card-${h.color}${p.selected === false ? ' unselected' : ''}`}>
+      {p.onToggle ? (
+        <label className="hl-card-check">
+          <input type="checkbox" checked={!!p.selected} onChange={p.onToggle} /> Include in shared
+        </label>
+      ) : null}
       <button type="button" className="hl-card-quote" onClick={p.onOpen} disabled={!p.onOpen} title={p.onOpen ? 'Show in the article' : undefined}>
         {h.text}
       </button>
@@ -136,9 +144,20 @@ export function HighlightsRail(p: {
   onShare: (h: Highlight) => void
   onEdit: (h: Highlight) => void
   onDelete: (h: Highlight) => void
-  onCopyAll: () => void
+  onShareMany: (hs: Highlight[]) => void
   toast: (msg: string) => void
 }) {
+  // Which highlights a combined share includes; all of them unless unticked
+  const [off, setOff] = useState<Set<string>>(new Set())
+  const picked = p.highlights.filter((h) => !off.has(h.id))
+  const allOn = picked.length === p.highlights.length
+  const toggle = (id: string) =>
+    setOff((o) => {
+      const n = new Set(o)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
+      return n
+    })
   return (
     <>
       <div className="hl-rail-scrim" onClick={p.onClose} />
@@ -148,13 +167,24 @@ export function HighlightsRail(p: {
             {p.highlights.length} highlight{p.highlights.length === 1 ? '' : 's'}
           </strong>
           <span className="spacer" />
-          {p.highlights.length ? (
-            <button type="button" className="hl-mini" onClick={p.onCopyAll}>
-              <Icon name="copy" size={16} /> Copy all
-            </button>
-          ) : null}
           <IconButton icon="close" label="Hide highlights" onClick={p.onClose} />
         </div>
+        {p.highlights.length > 1 ? (
+          <div className="hl-rail-share">
+            <label className="hl-select-all">
+              <input type="checkbox" checked={allOn} onChange={() => setOff(allOn ? new Set(p.highlights.map((h) => h.id)) : new Set())} /> Select all ({picked.length}/
+              {p.highlights.length})
+            </label>
+            <div className="hl-rail-share-btns">
+              <button type="button" className="hl-btn primary" disabled={!picked.length} onClick={() => p.onShareMany(picked)}>
+                <Icon name="image" size={18} /> Image + link
+              </button>
+              <button type="button" className="hl-btn" disabled={!picked.length} onClick={() => copyText(allQuotesText(picked), p.toast, `Copied ${picked.length} highlight${picked.length === 1 ? '' : 's'} with the link`)}>
+                <Icon name="link" size={18} /> Text + link
+              </button>
+            </div>
+          </div>
+        ) : null}
         {p.highlights.length ? (
           p.highlights.map((h) => (
             <HighlightCard
@@ -165,6 +195,8 @@ export function HighlightsRail(p: {
               onCopy={() => copyText(quoteText(h, h.note), p.toast)}
               onEdit={() => p.onEdit(h)}
               onDelete={() => p.onDelete(h)}
+              selected={p.highlights.length > 1 ? !off.has(h.id) : undefined}
+              onToggle={p.highlights.length > 1 ? () => toggle(h.id) : undefined}
             />
           ))
         ) : (
@@ -182,6 +214,7 @@ export function HighlightsPage(p: {
   onMenu: () => void
   onOpenArticle: (h: Highlight) => void
   onShare: (h: Highlight) => void
+  onShareMany: (hs: Highlight[]) => void
   onDelete: (h: Highlight) => void
   toast: (msg: string) => void
 }) {
@@ -243,10 +276,22 @@ export function HighlightsPage(p: {
         {groups.length ? (
           groups.map((g) => (
             <div key={g.itemId} className="hl-group">
-              <button type="button" className="hl-group-head" onClick={() => p.onOpenArticle(g.items[0])}>
-                <span className="hl-group-title">{g.title || '(no title)'}</span>
-                <span className="hl-group-source">{g.source}</span>
-              </button>
+              <div className="hl-group-bar">
+                <button type="button" className="hl-group-head" onClick={() => p.onOpenArticle(g.items[0])}>
+                  <span className="hl-group-title">{g.title || '(no title)'}</span>
+                  <span className="hl-group-source">{g.source}</span>
+                </button>
+                {g.items.length > 1 ? (
+                  <span className="hl-group-actions">
+                    <button type="button" className="hl-mini" onClick={() => p.onShareMany(byStart(g.items))} title="All of this article's highlights in one image">
+                      <Icon name="image" size={16} /> All as image + link
+                    </button>
+                    <button type="button" className="hl-mini" onClick={() => copyText(allQuotesText(byStart(g.items)), p.toast, `Copied ${g.items.length} highlights with the link`)}>
+                      <Icon name="link" size={16} /> All as text + link
+                    </button>
+                  </span>
+                ) : null}
+              </div>
               <div className="hl-grid">
                 {g.items.map((h) => (
                   <HighlightCard
@@ -271,6 +316,9 @@ export function HighlightsPage(p: {
     </section>
   )
 }
+
+/** Reading order within one article. */
+const byStart = (hs: Highlight[]) => [...hs].sort((a, b) => a.start - b.start)
 
 export async function copyText(text: string, toast: (msg: string) => void, done = 'Copied quote and link') {
   try {

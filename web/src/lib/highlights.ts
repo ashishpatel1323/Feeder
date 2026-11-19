@@ -157,10 +157,10 @@ export function quoteText(h: Pick<Highlight, 'text' | 'itemTitle' | 'feedTitle' 
 }
 
 /** All of an article's highlights as text, in reading order. */
-export function allQuotesText(hs: Highlight[]): string {
+export function allQuotesText(hs: Pick<Highlight, 'text' | 'note' | 'itemTitle' | 'feedTitle' | 'itemLink'>[], withNotes = true): string {
   if (!hs.length) return ''
   const first = hs[0]
-  const quotes = hs.map((h) => `“${h.text}”${h.note ? `\n  ${h.note}` : ''}`).join('\n\n')
+  const quotes = hs.map((h) => `“${h.text}”${withNotes && h.note ? `\n  ${h.note}` : ''}`).join('\n\n')
   const from = [first.itemTitle, first.feedTitle].filter(Boolean).join(', ')
   return `${quotes}\n\n— ${from}${first.itemLink ? `\n${first.itemLink}` : ''}`
 }

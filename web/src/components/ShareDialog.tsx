@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { HighlightColor } from '../lib/db'
-import { quoteText } from '../lib/highlights'
+import { allQuotesText, quoteText } from '../lib/highlights'
 import { proxiedUrl } from '../lib/api'
 import {
   canvasToPng,
@@ -23,6 +23,19 @@ export interface ShareSubject {
   feedTitle: string
   itemLink: string | null
   imageUrl: string | null
+  /** Several highlights in one image: their texts and notes are joined in `text` and `note`. */
+  quotes?: { text: string; note: string }[]
+}
+
+/** One share for several highlights of the same article, in reading order. */
+export function combinedSubject(hs: { text: string; note: string; color: HighlightColor }[], article: Omit<ShareSubject, 'text' | 'note' | 'color' | 'quotes'>): ShareSubject {
+  return {
+    ...article,
+    text: hs.map((h) => h.text).join('\n'),
+    note: hs.map((h) => h.note).filter(Boolean).join('\n'),
+    color: hs[0]?.color ?? 'yellow',
+    quotes: hs.map((h) => ({ text: h.text, note: h.note })),
+  }
 }
 
 const PREFS_KEY = 'feeder.shareImage'
@@ -109,7 +122,14 @@ export function ShareDialog(p: { subject: ShareSubject; onClose: () => void; toa
     setPrefs((pr) => ({ ...pr, layout: next.id }))
   }
 
-  const caption = quoteText({ text: s.text, itemTitle: s.itemTitle, feedTitle: s.feedTitle, itemLink: s.itemLink }, showNote ? s.note : '')
+  const article = { itemTitle: s.itemTitle, feedTitle: s.feedTitle, itemLink: s.itemLink }
+  const caption =
+    s.quotes && s.quotes.length > 1
+      ? allQuotesText(
+          s.quotes.map((q) => ({ ...q, ...article })),
+          showNote,
+        )
+      : quoteText({ text: s.text, ...article }, showNote ? s.note : '')
   const fileName = `feeder-highlight-${Date.now()}.png`
 
   const run = async (fn: () => Promise<void>) => {
@@ -198,7 +218,7 @@ export function ShareDialog(p: { subject: ShareSubject; onClose: () => void; toa
     <div className="modal-backdrop share-backdrop" onClick={(e) => e.target === e.currentTarget && p.onClose()}>
       <div className="share-dialog" role="dialog" aria-modal="true" aria-label="Share highlight">
         <div className="share-head">
-          <h2>Share highlight</h2>
+          <h2>{s.quotes && s.quotes.length > 1 ? `Share ${s.quotes.length} highlights` : 'Share highlight'}</h2>
           <IconButton icon="close" label="Close" onClick={p.onClose} />
         </div>
         <div className="share-body">
@@ -267,8 +287,8 @@ export function ShareDialog(p: { subject: ShareSubject; onClose: () => void; toa
                   {SHARE_SIZES[k].label}
                 </button>
               ))}
-              <label className={s.note ? '' : 'disabled'} title={s.note ? undefined : 'This highlight has no note'}>
-                <input type="checkbox" checked={showNote} disabled={!s.note} onChange={(e) => setShowNote(e.target.checked)} /> Include my note
+              <label className={s.note ? '' : 'disabled'} title={s.note ? undefined : 'No notes to include'}>
+                <input type="checkbox" checked={showNote} disabled={!s.note} onChange={(e) => setShowNote(e.target.checked)} /> Include {s.quotes && s.quotes.length > 1 ? 'notes' : 'my note'}
               </label>
               <label>
                 <input type="checkbox" checked={prefs.showMark} onChange={(e) => setPrefs((pr) => ({ ...pr, showMark: e.target.checked }))} /> Feeder mark

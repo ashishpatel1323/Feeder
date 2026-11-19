@@ -69,7 +69,9 @@ const SANS = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
 
 function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
   const lines: string[] = []
-  for (const para of text.split(/\n+/)) {
+  text.split(/\n+/).forEach((para, i) => {
+    // A blank line between paragraphs (several highlights in one image)
+    if (i > 0 && lines.length) lines.push('')
     let line = ''
     for (const word of para.split(/\s+/).filter(Boolean)) {
       const next = line ? `${line} ${word}` : word
@@ -80,7 +82,7 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): st
       }
     }
     if (line) lines.push(line)
-  }
+  })
   return lines
 }
 
@@ -172,7 +174,7 @@ function drawLines(ctx: CanvasRenderingContext2D, t: Fitted, x: number, top: num
   ctx.textAlign = align
   lines.forEach((line, i) => {
     const base = top + i * lh + px
-    if (stroke) {
+    if (stroke && line) {
       const w = ctx.measureText(line).width
       const left = align === 'center' ? x - w / 2 : x
       ctx.save()
@@ -194,7 +196,10 @@ export function renderShareImage(canvas: HTMLCanvasElement, c: ShareContent, o: 
   ctx.clearRect(0, 0, W, H)
   const pad = 88
   const ink = HIGHLIGHT_INK[c.color]
-  const quote = `“${c.text}”`
+  const quote = c.text
+    .split('\n')
+    .map((t) => `“${t}”`)
+    .join('\n')
   const note = o.showNote && c.note ? c.note : ''
 
   if (o.layout === 'photo') {

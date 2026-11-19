@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, feedDisplayTitle, type Feed, type Highlight, type HighlightColor, type Item } from '../lib/db'
-import { allQuotesText, anchorOf, applyHighlights, deleteHighlight, newHighlight, quoteText, saveHighlight, updateHighlight } from '../lib/highlights'
+import { anchorOf, applyHighlights, deleteHighlight, newHighlight, quoteText, saveHighlight, updateHighlight } from '../lib/highlights'
 import { copyText, HighlightBar, HighlightsRail } from './Highlights'
-import { ShareDialog, type ShareSubject } from './ShareDialog'
+import { combinedSubject, ShareDialog, type ShareSubject } from './ShareDialog'
 import { formatPoints, readingMinutes, wordsOf } from '../lib/listquery'
 import { hnDiscussionUrl, loadFullText, refreshHnScores, sanitize, summarize } from '../lib/extras'
 import { htmlToText } from '../lib/feedparse'
@@ -486,7 +486,7 @@ export function Reader(p: Props) {
               if (window.matchMedia('(max-width: 1100px)').matches) setRailOpen(false)
             }}
             onDelete={removeHighlight}
-            onCopyAll={() => copyText(allQuotesText(ordered), p.toast, 'Copied all highlights')}
+            onShareMany={(hs) => setShare(combinedSubject(hs, { itemTitle: item.title, feedTitle: feedDisplayTitle(feed), itemLink: item.link, imageUrl: item.imageUrl }))}
             toast={p.toast}
           />
         ) : null}
