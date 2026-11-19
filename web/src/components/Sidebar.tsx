@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { FEED_ORDER_KEY, feedDisplayTitle, getKv, sortFolder, type Feed, type Item } from '../lib/db'
+import { FEED_ORDER_KEY, feedDisplayTitle, FOLDER_ORDER_KEY, getKv, sortFolder, sortFolders, type Feed, type Item } from '../lib/db'
 import type { Selection } from '../lib/listquery'
 import { Icon, IconButton } from './Icon'
 import { proxiedUrl } from '../lib/api'
@@ -17,6 +17,9 @@ interface Props {
    */
   onMoveFeed: (url: string, tag: string, place?: { beforeUrl: string | null; folderUrls: string[] }) => void
   onAddFeed: () => void
+  onManageFeeds: () => void
+  /** The Manage feeds page is open. */
+  managing: boolean
   onRefresh: () => void
   onSettings: () => void
   refreshing: string | null
@@ -26,7 +29,7 @@ interface Props {
   onToggleCollapsed: () => void
 }
 
-function FeedIcon({ feed }: { feed: Feed }) {
+export function FeedIcon({ feed }: { feed: Feed }) {
   const [broken, setBroken] = useState(false)
   const title = feedDisplayTitle(feed)
   let src = feed.imageUrl
@@ -44,6 +47,7 @@ function FeedIcon({ feed }: { feed: Feed }) {
 export function Sidebar(p: Props) {
   const [closedTags, setClosedTags] = useState<string[]>([])
   const order = useLiveQuery(() => getKv<string[]>(FEED_ORDER_KEY, []), []) ?? []
+  const folderOrder = useLiveQuery(() => getKv<string[]>(FOLDER_ORDER_KEY, []), []) ?? []
   // Drag and drop of feeds between folders
   const [dragUrl, setDragUrl] = useState<string | null>(null)
   const [dropTag, setDropTag] = useState<string | null>(null)
@@ -86,10 +90,12 @@ export function Sidebar(p: Props) {
     const byTag = new Map<string, Feed[]>()
     for (const f of p.feeds) byTag.set(f.tag, [...(byTag.get(f.tag) ?? []), f])
     for (const [tag, list] of byTag) byTag.set(tag, sortFolder(list, order))
-    return [...byTag.entries()].sort(([a], [b]) => (!a !== !b ? (a ? -1 : 1) : a.toLowerCase().localeCompare(b.toLowerCase())))
-  }, [p.feeds, order])
+    // Folders in the order set on the Manage feeds page, feeds without a folder last
+    const named = sortFolders([...byTag.keys()].filter(Boolean), folderOrder)
+    return [...named, ...(byTag.has('') ? [''] : [])].map((t) => [t, byTag.get(t)!] as const)
+  }, [p.feeds, order, folderOrder])
 
-  const isSel = (s: Selection) => JSON.stringify(s) === JSON.stringify(p.selection)
+  const isSel = (s: Selection) => !p.managing && JSON.stringify(s) === JSON.stringify(p.selection)
 
   const feedRow = (f: Feed, i: number, folder: Feed[]) => (
     <li
@@ -164,12 +170,14 @@ export function Sidebar(p: Props) {
         <span className="rail-gap" />
         <IconButton icon="refresh" label={p.refreshing ? `Refreshing ${p.refreshing}` : 'Refresh'} onClick={p.onRefresh} disabled={!!p.refreshing} />
         <IconButton icon="add" label="Add feed" onClick={p.onAddFeed} />
+        <IconButton icon="tune" label="Manage feeds" onClick={p.onManageFeeds} active={p.managing} />
         <IconButton icon="settings" label="Settings" onClick={p.onSettings} />
       </div>
       <div className="sidebar-top">
         <span className="brand">Feeder</span>
         <IconButton icon="refresh" label={p.refreshing ? `Refreshing ${p.refreshing}` : 'Refresh'} onClick={p.onRefresh} disabled={!!p.refreshing} />
         <IconButton icon="add" label="Add feed" onClick={p.onAddFeed} />
+        <IconButton icon="tune" label="Manage feeds" onClick={p.onManageFeeds} active={p.managing} />
         <IconButton icon="settings" label="Settings" onClick={p.onSettings} />
         <span className="only-wide">
           <IconButton icon="panelClose" label="Hide feeds" title="Hide feeds ( [ )" onClick={p.onToggleCollapsed} />

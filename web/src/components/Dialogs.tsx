@@ -326,7 +326,17 @@ function SyncSection({ toast }: { toast: (m: string) => void }) {
 /** Browser voices that are neural/network voices and sound natural. */
 export const NATURAL_VOICE = /natural|neural|online|premium|enhanced|google|siri/i
 
-export function SettingsDialog({ settings, onClose, toast }: { settings: Settings; onClose: () => void; toast: (m: string) => void }) {
+export function SettingsDialog({
+  settings,
+  onClose,
+  toast,
+  onManageFeeds,
+}: {
+  settings: Settings
+  onClose: () => void
+  toast: (m: string) => void
+  onManageFeeds?: () => void
+}) {
   const [token, setToken] = useState(getAccessToken())
   const [tokenRequired, setTokenRequired] = useState(false)
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([])
@@ -525,6 +535,11 @@ export function SettingsDialog({ settings, onClose, toast }: { settings: Setting
       <section className="settings-section">
         <h3>Feeds</h3>
         <div className="form-actions wrap">
+          {onManageFeeds ? (
+            <button className="primary" onClick={onManageFeeds}>
+              Manage feeds and folders
+            </button>
+          ) : null}
           <label className="file-btn">
             Import OPML
             <input type="file" accept=".opml,.xml,text/xml" onChange={(e) => e.target.files?.[0] && onImport(e.target.files[0])} />
