@@ -543,6 +543,15 @@ export function addDeviceLink(state: Pick<SyncState, 'syncCode' | 'secretKey'>):
   return `https://feederapp.nononsenseapps.com/sync/join?sync_code=${state.syncCode}&key=${encodeURIComponent(state.secretKey)}`
 }
 
+async function serverReady(): Promise<boolean> {
+  try {
+    const res = await fetch('/api/v2/status', { headers: apiHeaders() })
+    return res.ok && ((await res.json()) as { store?: string }).store !== 'none'
+  } catch {
+    return false
+  }
+}
+
 /**
  * Moving over from Feeder's old sync chain, once per browser, with nothing lost:
  *  1. one last pull from the old chain, so read marks and feed changes made elsewhere arrive
@@ -557,8 +566,13 @@ export async function moveFromOldChain(): Promise<SyncState | null> {
   const old = await getKv<{ syncCode: string; secretKey: string } | null>(OLD_CHAIN_KEY, null)
   if (!old?.syncCode || !old.secretKey) return null
 
+  const { syncNow: oldSync } = await import('./sync')
+  // Until the server has its sync database, keep using the old chain
+  if (!(await serverReady())) {
+    await oldSync()
+    return null
+  }
   try {
-    const { syncNow: oldSync } = await import('./sync')
     await Promise.race([oldSync(), new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 30_000))])
   } catch (e) {
     console.warn('Last pull from the old sync chain failed; moving over with what is here', e)

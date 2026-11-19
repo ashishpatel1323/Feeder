@@ -78,6 +78,7 @@ beforeEach(async () => {
   await db.open()
   vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
+    if (url.startsWith('/api/v2/status')) return new Response(JSON.stringify({ store: 'memory' }))
     if (url.startsWith('/api/v2/sync')) {
       return handleSync2(new Request(`http://x${url}`, { method: init?.method, body: init?.body as string }), {}, store)
     }
