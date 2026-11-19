@@ -2645,7 +2645,7 @@ mark.hl.flash {
   display: block;
   height: 100%;
   background: var(--accent);
-
+}
 
 /* Right-click menu on an article in the list */
 .ctx-backdrop {
