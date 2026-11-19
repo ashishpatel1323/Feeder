@@ -31,6 +31,7 @@ import com.nononsenseapps.feeder.model.syncMutex
 import com.nononsenseapps.feeder.sync.DeviceListResponse
 import com.nononsenseapps.feeder.sync.ErrorResponse
 import com.nononsenseapps.feeder.sync.SyncRestClient
+import com.nononsenseapps.feeder.sync2.DeletedArticles
 import com.nononsenseapps.feeder.sync2.Sync2Client
 import com.nononsenseapps.feeder.ui.compose.feed.FeedListItem
 import com.nononsenseapps.feeder.ui.compose.feedarticle.FeedListFilter
@@ -997,8 +998,15 @@ class Repository(
     suspend fun getSync2State() = sync2Client.getState()
 
     /** Deletes articles for good, here and (after the next sync) on every other device. */
-    suspend fun deleteArticlesForGood(itemIds: List<Long>) {
-        sync2Client.hideItems(itemIds)
+    suspend fun deleteArticlesForGood(itemIds: List<Long>): DeletedArticles {
+        val deleted = sync2Client.hideItems(itemIds)
+        runOnceSyncChainSendRead(di)
+        return deleted
+    }
+
+    /** Undo for [deleteArticlesForGood]. */
+    suspend fun undoDeleteArticles(deleted: DeletedArticles) {
+        sync2Client.unhideItems(deleted)
         runOnceSyncChainSendRead(di)
     }
 

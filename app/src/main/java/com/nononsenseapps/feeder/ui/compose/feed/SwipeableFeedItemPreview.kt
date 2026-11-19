@@ -17,9 +17,11 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -35,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -55,10 +58,12 @@ import com.nononsenseapps.feeder.ui.compose.components.safeSemantics
 import com.nononsenseapps.feeder.ui.compose.feedarticle.FeedListFilter
 import com.nononsenseapps.feeder.ui.compose.feedarticle.onlyUnread
 import com.nononsenseapps.feeder.ui.compose.theme.LocalDimens
+import com.nononsenseapps.feeder.ui.compose.theme.SwipingItemToDeleteColor
 import com.nononsenseapps.feeder.ui.compose.theme.SwipingItemToReadColor
 import com.nononsenseapps.feeder.ui.compose.theme.SwipingItemToUnreadColor
 import com.nononsenseapps.feeder.ui.compose.utils.isCompactLandscape
 import com.nononsenseapps.feeder.util.logDebug
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -90,15 +95,26 @@ fun SwipeableFeedItemPreview(
     onOpenFeedItemInBrowser: () -> Unit,
     modifier: Modifier = Modifier,
     swipeEnabled: Boolean = true,
+    // Swiping toward the end (right in left-to-right languages) deletes the article for good
+    onDelete: (() -> Unit)? = null,
 ) {
     val coroutineScope = rememberCoroutineScope()
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val anchoredDraggableState = remember { AnchoredDraggableState(FeedItemSwipeState.CENTER) }
     val onSwipeCallback by rememberUpdatedState(newValue = onSwipe)
+    val onDeleteCallback by rememberUpdatedState(newValue = onDelete)
+
+    // Swiping toward the end deletes, when deleting is offered
+    val swipingToDelete by remember {
+        derivedStateOf {
+            onDeleteCallback != null && anchoredDraggableState.offset > 0
+        }
+    }
 
     val color by animateColorAsState(
         targetValue =
             when {
+                swipingToDelete -> SwipingItemToDeleteColor
                 item.unread || filter.onlyUnread -> SwipingItemToReadColor
                 else -> SwipingItemToUnreadColor
             },
@@ -114,7 +130,15 @@ fun SwipeableFeedItemPreview(
 
     var skipHapticFeedback by remember { mutableStateOf(false) }
     LaunchedEffect(anchoredDraggableState.settledValue) {
-        if (anchoredDraggableState.settledValue != FeedItemSwipeState.CENTER) {
+        val delete = onDeleteCallback
+        if (anchoredDraggableState.settledValue == FeedItemSwipeState.END && delete != null) {
+            logDebug(LOG_TAG, "onDelete ${item.id}")
+            delete()
+            // The article leaves the list; if it is still here after a moment, slide it back
+            delay(1500)
+            skipHapticFeedback = true
+            anchoredDraggableState.animateTo(FeedItemSwipeState.CENTER)
+        } else if (anchoredDraggableState.settledValue != FeedItemSwipeState.CENTER) {
             logDebug(LOG_TAG, "onSwipe ${item.unread}")
             if (!filter.onlyUnread) {
                 skipHapticFeedback = true
@@ -147,6 +171,7 @@ fun SwipeableFeedItemPreview(
     val markAboveAsReadLabel = stringResource(R.string.mark_items_above_as_read)
     val markBelowAsReadLabel = stringResource(R.string.mark_items_below_as_read)
     val shareLabel = stringResource(R.string.share)
+    val deleteLabel = stringResource(R.string.swipe_to_delete_article)
 
     val unreadLabel = stringResource(R.string.unread_adjective)
     val alreadyReadLabel = stringResource(R.string.read_adjective)
@@ -220,6 +245,14 @@ fun SwipeableFeedItemPreview(
                                 onShareItem()
                                 true
                             },
+                        ) +
+                        listOfNotNull(
+                            onDelete?.let { delete ->
+                                CustomAccessibilityAction(deleteLabel) {
+                                    delete()
+                                    true
+                                }
+                            },
                         )
                 },
     ) {
@@ -264,11 +297,13 @@ fun SwipeableFeedItemPreview(
                     }.padding(horizontal = 24.dp),
         ) {
             Icon(
-                when (item.unread) {
-                    true -> Icons.Default.VisibilityOff
-                    false -> Icons.Default.Visibility
+                when {
+                    swipingToDelete -> Icons.Default.Delete
+                    item.unread -> Icons.Default.VisibilityOff
+                    else -> Icons.Default.Visibility
                 },
                 contentDescription = null,
+                tint = if (swipingToDelete) Color.White else LocalContentColor.current,
             )
         }
 
@@ -443,12 +478,14 @@ fun SwipeableFeedItemPreview(
                 )
 
                 // Dividing the maxWidth by 2 means you only have to swipe a quarter of the screen width to reach the swipe threshold, instead of a full half of the screen by default.
-                LaunchedEffect(swipeAsRead) {
+                val canDelete = onDelete != null
+                LaunchedEffect(swipeAsRead, canDelete) {
                     anchoredDraggableState.updateAnchors(
                         DraggableAnchors {
                             if (swipeAsRead == SwipeAsRead.ONLY_FROM_END) {
                                 FeedItemSwipeState.START at -(maxWidthPx / 2)
                                 FeedItemSwipeState.CENTER at 0f
+                                if (canDelete) FeedItemSwipeState.END at maxWidthPx / 2
                             } else if (swipeAsRead == SwipeAsRead.FROM_ANYWHERE) {
                                 FeedItemSwipeState.START at -(maxWidthPx / 2)
                                 FeedItemSwipeState.CENTER at 0f

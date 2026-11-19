@@ -96,6 +96,22 @@ interface Sync2Dao {
     @Query("DELETE FROM feed_items WHERE id = :id")
     suspend fun deleteItem(id: Long)
 
+    @Query("SELECT * FROM feed_items WHERE id IN (:ids)")
+    suspend fun getFeedItems(ids: List<Long>): List<FeedItem>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertFeedItems(items: List<FeedItem>)
+
+    /** Undo for [hide]: the articles come back here, and the next sync brings them back elsewhere. */
+    @Transaction
+    suspend fun unhide(
+        keys: List<Sync2ItemKey>,
+        items: List<FeedItem>,
+    ) {
+        for (k in keys) deleteHidden(k.feedUrl, k.guid)
+        insertFeedItems(items)
+    }
+
     @Transaction
     suspend fun hide(
         rows: List<HiddenItem>,
