@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fork: Feeder's own sync, deleting articles for good -->
+    <string name="action_delete_article">Delete</string>
+    <string name="article_deleted_everywhere">Article deleted on all your devices</string>
+</resources>

@@ -11,7 +11,8 @@ import com.nononsenseapps.feeder.blob.blobOutputStream
 import com.nononsenseapps.feeder.db.room.Feed
 import com.nononsenseapps.feeder.db.room.FeedItem
 import com.nononsenseapps.feeder.db.room.ID_UNSET
-import com.nononsenseapps.feeder.sync.SyncRestClient
+import com.nononsenseapps.feeder.db.room.Sync2Dao
+import com.nononsenseapps.feeder.sync2.Sync2Client
 import com.nononsenseapps.feeder.util.Either
 import com.nononsenseapps.feeder.util.FilePathProvider
 import com.nononsenseapps.feeder.util.fetchOgImage
@@ -56,7 +57,8 @@ class RssLocalSync(
     override val di: DI,
 ) : DIAware {
     private val repository: Repository by instance()
-    private val syncClient: SyncRestClient by instance()
+    private val sync2Client: Sync2Client by instance()
+    private val sync2Dao: Sync2Dao by instance()
     private val feedParser: FeedParser by instance()
     private val okHttpClient: OkHttpClient by instance()
     private val filePathProvider: FilePathProvider by instance()
@@ -123,11 +125,7 @@ class RssLocalSync(
                             }
                         // Fetch sync stuff first - this is fast
                         try {
-                            syncClient.getFeeds()
-                            syncClient.getRead()
-                            syncClient.getDevices()
-                            syncClient.sendUpdatedFeeds()
-                            syncClient.markAsRead()
+                            sync2Client.sync()
                         } catch (e: Exception) {
                             if (e is CancellationException) throw e
                             Log.e(LOG_TAG, "error with syncClient: ${e.message}", e)
@@ -308,6 +306,9 @@ class RssLocalSync(
                     val isNotUniqueIds = uniqueIdCount != items?.size
 
                     val alreadyReadGuids = repository.getGuidsWhichAreSyncedAsReadInFeed(feedSql)
+                    // Deleted for good (here or on another device), and saved elsewhere before arriving here
+                    val hiddenGuids = sync2Dao.getHiddenGuids(feedSql.url.toString()).toHashSet()
+                    val savedElsewhereGuids = sync2Dao.getKnownTrueGuids("saved\n${feedSql.url}\n").toHashSet()
 
                     // Compiled once per feed per sync. Never inside the item loop.
                     val articleFilterRules =
@@ -361,6 +362,9 @@ class RssLocalSync(
                                     logDebug(LOG_TAG, "Filtered by feed rules: [${item.title}] [${feed.title}]")
                                     return@mapIndexedNotNull null
                                 }
+                                if (guid in hiddenGuids) {
+                                    return@mapIndexedNotNull null
+                                }
 
                                 // Each undated item in the feed gets a distinct fallback clock.
                                 // Items are in reversed feed order here (oldest position = index 0),
@@ -398,6 +402,9 @@ class RssLocalSync(
                                             )
                                     }
 
+                                    if (feedItemSql.id == ID_UNSET && feedItemSql.guid in savedElsewhereGuids) {
+                                        feedItemSql.bookmarked = true
+                                    }
                                     if (feedItemSql.guid in alreadyReadGuids) {
                                         // TODO get read time from sync service
                                         feedItemSql.readTime = feedItemSql.readTime ?: Instant.now()

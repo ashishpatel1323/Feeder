@@ -5,6 +5,7 @@ import com.nononsenseapps.feeder.model.FullTextParser
 import com.nononsenseapps.feeder.model.HackerNewsScores
 import com.nononsenseapps.feeder.model.RssLocalSync
 import com.nononsenseapps.feeder.sync.SyncRestClient
+import com.nononsenseapps.feeder.sync2.Sync2Client
 import com.nononsenseapps.jsonfeed.Feed
 import com.nononsenseapps.jsonfeed.JsonFeedParser
 import com.nononsenseapps.jsonfeed.feedAdapter
@@ -24,6 +25,7 @@ val networkModule =
         bind<FeedParser>() with provider { FeedParser(di) }
         // These don't have state issues
         bind<SyncRestClient>() with singleton { SyncRestClient(di) }
+        bind<Sync2Client>() with singleton { Sync2Client(di) }
         bind<RssLocalSync>() with singleton { RssLocalSync(di) }
         bind<FullTextParser>() with singleton { FullTextParser(di) }
         bind<HackerNewsScores>() with singleton { HackerNewsScores(di) }

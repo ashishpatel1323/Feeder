@@ -87,16 +87,8 @@ class SyncScreenViewModel(
         screenToShow.update { value }
     }
 
-    fun updateDeviceList() {
-        applicationCoroutineScope.launch {
-            logDebug(tag = LOG_TAG, "Update Devices")
-            repository
-                .updateDeviceList()
-                .onLeft {
-                    Log.e(LOG_TAG, "updateDeviceList: ${it.code}: ${it.body}", it.throwable)
-                }
-        }
-    }
+    /** Feeder's own sync has no device registry; kept so the screen's call sites stay the same. */
+    fun updateDeviceList() = Unit
 
     fun joinSyncChain(
         syncCode: String,
@@ -140,7 +132,7 @@ class SyncScreenViewModel(
     fun forceSync() {
         applicationCoroutineScope.launch {
             try {
-                repository.prepareForceSync()
+                repository.forceSync()
                 runOnceRssSync(
                     di = di,
                     triggeredByUser = true,
@@ -256,7 +248,7 @@ class SyncScreenViewModel(
                     addNewDeviceUrl = URL("$DEEP_LINK_BASE_URI/sync/join?sync_code=${syncRemote?.syncChainId ?: ""}&key=$remoteKeyEncoded"),
                     singleScreenToShow = actualScreen,
                     deviceId = syncRemote?.deviceId ?: 0,
-                    deviceList = deviceList,
+                    deviceList = emptyList(),
                     secretKey = secretKey,
                 )
             }.collect {

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.provider.Settings
 import android.text.format.DateFormat
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.ScrollState
@@ -42,6 +43,7 @@ import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -192,6 +194,7 @@ fun ArticleScreen(
     }
 
     val toolbarColor = MaterialTheme.colorScheme.surface.toArgb()
+    val context = LocalContext.current
 
     ArticleScreen(
         viewState = viewState,
@@ -255,6 +258,11 @@ fun ArticleScreen(
         podcastOnSeekTo = viewModel::podcastSeekTo,
         onToggleBookmark = {
             viewModel.setBookmarked(!viewState.isBookmarked)
+        },
+        onDelete = {
+            viewModel.deleteForGood()
+            Toast.makeText(context, R.string.article_deleted_everywhere, Toast.LENGTH_SHORT).show()
+            onNavigateUp()
         },
         articleScrollState = articleScrollState,
         onNavigateUp = onNavigateUp,
@@ -324,6 +332,7 @@ fun ArticleScreen(
     podcastOnSeekTo: (Int) -> Unit,
     onToggleBookmark: () -> Unit,
     articleScrollState: ScrollState,
+    onDelete: () -> Unit = {},
     onNavigateUp: () -> Unit,
     onSummarize: () -> Unit,
     onTranslate: () -> Unit,
@@ -488,6 +497,7 @@ fun ArticleScreen(
                                 onSummarize = onSummarize,
                                 onToggleBookmark = onToggleBookmark,
                                 onTranslate = onTranslate,
+                                onDelete = onDelete,
                             )
                         }
                     }
@@ -550,6 +560,7 @@ fun ArticleScreen(
                         onSummarize = onSummarize,
                         onToggleBookmark = onToggleBookmark,
                         onTranslate = onTranslate,
+                        onDelete = onDelete,
                         fastReading = fastReading,
                         onToggleFastReading = onToggleFastReading,
                         autoScrolling = autoScroll.active,
@@ -960,6 +971,7 @@ private fun RowScope.ArticleTopBarActions(
     onSummarize: () -> Unit,
     onToggleBookmark: () -> Unit,
     onTranslate: () -> Unit,
+    onDelete: () -> Unit,
 ) {
     TopBarAction(Icons.Default.Share, stringResource(R.string.share), onShare)
     TopBarAction(Icons.Outlined.VisibilityOff, stringResource(R.string.action_unread), onMarkAsUnread)
@@ -971,6 +983,7 @@ private fun RowScope.ArticleTopBarActions(
         stringResource(if (isBookmarked) R.string.action_saved else R.string.action_save),
         onToggleBookmark,
     )
+    TopBarAction(Icons.Outlined.Delete, stringResource(R.string.action_delete_article), onDelete)
     if (showTranslate) {
         TopBarAction(
             Icons.Default.Translate,
@@ -1004,6 +1017,7 @@ private fun ArticleActionBar(
     onSummarize: () -> Unit,
     onToggleBookmark: () -> Unit,
     onTranslate: () -> Unit,
+    onDelete: () -> Unit,
     fastReading: Boolean,
     onToggleFastReading: () -> Unit,
     autoScrolling: Boolean,
@@ -1049,6 +1063,12 @@ private fun ArticleActionBar(
                     icon = if (isBookmarked) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
                     label = stringResource(if (isBookmarked) R.string.action_saved else R.string.action_save),
                     onClick = onToggleBookmark,
+                    modifier = Modifier.weight(1f),
+                )
+                ArticleAction(
+                    icon = Icons.Outlined.Delete,
+                    label = stringResource(R.string.action_delete_article),
+                    onClick = onDelete,
                     modifier = Modifier.weight(1f),
                 )
                 if (showTranslate) {

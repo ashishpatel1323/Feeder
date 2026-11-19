@@ -2,6 +2,6 @@
 <resources>
     <!-- Fork: force sync on the Device sync screen -->
     <string name="force_sync">Force sync</string>
-    <string name="force_sync_description">Pulls the full feed list and every read mark from the chain again, and re-sends this device\'s read marks. Use it when devices look out of step.</string>
+    <string name="force_sync_description">Sends everything this device has again (feeds, read marks, Saved, deleted articles) and pulls everything from your other devices. Use it when devices look out of step.</string>
     <string name="force_sync_started">Force sync started</string>
 </resources>

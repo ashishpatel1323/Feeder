@@ -8,6 +8,7 @@ import androidx.paging.PagingData
 import com.nononsenseapps.feeder.ApplicationCoroutineScope
 import com.nononsenseapps.feeder.background.runOnceBlocklistUpdate
 import com.nononsenseapps.feeder.background.runOnceRssSync
+import com.nononsenseapps.feeder.background.runOnceSyncChainGetUpdates
 import com.nononsenseapps.feeder.background.runOnceSyncChainSendRead
 import com.nononsenseapps.feeder.background.schedulePeriodicRssSync
 import com.nononsenseapps.feeder.db.room.Feed
@@ -31,6 +32,7 @@ import com.nononsenseapps.feeder.model.syncMutex
 import com.nononsenseapps.feeder.sync.DeviceListResponse
 import com.nononsenseapps.feeder.sync.ErrorResponse
 import com.nononsenseapps.feeder.sync.SyncRestClient
+import com.nononsenseapps.feeder.sync2.Sync2Client
 import com.nononsenseapps.feeder.ui.compose.feed.FeedListItem
 import com.nononsenseapps.feeder.ui.compose.feedarticle.FeedListFilter
 import com.nononsenseapps.feeder.ui.compose.feedarticle.FeedListShow
@@ -73,6 +75,7 @@ class Repository(
     private val application: Application by instance()
     private val syncRemoteStore: SyncRemoteStore by instance()
     private val syncClient: SyncRestClient by instance()
+    private val sync2Client: Sync2Client by instance()
     private val fontStore: FontStore by instance()
     private val hackerNewsScores: HackerNewsScores by instance()
 
@@ -643,7 +646,10 @@ class Repository(
     suspend fun setBookmarked(
         itemId: Long,
         bookmarked: Boolean,
-    ) = feedItemStore.setBookmarked(itemId = itemId, bookmarked = bookmarked)
+    ) {
+        feedItemStore.setBookmarked(itemId = itemId, bookmarked = bookmarked)
+        runOnceSyncChainSendRead(di)
+    }
 
     suspend fun markAsNotified(itemIds: List<Long>) = feedItemStore.markAsNotified(itemIds)
 
@@ -675,6 +681,7 @@ class Repository(
     suspend fun markAsUnread(itemId: Long) {
         feedItemStore.markAsUnread(itemId)
         syncRemoteStore.setNotSynced(itemId)
+        runOnceSyncChainSendRead(di)
     }
 
     suspend fun shouldDisplayFullTextForItemByDefault(itemId: Long): Boolean = feedItemStore.getFullTextByDefault(itemId)
@@ -954,18 +961,17 @@ class Repository(
         syncCode: String,
         secretKey: String,
     ): Either<ErrorResponse, String> =
-        syncClient
-            .join(syncCode = syncCode, remoteSecretKey = secretKey)
-            .onRight {
-                syncClient.getDevices()
-            }
+        try {
+            sync2Client.join(syncCode = syncCode, secretKey = secretKey)
+            runOnceSyncChainGetUpdates(di)
+            Either.Right(syncCode)
+        } catch (e: Exception) {
+            Log.e(LOG_TAG, "joinSyncChain", e)
+            Either.Left(ErrorResponse(999, e.message, e))
+        }
 
     suspend fun leaveSyncChain() {
-        syncClient
-            .leave()
-            .onLeft {
-                Log.e(LOG_TAG, "leaveSyncChain: ${it.code}, ${it.body}", it.throwable)
-            }
+        sync2Client.leave()
     }
 
     suspend fun removeDevice(deviceId: Long) {
@@ -977,13 +983,27 @@ class Repository(
     }
 
     suspend fun startNewSyncChain(): Either<ErrorResponse, Pair<String, String>> =
-        syncClient
-            .create()
-            .onRight {
-                updateDeviceList()
-            }.map { syncCode ->
-                syncCode to getSyncRemote().secretKey
-            }
+        try {
+            val syncCode = sync2Client.create()
+            runOnceSyncChainGetUpdates(di)
+            Either.Right(syncCode to getSyncRemote().secretKey)
+        } catch (e: Exception) {
+            Log.e(LOG_TAG, "startNewSyncChain", e)
+            Either.Left(ErrorResponse(999, e.message, e))
+        }
+
+    /** Runs Feeder's own sync once (moving over from the old chain first if needed). */
+    suspend fun syncNow(): Boolean = sync2Client.sync()
+
+    suspend fun forceSync() = sync2Client.forceSync()
+
+    suspend fun getSync2State() = sync2Client.getState()
+
+    /** Deletes articles for good, here and (after the next sync) on every other device. */
+    suspend fun deleteArticlesForGood(itemIds: List<Long>) {
+        sync2Client.hideItems(itemIds)
+        runOnceSyncChainSendRead(di)
+    }
 
     suspend fun syncLoadFeedIfStale(
         feedId: Long,
@@ -1099,7 +1119,7 @@ class Repository(
     }
 
     val isSyncChainConfigured: Boolean
-        get() = syncClient.isConfigured
+        get() = sync2Client.isConfigured
 
     /**
      * Set the retry after time for feeds with the given base URL.
