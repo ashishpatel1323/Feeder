@@ -37,8 +37,10 @@ const apiMiddleware: Connect.NextHandleFunction = async (req, res, next) => {
       ALLOW_PRIVATE_HOSTS: process.env.ALLOW_PRIVATE_HOSTS,
       DATABASE_URL: process.env.DATABASE_URL,
       SYNC_MAX_ACCOUNTS: process.env.SYNC_MAX_ACCOUNTS,
-      // Without a database, development keeps sync data in memory until the server restarts
-      SYNC_MEMORY: process.env.DATABASE_URL ? undefined : '1',
+      // Without a database, development syncs through the deployed app (SYNC_UPSTREAM=none
+      // keeps sync data in memory instead, until the server restarts)
+      SYNC_UPSTREAM: process.env.SYNC_UPSTREAM === 'none' ? undefined : (process.env.SYNC_UPSTREAM ?? 'https://feeder-web-snowy.vercel.app'),
+      SYNC_MEMORY: process.env.DATABASE_URL || process.env.SYNC_UPSTREAM !== 'none' ? undefined : '1',
     })
     res.statusCode = response.status
     response.headers.forEach((v, k) => res.setHeader(k, v))
