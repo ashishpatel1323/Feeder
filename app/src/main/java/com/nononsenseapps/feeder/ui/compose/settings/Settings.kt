@@ -601,6 +601,14 @@ fun SettingsList(
         HorizontalDivider(modifier = Modifier.width(dimens.maxContentWidth))
 
         SettingsGroup(
+            title = R.string.offline_reading,
+        ) {
+            OfflineReadingSection()
+        }
+
+        HorizontalDivider(modifier = Modifier.width(dimens.maxContentWidth))
+
+        SettingsGroup(
             title = R.string.synchronization,
         ) {
             MenuSetting(

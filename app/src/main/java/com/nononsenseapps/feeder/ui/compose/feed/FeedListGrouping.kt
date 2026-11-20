@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.CloudQueue
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -266,6 +268,7 @@ private val FeedListShow.stringId: Int
             FeedListShow.UNREAD -> R.string.show_unread
             FeedListShow.ALL -> R.string.show_all
             FeedListShow.SAVED -> R.string.show_saved
+            FeedListShow.DOWNLOADED -> R.string.show_downloaded
         }
 
 /** Order of the group options in the sort and group sheet. */
@@ -295,6 +298,8 @@ fun FeedListFilterBar(
     modifier: Modifier = Modifier,
     showTabs: Boolean = true,
     unreadCount: Int = 0,
+    downloadedCount: Int = 0,
+    offlineMode: Boolean = false,
 ) {
     var showSheet by rememberSaveable { mutableStateOf(false) }
     Column(
@@ -324,9 +329,15 @@ fun FeedListFilterBar(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
                                 Text(stringResource(option.stringId), maxLines = 1)
-                                if (option == FeedListShow.UNREAD && unreadCount > 0) {
+                                val count =
+                                    when (option) {
+                                        FeedListShow.UNREAD -> unreadCount
+                                        FeedListShow.DOWNLOADED -> downloadedCount
+                                        else -> 0
+                                    }
+                                if (count > 0) {
                                     Text(
-                                        unreadCount.toString(),
+                                        count.toString(),
                                         style = MaterialTheme.typography.labelMedium,
                                         maxLines = 1,
                                     )
@@ -345,6 +356,24 @@ fun FeedListFilterBar(
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
         ) {
+            // Offline mode: nothing is fetched or synced, only what is on the device is shown
+            FilterChip(
+                selected = offlineMode,
+                onClick = { filterCallback.setOfflineMode(!offlineMode) },
+                label = {
+                    Text(
+                        stringResource(if (offlineMode) R.string.offline_mode else R.string.go_offline),
+                        maxLines = 1,
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        if (offlineMode) Icons.Default.CloudOff else Icons.Default.CloudQueue,
+                        contentDescription = null,
+                        modifier = Modifier.size(FilterChipDefaults.IconSize),
+                    )
+                },
+            )
             FilterChip(
                 selected = filter.today,
                 onClick = { filterCallback.setToday(!filter.today) },

@@ -628,6 +628,14 @@ data class FullTextDecodingFailure(
     override val description: String = throwable?.message ?: "",
 ) : FeedParserError()
 
+/** Offline mode is on, so nothing was fetched. */
+@Parcelize
+data class OfflineModeOn(
+    override val url: String,
+    override val description: String = "Offline mode is on",
+    override val throwable: Throwable? = null,
+) : FeedParserError()
+
 @Parcelize
 data class FullTextTooLarge(
     override val url: String,

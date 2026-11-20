@@ -1046,6 +1046,8 @@ fun FeedScreen(
                 onSelectSorting = onSetSorting,
                 showTabs = viewState.currentFeedOrTag.isNotSavedArticles,
                 unreadCount = viewState.feedScreenTitle.unreadCount,
+                downloadedCount = viewState.downloadedCount,
+                offlineMode = viewState.offlineMode,
             )
 
             when (screenType) {

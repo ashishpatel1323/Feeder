@@ -24,6 +24,7 @@ import com.nononsenseapps.feeder.db.COL_IMAGEURL
 import com.nononsenseapps.feeder.db.COL_IMAGE_FROM_BODY
 import com.nononsenseapps.feeder.db.COL_LINK
 import com.nononsenseapps.feeder.db.COL_NOTIFIED
+import com.nononsenseapps.feeder.db.COL_OFFLINE_TIME
 import com.nononsenseapps.feeder.db.COL_PLAINSNIPPET
 import com.nononsenseapps.feeder.db.COL_PLAINTITLE
 import com.nononsenseapps.feeder.db.COL_PRIMARYSORTTIME
@@ -134,6 +135,11 @@ data class FeedItem
             name = COL_HN_CHECKED_TIME,
             typeAffinity = ColumnInfo.INTEGER,
         ) var hnCheckedTime: Instant = Instant.EPOCH,
+        // When the article was downloaded for offline reading (Settings > Offline reading), null if not
+        @ColumnInfo(
+            name = COL_OFFLINE_TIME,
+            typeAffinity = ColumnInfo.INTEGER,
+        ) var offlineTime: Instant? = null,
     ) : FeedItemForFetching,
         FeedItemCursor {
         constructor() : this(id = ID_UNSET)

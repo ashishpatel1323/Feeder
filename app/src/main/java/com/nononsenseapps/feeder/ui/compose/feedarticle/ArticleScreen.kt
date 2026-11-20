@@ -90,6 +90,7 @@ import com.nononsenseapps.feeder.localtranslation.BergamotModelDownloadProgress
 import com.nononsenseapps.feeder.model.LocaleOverride
 import com.nononsenseapps.feeder.model.ReadAloudNeighbors
 import com.nononsenseapps.feeder.model.ReadAloudProgress
+import com.nononsenseapps.feeder.model.offline.isYouTubeLink
 import com.nononsenseapps.feeder.ui.MainActivityViewModel
 import com.nononsenseapps.feeder.ui.ScrollDirection
 import com.nononsenseapps.feeder.ui.compose.components.TranslationProgressContent
@@ -811,6 +812,12 @@ fun ArticleContent(
         articleScrollState = articleScrollState,
     ) { indexOffset ->
         var offsetCounter = indexOffset
+
+        // YouTube articles: Save video offline, and the saved copy's player
+        if (viewState.articleId > ID_UNSET && viewState.articleLink?.let { isYouTubeLink(it) } == true) {
+            offsetCounter++
+            OfflineVideoPanel(itemId = viewState.articleId, link = viewState.articleLink)
+        }
 
         if (viewState.isTranslationLoading) {
             offsetCounter++

@@ -62,7 +62,7 @@ interface FeedItemDao {
     @Query(
         """
         SELECT id FROM feed_items
-        WHERE feed_id IS :feedId AND bookmarked = 0
+        WHERE feed_id IS :feedId AND bookmarked = 0 AND offline_time IS NULL
         ORDER BY primary_sort_time DESC, pub_date DESC
         LIMIT -1 OFFSET :keepCount
         """,
@@ -71,6 +71,47 @@ interface FeedItemDao {
         feedId: Long,
         keepCount: Int,
     ): List<Long>
+
+    // Offline reading
+
+    /** Newest unread articles first; [limit] -1 means all of them. */
+    @Query(
+        """
+        SELECT id FROM feed_items
+        WHERE block_time IS NULL AND read_time IS NULL
+        ORDER BY primary_sort_time DESC, pub_date DESC
+        LIMIT :limit
+        """,
+    )
+    suspend fun getUnreadIdsNewestFirst(limit: Int): List<Long>
+
+    @Query("UPDATE feed_items SET offline_time = :offlineTime WHERE id = :id")
+    suspend fun setOfflineTime(
+        id: Long,
+        offlineTime: Long?,
+    )
+
+    @Query("UPDATE feed_items SET offline_time = NULL WHERE id IN (:ids)")
+    suspend fun clearOfflineTimes(ids: List<Long>)
+
+    @Query("UPDATE feed_items SET offline_time = NULL WHERE offline_time IS NOT NULL")
+    suspend fun clearAllOfflineTimes()
+
+    @Query("SELECT id FROM feed_items WHERE offline_time IS NOT NULL")
+    suspend fun getOfflineIds(): List<Long>
+
+    /** Downloaded articles read before [readBefore] (epoch millis), saved ones excepted. */
+    @Query(
+        """
+        SELECT id FROM feed_items
+        WHERE offline_time IS NOT NULL AND bookmarked = 0
+        AND read_time IS NOT NULL AND read_time < :readBefore
+        """,
+    )
+    suspend fun getOfflineIdsReadBefore(readBefore: Long): List<Long>
+
+    @Query("SELECT count(*) FROM feed_items WHERE offline_time IS NOT NULL AND block_time IS NULL")
+    fun getOfflineCount(): Flow<Int>
 
     @Query("SELECT * FROM feed_items WHERE guid IS :guid AND feed_id IS :feedId")
     suspend fun loadFeedItem(
