@@ -22,6 +22,8 @@ import com.nononsenseapps.feeder.db.room.ID_UNSET
 import com.nononsenseapps.feeder.db.room.upsertFeedItems
 import com.nononsenseapps.feeder.model.PREVIEW_COLUMNS
 import com.nononsenseapps.feeder.model.PreviewItem
+import com.nononsenseapps.feeder.model.youtube.VideoPositions
+import com.nononsenseapps.feeder.model.youtube.youtubeVideoId
 import com.nononsenseapps.feeder.ui.compose.feed.FeedListItem
 import com.nononsenseapps.feeder.ui.compose.feedarticle.FeedListFilter
 import kotlinx.coroutines.Dispatchers
@@ -558,6 +560,7 @@ private fun PreviewItem.toFeedListItem(
     rawPubDate = pubDate,
     primarySortTime = primarySortTime,
     wordCount = bestWordCount,
+    videoKey = if (youtubeVideoId(link) != null) VideoPositions.articleKey(feedUrl.toString(), guid) else "",
 )
 
 internal fun ZonedDateTime?.formatForFeed(

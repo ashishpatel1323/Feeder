@@ -125,9 +125,11 @@ import com.nononsenseapps.feeder.model.html.LinearTextAnnotationSuperscript
 import com.nononsenseapps.feeder.model.html.LinearTextAnnotationUnderline
 import com.nononsenseapps.feeder.model.html.LinearTextBlockStyle
 import com.nononsenseapps.feeder.model.html.LinearVideo
+import com.nononsenseapps.feeder.model.youtube.youtubeVideoId
 import com.nononsenseapps.feeder.ui.compose.coil.RestrainedFillWidthScaling
 import com.nononsenseapps.feeder.ui.compose.coil.RestrainedFitScaling
 import com.nononsenseapps.feeder.ui.compose.coil.rememberTintedVectorPainter
+import com.nononsenseapps.feeder.ui.compose.feedarticle.YouTubeVideoBlock
 import com.nononsenseapps.feeder.ui.compose.images.rememberImageViewer
 import com.nononsenseapps.feeder.ui.compose.layouts.Table
 import com.nononsenseapps.feeder.ui.compose.layouts.TableCell
@@ -405,6 +407,20 @@ fun LinearVideoContent(
     onLinkClick: (url: String, index: Int?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // YouTube videos in an article's text play right here, in YouTube's player, like the web app
+    val youtubeId =
+        remember(linearVideo) {
+            youtubeVideoId(linearVideo.firstSource.uri) ?: youtubeVideoId(linearVideo.firstSource.link)
+        }
+    if (youtubeId != null) {
+        YouTubeVideoBlock(
+            videoId = youtubeId,
+            articleKey = "",
+            title = stringResource(R.string.touch_to_play_video),
+            modifier = modifier,
+        )
+        return
+    }
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(8.dp),

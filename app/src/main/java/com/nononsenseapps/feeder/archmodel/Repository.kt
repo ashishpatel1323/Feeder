@@ -29,6 +29,8 @@ import com.nononsenseapps.feeder.model.FeedUnreadCount
 import com.nononsenseapps.feeder.model.ThumbnailImage
 import com.nononsenseapps.feeder.model.offline.OfflineFiles
 import com.nononsenseapps.feeder.model.syncMutex
+import com.nononsenseapps.feeder.model.youtube.VideoPositions
+import com.nononsenseapps.feeder.model.youtube.youtubeVideoId
 import com.nononsenseapps.feeder.sync.DeviceListResponse
 import com.nononsenseapps.feeder.sync.ErrorResponse
 import com.nononsenseapps.feeder.sync.SyncRestClient
@@ -722,7 +724,8 @@ class Repository(
         runOnceSyncChainSendRead(di)
     }
 
-    suspend fun shouldDisplayFullTextForItemByDefault(itemId: Long): Boolean = feedItemStore.getFullTextByDefault(itemId)
+    suspend fun shouldDisplayFullTextForItemByDefault(itemId: Long): Boolean =
+        feedItemStore.getFullTextByDefault(itemId) && youtubeVideoId(getLink(itemId)) == null
 
     suspend fun getLink(itemId: Long): String? = feedItemStore.getLink(itemId)
 
@@ -1221,7 +1224,14 @@ data class Article(
     val feedId: Long = item?.feedId ?: ID_UNSET
     val feedUrl: String? = item?.feedUrl?.toString()
     val bookmarked: Boolean = item?.bookmarked ?: false
-    val fullTextByDefault: Boolean = item?.fullTextByDefault ?: false
+    /** YouTube video of the article link, played in the reader instead of a full text. */
+    val youtubeId: String? = youtubeVideoId(item?.link)
+
+    // A YouTube page has no article text to extract, so videos start on the feed's description
+    val fullTextByDefault: Boolean = (item?.fullTextByDefault ?: false) && youtubeId == null
+
+    /** Same key as sync and the saved video positions: feedUrl + "\n" + guid. */
+    val articleKey: String = VideoPositions.articleKey(feedUrl, item?.guid)
     val wordCount: Int = item?.wordCount ?: 0
     val wordCountFull: Int = item?.wordCountFull ?: 0
     val image: ThumbnailImage? = item?.thumbnailImage

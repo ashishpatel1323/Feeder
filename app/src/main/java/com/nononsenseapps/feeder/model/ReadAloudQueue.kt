@@ -125,7 +125,8 @@ class ReadAloudQueue(
                 repository.markAsReadAndNotified(target)
                 // Load before the screen opens the article, so the two never download the same full
                 // text at once, and the screen shows the version that is actually read
-                val fullText = loadSpeechText(article, fullText = true)
+                // YouTube pages have no article text: read the feed text
+                val fullText = if (article.youtubeId == null) loadSpeechText(article, fullText = true) else null
                 val text = fullText ?: loadSpeechText(article, fullText = false) ?: return@launch
                 // Stop, or reading another article, while loading cancels this move
                 if (ttsStateHolder.progress.value.articleId != current) return@launch

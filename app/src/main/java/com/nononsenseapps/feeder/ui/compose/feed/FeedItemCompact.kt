@@ -177,6 +177,8 @@ data class FeedListItem(
     val feedId: Long = ID_UNSET,
     // Key of the group this item is in for the current grouping, empty when not grouped
     val groupKey: String = "",
+    // Sync key (feedUrl + "\n" + guid) of a YouTube article, for where its video was left; empty otherwise
+    val videoKey: String = "",
 ) {
     val cursor: FeedItemCursor
         get() =
