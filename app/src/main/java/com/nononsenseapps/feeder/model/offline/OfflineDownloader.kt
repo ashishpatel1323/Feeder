@@ -214,7 +214,7 @@ class OfflineDownloader(
 
         // Full text for everything with a page (YouTube pages have none); feed text stays as the fallback
         var fullTextOk = true
-        if (link != null && !isYouTube(link)) {
+        if (link != null && !isYouTubeLink(link)) {
             fullTextOk = fullTextParser.parseFullArticleIfMissing(item, ignoreOfflineMode = true).isRight()
             offlineFiles.keepFullText(itemId)
         }
@@ -357,7 +357,7 @@ class OfflineDownloader(
 
 private fun gzipStream(file: File): InputStream = java.util.zip.GZIPInputStream(file.inputStream())
 
-internal fun isYouTube(link: String): Boolean {
+fun isYouTubeLink(link: String): Boolean {
     val host =
         try {
             URI(link).host?.lowercase()

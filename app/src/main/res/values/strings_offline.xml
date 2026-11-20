@@ -23,4 +23,14 @@
   <string name="offline_turn_off_to_download">Turn off Offline mode to download</string>
   <string name="offline_downloaded_summary">Downloaded: %1$d articles · %2$s</string>
   <string name="offline_explanation">Runs only when you tap Download, never on its own. Keep Feeder open until it finishes. Downloads of articles read over a week ago are removed (saved ones stay), and deleting an article deletes its downloads.</string>
+  <string name="offline_video_save">Save video offline</string>
+  <string name="offline_video_hint">Saved on this phone with yt-dlp, up to 720p, with subtitles when there are any</string>
+  <string name="offline_video_preparing">Getting ready…</string>
+  <string name="offline_video_saving_video">Saving video… %1$d%%</string>
+  <string name="offline_video_saving_audio">Saving sound… %1$d%%</string>
+  <string name="offline_video_saving_subtitles">Saving subtitles…</string>
+  <string name="offline_video_saved">Saved on this phone · %1$s</string>
+  <string name="offline_video_remove">Remove</string>
+  <string name="offline_video_retry">Try again</string>
+  <string name="offline_video_failed">Could not save the video: %1$s</string>
 </resources>

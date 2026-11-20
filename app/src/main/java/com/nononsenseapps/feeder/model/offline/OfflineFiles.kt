@@ -14,6 +14,7 @@ import java.security.MessageDigest
  * - `offline/images/<key>.alias`: another size of a saved image (srcset); holds the saved key
  * - `offline/full/<id>.full.html.gz`: a copy of the full text (the reader's copy is in the cache dir)
  * - `offline/items/<id>.txt`: the image keys an article saved, so deleting it removes them
+ * - `offline/videos/<id>.*`: a saved YouTube video, see [OfflineVideos]
  */
 class OfflineFiles(
     private val filePathProvider: FilePathProvider,
@@ -26,6 +27,28 @@ class OfflineFiles(
         get() = rootDir.resolve("full")
     val itemsDir: File
         get() = rootDir.resolve("items")
+    val videosDir: File
+        get() = rootDir.resolve("videos")
+
+    private fun videoFiles(itemId: Long): List<File> =
+        videosDir
+            .listFiles { file -> file.name.startsWith("$itemId.") }
+            ?.toList()
+            .orEmpty()
+
+    /** The saved copy of an article's YouTube video, if complete. */
+    fun savedVideo(itemId: Long): SavedVideo? {
+        val files = videoFiles(itemId).filter { it.isFile && it.length() > 0 }
+        val subtitles = files.filter { it.name.startsWith("$itemId.subs.") && it.name.endsWith(".vtt") }
+        files.firstOrNull { it.name.startsWith("$itemId.muxed.") }?.let { return SavedVideo(it, null, subtitles) }
+        val video = files.firstOrNull { it.name.startsWith("$itemId.video.") } ?: return null
+        val audio = files.firstOrNull { it.name.startsWith("$itemId.audio.") } ?: return null
+        return SavedVideo(video, audio, subtitles)
+    }
+
+    fun deleteVideo(itemId: Long) {
+        videoFiles(itemId).forEach { it.delete() }
+    }
 
     fun imageFile(key: String): File = imagesDir.resolve(key)
 
@@ -96,6 +119,7 @@ class OfflineFiles(
                     manifest.delete()
                 }
                 fullTextCopy(id).delete()
+                deleteVideo(id)
             } catch (e: Exception) {
                 Log.e(LOG_TAG, "Could not delete downloads of $id", e)
             }
@@ -110,6 +134,10 @@ class OfflineFiles(
                 ?.mapNotNull { it.name.removeSuffix(".txt").toLongOrNull() }
                 .orEmpty() +
                 fullDir
+                    .listFiles()
+                    ?.mapNotNull { it.name.substringBefore('.').toLongOrNull() }
+                    .orEmpty() +
+                videosDir
                     .listFiles()
                     ?.mapNotNull { it.name.substringBefore('.').toLongOrNull() }
                     .orEmpty()

@@ -5,6 +5,7 @@ import com.nononsenseapps.feeder.model.FullTextParser
 import com.nononsenseapps.feeder.model.RssLocalSync
 import com.nononsenseapps.feeder.model.offline.OfflineDownloader
 import com.nononsenseapps.feeder.model.offline.OfflineFiles
+import com.nononsenseapps.feeder.model.offline.OfflineVideos
 import com.nononsenseapps.feeder.sync.SyncRestClient
 import com.nononsenseapps.feeder.sync2.Sync2Client
 import com.nononsenseapps.jsonfeed.Feed
@@ -31,4 +32,5 @@ val networkModule =
         bind<FullTextParser>() with singleton { FullTextParser(di) }
         bind<OfflineFiles>() with singleton { OfflineFiles(instance()) }
         bind<OfflineDownloader>() with singleton { OfflineDownloader(di) }
+        bind<OfflineVideos>() with singleton { OfflineVideos(di) }
     }
