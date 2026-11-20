@@ -42,6 +42,7 @@ import com.nononsenseapps.feeder.model.ReadAloudQueue
 import com.nononsenseapps.feeder.model.TTSStateHolder
 import com.nononsenseapps.feeder.model.TooManyRequestsInterceptor
 import com.nononsenseapps.feeder.model.UserAgentInterceptor
+import com.nononsenseapps.feeder.model.offline.OfflineImageInterceptor
 import com.nononsenseapps.feeder.notifications.NotificationsWorker
 import com.nononsenseapps.feeder.util.FilePathProvider
 import com.nononsenseapps.feeder.util.ToastMaker
@@ -162,7 +163,11 @@ class FeederApplication :
                         .addInterceptor(AlwaysUseCacheIfPossibleRequestsInterceptor)
                         .addInterceptor { chain ->
                             chain.proceed(
-                                when (!repository.loadImageOnlyOnWifi.value || currentlyUnmetered(this@FeederApplication)) {
+                                // Offline mode: only images already here
+                                when (
+                                    !repository.offlineMode.value &&
+                                        (!repository.loadImageOnlyOnWifi.value || currentlyUnmetered(this@FeederApplication))
+                                ) {
                                     true -> chain.request()
                                     false -> {
                                         // Forces only cached responses to be used - if no cache then 504 is thrown
@@ -200,6 +205,7 @@ class FeederApplication :
                             .maxSizeBytes(100 * 1024 * 1024)
                             .build()
                     }.components {
+                        add(OfflineImageInterceptor(instance()))
                         add(OneImageRequestPerHostInterceptor)
                         add(IcoDecoder.Factory(this@FeederApplication))
                         add(

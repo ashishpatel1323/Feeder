@@ -3,6 +3,8 @@ package com.nononsenseapps.feeder.di
 import com.nononsenseapps.feeder.model.FeedParser
 import com.nononsenseapps.feeder.model.FullTextParser
 import com.nononsenseapps.feeder.model.RssLocalSync
+import com.nononsenseapps.feeder.model.offline.OfflineDownloader
+import com.nononsenseapps.feeder.model.offline.OfflineFiles
 import com.nononsenseapps.feeder.sync.SyncRestClient
 import com.nononsenseapps.feeder.sync2.Sync2Client
 import com.nononsenseapps.jsonfeed.Feed
@@ -27,4 +29,6 @@ val networkModule =
         bind<Sync2Client>() with singleton { Sync2Client(di) }
         bind<RssLocalSync>() with singleton { RssLocalSync(di) }
         bind<FullTextParser>() with singleton { FullTextParser(di) }
+        bind<OfflineFiles>() with singleton { OfflineFiles(instance()) }
+        bind<OfflineDownloader>() with singleton { OfflineDownloader(di) }
     }

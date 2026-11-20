@@ -72,6 +72,8 @@ class RssLocalSync(
         // Used in tests to force network without having to wait
         debugReallyForceNetwork: Boolean = false,
     ): Boolean {
+        // Offline mode: nothing is fetched or synced
+        if (repository.offlineMode.value) return false
         logDebug(LOG_TAG, "${Thread.currentThread().name}: Taking sync mutex")
         return syncMutex.withLock {
             withContext(singleThreadedSync) {

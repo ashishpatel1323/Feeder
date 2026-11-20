@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="show_downloaded">Downloaded</string>
+  <string name="go_offline">Go offline</string>
+  <string name="offline_mode">Offline mode</string>
+  <string name="offline_mode_description">Nothing is fetched or synced, even with internet. Read marks sync when you turn it off.</string>
+  <string name="offline_mode_is_on">Offline mode is on</string>
+  <string name="offline_reading">Offline reading</string>
+  <string name="offline_articles_to_download">Newest unread articles to download</string>
+  <string name="offline_all_unread">All</string>
+  <string name="offline_include_images">Include images</string>
+  <string name="offline_download">Download for offline</string>
+  <string name="offline_stop">Stop</string>
+  <string name="offline_remove">Remove downloads</string>
+  <string name="offline_remove_confirm_title">Remove downloads?</string>
+  <string name="offline_remove_confirm_text">Saved images, full texts and videos are deleted. The articles themselves stay.</string>
+  <string name="offline_progress">%1$d of %2$d articles · %3$d images · %4$d failed</string>
+  <string name="offline_finding_articles">Finding unread articles…</string>
+  <string name="offline_saving_articles">Saving articles…</string>
+  <string name="offline_saved_summary">Saved %1$d articles and %2$d images for offline reading</string>
+  <string name="offline_stopped_after">Stopped after %1$d of %2$d</string>
+  <string name="offline_download_failed">Download failed: %1$s</string>
+  <string name="offline_turn_off_to_download">Turn off Offline mode to download</string>
+  <string name="offline_downloaded_summary">Downloaded: %1$d articles · %2$s</string>
+  <string name="offline_explanation">Runs only when you tap Download, never on its own. Keep Feeder open until it finishes. Downloads of articles read over a week ago are removed (saved ones stay), and deleting an article deletes its downloads.</string>
+</resources>
