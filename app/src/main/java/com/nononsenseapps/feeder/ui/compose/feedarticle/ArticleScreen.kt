@@ -764,6 +764,7 @@ fun ArticleContent(
     // Track Y positions of article elements by index for anchor link scrolling
     val elementPositions = remember { mutableMapOf<Int, Float>() }
     val contentImageUrls = remember(viewState.articleContent) { viewState.articleContent.imageUrls }
+    val youtubeId = viewState.youtubeId
 
     ReaderView(
         screenType = screenType,
@@ -810,14 +811,16 @@ fun ArticleContent(
         modifier = if (onUserScroll != null) modifier.stopSpeechFollowingOnAccessibilityScroll(articleScrollState, onUserScroll) else modifier,
         articleScrollState = articleScrollState,
         video =
-            viewState.youtubeId?.let { videoId ->
+            if (youtubeId != null) {
                 {
                     YouTubeVideoBlock(
-                        videoId = videoId,
+                        videoId = youtubeId,
                         articleKey = viewState.articleKey,
                         title = viewState.articleTitle,
                     )
                 }
+            } else {
+                null
             },
     ) { indexOffset ->
         var offsetCounter = indexOffset

@@ -435,9 +435,10 @@ class Sync2Client(
                     }
                 }
                 "video" -> {
-                    val m = v as? Map<*, *>
-                    val t = (m?.get("t") as? Number)?.toDouble()
-                    if (t != null) videoPositions.applyRemote(key, t, (m["d"] as? Number)?.toDouble() ?: 0.0, ts)
+                    if (v is Map<*, *>) {
+                        val t = (v["t"] as? Number)?.toDouble()
+                        if (t != null) videoPositions.applyRemote(key, t, (v["d"] as? Number)?.toDouble() ?: 0.0, ts)
+                    }
                 }
                 // layout and kinds from newer versions are only remembered
             }
