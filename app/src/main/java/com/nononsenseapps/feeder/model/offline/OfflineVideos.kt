@@ -33,6 +33,12 @@ data class SavedVideo(
         get() = video.length() + (audio?.length() ?: 0L) + subtitles.sumOf { it.length() }
 }
 
+/** Direct stream addresses of a YouTube video: [audio] is null when [video] already has sound. */
+data class StreamUrls(
+    val video: String,
+    val audio: String?,
+)
+
 /** A Save video offline in progress (or failed). */
 data class VideoJob(
     val phase: VideoPhase,
@@ -222,6 +228,38 @@ class OfflineVideos(
         }
     }
 
+    private val streamCache = ConcurrentHashMap<String, Pair<Long, StreamUrls>>()
+
+    /**
+     * The video's own stream addresses, from yt-dlp, for playing it in the app's player instead of
+     * YouTube's embed: no ads, like NewPipe-based apps (Flow, LibreTube). Up to 720p, H.264 when
+     * there is one. Addresses expire after some hours, so they are kept for a while only.
+     */
+    suspend fun streamUrls(link: String): StreamUrls =
+        withContext(Dispatchers.IO) {
+            streamCache[link]?.let { (at, urls) ->
+                if (System.currentTimeMillis() - at < STREAM_URLS_FOR_MS) return@withContext urls
+            }
+            ensureReady()
+            val response =
+                YoutubeDL.getInstance().execute(
+                    YoutubeDLRequest(link)
+                        .addOption("--no-playlist")
+                        .addOption("-f", "bv[height<=720][ext=mp4][vcodec^=avc1]+ba[ext=m4a]/b[height<=720][ext=mp4]/b")
+                        .addOption("-g"),
+                )
+            val lines = response.out.lines().map { it.trim() }.filter { it.startsWith("http") }
+            check(lines.isNotEmpty()) { "yt-dlp found no stream" }
+            StreamUrls(video = lines[0], audio = lines.getOrNull(1)).also {
+                streamCache[link] = System.currentTimeMillis() to it
+            }
+        }
+
+    /** Drops cached stream addresses that stopped working. */
+    fun forgetStreams(link: String) {
+        streamCache.remove(link)
+    }
+
     private fun setJob(
         itemId: Long,
         job: VideoJob?,
@@ -233,5 +271,8 @@ class OfflineVideos(
 
     companion object {
         private const val LOG_TAG = "FEEDER_OFFLINE_VIDEO"
+
+        /** Stream addresses last about 6 hours; use them for less than that. */
+        private const val STREAM_URLS_FOR_MS = 4 * 60 * 60 * 1000L
     }
 }

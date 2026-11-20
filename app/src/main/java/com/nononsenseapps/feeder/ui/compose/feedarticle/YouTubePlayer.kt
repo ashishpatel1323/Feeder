@@ -19,10 +19,14 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
+import androidx.annotation.OptIn
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -30,37 +34,55 @@ import androidx.compose.foundation.text.selection.DisableSelection
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.MergingMediaSource
+import androidx.media3.ui.PlayerView
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.background.runOnceSyncChainSendRead
+import com.nononsenseapps.feeder.model.offline.OfflineVideos
+import com.nononsenseapps.feeder.model.offline.StreamUrls
 import com.nononsenseapps.feeder.model.youtube.VideoPositions
 import com.nononsenseapps.feeder.model.youtube.youtubeWatchUrl
 import com.nononsenseapps.feeder.ui.compose.theme.FeedListItemDateStyle
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import org.kodein.di.compose.LocalDI
 import org.kodein.di.instance
 
@@ -90,6 +112,7 @@ fun YouTubeVideoBlock(
 ) {
     val di = LocalDI.current
     val videoPositions: VideoPositions by di.instance()
+    val offlineVideos: OfflineVideos by di.instance()
     val positions by videoPositions.all.collectAsState()
     val pos = if (articleKey.isEmpty()) null else positions[articleKey]
     // The start goes in the player's page, so it is fixed when the article opens
@@ -103,22 +126,63 @@ fun YouTubeVideoBlock(
         ) {
             // Each article gets its own player and position tracking, even for the same video
             key(articleKey) {
-                YouTubePlayer(
-                    videoId = videoId,
-                    start = start,
-                    title = title,
-                    onPosition = { t, d, stopped ->
-                        if (articleKey.isNotEmpty()) {
-                            videoPositions.save(articleKey, t, d)
-                            // Sent when it stops, even if a save while playing already wrote this position
-                            if (stopped) runOnceSyncChainSendRead(di)
+                val onPosition: (Double, Double, Boolean) -> Unit = { t, d, stopped ->
+                    if (articleKey.isNotEmpty()) {
+                        videoPositions.save(articleKey, t, d)
+                        // Sent when it stops, even if a save while playing already wrote this position
+                        if (stopped) runOnceSyncChainSendRead(di)
+                    }
+                }
+                val playerModifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                // No ads: the video's own streams (from yt-dlp) play in the app's player, like
+                // Flow and NewPipe. YouTube's embedded player is the fallback when that fails.
+                var playFailed by remember(videoId) { mutableStateOf(false) }
+                val resolved by produceState<StreamState>(StreamState.Loading, videoId) {
+                    value =
+                        try {
+                            StreamState.Ready(offlineVideos.streamUrls(youtubeWatchUrl(videoId)))
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.w(LOG_TAG, "No direct streams for $videoId, using YouTube's player", e)
+                            StreamState.Failed
                         }
-                    },
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(16f / 9f),
-                )
+                }
+                // A stream that resolves but won't play (expired, unsupported) also falls back
+                val streams = if (playFailed) StreamState.Failed else resolved
+                when (val current = streams) {
+                    StreamState.Loading ->
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = playerModifier.background(ComposeColor.Black),
+                        ) {
+                            CircularProgressIndicator()
+                        }
+
+                    is StreamState.Ready ->
+                        AdFreePlayer(
+                            urls = current.urls,
+                            start = start,
+                            onPosition = onPosition,
+                            onError = {
+                                offlineVideos.forgetStreams(youtubeWatchUrl(videoId))
+                                playFailed = true
+                            },
+                            modifier = playerModifier,
+                        )
+
+                    StreamState.Failed ->
+                        YouTubePlayer(
+                            videoId = videoId,
+                            start = start,
+                            title = title,
+                            onPosition = onPosition,
+                            modifier = playerModifier,
+                        )
+                }
             }
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -278,6 +342,171 @@ fun YouTubePlayer(
             },
             modifier = modifier,
         )
+    }
+}
+
+private sealed interface StreamState {
+    data object Loading : StreamState
+
+    data class Ready(
+        val urls: StreamUrls,
+    ) : StreamState
+
+    data object Failed : StreamState
+}
+
+/**
+ * The video's own streams in the app's player (Media3): no ads. Same position reports as
+ * [YouTubePlayer]. Its fullscreen button opens a fullscreen view.
+ */
+@OptIn(UnstableApi::class)
+@Composable
+private fun AdFreePlayer(
+    urls: StreamUrls,
+    start: Int,
+    onPosition: (t: Double, d: Double, stopped: Boolean) -> Unit,
+    onError: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val currentOnPosition by rememberUpdatedState(onPosition)
+    val currentOnError by rememberUpdatedState(onError)
+    val reporter = remember(urls) { PlaybackReporter { t, d, stopped -> currentOnPosition(t, d, stopped) } }
+    var fullscreen by remember(urls) { mutableStateOf(false) }
+    val player =
+        remember(urls) {
+            ExoPlayer.Builder(context).build().apply {
+                val factory = DefaultMediaSourceFactory(context)
+                val video = factory.createMediaSource(MediaItem.fromUri(urls.video))
+                val source =
+                    urls.audio?.let { audio ->
+                        MergingMediaSource(video, factory.createMediaSource(MediaItem.fromUri(audio)))
+                    } ?: video
+                setMediaSource(source, start * 1000L)
+                prepare()
+            }
+        }
+
+    DisposableEffect(player, lifecycleOwner) {
+        val listener =
+            object : Player.Listener {
+                override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    if (!isPlaying && player.playbackState != Player.STATE_ENDED) {
+                        reporter.paused(player.currentPosition / 1000.0, player.durationSeconds())
+                    }
+                }
+
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == Player.STATE_ENDED) reporter.ended(player.durationSeconds())
+                }
+
+                override fun onPlayerError(error: PlaybackException) {
+                    Log.w(LOG_TAG, "Direct stream failed, using YouTube's player", error)
+                    currentOnError()
+                }
+            }
+        player.addListener(listener)
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_PAUSE) player.pause()
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            player.removeListener(listener)
+            if (player.isPlaying) reporter.playing(player.currentPosition / 1000.0, player.durationSeconds())
+            reporter.stop()
+            player.release()
+        }
+    }
+
+    LaunchedEffect(player) {
+        while (true) {
+            delay(1000)
+            if (player.isPlaying) reporter.playing(player.currentPosition / 1000.0, player.durationSeconds())
+        }
+    }
+
+    AndroidView(
+        factory = { ctx ->
+            PlayerView(ctx).apply {
+                setFullscreenButtonClickListener { fullscreen = it }
+            }
+        },
+        update = { view ->
+            // One view shows the player at a time
+            view.player = if (fullscreen) null else player
+            view.setFullscreenButtonState(false)
+        },
+        onRelease = { it.player = null },
+        modifier = modifier.background(ComposeColor.Black),
+    )
+
+    // Fullscreen keeps the phone's orientation: forcing landscape would recreate the screen
+    // and stop the video. Turning the phone (with rotation on) gives landscape.
+    if (fullscreen) {
+        Dialog(
+            onDismissRequest = { fullscreen = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+        ) {
+            AndroidView(
+                factory = { ctx ->
+                    PlayerView(ctx).apply {
+                        setFullscreenButtonState(true)
+                        setFullscreenButtonClickListener { fullscreen = it }
+                    }
+                },
+                update = { it.player = player },
+                onRelease = { it.player = null },
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .background(ComposeColor.Black),
+            )
+        }
+    }
+}
+
+private fun Player.durationSeconds(): Double = duration.takeIf { it > 0 }?.let { it / 1000.0 } ?: 0.0
+
+/** Decides when a position of [AdFreePlayer] is worth saving, like [PositionTracker]. */
+private class PlaybackReporter(
+    private val report: (t: Double, d: Double, stopped: Boolean) -> Unit,
+) {
+    private var last: Pair<Double, Double>? = null
+    private var lastSaved = 0L
+
+    fun playing(
+        t: Double,
+        d: Double,
+    ) {
+        last = t to d
+        val now = System.currentTimeMillis()
+        if (now - lastSaved >= SAVE_EVERY_MS) {
+            lastSaved = now
+            report(t, d, false)
+        }
+    }
+
+    fun paused(
+        t: Double,
+        d: Double,
+    ) {
+        if (last != null) last = t to d
+        stop()
+    }
+
+    fun ended(d: Double) {
+        last = d to d
+        stop()
+    }
+
+    fun stop() {
+        val l = last ?: return
+        last = null
+        lastSaved = System.currentTimeMillis()
+        report(l.first, l.second, true)
     }
 }
 
