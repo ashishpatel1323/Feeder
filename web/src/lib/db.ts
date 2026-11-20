@@ -388,6 +388,7 @@ export async function hideItems(ids: string[]): Promise<void> {
 export async function unhideItems(items: Item[]): Promise<void> {
   await db.transaction('rw', db.items, db.hidden, async () => {
     await db.hidden.bulkDelete(items.map((i) => i.id))
-    await db.items.bulkPut(items.map((i) => ({ ...i, readSynced: 0 })))
+    // Deleting removed the downloaded copies (offline.ts), so they come back without them
+    await db.items.bulkPut(items.map((i) => ({ ...i, readSynced: 0, offlineAt: undefined, offlineImages: undefined, offlineVideo: undefined })))
   })
 }

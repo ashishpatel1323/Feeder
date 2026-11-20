@@ -18,6 +18,7 @@
  * The device remembers the last value it exchanged for every record (db.syncKnown). A sync
  * sends whatever differs locally, then applies what other devices changed.
  */
+import { offlineNow } from './settings'
 import { apiHeaders, HttpError } from './api'
 import { b64encode, decodeKey, decryptString, encryptString, type SecretKeys } from './crypto'
 import {
@@ -482,6 +483,8 @@ let running: Promise<SyncResult | null> | null = null
 export function syncNow(): Promise<SyncResult | null> {
   if (running) return running
   running = (async () => {
+    // Offline mode or no connection: changes wait in the queue
+    if (await offlineNow()) return null
     const state = await moveFromOldChain()
     if (!state) return null
     try {

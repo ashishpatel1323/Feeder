@@ -84,6 +84,8 @@ export function applyShow(items: Item[], show: ShowFilter, keepId?: string): Ite
       return items.filter((i) => i.id === keepId || !i.read)
     case 'saved':
       return items.filter((i) => i.id === keepId || i.saved)
+    case 'downloaded':
+      return items.filter((i) => i.id === keepId || isDownloaded(i))
   }
 }
 
@@ -92,15 +94,20 @@ export function applyFilters(items: Item[], filters: ListFilters, keepId?: strin
 }
 
 /** Counts shown on the Unread and Saved tabs, for the items the other filters leave. */
-export function showCounts(items: Item[]): { unread: number; saved: number } {
+export function showCounts(items: Item[]): { unread: number; saved: number; downloaded: number } {
   let unread = 0
   let saved = 0
+  let downloaded = 0
   for (const i of items) {
     if (!i.read) unread++
     if (i.saved) saved++
+    if (isDownloaded(i)) downloaded++
   }
-  return { unread, saved }
+  return { unread, saved, downloaded }
 }
+
+/** Saved for offline reading by Download for offline, or a video saved with yt-dlp. */
+export const isDownloaded = (i: Pick<Item, 'offlineAt' | 'offlineVideo'>) => !!i.offlineAt || !!i.offlineVideo
 
 function compareWithin(sorting: Sorting, feeds: Map<string, Feed>) {
   const newest = (a: Item, b: Item) => b.sortTime - a.sortTime || (a.id < b.id ? 1 : -1)

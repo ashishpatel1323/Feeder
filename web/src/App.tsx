@@ -3,12 +3,12 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db, FEED_ORDER_KEY, feedDisplayTitle, getKv, hideItems, moveFeedToTag, opensInBrowser, placeInOrder, setKv, unhideItems, type Feed, type Item } from './lib/db'
 import type { ToastAction } from './lib/toast'
 import { applyShow, applyToday, buildGroups, selectItems, showCounts, type Selection } from './lib/listquery'
-import { getSettings, updateSettings, useSettings } from './lib/settings'
+import { getSettings, offlineNow, updateSettings, useSettings } from './lib/settings'
 import { refreshFeeds } from './lib/refresh'
 import { getSyncState, syncNow } from './lib/sync2'
 import { fetchOgImages } from './lib/extras'
 import { readAloud } from './lib/readaloud'
-import { cleanupOffline } from './lib/offline'
+import { cleanupOffline, isOnline, setForcedOffline } from './lib/offline'
 import { Sidebar } from './components/Sidebar'
 import { ArticleList } from './components/ArticleList'
 import { Reader } from './components/Reader'
@@ -199,8 +199,8 @@ export default function App() {
 
   // Sync and refresh
   const fullRefresh = useCallback(async () => {
-    // Offline: nothing to fetch; read marks wait and go out when the connection is back
-    if (refreshing || !navigator.onLine) return
+    // Offline or Offline mode: nothing to fetch; read marks wait and go out later
+    if (refreshing || (await offlineNow())) return
     try {
       setRefreshing('sync')
       await syncNow().catch((e) => toast(`Sync: ${e instanceof Error ? e.message : e}`))
@@ -235,9 +235,20 @@ export default function App() {
     }
   }, [settings.refreshMinutes])
 
+  // Offline mode switched off: send what changed meanwhile, then fetch new articles
+  const offlineMode = settings.offlineMode
+  const wasOffline = useRef(false)
+  useEffect(() => {
+    setForcedOffline(offlineMode)
+    if (wasOffline.current && !offlineMode) void syncNow().catch(() => undefined).then(() => fullRefreshRef.current())
+    wasOffline.current = offlineMode
+  }, [offlineMode])
+
   // Back online: send what changed while offline, then fetch new articles
   useEffect(() => {
-    const onOnline = () => void syncNow().catch(() => undefined).then(() => fullRefreshRef.current())
+    const onOnline = () => {
+      if (isOnline()) void syncNow().catch(() => undefined).then(() => fullRefreshRef.current())
+    }
     window.addEventListener('online', onOnline)
     void cleanupOffline().catch(() => undefined)
     return () => window.removeEventListener('online', onOnline)
@@ -247,7 +258,7 @@ export default function App() {
   const deletedCount = useLiveQuery(() => db.hidden.count(), []) ?? 0
   const pendingMarks = items.filter((i) => !i.readSynced).length + deletedCount
   useEffect(() => {
-    if (!pendingMarks || !syncState || !navigator.onLine) return
+    if (!pendingMarks || !syncState || !isOnline()) return
     const t = window.setTimeout(() => syncNow().catch(() => undefined), 5000)
     return () => clearTimeout(t)
   }, [pendingMarks, syncState])
@@ -255,8 +266,8 @@ export default function App() {
   // og:images for the visible list
   useEffect(() => {
     const visible = groups.flatMap((g) => g.items).slice(0, 30).filter((i) => feeds.get(i.feedUrl)?.fetchOgImages)
-    if (visible.length) fetchOgImages(visible).catch(() => undefined)
-  }, [groups, feeds])
+    if (visible.length && isOnline()) fetchOgImages(visible).catch(() => undefined)
+  }, [groups, feeds, offlineMode])
 
   // Keyboard shortcuts
   useEffect(() => {

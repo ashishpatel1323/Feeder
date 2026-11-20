@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react'
 import { apiHeaders, getAccessToken } from './api'
 import { db, opensInBrowser, type Item } from './db'
 import { loadFullText } from './extras'
+import { getSettings } from './settings'
 import { youtubeVideoId } from './youtube'
 
 export const IMAGE_CACHE = 'feeder-offline-images'
@@ -26,7 +27,25 @@ const hasCaches = () => typeof caches !== 'undefined'
 // ---------------------------------------------------------------------------------------------
 // Online / offline
 
-export function useOnline(): boolean {
+/** Offline mode (Settings / list header), mirrored here for code outside React. */
+let forced = false
+const forcedSubs = new Set<() => void>()
+export function setForcedOffline(v: boolean) {
+  if (forced === v) return
+  forced = v
+  forcedSubs.forEach((f) => f())
+}
+void getSettings()
+  .then((s) => setForcedOffline(s.offlineMode))
+  .catch(() => undefined)
+
+/** True when there is a connection and Offline mode is off. */
+export function isOnline(): boolean {
+  return !forced && (typeof navigator === 'undefined' || navigator.onLine)
+}
+
+/** The real connection only, ignoring Offline mode. */
+export function useNetwork(): boolean {
   const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine))
   useEffect(() => {
     const on = () => setOnline(true)
@@ -39,6 +58,19 @@ export function useOnline(): boolean {
     }
   }, [])
   return online
+}
+
+/** False when offline or in Offline mode: then nothing is fetched. */
+export function useOnline(): boolean {
+  const network = useNetwork()
+  const [f, setF] = useState(forced)
+  useEffect(() => {
+    const sub = () => setF(forced)
+    forcedSubs.add(sub)
+    sub()
+    return () => void forcedSubs.delete(sub)
+  }, [])
+  return network && !f
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -153,6 +185,10 @@ export async function unreadForOffline(limit: number): Promise<Item[]> {
 
 export async function downloadForOffline(opts: DownloadOptions): Promise<void> {
   if (job.get().running) return
+  if (!isOnline()) {
+    job.set({ ...IDLE, message: 'Turn off Offline mode (and be online) to download' })
+    return
+  }
   abort = new AbortController()
   const signal = abort.signal
   job.set({ ...IDLE, running: true, message: 'Finding unread articles…' })
@@ -342,6 +378,7 @@ export async function saveVideo(itemId: string, videoId: string): Promise<void> 
   const signal = ctl.signal
   setVideoJob(videoId, { phase: 'mac', percent: 0 })
   try {
+    if (!isOnline()) throw new Error('Turn off Offline mode to save videos')
     if (!(await videoSavingAvailable())) throw new Error('Saving videos needs Feeder running on your Mac (localhost) with yt-dlp')
     let st = await (await fetch(ytdlUrl('start', videoId), { method: 'POST', signal })).json()
     while (st.state === 'running') {
@@ -404,3 +441,25 @@ export async function removeAllVideos(): Promise<void> {
   const marked = await db.items.filter((i) => !!i.offlineVideo).primaryKeys()
   await db.items.bulkUpdate(marked.map((key) => ({ key, changes: { offlineVideo: undefined } })))
 }
+
+// ---------------------------------------------------------------------------------------------
+// Deleting an article deletes its downloads (Delete, Delete read, a deletion from another
+// device, or old articles dropped by refresh): every path goes through db.items deletes.
+
+/** Removes an article's saved images and video from Cache Storage. */
+export async function deleteOfflineFiles(item: Pick<Item, 'offlineImages' | 'offlineVideo' | 'link'>): Promise<void> {
+  if (!hasCaches()) return
+  if (item.offlineImages?.length) {
+    const images = await caches.open(IMAGE_CACHE)
+    await Promise.all(item.offlineImages.map((u) => images.delete(u)))
+  }
+  const vid = youtubeVideoId(item.link)
+  if (vid && item.offlineVideo) await (await caches.open(VIDEO_CACHE)).delete(videoKey(vid))
+}
+
+db.items.hook('deleting', (_key, item) => {
+  if (item && (item.offlineImages?.length || item.offlineVideo)) {
+    // After the transaction: Cache Storage is not part of IndexedDB
+    setTimeout(() => void deleteOfflineFiles(item).catch(() => undefined), 0)
+  }
+})
