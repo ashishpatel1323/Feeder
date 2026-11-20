@@ -18,6 +18,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -38,8 +39,10 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -103,8 +106,10 @@ fun YouTubeVideoBlock(
                 start = start,
                 title = title,
                 onPosition = { t, d, stopped ->
-                    if (articleKey.isNotEmpty() && videoPositions.save(articleKey, t, d) && stopped) {
-                        runOnceSyncChainSendRead(di)
+                    if (articleKey.isNotEmpty()) {
+                        videoPositions.save(articleKey, t, d)
+                        // Sent when it stops, even if a save while playing already wrote this position
+                        if (stopped) runOnceSyncChainSendRead(di)
                     }
                 },
                 modifier =
@@ -195,6 +200,13 @@ fun YouTubePlayer(
     val tracker = remember(videoId) { PositionTracker { t, d, stopped -> currentOnPosition(t, d, stopped) } }
     val lifecycleOwner = LocalLifecycleOwner.current
     val holder = remember(videoId) { WebViewHolder() }
+    val context = LocalContext.current
+    val chromeClient = remember(videoId) { FullscreenChromeClient(context) }
+
+    // Back leaves fullscreen first, then the article
+    BackHandler(enabled = chromeClient.isFullscreen) {
+        chromeClient.onHideCustomView()
+    }
 
     DisposableEffect(lifecycleOwner, holder) {
         val observer =
@@ -220,8 +232,8 @@ fun YouTubePlayer(
     // A new page (and player) for another video
     key(videoId, start) {
         AndroidView(
-            factory = { context ->
-                WebView(context).apply {
+            factory = { ctx ->
+                WebView(ctx).apply {
                     holder.webView = this
                     contentDescription = title
                     setBackgroundColor(Color.BLACK)
@@ -243,10 +255,10 @@ fun YouTubePlayer(
                                 return false
                             }
                         }
-                    webChromeClient = FullscreenChromeClient(context)
+                    webChromeClient = chromeClient
                     // YouTube's embed wants to know which app is asking: the referrer is https://<package>
                     loadDataWithBaseURL(
-                        "https://${context.packageName}",
+                        "https://${ctx.packageName}",
                         playerHtml(videoId, start),
                         "text/html",
                         "utf-8",
@@ -255,6 +267,7 @@ fun YouTubePlayer(
                 }
             },
             onRelease = { webView ->
+                chromeClient.onHideCustomView()
                 tracker.stop()
                 holder.webView = null
                 (webView.parent as? ViewGroup)?.removeView(webView)
@@ -328,6 +341,9 @@ private class FullscreenChromeClient(
     private var custom: View? = null
     private var callback: CustomViewCallback? = null
 
+    var isFullscreen by mutableStateOf(false)
+        private set
+
     override fun onShowCustomView(
         view: View,
         callback: CustomViewCallback,
@@ -343,6 +359,7 @@ private class FullscreenChromeClient(
         this.callback = callback
         view.setBackgroundColor(Color.BLACK)
         decor.addView(view, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        isFullscreen = true
         WindowCompat.getInsetsController(activity.window, decor).apply {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             hide(WindowInsetsCompat.Type.systemBars())
@@ -357,6 +374,7 @@ private class FullscreenChromeClient(
             WindowCompat.getInsetsController(it.window, it.window.decorView).show(WindowInsetsCompat.Type.systemBars())
         }
         custom = null
+        isFullscreen = false
         callback?.onCustomViewHidden()
         callback = null
     }
