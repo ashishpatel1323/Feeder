@@ -56,7 +56,7 @@ private const val LOG_TAG = "FEEDER_APPDB"
     views = [
         FeedsWithItemsForNavDrawer::class,
     ],
-    version = 42,
+    version = 43,
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -145,6 +145,7 @@ fun getAllMigrations(di: DI) =
         MIGRATION_39_40,
         MIGRATION_40_41,
         MIGRATION_41_42,
+        MigrationFrom42To43,
     )
 
 /*
@@ -275,6 +276,17 @@ object MIGRATION_41_42 : Migration(41, 42) {
         db.execSQL(
             """
             CREATE TABLE IF NOT EXISTS `hidden_items` (`feed_url` TEXT NOT NULL, `guid` TEXT NOT NULL, `ts` INTEGER NOT NULL, PRIMARY KEY(`feed_url`, `guid`))
+            """.trimIndent(),
+        )
+    }
+}
+
+/** Offline reading: when an article was downloaded for offline reading. */
+object MigrationFrom42To43 : Migration(42, 43) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            ALTER TABLE feed_items ADD COLUMN offline_time INTEGER
             """.trimIndent(),
         )
     }

@@ -572,6 +572,9 @@ class FeedViewModel(
             repository.feedListGrouping,
             repository.currentSorting,
             repository.feedListGroups,
+            // 35
+            repository.offlineMode,
+            repository.downloadedCountInCurrentFeed,
         ) { params: Array<Any?> ->
             val haveVisibleFeedItems = (params[7] as Int) > 0
             val currentFeedOrTag = params[13] as FeedOrTag
@@ -618,6 +621,8 @@ class FeedViewModel(
                 feedListGrouping = params[32] as FeedListGrouping,
                 currentSorting = params[33] as SortingOptions,
                 feedListGroups = params[34] as List<FeedListGroup>,
+                offlineMode = params[35] as Boolean,
+                downloadedCount = params[36] as Int,
             )
         }.stateIn(
             viewModelScope,
@@ -732,6 +737,10 @@ class FeedViewModel(
     override fun setToday(value: Boolean) {
         repository.setFeedListFilterToday(value)
     }
+
+    override fun setOfflineMode(value: Boolean) {
+        repository.setOfflineMode(value)
+    }
 }
 
 @Immutable
@@ -773,6 +782,8 @@ data class FeedState(
     override val feedListGrouping: FeedListGrouping = FeedListGrouping.NONE,
     override val currentSorting: SortingOptions = SortingOptions.NEWEST_FIRST,
     override val feedListGroups: List<FeedListGroup> = emptyList(),
+    override val offlineMode: Boolean = false,
+    override val downloadedCount: Int = 0,
 ) : FeedScreenViewState
 
 @Immutable
@@ -816,6 +827,12 @@ interface FeedScreenViewState {
     // Groups of the current list in list order, with their counts. Empty when not grouped.
     val feedListGroups: List<FeedListGroup>
         get() = emptyList()
+
+    // Offline mode (switch above the list) and the count on the Downloaded tab
+    val offlineMode: Boolean
+        get() = false
+    val downloadedCount: Int
+        get() = 0
 }
 
 private data class FeedCardTranslationConfig(
@@ -877,6 +894,10 @@ interface FeedListFilter {
 
     // Restrictive filter: only articles from today
     val today: Boolean
+
+    // Downloaded tab: articles downloaded for offline reading, read or unread
+    val downloaded: Boolean
+        get() = false
 }
 
 val emptyFeedListFilter =
@@ -891,17 +912,20 @@ val emptyFeedListFilter =
 /**
  * The Show tabs above the list, a single choice. Stored as the filter flags:
  * Unread is unread plus recently read (so an article just read doesn't vanish at once),
- * All is everything, Saved is saved articles only, read or unread.
+ * All is everything, Saved is saved articles only, read or unread, Downloaded is articles
+ * downloaded for offline reading, read or unread.
  */
 enum class FeedListShow {
     UNREAD,
     ALL,
     SAVED,
+    DOWNLOADED,
 }
 
 val FeedListFilter.show: FeedListShow
     get() =
         when {
+            downloaded -> FeedListShow.DOWNLOADED
             saved -> FeedListShow.SAVED
             read -> FeedListShow.ALL
             else -> FeedListShow.UNREAD
@@ -912,6 +936,8 @@ interface FeedListFilterCallback {
     fun setShow(value: FeedListShow)
 
     fun setToday(value: Boolean)
+
+    fun setOfflineMode(value: Boolean) {}
 }
 
 val FeedListFilter.onlyUnread: Boolean

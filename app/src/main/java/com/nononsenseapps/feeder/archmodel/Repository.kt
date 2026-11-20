@@ -27,7 +27,10 @@ import com.nononsenseapps.feeder.db.room.SyncDevice
 import com.nononsenseapps.feeder.db.room.SyncRemote
 import com.nononsenseapps.feeder.model.FeedUnreadCount
 import com.nononsenseapps.feeder.model.ThumbnailImage
+import com.nononsenseapps.feeder.model.offline.OfflineFiles
 import com.nononsenseapps.feeder.model.syncMutex
+import com.nononsenseapps.feeder.model.youtube.VideoPositions
+import com.nononsenseapps.feeder.model.youtube.youtubeVideoId
 import com.nononsenseapps.feeder.sync.DeviceListResponse
 import com.nononsenseapps.feeder.sync.ErrorResponse
 import com.nononsenseapps.feeder.sync.SyncRestClient
@@ -72,6 +75,7 @@ class Repository(
     private val feedStore: FeedStore by instance()
     private val androidSystemStore: AndroidSystemStore by instance()
     private val applicationCoroutineScope: ApplicationCoroutineScope by instance()
+    private val offlineFiles: OfflineFiles by instance()
     private val application: Application by instance()
     private val syncRemoteStore: SyncRemoteStore by instance()
     private val syncClient: SyncRestClient by instance()
@@ -206,6 +210,43 @@ class Repository(
     fun setFeedListFilterToday(value: Boolean) {
         settingsStore.setFeedListFilterToday(value)
     }
+
+    /** Offline mode: no feed fetching, no sync, no full-text loading. See [SettingsStore.offlineMode]. */
+    val offlineMode: StateFlow<Boolean> = settingsStore.offlineMode
+
+    fun setOfflineMode(value: Boolean) {
+        val wasOffline = settingsStore.offlineMode.value
+        settingsStore.setOfflineMode(value)
+        if (wasOffline && !value) {
+            // Back online: a refresh syncs first, sending read marks made meanwhile, then fetches
+            runOnceRssSync(di = di, forceNetwork = true, triggeredByUser = true)
+        }
+    }
+
+    val offlineDownloadLimit: StateFlow<Int> = settingsStore.offlineDownloadLimit
+
+    fun setOfflineDownloadLimit(value: Int) = settingsStore.setOfflineDownloadLimit(value)
+
+    val offlineDownloadImages: StateFlow<Boolean> = settingsStore.offlineDownloadImages
+
+    fun setOfflineDownloadImages(value: Boolean) = settingsStore.setOfflineDownloadImages(value)
+
+    /** Count on the Downloaded tab, for the current feed or tag. */
+    val downloadedCountInCurrentFeed: Flow<Int>
+        get() = currentFeedAndTag.flatMapLatest { (feedId, tag) -> getDownloadedCount(feedId, tag) }
+
+    /** Articles downloaded for offline reading in the current feed or tag, for the Downloaded tab. */
+    fun getDownloadedCount(
+        feedId: Long,
+        tag: String,
+    ): Flow<Int> =
+        feedItemStore.getFeedItemCountRaw(
+            feedId = feedId,
+            tag = tag,
+            minReadTime = Instant.EPOCH,
+            filter = PrefsFeedListFilter(saved = false, recentlyRead = true, read = true, downloaded = true),
+            search = "",
+        )
 
     val search: MutableStateFlow<String> = MutableStateFlow("")
 
@@ -683,7 +724,8 @@ class Repository(
         runOnceSyncChainSendRead(di)
     }
 
-    suspend fun shouldDisplayFullTextForItemByDefault(itemId: Long): Boolean = feedItemStore.getFullTextByDefault(itemId)
+    suspend fun shouldDisplayFullTextForItemByDefault(itemId: Long): Boolean =
+        feedItemStore.getFullTextByDefault(itemId) && youtubeVideoId(getLink(itemId)) == null
 
     suspend fun getLink(itemId: Long): String? = feedItemStore.getLink(itemId)
 
@@ -920,6 +962,7 @@ class Repository(
 
     suspend fun deleteFeedItems(ids: List<Long>) {
         feedItemStore.deleteFeedItems(ids)
+        offlineFiles.deleteDownloads(ids)
     }
 
     suspend fun deleteStaleRemoteReadMarks() {
@@ -1181,7 +1224,14 @@ data class Article(
     val feedId: Long = item?.feedId ?: ID_UNSET
     val feedUrl: String? = item?.feedUrl?.toString()
     val bookmarked: Boolean = item?.bookmarked ?: false
-    val fullTextByDefault: Boolean = item?.fullTextByDefault ?: false
+    /** YouTube video of the article link, played in the reader instead of a full text. */
+    val youtubeId: String? = youtubeVideoId(item?.link)
+
+    // A YouTube page has no article text to extract, so videos start on the feed's description
+    val fullTextByDefault: Boolean = (item?.fullTextByDefault ?: false) && youtubeId == null
+
+    /** Same key as sync and the saved video positions: feedUrl + "\n" + guid. */
+    val articleKey: String = VideoPositions.articleKey(feedUrl, item?.guid)
     val wordCount: Int = item?.wordCount ?: 0
     val wordCountFull: Int = item?.wordCountFull ?: 0
     val image: ThumbnailImage? = item?.thumbnailImage

@@ -200,6 +200,9 @@ android {
         }
 
         jniLibs {
+            // youtubedl-android runs its bundled Python as a program, which needs the native
+            // libraries extracted to disk
+            useLegacyPackaging = true
             // Attempting any kind of stripping can introduce randomness and make the build non-reproducible
             // Debug symbols should have been stripped already anywah
             keepDebugSymbols.add("**/*.so")
@@ -257,6 +260,9 @@ dependencies {
     implementation(libs.mlkit.genai.prompt)
     implementation(libs.mlkit.genai.summarization)
     implementation(libs.media3.session)
+    // Offline reading: playing saved YouTube videos, and saving them with yt-dlp on the phone (fork only)
+    implementation(libs.media3.ui)
+    implementation(libs.youtubedl.android)
     ktlintRuleset(libs.ktlint.compose)
     ksp(libs.room)
     // For java time

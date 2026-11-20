@@ -49,6 +49,8 @@ import com.nononsenseapps.feeder.model.TranslationManager
 import com.nononsenseapps.feeder.model.UnsupportedContentType
 import com.nononsenseapps.feeder.model.html.HtmlLinearizer
 import com.nononsenseapps.feeder.model.html.LinearArticle
+import com.nononsenseapps.feeder.model.offline.OfflineFiles
+import com.nononsenseapps.feeder.model.youtube.youtubeVideoId
 import com.nononsenseapps.feeder.openai.OpenAIApi
 import com.nononsenseapps.feeder.openai.canSummarize
 import com.nononsenseapps.feeder.openai.canUseAsTranslationApi
@@ -217,6 +219,7 @@ class ArticleViewModel(
 
     private val podcastPlayerStateHolder: PodcastPlayerStateHolder by instance()
     private val fullTextParser: FullTextParser by instance()
+    private val offlineFiles: OfflineFiles by instance()
     private val filePathProvider: FilePathProvider by instance()
     private val openAIApi: OpenAIApi by instance()
     private val toastMaker: ToastMaker by instance()
@@ -396,6 +399,8 @@ class ArticleViewModel(
                         .orEmpty(),
                 showBergamotRuntimeDownloadPrompt = translationState is ArticleTranslationState.RuntimeDownloadRequired,
                 articleContent = if (isShowingTranslated) translatedArticleContent else articleContent,
+                youtubeId = article?.youtubeId,
+                articleKey = article?.articleKey ?: "",
             )
         }.stateIn(
             scope = viewModelScope,
@@ -498,13 +503,18 @@ class ArticleViewModel(
         logDebug(LOG_TAG, "parseArticleContent(${article.id}, $fullText)")
         return try {
             withContext(Dispatchers.IO) {
+                offlineFiles.restoreFullText(article.id)
+                // Offline mode: without a downloaded full text, show the feed text instead of fetching
+                val useFullText =
+                    fullText &&
+                        !(repository.offlineMode.value && !blobFullFile(article.id, filePathProvider.fullArticleDir).isFile)
                 val htmlLinearizer =
                     HtmlLinearizer(
                         tooLargeText = application.getString(R.string.failed_to_fetch_full_article_too_large),
                         openInBrowserText = application.getString(R.string.open_in_web_view),
                         articleLink = article.link ?: "",
                     )
-                when (fullText) {
+                when (useFullText) {
                     false -> {
                         if (blobFile(article.id, filePathProvider.articleDir).isFile) {
                             try {
@@ -525,7 +535,7 @@ class ArticleViewModel(
                             }
                         } else {
                             Log.e(LOG_TAG, "No default file to parse. Attempting to fetch feed again")
-                            // Should not happen but keeping this as a fallback
+                            // Should not happen but keeping this as a fallback (nothing is fetched in Offline mode)
                             runOnceRssSync(
                                 di = di,
                                 feedId = article.feedId,
@@ -708,7 +718,7 @@ class ArticleViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             val feedItem = repository.getCurrentArticle() ?: return@launch
             val article = Article(feedItem)
-            val readFullText = displayFullTextOverride.value ?: feedItem.fullTextByDefault
+            val readFullText = displayFullTextOverride.value ?: (feedItem.fullTextByDefault && youtubeVideoId(feedItem.link) == null)
             val textToRead =
                 if (showTranslatedContent.value) {
                     Either.catching<TSSError, List<AnnotatedString>>(
@@ -1230,10 +1240,17 @@ private data class ArticleState(
     override val systemTranslationSettingsMessage: String = "",
     override val showBergamotRuntimeDownloadPrompt: Boolean = false,
     override val articleContent: LinearArticle = LinearArticle(emptyList()),
+    override val youtubeId: String? = null,
+    override val articleKey: String = "",
 ) : ArticleScreenViewState
 
 @Immutable
 interface ArticleScreenViewState {
+    /** YouTube video of the article link: played at the top of the article */
+    val youtubeId: String?
+
+    /** feedUrl + "\n" + guid, as in sync */
+    val articleKey: String
     val useDetectLanguage: Boolean
     val isBottomBarVisible: Boolean
     val isTTSPlaying: Boolean

@@ -51,6 +51,7 @@ import com.nononsenseapps.feeder.model.MediaImage
 import com.nononsenseapps.feeder.ui.compose.coil.RestrainedCropScaling
 import com.nononsenseapps.feeder.ui.compose.coil.rememberTintedVectorPainter
 import com.nononsenseapps.feeder.ui.compose.components.safeSemantics
+import com.nononsenseapps.feeder.ui.compose.feedarticle.VideoPositionText
 import com.nononsenseapps.feeder.ui.compose.feedarticle.wordsToReadTimeSecs
 import com.nononsenseapps.feeder.ui.compose.minimumTouchSize
 import com.nononsenseapps.feeder.ui.compose.text.WithBidiDeterminedLayoutDirection
@@ -255,6 +256,9 @@ fun RowScope.FeedItemText(
                                 Modifier
                                     .weight(1f),
                         )
+                    }
+                    if (item.videoKey.isNotEmpty()) {
+                        VideoPositionText(videoKey = item.videoKey)
                     }
                     WithBidiDeterminedLayoutDirection(paragraph = item.pubDate) {
                         Text(

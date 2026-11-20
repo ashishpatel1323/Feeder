@@ -482,4 +482,6 @@
   <string name="image_load_failed">Could not load image</string>
   <string name="image_retry">Retry</string>
   <string name="image_close">Close image</string>
+    <string name="open_in_youtube_app">Open in YouTube</string>
+    <string name="video_watched">Watched</string>
 </resources>

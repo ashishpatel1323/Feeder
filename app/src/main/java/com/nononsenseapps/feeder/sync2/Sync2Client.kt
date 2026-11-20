@@ -10,6 +10,8 @@ import com.nononsenseapps.feeder.db.room.HiddenItem
 import com.nononsenseapps.feeder.db.room.Sync2Dao
 import com.nononsenseapps.feeder.db.room.Sync2ItemKey
 import com.nononsenseapps.feeder.db.room.Sync2Known
+import com.nononsenseapps.feeder.model.offline.OfflineFiles
+import com.nononsenseapps.feeder.model.youtube.VideoPositions
 import com.nononsenseapps.feeder.sync.SyncRestClient
 import com.nononsenseapps.feeder.util.logDebug
 import com.squareup.moshi.JsonAdapter
@@ -44,6 +46,7 @@ const val SYNC2_SERVER = "https://feeder-web-snowy.vercel.app"
  *   saved   feedUrl \n guid     true / false (+ a small copy of the article in "a")
  *   hidden  feedUrl \n guid     true = deleted for good on every device
  *   layout  "main"              feed/folder order (web only; kept, not used here)
+ *   video   feedUrl \n guid     { t, d }: where a YouTube video was left, in seconds
  *
  * The device remembers the last value exchanged for every record (sync2_known) and sends
  * whatever differs locally, then applies what other devices changed. Unknown kinds (Read later
@@ -56,6 +59,8 @@ class Sync2Client(
     private val dao: Sync2Dao by instance()
     private val okHttpClient: OkHttpClient by instance()
     private val oldClient: SyncRestClient by instance()
+    private val videoPositions: VideoPositions by instance()
+    private val offlineFiles: OfflineFiles by instance()
     private val mutex = Mutex()
 
     @Volatile
@@ -180,6 +185,8 @@ class Sync2Client(
     /** One full exchange. Returns false when sync isn't set up. */
     suspend fun sync(): Boolean =
         mutex.withLock {
+            // Offline mode: changes wait here and go out with the first sync after it
+            if (repository.offlineMode.value) return@withLock false
             val remote = repository.getSyncRemote()
             if (!remote.hasSyncChain() || remote.secretKey.isBlank()) return@withLock false
             var state = getState()
@@ -366,6 +373,16 @@ class Sync2Client(
         for ((key, kn) in knownHidden) {
             if (kn.v == "true" && key !in hiddenHere) out += Pending("hidden", key, false, maxOf(now, kn.ts + 1))
         }
+
+        // Where YouTube videos were left, saved here since they were last exchanged
+        val knownVideos = dao.getKnownWithPrefix("video\n").associateBy { it.k.removePrefix("video\n") }
+        for ((key, pos) in videoPositions.all.value) {
+            val kn = knownVideos[key]
+            val value = linkedMapOf<String, Any?>("t" to pos.t, "d" to pos.d)
+            if (kn == null || pos.ts > kn.ts) {
+                out += Pending("video", key, value, maxOf(pos.ts, (kn?.ts ?: 0) + 1))
+            }
+        }
         return out
     }
 
@@ -416,9 +433,18 @@ class Sync2Client(
 
                 "hidden" -> {
                     if (v == true) {
-                        dao.hide(listOf(HiddenItem(feedUrl, guid, ts)), listOfNotNull(dao.getItemId(feedUrl, guid)))
+                        val itemIds = listOfNotNull(dao.getItemId(feedUrl, guid))
+                        dao.hide(listOf(HiddenItem(feedUrl, guid, ts)), itemIds)
+                        // Deleted on another device: its downloads go too
+                        offlineFiles.deleteDownloads(itemIds)
                     } else {
                         dao.deleteHidden(feedUrl, guid)
+                    }
+                }
+                "video" -> {
+                    if (v is Map<*, *>) {
+                        val t = (v["t"] as? Number)?.toDouble()
+                        if (t != null) videoPositions.applyRemote(key, t, (v["d"] as? Number)?.toDouble() ?: 0.0, ts)
                     }
                 }
                 // layout and kinds from newer versions are only remembered
@@ -440,6 +466,9 @@ class Sync2Client(
         val items = dao.getItemKeys(itemIds)
         val rows = dao.getFeedItems(itemIds)
         dao.hide(items.map { HiddenItem(it.feedUrl, it.guid, now) }, items.map { it.id })
+        offlineFiles.deleteDownloads(items.map { it.id })
+        // Undo brings the articles back without their downloads
+        rows.forEach { it.offlineTime = null }
         return DeletedArticles(items, rows)
     }
 
@@ -474,6 +503,16 @@ class Sync2Client(
             kind: String,
             key: String,
         ) = "$kind\n$key"
+
+        /** True when a synced video value (numbers parse as doubles) says [t] of [d]. */
+        fun sameVideoValue(
+            v: Any?,
+            t: Int,
+            d: Int,
+        ): Boolean {
+            val m = v as? Map<*, *> ?: return false
+            return (m["t"] as? Number)?.toDouble() == t.toDouble() && ((m["d"] as? Number)?.toDouble() ?: 0.0) == d.toDouble()
+        }
 
         fun isDeleted(v: Any?): Boolean = v is Map<*, *> && v["deleted"] == true
 

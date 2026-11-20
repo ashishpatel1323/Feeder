@@ -12,7 +12,7 @@ import { apiHeaders, getAccessToken } from './api'
 import { db, opensInBrowser, type Item } from './db'
 import { loadFullText } from './extras'
 import { getSettings } from './settings'
-import { youtubeVideoId } from './youtube'
+import { articleVideoId, youtubeVideoId } from './youtube'
 
 export const IMAGE_CACHE = 'feeder-offline-images'
 export const VIDEO_CACHE = 'feeder-offline-videos'
@@ -276,7 +276,7 @@ export async function cleanupOffline(now = Date.now()): Promise<number> {
   const images = hasCaches() ? await caches.open(IMAGE_CACHE) : null
   for (const item of old) {
     if (images) for (const url of item.offlineImages ?? []) await images.delete(url)
-    const vid = youtubeVideoId(item.link)
+    const vid = articleVideoId(item)
     if (vid && item.offlineVideo) await removeVideo(item.id, vid)
   }
   await db.items.bulkUpdate(old.map((i) => ({ key: i.id, changes: { offlineAt: undefined, offlineImages: undefined, offlineVideo: undefined } })))
@@ -314,6 +314,7 @@ export function preferSavedImages(html: string): string {
 // YouTube videos (yt-dlp on the local server)
 
 const videoKey = (videoId: string) => `/offline-video/${videoId}`
+const subsKey = (videoId: string, lang: string) => `/offline-video/${videoId}.${lang}.vtt`
 
 export interface VideoJob {
   phase: 'mac' | 'transfer' | 'error'
@@ -343,9 +344,14 @@ const ytdlUrl = (action: string, videoId?: string) => {
 let ytdlAvailable: Promise<boolean> | null = null
 /** True when this page comes from the local server with yt-dlp (not Vercel). */
 export function videoSavingAvailable(): Promise<boolean> {
+  // Only a success is remembered: a failed check (server busy, offline) is tried again next time
   ytdlAvailable ??= fetch(ytdlUrl('health'))
     .then(async (r) => r.ok && (await r.json()).ok === true)
     .catch(() => false)
+    .then((ok) => {
+      if (!ok) ytdlAvailable = null
+      return ok
+    })
   return ytdlAvailable
 }
 
@@ -407,6 +413,8 @@ export async function saveVideo(itemId: string, videoId: string): Promise<void> 
     await navigator.storage?.persist?.().catch(() => false)
     await db.items.update(itemId, { offlineVideo: blob.size })
     setVideoJob(videoId, null)
+    // Subtitles separately: a video without them is still worth keeping
+    void saveSubtitles(itemId, videoId).catch(() => undefined)
   } catch (e) {
     if (signal.aborted) setVideoJob(videoId, null)
     else setVideoJob(videoId, { phase: 'error', percent: 0, error: e instanceof Error ? e.message : String(e) })
@@ -432,14 +440,54 @@ export async function savedVideoUrl(videoId: string): Promise<string | null> {
 }
 
 export async function removeVideo(itemId: string, videoId: string): Promise<void> {
-  if (hasCaches()) await (await caches.open(VIDEO_CACHE)).delete(videoKey(videoId))
-  await db.items.update(itemId, { offlineVideo: undefined })
+  if (hasCaches()) {
+    const videos = await caches.open(VIDEO_CACHE)
+    await videos.delete(videoKey(videoId))
+    for (const lang of (await db.items.get(itemId))?.offlineSubs ?? []) await videos.delete(subsKey(videoId, lang))
+  }
+  await db.items.update(itemId, { offlineVideo: undefined, offlineSubs: undefined })
+}
+
+const subsRunning = store<Record<string, boolean>>({})
+export const useSubsRunning = () => useStore(subsRunning)
+
+/** Fetches subtitles (the video's own, else YouTube's auto captions) with yt-dlp and keeps them. */
+export async function saveSubtitles(itemId: string, videoId: string): Promise<string[]> {
+  if (subsRunning.get()[videoId]) return []
+  subsRunning.set({ ...subsRunning.get(), [videoId]: true })
+  try {
+    if (!isOnline() || !(await videoSavingAvailable())) throw new Error('Getting subtitles needs Feeder on your Mac and a connection')
+    const res = await fetch(ytdlUrl('subs', videoId), { method: 'POST' })
+    const body = (await res.json()) as { tracks?: { lang: string; vtt: string }[]; error?: string }
+    if (!res.ok || !body.tracks) throw new Error(body.error || `HTTP ${res.status}`)
+    const videos = await caches.open(VIDEO_CACHE)
+    for (const t of body.tracks) await videos.put(subsKey(videoId, t.lang), new Response(t.vtt, { headers: { 'content-type': 'text/vtt' } }))
+    const langs = body.tracks.map((t) => t.lang)
+    await db.items.update(itemId, { offlineSubs: langs })
+    return langs
+  } finally {
+    const next = { ...subsRunning.get() }
+    delete next[videoId]
+    subsRunning.set(next)
+  }
+}
+
+/** blob: URLs of the saved subtitle tracks. The caller revokes them. */
+export async function savedSubtitleUrls(videoId: string, langs: string[]): Promise<{ lang: string; url: string }[]> {
+  if (!hasCaches() || !langs.length) return []
+  const videos = await caches.open(VIDEO_CACHE)
+  const out: { lang: string; url: string }[] = []
+  for (const lang of langs) {
+    const res = await videos.match(subsKey(videoId, lang))
+    if (res) out.push({ lang, url: URL.createObjectURL(await res.blob()) })
+  }
+  return out
 }
 
 export async function removeAllVideos(): Promise<void> {
   if (hasCaches()) await caches.delete(VIDEO_CACHE)
   const marked = await db.items.filter((i) => !!i.offlineVideo).primaryKeys()
-  await db.items.bulkUpdate(marked.map((key) => ({ key, changes: { offlineVideo: undefined } })))
+  await db.items.bulkUpdate(marked.map((key) => ({ key, changes: { offlineVideo: undefined, offlineSubs: undefined } })))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -447,14 +495,18 @@ export async function removeAllVideos(): Promise<void> {
 // device, or old articles dropped by refresh): every path goes through db.items deletes.
 
 /** Removes an article's saved images and video from Cache Storage. */
-export async function deleteOfflineFiles(item: Pick<Item, 'offlineImages' | 'offlineVideo' | 'link'>): Promise<void> {
+export async function deleteOfflineFiles(item: Pick<Item, 'offlineImages' | 'offlineVideo' | 'offlineSubs' | 'link' | 'contentHtml'>): Promise<void> {
   if (!hasCaches()) return
   if (item.offlineImages?.length) {
     const images = await caches.open(IMAGE_CACHE)
     await Promise.all(item.offlineImages.map((u) => images.delete(u)))
   }
-  const vid = youtubeVideoId(item.link)
-  if (vid && item.offlineVideo) await (await caches.open(VIDEO_CACHE)).delete(videoKey(vid))
+  const vid = articleVideoId(item)
+  if (vid && item.offlineVideo) {
+    const videos = await caches.open(VIDEO_CACHE)
+    await videos.delete(videoKey(vid))
+    for (const lang of item.offlineSubs ?? []) await videos.delete(subsKey(vid, lang))
+  }
 }
 
 db.items.hook('deleting', (_key, item) => {

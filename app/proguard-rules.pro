@@ -100,3 +100,9 @@
 -keep interface * extends android.os.IInterface { *; }
 -keep class * implements android.os.IInterface { *; }
 -keep class * extends android.os.Binder { *; }
+
+# youtubedl-android (Save video offline): reflection-based JSON mapping and its zip extraction
+-keep class com.yausername.** { *; }
+-keep class org.apache.commons.compress.archivers.zip.** { *; }
+-keep class com.fasterxml.jackson.databind.** { *; }
+-dontwarn com.fasterxml.jackson.databind.**
