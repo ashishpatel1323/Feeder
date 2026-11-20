@@ -32,6 +32,17 @@ export function youtubeVideoId(url: string | null | undefined): string | null {
  * enablejsapi lets the reader read the play position (IFrame Player API), and `start`
  * resumes where the video was left. `origin` is this page, as the API asks.
  */
+/**
+ * The article's video: its link when that is a YouTube page, else the first YouTube player
+ * embedded in the feed's text (blogs and newsletters that embed a video).
+ */
+export function articleVideoId(item: { link: string | null; contentHtml?: string | null }): string | null {
+  const own = youtubeVideoId(item.link)
+  if (own || !item.contentHtml || !/youtu/i.test(item.contentHtml)) return own
+  const m = item.contentHtml.match(/<(?:iframe|embed)[^>]+src=["']([^"']*(?:youtube(?:-nocookie)?\.com|youtu\.be)[^"']*)["']/i)
+  return m ? youtubeVideoId(m[1].startsWith('//') ? `https:${m[1]}` : m[1].replace(/&amp;/g, '&')) : null
+}
+
 export function youtubeEmbedUrl(id: string, opts: { start?: number; origin?: string } = {}): string {
   const q = new URLSearchParams({ rel: '0', playsinline: '1', enablejsapi: '1' })
   if (opts.origin) q.set('origin', opts.origin)

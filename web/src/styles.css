@@ -2876,3 +2876,7 @@ label.check.inline {
   border-color: var(--accent);
   color: var(--accent-ink);
 }
+.video-subs {
+  font-size: 13px;
+  color: var(--text-muted, inherit);
+}

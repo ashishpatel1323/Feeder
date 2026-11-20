@@ -15,7 +15,7 @@ import { applyFastReading } from '../lib/fastReading'
 import { AUTO_SCROLL_SPEEDS, useAutoScroll } from '../lib/autoscroll'
 import { Icon, IconButton } from './Icon'
 import { Player } from './Player'
-import { youtubeVideoId, youtubeWatchUrl } from '../lib/youtube'
+import { articleVideoId, youtubeVideoId, youtubeWatchUrl } from '../lib/youtube'
 import { YouTubeFrame } from './YouTubeFrame'
 import { LocalVideo, VideoOfflineControls } from './Offline'
 import { preferSavedImages, useOnline } from '../lib/offline'
@@ -385,7 +385,7 @@ export function Reader(p: Props) {
     }
   }
 
-  const videoId = youtubeVideoId(item.link)
+  const videoId = articleVideoId(item)
   const showLocal = !!item.offlineVideo && useLocal
   const words = wordsOf(item, feed)
   const date = new Date(item.sortTime)
@@ -444,7 +444,7 @@ export function Reader(p: Props) {
             {videoId ? (
               <div className="video-block">
                 {showLocal ? (
-                  <LocalVideo key={`${item.id}|${videoId}|local`} itemId={item.id} videoId={videoId} title={item.title || 'YouTube video'} />
+                  <LocalVideo key={`${item.id}|${videoId}|local`} itemId={item.id} videoId={videoId} title={item.title || 'YouTube video'} subs={item.offlineSubs} />
                 ) : online ? (
                   <YouTubeFrame key={`${item.id}|${videoId}`} itemId={item.id} videoId={videoId} title={item.title || 'YouTube video'} />
                 ) : (

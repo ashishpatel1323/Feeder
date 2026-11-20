@@ -7,10 +7,11 @@
  *   POST /api/ytdl/start?id=VIDEO  starts (or reuses) a download job
  *   GET  /api/ytdl/status?id=VIDEO { state, percent, size, error }
  *   GET  /api/ytdl/file?id=VIDEO   the finished MP4; the temp copy is removed once sent
+ *   POST /api/ytdl/subs?id=VIDEO   subtitles (own, else YouTube's auto captions) as WebVTT text
  */
 import { spawn } from 'node:child_process'
 import { createReadStream } from 'node:fs'
-import { access, mkdtemp, readdir, rm, stat } from 'node:fs/promises'
+import { access, mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -140,6 +141,70 @@ async function startJob(id: string): Promise<Job> {
   return job
 }
 
+/** English (any variant) and Hindi; the video's own subtitles win over auto captions per language. */
+const SUB_LANGS = 'en.*,hi'
+const MAX_TRACKS = 3
+
+/**
+ * Cleans YouTube's auto-caption WebVTT: drops word-timing tags and the 10 ms "hold" cues,
+ * and the line each rolling cue repeats from the one before, so lines show once.
+ */
+export function cleanVtt(vtt: string): string {
+  const blocks = vtt.replace(/\r/g, '').split(/\n\n+/)
+  const out: string[] = ['WEBVTT']
+  let prev: string[] = []
+  const secs = (t: string) => {
+    const p = t.split(':').map(Number)
+    return p.length === 3 ? p[0] * 3600 + p[1] * 60 + p[2] : p[0] * 60 + p[1]
+  }
+  for (const block of blocks) {
+    const lines = block.split('\n')
+    const ti = lines.findIndex((l) => l.includes('-->'))
+    if (ti < 0) continue
+    const m = lines[ti].match(/([\d:.]+)\s+-->\s+([\d:.]+)/)
+    if (!m) continue
+    if (secs(m[2]) - secs(m[1]) < 0.05) continue
+    const text = lines
+      .slice(ti + 1)
+      .map((l) => l.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim())
+      .filter(Boolean)
+    const fresh = text.filter((l) => !prev.includes(l))
+    if (!fresh.length) continue
+    prev = text
+    out.push(`${m[1]} --> ${m[2]}\n${fresh.join('\n')}`)
+  }
+  return out.join('\n\n') + '\n'
+}
+
+async function subtitles(id: string): Promise<{ lang: string; vtt: string }[]> {
+  const dir = await mkdtemp(join(tmpdir(), 'feeder-subs-'))
+  try {
+    const { ytdlp } = await findTools()
+    const r = await run(ytdlp, [
+      '--skip-download', '--write-subs', '--write-auto-subs',
+      '--sub-langs', SUB_LANGS, '--sub-format', 'vtt',
+      '--no-playlist', '-o', join(dir, 'v.%(ext)s'),
+      `https://www.youtube.com/watch?v=${id}`,
+    ])
+    const files = (await readdir(dir)).filter((f) => f.endsWith('.vtt'))
+    if (!files.length && r.code !== 0) throw new Error(r.err.trim().split('\n').pop() || 'yt-dlp could not get subtitles')
+    const tracks = await Promise.all(
+      files.map(async (f) => ({ lang: f.slice(2, -4), vtt: cleanVtt(await readFile(join(dir, f), 'utf8')) })),
+    )
+    // Plain "en" first, then other English variants, then the rest
+    const rank = (l: string) => (l === 'en' ? 0 : l.startsWith('en') ? 1 : 2)
+    const seen = new Set<string>()
+    return tracks
+      .filter((t) => t.vtt.length > 20)
+      .sort((a, b) => rank(a.lang) - rank(b.lang))
+      // "en-orig" is often the same text as "en"
+      .filter((t) => !seen.has(t.vtt) && !!seen.add(t.vtt))
+      .slice(0, MAX_TRACKS)
+  } finally {
+    void rm(dir, { recursive: true, force: true })
+  }
+}
+
 const status = (job: Job | undefined) =>
   job ? { state: job.state, percent: Math.round(job.percent), size: job.size ?? 0, error: job.error ?? null } : { state: 'none', percent: 0, size: 0, error: null }
 
@@ -167,6 +232,7 @@ export async function ytdlMiddleware(req: IncomingMessage, res: ServerResponse, 
     if (!ID.test(id)) return send(res, 400, { error: 'Bad video id' })
     if (action === 'start' && req.method === 'POST') return send(res, 200, status(await startJob(id)))
     if (action === 'status') return send(res, 200, status(jobs.get(id)))
+    if (action === 'subs' && req.method === 'POST') return send(res, 200, { tracks: await subtitles(id) })
     if (action === 'file') {
       const job = jobs.get(id)
       if (!job || job.state !== 'done' || !job.file) return send(res, 404, { error: 'Not ready' })
