@@ -55,6 +55,8 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.ViewAgenda
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -712,6 +714,7 @@ fun FeedScreen(
     val context = LocalContext.current
     val closeMenuText = stringResource(id = R.string.close_menu)
     val focusRequester = remember { FocusRequester() }
+    val flipMode = rememberFlipModePreference()
 
     LaunchedEffect(viewState.searchBarVisible) {
         if (viewState.searchBarVisible) {
@@ -801,6 +804,16 @@ fun FeedScreen(
                 ) {
                 }
             } else {
+                val flipLabel = stringResource(if (flipMode.enabled) R.string.show_as_list else R.string.show_as_flip_pages)
+                PlainTooltipBox(tooltip = { Text(flipLabel) }) {
+                    IconButton(onClick = { flipMode.set(!flipMode.enabled) }) {
+                        Icon(
+                            if (flipMode.enabled) Icons.Outlined.ViewAgenda else Icons.Outlined.AutoStories,
+                            contentDescription = flipLabel,
+                        )
+                    }
+                }
+
                 PlainTooltipBox(tooltip = { Text(stringResource(R.string.search_verb)) }) {
                     Box {
                         IconButton(
@@ -1048,69 +1061,93 @@ fun FeedScreen(
                 unreadCount = viewState.feedScreenTitle.unreadCount,
             )
 
-            when (screenType) {
-                FeedScreenType.FeedGrid ->
-                    FeedGridContent(
-                        viewState = viewState,
-                        onOpenNavDrawer = {
-                            coroutineScope.launch {
-                                if (drawerState.isOpen) {
-                                    drawerState.close()
-                                } else {
-                                    drawerState.open()
-                                }
+            if (flipMode.enabled) {
+                FeedFlipContent(
+                    viewState = viewState,
+                    pagedFeedItems = pagedFeedItems,
+                    translatedFeedCards = translatedFeedCards,
+                    onTranslateFeedCard = onTranslateFeedCard,
+                    markAsUnread = markAsUnread,
+                    onSetBookmark = onSetBookmark,
+                    onItemClick = onOpenFeedItem,
+                    onOpenNavDrawer = {
+                        coroutineScope.launch {
+                            if (drawerState.isOpen) {
+                                drawerState.close()
+                            } else {
+                                drawerState.open()
                             }
-                        },
-                        onAddFeed = onAddFeed,
-                        markAsUnread = markAsUnread,
-                        markAsReadOnSwipe = markAsReadOnSwipe,
-                        markBeforeAsRead = markBeforeAsRead,
-                        markAfterAsRead = markAfterAsRead,
-                        onItemClick = onOpenFeedItem,
-                        onOpenFeedItemInReader = onOpenFeedItemInReader,
-                        onOpenFeedItemInCustomTab = onOpenFeedItemInCustomTab,
-                        onOpenFeedItemInBrowser = onOpenFeedItemInBrowser,
-                        onSetBookmark = onSetBookmark,
-                        onDeleteItem = onDeleteItem,
-                        selection = selection,
-                        gridState = feedGridState,
-                        pagedFeedItems = pagedFeedItems,
-                        translatedFeedCards = translatedFeedCards,
-                        onTranslateFeedCard = onTranslateFeedCard,
-                        modifier = Modifier.weight(1f),
-                    )
+                        }
+                    },
+                    onAddFeed = onAddFeed,
+                    onDeleteItem = onDeleteItem,
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                when (screenType) {
+                    FeedScreenType.FeedGrid ->
+                        FeedGridContent(
+                            viewState = viewState,
+                            onOpenNavDrawer = {
+                                coroutineScope.launch {
+                                    if (drawerState.isOpen) {
+                                        drawerState.close()
+                                    } else {
+                                        drawerState.open()
+                                    }
+                                }
+                            },
+                            onAddFeed = onAddFeed,
+                            markAsUnread = markAsUnread,
+                            markAsReadOnSwipe = markAsReadOnSwipe,
+                            markBeforeAsRead = markBeforeAsRead,
+                            markAfterAsRead = markAfterAsRead,
+                            onItemClick = onOpenFeedItem,
+                            onOpenFeedItemInReader = onOpenFeedItemInReader,
+                            onOpenFeedItemInCustomTab = onOpenFeedItemInCustomTab,
+                            onOpenFeedItemInBrowser = onOpenFeedItemInBrowser,
+                            onSetBookmark = onSetBookmark,
+                            onDeleteItem = onDeleteItem,
+                            selection = selection,
+                            gridState = feedGridState,
+                            pagedFeedItems = pagedFeedItems,
+                            translatedFeedCards = translatedFeedCards,
+                            onTranslateFeedCard = onTranslateFeedCard,
+                            modifier = Modifier.weight(1f),
+                        )
 
-                FeedScreenType.FeedList ->
-                    FeedListContent(
-                        viewState = viewState,
-                        onOpenNavDrawer = {
-                            coroutineScope.launch {
-                                if (drawerState.isOpen) {
-                                    drawerState.close()
-                                } else {
-                                    drawerState.open()
+                    FeedScreenType.FeedList ->
+                        FeedListContent(
+                            viewState = viewState,
+                            onOpenNavDrawer = {
+                                coroutineScope.launch {
+                                    if (drawerState.isOpen) {
+                                        drawerState.close()
+                                    } else {
+                                        drawerState.open()
+                                    }
                                 }
-                            }
-                        },
-                        onAddFeed = onAddFeed,
-                        markAsUnread = markAsUnread,
-                        markAsReadOnSwipe = markAsReadOnSwipe,
-                        markBeforeAsRead = markBeforeAsRead,
-                        markAfterAsRead = markAfterAsRead,
-                        onItemClick = onOpenFeedItem,
-                        onOpenFeedItemInReader = onOpenFeedItemInReader,
-                        onOpenFeedItemInCustomTab = onOpenFeedItemInCustomTab,
-                        onOpenFeedItemInBrowser = onOpenFeedItemInBrowser,
-                        onSetBookmark = onSetBookmark,
-                        onDeleteItem = onDeleteItem,
-                        selection = selection,
-                        listState = feedListState,
-                        onMarkGroupAsRead = onMarkGroupAsRead,
-                        pagedFeedItems = pagedFeedItems,
-                        translatedFeedCards = translatedFeedCards,
-                        onTranslateFeedCard = onTranslateFeedCard,
-                        modifier = Modifier.weight(1f),
-                    )
+                            },
+                            onAddFeed = onAddFeed,
+                            markAsUnread = markAsUnread,
+                            markAsReadOnSwipe = markAsReadOnSwipe,
+                            markBeforeAsRead = markBeforeAsRead,
+                            markAfterAsRead = markAfterAsRead,
+                            onItemClick = onOpenFeedItem,
+                            onOpenFeedItemInReader = onOpenFeedItemInReader,
+                            onOpenFeedItemInCustomTab = onOpenFeedItemInCustomTab,
+                            onOpenFeedItemInBrowser = onOpenFeedItemInBrowser,
+                            onSetBookmark = onSetBookmark,
+                            onDeleteItem = onDeleteItem,
+                            selection = selection,
+                            listState = feedListState,
+                            onMarkGroupAsRead = onMarkGroupAsRead,
+                            pagedFeedItems = pagedFeedItems,
+                            translatedFeedCards = translatedFeedCards,
+                            onTranslateFeedCard = onTranslateFeedCard,
+                            modifier = Modifier.weight(1f),
+                        )
+                }
             }
 
             if (selection?.active == true) {

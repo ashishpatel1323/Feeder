@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="show_as_flip_pages">Flip view</string>
+  <string name="show_as_list">List view</string>
+  <string name="listen">Listen</string>
+  <string name="full_text_short">Full text</string>
+  <string name="original_page_short">Web</string>
+  <string name="speed_read_short">Speed</string>
+  <string name="summary_short">Summary</string>
+</resources>
