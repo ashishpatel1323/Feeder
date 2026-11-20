@@ -1062,27 +1062,30 @@ fun FeedScreen(
             )
 
             if (flipMode.enabled) {
-                FeedFlipContent(
-                    viewState = viewState,
-                    pagedFeedItems = pagedFeedItems,
-                    translatedFeedCards = translatedFeedCards,
-                    onTranslateFeedCard = onTranslateFeedCard,
-                    markAsUnread = markAsUnread,
-                    onSetBookmark = onSetBookmark,
-                    onItemClick = onOpenFeedItem,
-                    onOpenNavDrawer = {
-                        coroutineScope.launch {
-                            if (drawerState.isOpen) {
-                                drawerState.close()
-                            } else {
-                                drawerState.open()
+                // A new pager per feed, so each feed opens at its first page
+                key(viewState.currentFeedOrTag) {
+                    FeedFlipContent(
+                        viewState = viewState,
+                        pagedFeedItems = pagedFeedItems,
+                        translatedFeedCards = translatedFeedCards,
+                        onTranslateFeedCard = onTranslateFeedCard,
+                        markAsUnread = markAsUnread,
+                        onSetBookmark = onSetBookmark,
+                        onItemClick = onOpenFeedItem,
+                        onOpenNavDrawer = {
+                            coroutineScope.launch {
+                                if (drawerState.isOpen) {
+                                    drawerState.close()
+                                } else {
+                                    drawerState.open()
+                                }
                             }
-                        }
-                    },
-                    onAddFeed = onAddFeed,
-                    onDeleteItem = onDeleteItem,
-                    modifier = Modifier.weight(1f),
-                )
+                        },
+                        onAddFeed = onAddFeed,
+                        onDeleteItem = onDeleteItem,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             } else {
                 when (screenType) {
                     FeedScreenType.FeedGrid ->

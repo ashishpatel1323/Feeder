@@ -390,6 +390,8 @@ fun ArticleScreen(
         derivedStateOf { articleScrollState.value > headerHeightPx }
     }
     val showCollapsedBar = scrolledPastHeader && !showOriginalPage && !readingAloud
+    // The original page has no chips under the title, so its top bar always holds Save, Unread and Delete
+    val showArticleActionsInBar = showCollapsedBar || (showOriginalPage && !readingAloud)
 
     val bottomBarVisibleState = remember { MutableTransitionState(viewState.isBottomBarVisible) }
     LaunchedEffect(viewState.isBottomBarVisible) {
@@ -451,7 +453,10 @@ fun ArticleScreen(
                                     onDelete = onDelete,
                                 )
                             }
-                        } else if (showCollapsedBar) {
+                        } else if (showArticleActionsInBar) {
+                            if (showOriginalPage) {
+                                TopBarAction(Icons.Default.Share, stringResource(R.string.share), onShare)
+                            }
                             TopBarAction(
                                 if (viewState.isBookmarked) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
                                 stringResource(if (viewState.isBookmarked) R.string.action_saved else R.string.action_save),

@@ -72,6 +72,7 @@ import com.nononsenseapps.feeder.util.ActivityLauncher
 import com.nononsenseapps.feeder.util.stripTrackingParameters
 import org.kodein.di.compose.LocalDI
 import org.kodein.di.instance
+import java.util.concurrent.atomic.AtomicBoolean
 
 private const val FLIP_PREFS = "feeder_flip_mode"
 private const val FLIP_PREFS_ENABLED = "enabled"
@@ -191,9 +192,16 @@ fun FeedFlipContent(
             if (index < pagedFeedItems.itemCount) pagedFeedItems.peek(index) else null
         }
 
+    // Set while the pager is moved back to the anchor, which is not the user flipping
+    val anchorCorrection = remember { AtomicBoolean(false) }
+
     LaunchedEffect(pagerState) {
         var previous = pagerState.settledPage
         snapshotFlow { pagerState.settledPage }.collect { page ->
+            if (anchorCorrection.getAndSet(false)) {
+                previous = page
+                return@collect
+            }
             if (page != previous) {
                 haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             }
@@ -218,7 +226,8 @@ fun FeedFlipContent(
             pages.indexOfFirst { page ->
                 page.any { index -> index < pagedFeedItems.itemCount && pagedFeedItems.peek(index)?.id == anchorId }
             }
-        if (anchorPage >= 0 && anchorPage != pagerState.currentPage) {
+        if (anchorPage >= 0 && anchorPage != pagerState.settledPage) {
+            anchorCorrection.set(true)
             pagerState.scrollToPage(anchorPage)
         }
     }
