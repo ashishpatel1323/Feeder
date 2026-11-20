@@ -4,6 +4,7 @@ import { db, feedDisplayTitle, type Feed, type Item } from '../lib/db'
 import { readingMinutes, wordsOf, type Group } from '../lib/listquery'
 import { updateSettings, type Grouping, type Settings, type ShowFilter, type Sorting } from '../lib/settings'
 import { proxiedUrl } from '../lib/api'
+import { useOnline } from '../lib/offline'
 import { isWatched, positionLabel } from '../lib/videopos'
 import { Icon, IconButton } from './Icon'
 
@@ -180,6 +181,7 @@ export function ArticleList(p: Props) {
   const longPress = useRef<number | null>(null)
   const longPressed = useRef(false)
   const s = p.settings
+  const online = useOnline()
   const total = p.groups.reduce((n, g) => n + g.items.length, 0)
   const grouped = s.grouping !== 'none'
 
@@ -275,6 +277,11 @@ export function ArticleList(p: Props) {
         <h1 className="pane-title" title={p.title}>
           {p.title}
         </h1>
+        {online ? null : (
+          <span className="offline-badge" title="No connection: articles saved for offline reading still open, and changes sync later">
+            Offline
+          </span>
+        )}
         <IconButton icon="delete" label="Delete read articles on all devices" onClick={p.onDeleteRead} />
         <IconButton icon="doneAll" label="Mark all as read" onClick={p.onMarkAllRead} />
       </header>
@@ -422,6 +429,11 @@ export function ArticleList(p: Props) {
                               <span>{readingMinutes(wordsOf(item, feed))} min</span>
                             )}
                             {item.saved ? <Icon name="bookmarkFilled" size={14} title="Saved" /> : null}
+                            {item.offlineAt || item.offlineVideo ? (
+                              <span className={`row-offline${online ? '' : ' strong'}`} title={item.offlineVideo ? 'Video saved for offline watching' : 'Saved for offline reading'}>
+                                <Icon name="download" size={14} />
+                              </span>
+                            ) : null}
                           </div>
                           {s.snippetLines > 0 && item.snippet ? (
                             <div className="row-snippet" style={{ WebkitLineClamp: s.snippetLines }}>

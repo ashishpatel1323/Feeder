@@ -17,6 +17,8 @@ import { Icon, IconButton } from './Icon'
 import { Player } from './Player'
 import { youtubeVideoId, youtubeWatchUrl } from '../lib/youtube'
 import { YouTubeFrame } from './YouTubeFrame'
+import { LocalVideo, VideoOfflineControls } from './Offline'
+import { preferSavedImages, useOnline } from '../lib/offline'
 
 interface Props {
   item: Item
@@ -51,6 +53,9 @@ export function Reader(p: Props) {
   const [fullMode, setFullMode] = useState<boolean>(fullByDefault)
   const [fullState, setFullState] = useState<'idle' | 'loading' | 'error'>('idle')
   const [fullError, setFullError] = useState('')
+  // A saved video plays from the offline copy unless switched to YouTube's player
+  const [useLocal, setUseLocal] = useState(true)
+  const online = useOnline()
   const [summaryState, setSummaryState] = useState<'idle' | 'loading'>('idle')
   const [ra, setRa] = useState<ReadAloudState>(readAloud.state)
   const [pill, setPill] = useState<{ x: number; y: number; offset: number } | null>(null)
@@ -61,6 +66,7 @@ export function Reader(p: Props) {
   // New article: reset view state
   useEffect(() => {
     setFullMode(fullByDefault)
+    setUseLocal(true)
     setFullState('idle')
     setPill(null)
     readAloud.showTapWord(null)
@@ -69,7 +75,8 @@ export function Reader(p: Props) {
 
   // Load full text when needed
   useEffect(() => {
-    if (!fullMode || item.fullHtml) return
+    // Offline without a saved copy: the feed text shows instead
+    if (!fullMode || item.fullHtml || !online) return
     let cancelled = false
     setFullState('loading')
     loadFullText(item)
@@ -82,17 +89,19 @@ export function Reader(p: Props) {
     return () => {
       cancelled = true
     }
-  }, [fullMode, item.id, item.fullHtml, item])
+  }, [fullMode, item.id, item.fullHtml, item, online])
 
   const fastReading = p.settings.fastReading
   const highlights = useLiveQuery(() => db.highlights.where('itemId').equals(item.id).toArray(), [item.id])
   const html = useMemo(() => {
     const source = fullMode && item.fullHtml ? item.fullHtml : item.contentHtml
-    const clean = sanitize(source || `<p>${item.snippet}</p>`, item.link ?? feed?.url ?? null)
+    const sanitized = sanitize(source || `<p>${item.snippet}</p>`, item.link ?? feed?.url ?? null)
+    // Saved offline: use the image URLs that were saved (srcset would pick others)
+    const clean = item.offlineAt ? preferSavedImages(sanitized) : sanitized
     // Bold word starts and highlight marks only add elements, so read aloud and tap-to-read see the same text
     const marked = applyHighlights(clean, highlights ?? [])
     return fastReading ? applyFastReading(marked) : marked
-  }, [fullMode, item.fullHtml, item.contentHtml, item.snippet, item.link, feed?.url, fastReading, highlights])
+  }, [fullMode, item.fullHtml, item.contentHtml, item.snippet, item.link, item.offlineAt, feed?.url, fastReading, highlights])
 
   // Highlights, in reading order
   const [bar, setBar] = useState<BarTarget | null>(null)
@@ -377,6 +386,7 @@ export function Reader(p: Props) {
   }
 
   const videoId = youtubeVideoId(item.link)
+  const showLocal = !!item.offlineVideo && useLocal
   const words = wordsOf(item, feed)
   const date = new Date(item.sortTime)
 
@@ -433,10 +443,19 @@ export function Reader(p: Props) {
             </div>
             {videoId ? (
               <div className="video-block">
-                <YouTubeFrame key={`${item.id}|${videoId}`} itemId={item.id} videoId={videoId} title={item.title || 'YouTube video'} />
-                <a className="open-youtube" href={youtubeWatchUrl(videoId)} target="_blank" rel="noopener noreferrer">
-                  <Icon name="open" size={18} /> Open on YouTube
-                </a>
+                {showLocal ? (
+                  <LocalVideo key={`${item.id}|${videoId}|local`} itemId={item.id} videoId={videoId} title={item.title || 'YouTube video'} />
+                ) : online ? (
+                  <YouTubeFrame key={`${item.id}|${videoId}`} itemId={item.id} videoId={videoId} title={item.title || 'YouTube video'} />
+                ) : (
+                  <div className="video-frame video-missing">You are offline and this video was not saved.</div>
+                )}
+                <div className="video-actions">
+                  <a className="open-youtube" href={youtubeWatchUrl(videoId)} target="_blank" rel="noopener noreferrer">
+                    <Icon name="open" size={18} /> Open on YouTube
+                  </a>
+                  <VideoOfflineControls item={item} videoId={videoId} useLocal={useLocal} onUseLocal={setUseLocal} />
+                </div>
               </div>
             ) : item.imageUrl && !html.includes(item.imageUrl) ? (
               <img className="lead-image" src={item.imageUrl} alt="" referrerPolicy="no-referrer" onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />

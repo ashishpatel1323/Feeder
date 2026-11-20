@@ -6,6 +6,7 @@ import { addDeviceLink, createSync, forceSync, getSyncState, joinSync, leaveSync
 import { parseJoinLink } from '../lib/crypto'
 import { getAccessToken, health, setAccessToken } from '../lib/api'
 import { updateSettings, type Settings } from '../lib/settings'
+import { OfflineSection } from './Offline'
 import { isKokoroVoice, kokoro, KOKORO_PREFIX, KOKORO_VOICES, webGpuAvailable, type KokoroStatus } from '../lib/kokoro'
 import { readAloud } from '../lib/readaloud'
 import { IconButton } from './Icon'
@@ -323,6 +324,8 @@ export function SettingsDialog({
   return (
     <Modal title="Settings" onClose={onClose} wide>
       <SyncSection toast={toast} />
+
+      <OfflineSection toast={toast} />
 
       <section className="settings-section">
         <h3>Reading</h3>

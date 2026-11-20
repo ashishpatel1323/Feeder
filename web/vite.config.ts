@@ -4,15 +4,19 @@ import react from '@vitejs/plugin-react'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { handle } from './server/handler'
+import { ytdlMiddleware } from './server/ytdl'
 
 // Serves /api/* during `npm run dev` and `npm run preview` with the same code the Pages Function runs.
 function devApi(): Plugin {
   return {
     name: 'feeder-dev-api',
     configureServer(server) {
+      // yt-dlp video saving exists only on this local server, not on Vercel
+      server.middlewares.use(ytdlMiddleware)
       server.middlewares.use(apiMiddleware)
     },
     configurePreviewServer(server) {
+      server.middlewares.use(ytdlMiddleware)
       server.middlewares.use(apiMiddleware)
     },
   }

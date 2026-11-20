@@ -9,6 +9,8 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 )
 
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => undefined))
+// In development the worker only serves images saved for offline reading (see sw.js)
+if ('serviceWorker' in navigator) {
+  const script = import.meta.env.PROD ? '/sw.js' : '/sw.js?dev=1'
+  window.addEventListener('load', () => navigator.serviceWorker.register(script).catch(() => undefined))
 }
