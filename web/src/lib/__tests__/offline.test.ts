@@ -2,6 +2,10 @@ import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { db, type Item } from '../db'
 import { articleImageUrls, cleanupOffline, formatBytes, preferSavedImages, unreadForOffline } from '../offline'
+import { hideItems, unhideItems } from '../db'
+import { applyShow, showCounts } from '../listquery'
+import { offlineNow, updateSettings } from '../settings'
+import { syncNow } from '../sync2'
 
 const item = (id: string, over: Partial<Item> = {}): Item => ({
   id,
@@ -70,5 +74,29 @@ describe('offline reading', () => {
     expect(formatBytes(2048)).toBe('2 KB')
     expect(formatBytes(5.5 * 1024 * 1024)).toBe('5.5 MB')
     expect(formatBytes(3 * 1024 * 1024 * 1024)).toBe('3.0 GB')
+  })
+
+  it('has a Downloaded tab for saved articles and videos', () => {
+    const list = [item('a', { offlineAt: 1 }), item('b', { offlineVideo: 10, read: 1 }), item('c')]
+    expect(applyShow(list, 'downloaded').map((i) => i.id)).toEqual(['a', 'b'])
+    expect(showCounts(list).downloaded).toBe(2)
+  })
+
+  it('brings deleted articles back without their downloads on Undo', async () => {
+    const a = item('a', { offlineAt: 5, offlineImages: ['https://x/1.png'], offlineVideo: 9 })
+    await db.items.put(a)
+    await hideItems(['a'])
+    expect(await db.items.get('a')).toBeUndefined()
+    await unhideItems([a])
+    const back = await db.items.get('a')
+    expect([back?.offlineAt, back?.offlineImages, back?.offlineVideo]).toEqual([undefined, undefined, undefined])
+  })
+
+  it('Offline mode stops syncing', async () => {
+    await updateSettings({ offlineMode: true })
+    expect(await offlineNow()).toBe(true)
+    expect(await syncNow()).toBeNull()
+    await updateSettings({ offlineMode: false })
+    expect(await offlineNow()).toBe(false)
   })
 })

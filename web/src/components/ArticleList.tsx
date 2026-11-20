@@ -4,7 +4,7 @@ import { db, feedDisplayTitle, type Feed, type Item } from '../lib/db'
 import { readingMinutes, wordsOf, type Group } from '../lib/listquery'
 import { updateSettings, type Grouping, type Settings, type ShowFilter, type Sorting } from '../lib/settings'
 import { proxiedUrl } from '../lib/api'
-import { useOnline } from '../lib/offline'
+import { useNetwork } from '../lib/offline'
 import { isWatched, positionLabel } from '../lib/videopos'
 import { Icon, IconButton } from './Icon'
 
@@ -12,7 +12,7 @@ interface Props {
   title: string
   groups: Group[]
   /** Unread and saved counts for the Show tabs. */
-  counts: { unread: number; saved: number }
+  counts: { unread: number; saved: number; downloaded: number }
   feeds: Map<string, Feed>
   settings: Settings
   selectedId: string | null
@@ -29,6 +29,7 @@ const SHOWS: [ShowFilter, string][] = [
   ['unread', 'Unread'],
   ['all', 'All'],
   ['saved', 'Saved'],
+  ['downloaded', 'Downloaded'],
 ]
 const SORTINGS: [Sorting, string][] = [
   ['newest', 'Newest'],
@@ -181,14 +182,15 @@ export function ArticleList(p: Props) {
   const longPress = useRef<number | null>(null)
   const longPressed = useRef(false)
   const s = p.settings
-  const online = useOnline()
+  const network = useNetwork()
+  const online = network && !s.offlineMode
   const total = p.groups.reduce((n, g) => n + g.items.length, 0)
   const grouped = s.grouping !== 'none'
 
   const [sheet, setSheet] = useState(false)
   // Where YouTube videos were left, shown in place of the reading time
   const videoPos = useLiveQuery(async () => new Map((await db.videoPos.toArray()).map((v) => [v.id, v])), [])
-  const countOf = (v: ShowFilter) => (v === 'unread' ? p.counts.unread : v === 'saved' ? p.counts.saved : 0)
+  const countOf = (v: ShowFilter) => (v === 'unread' ? p.counts.unread : v === 'saved' ? p.counts.saved : v === 'downloaded' ? p.counts.downloaded : 0)
 
   const toggleGroup = (key: string) => {
     const id = `${s.grouping}:${key}`
@@ -277,9 +279,19 @@ export function ArticleList(p: Props) {
         <h1 className="pane-title" title={p.title}>
           {p.title}
         </h1>
-        {online ? null : (
-          <span className="offline-badge" title="No connection: articles saved for offline reading still open, and changes sync later">
-            Offline
+        {network ? (
+          <button
+            type="button"
+            className={`offline-toggle${s.offlineMode ? ' on' : ''}`}
+            aria-pressed={s.offlineMode}
+            title={s.offlineMode ? 'Offline mode is on: only downloaded content, nothing fetched. Click to go online.' : 'Offline mode: use only downloaded content, even with internet'}
+            onClick={() => updateSettings({ offlineMode: !s.offlineMode })}
+          >
+            <Icon name="download" size={16} /> {s.offlineMode ? 'Offline mode' : 'Go offline'}
+          </button>
+        ) : (
+          <span className="offline-badge" title="No connection: downloaded articles still open, and changes sync later">
+            No connection
           </span>
         )}
         <IconButton icon="delete" label="Delete read articles on all devices" onClick={p.onDeleteRead} />

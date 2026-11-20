@@ -28,7 +28,7 @@ describe('Show tabs and Today chip', () => {
     expect(ids(applyFilters(items, { show: 'unread', today: true }, 'read'))).toContain('read')
   })
   it('counts unread and saved', () => {
-    expect(showCounts(items)).toEqual({ unread: 3, saved: 2 })
+    expect(showCounts(items)).toEqual({ unread: 3, saved: 2, downloaded: 0 })
   })
 })
 

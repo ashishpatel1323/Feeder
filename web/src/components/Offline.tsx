@@ -19,6 +19,7 @@ import {
 } from '../lib/offline'
 import { resumeAt, saveVideoPos } from '../lib/videopos'
 import { syncNow } from '../lib/sync2'
+import { updateSettings, useSettings } from '../lib/settings'
 import { Icon } from './Icon'
 
 const LIMITS = [
@@ -30,6 +31,7 @@ const LIMITS = [
 
 /** Settings section: the one-time "Download for offline" job, for trips. */
 export function OfflineSection({ toast }: { toast: (m: string) => void }) {
+  const offlineMode = useSettings().offlineMode
   const job = useOfflineJob()
   const [limit, setLimit] = useState(500)
   const [images, setImages] = useState(true)
@@ -55,6 +57,10 @@ export function OfflineSection({ toast }: { toast: (m: string) => void }) {
         Before a trip, save unread articles with their full text and images so they open without a connection. Read marks and stars made
         offline sync when you are back online.
       </p>
+      <label className="check">
+        <input type="checkbox" checked={offlineMode} onChange={(e) => updateSettings({ offlineMode: e.target.checked })} /> Offline mode: use only
+        downloaded content and fetch nothing, even with internet (also the Go offline button above the list)
+      </label>
       <div className="offline-stats">
         <span>
           <strong>{saved}</strong> of {unread} unread saved offline
@@ -80,7 +86,7 @@ export function OfflineSection({ toast }: { toast: (m: string) => void }) {
         {job.running ? (
           <button onClick={stopOfflineDownload}>Stop</button>
         ) : (
-          <button className="primary" onClick={() => void downloadForOffline({ limit, images })} disabled={!navigator.onLine}>
+          <button className="primary" onClick={() => void downloadForOffline({ limit, images })} disabled={!navigator.onLine || offlineMode} title={offlineMode ? 'Turn off Offline mode to download' : undefined}>
             <Icon name="download" size={18} /> Download for offline
           </button>
         )}

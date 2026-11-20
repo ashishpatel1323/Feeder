@@ -82,7 +82,8 @@ async function fetchOne(feed: Feed): Promise<number> {
     if (all.length > max) {
       const drop = all
         // Keep saved articles, and read marks the sync chain hasn't received yet
-        .filter((i) => !i.saved && !(syncing && i.read && !i.readSynced))
+        // and articles downloaded for offline reading (offline.ts cleans those up after reading)
+        .filter((i) => !i.saved && !i.offlineAt && !i.offlineVideo && !(syncing && i.read && !i.readSynced))
         .sort((a, b) => b.sortTime - a.sortTime)
         .slice(max)
         .map((i) => i.id)

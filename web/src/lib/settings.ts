@@ -4,7 +4,7 @@ import { db, setKv } from './db'
 export type Grouping = 'none' | 'date' | 'feed' | 'tag' | 'length' | 'site'
 export type Sorting = 'newest' | 'oldest' | 'shortest' | 'longest'
 /** The Show tabs above the list: a single choice. */
-export type ShowFilter = 'unread' | 'all' | 'saved'
+export type ShowFilter = 'unread' | 'all' | 'saved' | 'downloaded'
 
 export interface Settings {
   grouping: Grouping
@@ -33,6 +33,8 @@ export interface Settings {
   summaryBaseUrl: string
   summaryApiKey: string
   summaryModel: string
+  /** Offline mode: use only what is saved here, no network (offline.ts), even with internet. */
+  offlineMode: boolean
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -57,12 +59,13 @@ export const DEFAULT_SETTINGS: Settings = {
   summaryBaseUrl: 'http://localhost:11434/v1',
   summaryApiKey: '',
   summaryModel: 'llama3.2',
+  offlineMode: false,
 }
 
 const KEY = 'settings'
 
 const GROUPINGS: Grouping[] = ['none', 'date', 'feed', 'tag', 'length', 'site']
-const SHOWS: ShowFilter[] = ['unread', 'all', 'saved']
+const SHOWS: ShowFilter[] = ['unread', 'all', 'saved', 'downloaded']
 
 /**
  * Merges stored settings over the defaults and migrates the old list filters:
@@ -91,6 +94,12 @@ export function useSettings(): Settings {
 export async function getSettings(): Promise<Settings> {
   const stored = await db.kv.get(KEY)
   return normalizeSettings(stored?.value as Record<string, unknown> | undefined)
+}
+
+/** No connection, or Offline mode switched on: nothing should go to the network. */
+export async function offlineNow(): Promise<boolean> {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return true
+  return (await getSettings()).offlineMode
 }
 
 export async function updateSettings(patch: Partial<Settings>): Promise<void> {
