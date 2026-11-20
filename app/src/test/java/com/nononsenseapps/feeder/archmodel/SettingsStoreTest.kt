@@ -166,6 +166,33 @@ class SettingsStoreTest : DIAware {
     }
 
     @Test
+    fun setShowDownloaded() {
+        store.setFeedListShow(FeedListShow.DOWNLOADED)
+
+        val filter = store.feedListFilter.value
+        assertEquals(FeedListShow.DOWNLOADED, filter.show)
+        assertEquals(true, filter.downloaded)
+        assertEquals(false, filter.saved)
+        verify {
+            sp.edit().putBoolean(PREFS_FILTER_DOWNLOADED, true)
+        }
+
+        store.setFeedListShow(FeedListShow.UNREAD)
+        assertEquals(false, store.feedListFilter.value.downloaded)
+        assertEquals(FeedListShow.UNREAD, store.feedListFilter.value.show)
+    }
+
+    @Test
+    fun offlineModeSet() {
+        store.setOfflineMode(true)
+
+        verify {
+            sp.edit().putBoolean(PREF_OFFLINE_MODE, true).apply()
+        }
+        assertEquals(true, store.offlineMode.value)
+    }
+
+    @Test
     fun showFromOldFilterSettings() {
         // Saved chip on wins
         assertEquals(FeedListShow.SAVED, PrefsFeedListFilter(saved = true, recentlyRead = true, read = true).show)

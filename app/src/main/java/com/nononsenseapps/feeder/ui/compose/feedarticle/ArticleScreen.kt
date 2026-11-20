@@ -64,8 +64,10 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -84,12 +86,15 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nononsenseapps.feeder.R
+import com.nononsenseapps.feeder.archmodel.Repository
 import com.nononsenseapps.feeder.archmodel.TextToDisplay
 import com.nononsenseapps.feeder.db.room.ID_UNSET
 import com.nononsenseapps.feeder.localtranslation.BergamotModelDownloadProgress
 import com.nononsenseapps.feeder.model.LocaleOverride
 import com.nononsenseapps.feeder.model.ReadAloudNeighbors
 import com.nononsenseapps.feeder.model.ReadAloudProgress
+import com.nononsenseapps.feeder.model.offline.OfflineVideos
+import com.nononsenseapps.feeder.model.offline.isYouTubeLink
 import com.nononsenseapps.feeder.ui.MainActivityViewModel
 import com.nononsenseapps.feeder.ui.ScrollDirection
 import com.nononsenseapps.feeder.ui.compose.components.TranslationProgressContent
@@ -110,9 +115,11 @@ import com.nononsenseapps.feeder.ui.compose.utils.ScreenType
 import com.nononsenseapps.feeder.util.ActivityLauncher
 import com.nononsenseapps.feeder.util.stripTrackingParameters
 import com.nononsenseapps.feeder.util.unicodeWrap
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.kodein.di.compose.LocalDI
 import org.kodein.di.instance
 import java.text.SimpleDateFormat
@@ -764,7 +771,15 @@ fun ArticleContent(
     // Track Y positions of article elements by index for anchor link scrolling
     val elementPositions = remember { mutableMapOf<Int, Float>() }
     val contentImageUrls = remember(viewState.articleContent) { viewState.articleContent.imageUrls }
-    val youtubeId = viewState.youtubeId
+    // YouTube's streaming player, unless the saved offline copy plays below or Offline mode is on
+    val offlineVideos: OfflineVideos by LocalDI.current.instance()
+    val repository: Repository by LocalDI.current.instance()
+    val offlineMode by repository.offlineMode.collectAsState()
+    val offlineVideoChanges by offlineVideos.changes.collectAsState()
+    val hasSavedVideo by produceState(false, viewState.articleId, offlineVideoChanges) {
+        value = withContext(Dispatchers.IO) { offlineVideos.savedFiles(viewState.articleId) != null }
+    }
+    val youtubeId = viewState.youtubeId?.takeUnless { hasSavedVideo || offlineMode }
 
     ReaderView(
         screenType = screenType,
@@ -824,6 +839,12 @@ fun ArticleContent(
             },
     ) { indexOffset ->
         var offsetCounter = indexOffset
+
+        // YouTube articles: Save video offline, and the saved copy's player
+        if (viewState.articleId > ID_UNSET && viewState.articleLink?.let { isYouTubeLink(it) } == true) {
+            offsetCounter++
+            OfflineVideoPanel(itemId = viewState.articleId, link = viewState.articleLink)
+        }
 
         if (viewState.isTranslationLoading) {
             offsetCounter++

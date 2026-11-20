@@ -177,6 +177,7 @@ class SettingsStore(
                 // Unread is the default Show tab
                 read = sp.getBoolean(PREFS_FILTER_READ, false),
                 today = sp.getBoolean(PREFS_FILTER_TODAY, false),
+                downloaded = sp.getBoolean(PREFS_FILTER_DOWNLOADED, false),
             ),
         )
     val feedListFilter: StateFlow<FeedListFilter> = _feedListFilter.asStateFlow()
@@ -207,16 +208,48 @@ class SettingsStore(
      */
     fun setFeedListShow(value: FeedListShow) {
         val saved = value == FeedListShow.SAVED
+        val downloaded = value == FeedListShow.DOWNLOADED
         val recentlyRead = value != FeedListShow.SAVED
-        val read = value == FeedListShow.ALL
-        _feedListFilter.update { it.copy(saved = saved, recentlyRead = recentlyRead, read = read) }
+        val read = value == FeedListShow.ALL || downloaded
+        _feedListFilter.update { it.copy(saved = saved, recentlyRead = recentlyRead, read = read, downloaded = downloaded) }
         val editor = sp.edit()
+        editor.putBoolean(PREFS_FILTER_DOWNLOADED, downloaded)
         editor.putBoolean(PREFS_FILTER_SAVED, saved)
         editor.putBoolean(PREFS_FILTER_RECENTLY_READ, recentlyRead)
         editor.putBoolean(PREFS_FILTER_READ, read)
         // The Short reads filter is gone
         editor.remove(PREFS_FILTER_SHORT_READS)
         editor.apply()
+    }
+
+    /**
+     * Offline mode: no feed fetching, no sync and no full-text loading, even with internet. Read
+     * marks wait and go out with the next sync once it is switched off. Per device, never synced
+     * or exported.
+     */
+    private val _offlineMode = MutableStateFlow(sp.getBoolean(PREF_OFFLINE_MODE, false))
+    val offlineMode: StateFlow<Boolean> = _offlineMode.asStateFlow()
+
+    fun setOfflineMode(value: Boolean) {
+        _offlineMode.value = value
+        sp.edit().putBoolean(PREF_OFFLINE_MODE, value).apply()
+    }
+
+    /** Settings > Offline reading: how many of the newest unread articles to download, 0 = all. */
+    private val _offlineDownloadLimit = MutableStateFlow(sp.getInt(PREF_OFFLINE_DOWNLOAD_LIMIT, 250))
+    val offlineDownloadLimit: StateFlow<Int> = _offlineDownloadLimit.asStateFlow()
+
+    fun setOfflineDownloadLimit(value: Int) {
+        _offlineDownloadLimit.value = value
+        sp.edit().putInt(PREF_OFFLINE_DOWNLOAD_LIMIT, value).apply()
+    }
+
+    private val _offlineDownloadImages = MutableStateFlow(sp.getBoolean(PREF_OFFLINE_DOWNLOAD_IMAGES, true))
+    val offlineDownloadImages: StateFlow<Boolean> = _offlineDownloadImages.asStateFlow()
+
+    fun setOfflineDownloadImages(value: Boolean) {
+        _offlineDownloadImages.value = value
+        sp.edit().putBoolean(PREF_OFFLINE_DOWNLOAD_IMAGES, value).apply()
     }
 
     private val _currentTheme =
@@ -810,6 +843,10 @@ const val PREFS_FILTER_SAVED = "prefs_filter_saved"
 const val PREFS_FILTER_RECENTLY_READ = "prefs_filter_recently_read"
 const val PREFS_FILTER_READ = "prefs_filter_read"
 const val PREFS_FILTER_TODAY = "prefs_filter_today"
+const val PREFS_FILTER_DOWNLOADED = "prefs_filter_downloaded"
+const val PREF_OFFLINE_MODE = "pref_offline_mode"
+const val PREF_OFFLINE_DOWNLOAD_LIMIT = "pref_offline_download_limit"
+const val PREF_OFFLINE_DOWNLOAD_IMAGES = "pref_offline_download_images"
 
 // No longer used: the Short reads filter was removed. Cleared when the Show tab changes.
 const val PREFS_FILTER_SHORT_READS = "prefs_filter_short_reads"
@@ -1106,6 +1143,7 @@ data class PrefsFeedListFilter(
     override val recentlyRead: Boolean,
     override val read: Boolean,
     override val today: Boolean = false,
+    override val downloaded: Boolean = false,
 ) : FeedListFilter {
     override val unread: Boolean = true
 }

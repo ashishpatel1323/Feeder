@@ -8,6 +8,7 @@ import com.nononsenseapps.feeder.blob.blobFullFile
 import com.nononsenseapps.feeder.blob.blobFullOutputStream
 import com.nononsenseapps.feeder.db.room.FeedItemForFetching
 import com.nononsenseapps.feeder.db.room.estimateWordCount
+import com.nononsenseapps.feeder.model.offline.OfflineFiles
 import com.nononsenseapps.feeder.model.youtube.youtubeVideoId
 import com.nononsenseapps.feeder.ui.text.HtmlToPlainTextConverter
 import com.nononsenseapps.feeder.util.Either
@@ -32,8 +33,11 @@ class FullTextParser(
     private val repository: Repository by instance()
     private val okHttpClient: OkHttpClient by instance()
     private val filePathProvider: FilePathProvider by instance()
+    private val offlineFiles: OfflineFiles by instance()
 
     suspend fun parseFullArticlesForMissing(): Boolean {
+        // Offline mode: nothing is fetched
+        if (repository.offlineMode.value) return true
         logDebug(LOG_TAG, "Parsing full texts for missing")
         val itemsToSync: List<FeedItemForFetching> =
             repository
@@ -53,9 +57,21 @@ class FullTextParser(
             }
     }
 
-    suspend fun parseFullArticleIfMissing(feedItem: FeedItemForFetching): Either<FeedParserError, Unit> {
+    /**
+     * Fetches the full text unless it is already here. In Offline mode nothing is fetched,
+     * except by the Download for offline job ([ignoreOfflineMode]).
+     */
+    suspend fun parseFullArticleIfMissing(
+        feedItem: FeedItemForFetching,
+        ignoreOfflineMode: Boolean = false,
+    ): Either<FeedParserError, Unit> {
         val fullArticleFile =
             blobFullFile(itemId = feedItem.id, filesDir = filePathProvider.fullArticleDir)
+        offlineFiles.restoreFullText(feedItem.id)
+
+        if (!ignoreOfflineMode && repository.offlineMode.value && !fullArticleFile.isFile) {
+            return OfflineModeOn(feedItem.link ?: "").left()
+        }
 
         return try {
             if (fullArticleFile.isFile) {

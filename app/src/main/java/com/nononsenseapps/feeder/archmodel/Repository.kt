@@ -27,6 +27,7 @@ import com.nononsenseapps.feeder.db.room.SyncDevice
 import com.nononsenseapps.feeder.db.room.SyncRemote
 import com.nononsenseapps.feeder.model.FeedUnreadCount
 import com.nononsenseapps.feeder.model.ThumbnailImage
+import com.nononsenseapps.feeder.model.offline.OfflineFiles
 import com.nononsenseapps.feeder.model.syncMutex
 import com.nononsenseapps.feeder.model.youtube.VideoPositions
 import com.nononsenseapps.feeder.model.youtube.youtubeVideoId
@@ -74,6 +75,7 @@ class Repository(
     private val feedStore: FeedStore by instance()
     private val androidSystemStore: AndroidSystemStore by instance()
     private val applicationCoroutineScope: ApplicationCoroutineScope by instance()
+    private val offlineFiles: OfflineFiles by instance()
     private val application: Application by instance()
     private val syncRemoteStore: SyncRemoteStore by instance()
     private val syncClient: SyncRestClient by instance()
@@ -208,6 +210,43 @@ class Repository(
     fun setFeedListFilterToday(value: Boolean) {
         settingsStore.setFeedListFilterToday(value)
     }
+
+    /** Offline mode: no feed fetching, no sync, no full-text loading. See [SettingsStore.offlineMode]. */
+    val offlineMode: StateFlow<Boolean> = settingsStore.offlineMode
+
+    fun setOfflineMode(value: Boolean) {
+        val wasOffline = settingsStore.offlineMode.value
+        settingsStore.setOfflineMode(value)
+        if (wasOffline && !value) {
+            // Back online: a refresh syncs first, sending read marks made meanwhile, then fetches
+            runOnceRssSync(di = di, forceNetwork = true, triggeredByUser = true)
+        }
+    }
+
+    val offlineDownloadLimit: StateFlow<Int> = settingsStore.offlineDownloadLimit
+
+    fun setOfflineDownloadLimit(value: Int) = settingsStore.setOfflineDownloadLimit(value)
+
+    val offlineDownloadImages: StateFlow<Boolean> = settingsStore.offlineDownloadImages
+
+    fun setOfflineDownloadImages(value: Boolean) = settingsStore.setOfflineDownloadImages(value)
+
+    /** Count on the Downloaded tab, for the current feed or tag. */
+    val downloadedCountInCurrentFeed: Flow<Int>
+        get() = currentFeedAndTag.flatMapLatest { (feedId, tag) -> getDownloadedCount(feedId, tag) }
+
+    /** Articles downloaded for offline reading in the current feed or tag, for the Downloaded tab. */
+    fun getDownloadedCount(
+        feedId: Long,
+        tag: String,
+    ): Flow<Int> =
+        feedItemStore.getFeedItemCountRaw(
+            feedId = feedId,
+            tag = tag,
+            minReadTime = Instant.EPOCH,
+            filter = PrefsFeedListFilter(saved = false, recentlyRead = true, read = true, downloaded = true),
+            search = "",
+        )
 
     val search: MutableStateFlow<String> = MutableStateFlow("")
 
@@ -923,6 +962,7 @@ class Repository(
 
     suspend fun deleteFeedItems(ids: List<Long>) {
         feedItemStore.deleteFeedItems(ids)
+        offlineFiles.deleteDownloads(ids)
     }
 
     suspend fun deleteStaleRemoteReadMarks() {

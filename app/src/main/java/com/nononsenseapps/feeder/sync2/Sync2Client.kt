@@ -10,6 +10,7 @@ import com.nononsenseapps.feeder.db.room.HiddenItem
 import com.nononsenseapps.feeder.db.room.Sync2Dao
 import com.nononsenseapps.feeder.db.room.Sync2ItemKey
 import com.nononsenseapps.feeder.db.room.Sync2Known
+import com.nononsenseapps.feeder.model.offline.OfflineFiles
 import com.nononsenseapps.feeder.model.youtube.VideoPositions
 import com.nononsenseapps.feeder.sync.SyncRestClient
 import com.nononsenseapps.feeder.util.logDebug
@@ -59,6 +60,7 @@ class Sync2Client(
     private val okHttpClient: OkHttpClient by instance()
     private val oldClient: SyncRestClient by instance()
     private val videoPositions: VideoPositions by instance()
+    private val offlineFiles: OfflineFiles by instance()
     private val mutex = Mutex()
 
     @Volatile
@@ -183,6 +185,8 @@ class Sync2Client(
     /** One full exchange. Returns false when sync isn't set up. */
     suspend fun sync(): Boolean =
         mutex.withLock {
+            // Offline mode: changes wait here and go out with the first sync after it
+            if (repository.offlineMode.value) return@withLock false
             val remote = repository.getSyncRemote()
             if (!remote.hasSyncChain() || remote.secretKey.isBlank()) return@withLock false
             var state = getState()
@@ -429,7 +433,10 @@ class Sync2Client(
 
                 "hidden" -> {
                     if (v == true) {
-                        dao.hide(listOf(HiddenItem(feedUrl, guid, ts)), listOfNotNull(dao.getItemId(feedUrl, guid)))
+                        val itemIds = listOfNotNull(dao.getItemId(feedUrl, guid))
+                        dao.hide(listOf(HiddenItem(feedUrl, guid, ts)), itemIds)
+                        // Deleted on another device: its downloads go too
+                        offlineFiles.deleteDownloads(itemIds)
                     } else {
                         dao.deleteHidden(feedUrl, guid)
                     }
@@ -459,6 +466,9 @@ class Sync2Client(
         val items = dao.getItemKeys(itemIds)
         val rows = dao.getFeedItems(itemIds)
         dao.hide(items.map { HiddenItem(it.feedUrl, it.guid, now) }, items.map { it.id })
+        offlineFiles.deleteDownloads(items.map { it.id })
+        // Undo brings the articles back without their downloads
+        rows.forEach { it.offlineTime = null }
         return DeletedArticles(items, rows)
     }
 

@@ -264,7 +264,10 @@ class FeedItemStore(
         // Always blocklist
         append("block_time is null\n")
         // List filter
-        if (!onlySavedArticles && filter.saved) {
+        if (!onlySavedArticles && filter.downloaded) {
+            // Downloaded tab: articles downloaded for offline reading, read or unread
+            append("AND feed_items.offline_time IS NOT NULL\n")
+        } else if (!onlySavedArticles && filter.saved) {
             // Saved tab: saved articles only, read or unread
             append("AND bookmarked = 1\n")
         } else if (!onlySavedArticles) {

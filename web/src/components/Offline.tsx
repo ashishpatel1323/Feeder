@@ -9,11 +9,14 @@ import {
   removeAllVideos,
   removeOfflineCopies,
   removeVideo,
+  saveSubtitles,
   saveVideo,
+  savedSubtitleUrls,
   savedVideoUrl,
   stopOfflineDownload,
   storageUsed,
   useOfflineJob,
+  useSubsRunning,
   useVideoJobs,
   useVideoSavingAvailable,
 } from '../lib/offline'
@@ -134,8 +137,34 @@ export function OfflineSection({ toast }: { toast: (m: string) => void }) {
 }
 
 /** The saved MP4 in a plain video player, resuming and saving the position like the YouTube player. */
-export function LocalVideo({ itemId, videoId, title }: { itemId: string; videoId: string; title: string }) {
+/** "English", "English (United States)", "Hindi"; auto captions are YouTube's own guesses. */
+function langLabel(lang: string): string {
+  const base = lang.replace(/-orig$/, '')
+  try {
+    return new Intl.DisplayNames([navigator.language || 'en'], { type: 'language' }).of(base) ?? lang
+  } catch {
+    return lang
+  }
+}
+
+export function LocalVideo({ itemId, videoId, title, subs }: { itemId: string; videoId: string; title: string; subs?: string[] }) {
   const [src, setSrc] = useState<string | null>(null)
+  const [tracks, setTracks] = useState<{ lang: string; url: string }[]>([])
+  const subsKey = (subs ?? []).join(',')
+
+  useEffect(() => {
+    let live = true
+    let urls: { url: string }[] = []
+    savedSubtitleUrls(videoId, subsKey ? subsKey.split(',') : []).then((t) => {
+      urls = t
+      if (live) setTracks(t)
+      else t.forEach((x) => URL.revokeObjectURL(x.url))
+    })
+    return () => {
+      live = false
+      urls.forEach((x) => URL.revokeObjectURL(x.url))
+    }
+  }, [videoId, subsKey])
   const [missing, setMissing] = useState(false)
   const ref = useRef<HTMLVideoElement>(null)
 
@@ -188,7 +217,13 @@ export function LocalVideo({ itemId, videoId, title }: { itemId: string; videoId
   if (missing) return <div className="video-frame video-missing">The offline copy is gone. Save it again.</div>
   return (
     <div className="video-frame">
-      {src ? <video ref={ref} src={src} controls playsInline preload="metadata" title={title} /> : null}
+      {src ? (
+        <video ref={ref} src={src} controls playsInline preload="metadata" title={title}>
+          {tracks.map((t, i) => (
+            <track key={t.lang} kind="subtitles" srcLang={t.lang.replace(/-orig$/, '')} label={langLabel(t.lang)} src={t.url} default={i === 0} />
+          ))}
+        </video>
+      ) : null}
     </div>
   )
 }
@@ -207,6 +242,8 @@ export function VideoOfflineControls({
 }) {
   const jobs = useVideoJobs()
   const available = useVideoSavingAvailable()
+  const subsBusy = !!useSubsRunning()[videoId]
+  const [subsError, setSubsError] = useState('')
   const run = jobs[videoId]
 
   if (item.offlineVideo) {
@@ -218,6 +255,28 @@ export function VideoOfflineControls({
         <button className="open-youtube" onClick={() => void removeVideo(item.id, videoId)} title="Delete the saved copy from this browser">
           <Icon name="delete" size={18} /> Remove offline video ({formatBytes(item.offlineVideo)})
         </button>
+        {subsBusy ? (
+          <span className="video-saving">Getting subtitles…</span>
+        ) : item.offlineSubs?.length ? (
+          <span className="video-subs" title="Turn them on or off with the CC button in the player">
+            Subtitles: {item.offlineSubs.map(langLabel).join(', ')}
+          </span>
+        ) : (
+          <button
+            className="open-youtube"
+            disabled={!available}
+            title={available ? 'Get subtitles or YouTube auto captions with yt-dlp' : 'Needs Feeder running on your Mac'}
+            onClick={() => {
+              setSubsError('')
+              saveSubtitles(item.id, videoId)
+                .then((l) => !l.length && setSubsError('This video has no English or Hindi subtitles'))
+                .catch((e) => setSubsError(e instanceof Error ? e.message : String(e)))
+            }}
+          >
+            {item.offlineSubs ? 'Try subtitles again' : 'Add subtitles'}
+          </button>
+        )}
+        {subsError ? <span className="video-error">{subsError}</span> : null}
       </>
     )
   }

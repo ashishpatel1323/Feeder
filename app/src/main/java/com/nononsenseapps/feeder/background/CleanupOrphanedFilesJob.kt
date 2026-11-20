@@ -11,6 +11,7 @@ import androidx.core.content.getSystemService
 import com.nononsenseapps.feeder.blob.blobFile
 import com.nononsenseapps.feeder.blob.blobFullFile
 import com.nononsenseapps.feeder.db.room.FeedItemDao
+import com.nononsenseapps.feeder.model.offline.OfflineFiles
 import com.nononsenseapps.feeder.util.FilePathProvider
 import com.nononsenseapps.feeder.util.logDebug
 import kotlinx.coroutines.Dispatchers
@@ -31,6 +32,7 @@ class CleanupOrphanedFilesJob(
 
     private val filePathProvider: FilePathProvider by instance()
     private val feedItemDao: FeedItemDao by instance()
+    private val offlineFiles: OfflineFiles by instance()
 
     override val jobId: Int = params.jobId
 
@@ -49,6 +51,11 @@ class CleanupOrphanedFilesJob(
 
             // Clean up full article files in fullArticleDir
             cleanupDirectory(filePathProvider.fullArticleDir, validFeedItemIds, ::blobFullFile)
+
+            // Downloads for offline reading of articles that are gone (deleted feeds, synced deletes)
+            withContext(Dispatchers.IO) {
+                offlineFiles.deleteOrphans(validFeedItemIds.toSet())
+            }
 
             Log.i(LOG_TAG, "Completed cleanup of orphaned article files")
         } catch (e: Exception) {

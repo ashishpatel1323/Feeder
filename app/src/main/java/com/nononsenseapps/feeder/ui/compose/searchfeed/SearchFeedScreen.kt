@@ -79,6 +79,7 @@ import com.nononsenseapps.feeder.model.NoBody
 import com.nononsenseapps.feeder.model.NoUrl
 import com.nononsenseapps.feeder.model.NotHTML
 import com.nononsenseapps.feeder.model.NotInitializedYet
+import com.nononsenseapps.feeder.model.OfflineModeOn
 import com.nononsenseapps.feeder.model.RSSParseError
 import com.nononsenseapps.feeder.model.UnsupportedContentType
 import com.nononsenseapps.feeder.ui.compose.components.safeSemantics
@@ -588,6 +589,7 @@ fun ColumnScope.rightContent(
                         is FullTextDecodingFailure -> stringResource(R.string.failed_to_parse_full_article)
                         is FullTextTooLarge -> stringResource(R.string.failed_to_fetch_full_article_too_large)
                         is NoUrl -> stringResource(R.string.no_url)
+                        is OfflineModeOn -> stringResource(R.string.offline_mode_is_on)
                     }
 
                 ErrorResultView(
