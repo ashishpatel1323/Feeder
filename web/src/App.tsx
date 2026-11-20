@@ -8,6 +8,7 @@ import { refreshFeeds } from './lib/refresh'
 import { getSyncState, syncNow } from './lib/sync2'
 import { fetchOgImages } from './lib/extras'
 import { readAloud } from './lib/readaloud'
+import { cleanupOffline } from './lib/offline'
 import { Sidebar } from './components/Sidebar'
 import { ArticleList } from './components/ArticleList'
 import { Reader } from './components/Reader'
@@ -198,7 +199,8 @@ export default function App() {
 
   // Sync and refresh
   const fullRefresh = useCallback(async () => {
-    if (refreshing) return
+    // Offline: nothing to fetch; read marks wait and go out when the connection is back
+    if (refreshing || !navigator.onLine) return
     try {
       setRefreshing('sync')
       await syncNow().catch((e) => toast(`Sync: ${e instanceof Error ? e.message : e}`))
@@ -233,11 +235,19 @@ export default function App() {
     }
   }, [settings.refreshMinutes])
 
+  // Back online: send what changed while offline, then fetch new articles
+  useEffect(() => {
+    const onOnline = () => void syncNow().catch(() => undefined).then(() => fullRefreshRef.current())
+    window.addEventListener('online', onOnline)
+    void cleanupOffline().catch(() => undefined)
+    return () => window.removeEventListener('online', onOnline)
+  }, [])
+
   // Send read marks, saves and deletions shortly after they change
   const deletedCount = useLiveQuery(() => db.hidden.count(), []) ?? 0
   const pendingMarks = items.filter((i) => !i.readSynced).length + deletedCount
   useEffect(() => {
-    if (!pendingMarks || !syncState) return
+    if (!pendingMarks || !syncState || !navigator.onLine) return
     const t = window.setTimeout(() => syncNow().catch(() => undefined), 5000)
     return () => clearTimeout(t)
   }, [pendingMarks, syncState])

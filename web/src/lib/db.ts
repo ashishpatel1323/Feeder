@@ -47,6 +47,12 @@ export interface Item {
   fullWordCount?: number
   ogChecked?: number
   summary?: string | null
+  /** Offline reading (offline.ts), local only: when the offline copy was saved. */
+  offlineAt?: number
+  /** Image URLs of this article saved in the offline image cache. */
+  offlineImages?: string[]
+  /** Size in bytes of the YouTube video saved for offline watching. */
+  offlineVideo?: number
 }
 
 /** A read mark received from the chain for an article this browser hasn't fetched yet. */
