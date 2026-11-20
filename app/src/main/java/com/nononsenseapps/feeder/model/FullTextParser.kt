@@ -8,6 +8,7 @@ import com.nononsenseapps.feeder.blob.blobFullFile
 import com.nononsenseapps.feeder.blob.blobFullOutputStream
 import com.nononsenseapps.feeder.db.room.FeedItemForFetching
 import com.nononsenseapps.feeder.db.room.estimateWordCount
+import com.nononsenseapps.feeder.model.youtube.youtubeVideoId
 import com.nononsenseapps.feeder.ui.text.HtmlToPlainTextConverter
 import com.nononsenseapps.feeder.util.Either
 import com.nononsenseapps.feeder.util.FilePathProvider
@@ -41,6 +42,8 @@ class FullTextParser(
                 ?: emptyList()
 
         return itemsToSync
+            // YouTube pages have no article text; the reader plays the video instead
+            .filter { youtubeVideoId(it.link) == null }
             .map { feedItem ->
                 parseFullArticleIfMissing(
                     feedItem = feedItem,

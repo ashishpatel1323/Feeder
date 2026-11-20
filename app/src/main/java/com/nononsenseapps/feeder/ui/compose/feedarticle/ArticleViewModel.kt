@@ -49,6 +49,7 @@ import com.nononsenseapps.feeder.model.TranslationManager
 import com.nononsenseapps.feeder.model.UnsupportedContentType
 import com.nononsenseapps.feeder.model.html.HtmlLinearizer
 import com.nononsenseapps.feeder.model.html.LinearArticle
+import com.nononsenseapps.feeder.model.youtube.youtubeVideoId
 import com.nononsenseapps.feeder.openai.OpenAIApi
 import com.nononsenseapps.feeder.openai.canSummarize
 import com.nononsenseapps.feeder.openai.canUseAsTranslationApi
@@ -396,6 +397,8 @@ class ArticleViewModel(
                         .orEmpty(),
                 showBergamotRuntimeDownloadPrompt = translationState is ArticleTranslationState.RuntimeDownloadRequired,
                 articleContent = if (isShowingTranslated) translatedArticleContent else articleContent,
+                youtubeId = article?.youtubeId,
+                articleKey = article?.articleKey ?: "",
             )
         }.stateIn(
             scope = viewModelScope,
@@ -708,7 +711,7 @@ class ArticleViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             val feedItem = repository.getCurrentArticle() ?: return@launch
             val article = Article(feedItem)
-            val readFullText = displayFullTextOverride.value ?: feedItem.fullTextByDefault
+            val readFullText = displayFullTextOverride.value ?: (feedItem.fullTextByDefault && youtubeVideoId(feedItem.link) == null)
             val textToRead =
                 if (showTranslatedContent.value) {
                     Either.catching<TSSError, List<AnnotatedString>>(
@@ -1230,10 +1233,17 @@ private data class ArticleState(
     override val systemTranslationSettingsMessage: String = "",
     override val showBergamotRuntimeDownloadPrompt: Boolean = false,
     override val articleContent: LinearArticle = LinearArticle(emptyList()),
+    override val youtubeId: String? = null,
+    override val articleKey: String = "",
 ) : ArticleScreenViewState
 
 @Immutable
 interface ArticleScreenViewState {
+    /** YouTube video of the article link: played at the top of the article */
+    val youtubeId: String?
+
+    /** feedUrl + "\n" + guid, as in sync */
+    val articleKey: String
     val useDetectLanguage: Boolean
     val isBottomBarVisible: Boolean
     val isTTSPlaying: Boolean

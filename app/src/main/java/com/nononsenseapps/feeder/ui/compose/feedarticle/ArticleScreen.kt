@@ -809,6 +809,16 @@ fun ArticleContent(
         contentImageUrls = contentImageUrls,
         modifier = if (onUserScroll != null) modifier.stopSpeechFollowingOnAccessibilityScroll(articleScrollState, onUserScroll) else modifier,
         articleScrollState = articleScrollState,
+        video =
+            viewState.youtubeId?.let { videoId ->
+                {
+                    YouTubeVideoBlock(
+                        videoId = videoId,
+                        articleKey = viewState.articleKey,
+                        title = viewState.articleTitle,
+                    )
+                }
+            },
     ) { indexOffset ->
         var offsetCounter = indexOffset
 

@@ -13,6 +13,7 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -107,6 +108,8 @@ fun ReaderView(
     contentImageUrls: Set<String>,
     modifier: Modifier = Modifier,
     articleScrollState: ScrollState = rememberScrollState(),
+    // YouTube's player for a YouTube article, shown in place of the header image
+    video: (@Composable () -> Unit)? = null,
     articleBody: @Composable (indexOffset: Int) -> Unit,
 ) {
     val dimens = LocalDimens.current
@@ -369,7 +372,12 @@ fun ReaderView(
                     }
                 }
 
-                if (image != null && shouldShowHeaderImage(showHeaderImage, image, contentImageUrls)) {
+                if (video != null) {
+                    offsetCounter++
+                    Box(modifier = Modifier.width(dimens.maxReaderWidth)) {
+                        video()
+                    }
+                } else if (image != null && shouldShowHeaderImage(showHeaderImage, image, contentImageUrls)) {
                     val openImage = rememberImageViewer(image.url, enclosure.name)
                     val imageWidth: Int =
                         if (image.width?.let { it < 640 } == true) {
