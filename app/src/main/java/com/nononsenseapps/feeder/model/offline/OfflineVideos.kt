@@ -255,6 +255,11 @@ class OfflineVideos(
             }
         }
 
+    /** Drops cached stream addresses that stopped working. */
+    fun forgetStreams(link: String) {
+        streamCache.remove(link)
+    }
+
     private fun setJob(
         itemId: Long,
         job: VideoJob?,

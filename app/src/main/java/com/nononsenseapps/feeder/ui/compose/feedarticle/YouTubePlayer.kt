@@ -5,7 +5,6 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
-import android.content.pm.ActivityInfo
 import android.graphics.Color
 import android.net.Uri
 import android.os.Handler
@@ -68,6 +67,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
@@ -139,7 +139,8 @@ fun YouTubeVideoBlock(
                         .aspectRatio(16f / 9f)
                 // No ads: the video's own streams (from yt-dlp) play in the app's player, like
                 // Flow and NewPipe. YouTube's embedded player is the fallback when that fails.
-                val streams by produceState<StreamState>(StreamState.Loading, videoId) {
+                var playFailed by remember(videoId) { mutableStateOf(false) }
+                val resolved by produceState<StreamState>(StreamState.Loading, videoId) {
                     value =
                         try {
                             StreamState.Ready(offlineVideos.streamUrls(youtubeWatchUrl(videoId)))
@@ -150,6 +151,8 @@ fun YouTubeVideoBlock(
                             StreamState.Failed
                         }
                 }
+                // A stream that resolves but won't play (expired, unsupported) also falls back
+                val streams = if (playFailed) StreamState.Failed else resolved
                 when (val current = streams) {
                     StreamState.Loading ->
                         Box(
@@ -164,6 +167,10 @@ fun YouTubeVideoBlock(
                             urls = current.urls,
                             start = start,
                             onPosition = onPosition,
+                            onError = {
+                                offlineVideos.forgetStreams(youtubeWatchUrl(videoId))
+                                playFailed = true
+                            },
                             modifier = playerModifier,
                         )
 
@@ -350,7 +357,7 @@ private sealed interface StreamState {
 
 /**
  * The video's own streams in the app's player (Media3): no ads. Same position reports as
- * [YouTubePlayer]. Its fullscreen button opens a landscape fullscreen view.
+ * [YouTubePlayer]. Its fullscreen button opens a fullscreen view.
  */
 @OptIn(UnstableApi::class)
 @Composable
@@ -358,11 +365,13 @@ private fun AdFreePlayer(
     urls: StreamUrls,
     start: Int,
     onPosition: (t: Double, d: Double, stopped: Boolean) -> Unit,
+    onError: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val currentOnPosition by rememberUpdatedState(onPosition)
+    val currentOnError by rememberUpdatedState(onError)
     val reporter = remember(urls) { PlaybackReporter { t, d, stopped -> currentOnPosition(t, d, stopped) } }
     var fullscreen by remember(urls) { mutableStateOf(false) }
     val player =
@@ -390,6 +399,11 @@ private fun AdFreePlayer(
 
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     if (playbackState == Player.STATE_ENDED) reporter.ended(player.durationSeconds())
+                }
+
+                override fun onPlayerError(error: PlaybackException) {
+                    Log.w(LOG_TAG, "Direct stream failed, using YouTube's player", error)
+                    currentOnError()
                 }
             }
         player.addListener(listener)
@@ -429,15 +443,9 @@ private fun AdFreePlayer(
         modifier = modifier.background(ComposeColor.Black),
     )
 
+    // Fullscreen keeps the phone's orientation: forcing landscape would recreate the screen
+    // and stop the video. Turning the phone (with rotation on) gives landscape.
     if (fullscreen) {
-        DisposableEffect(Unit) {
-            val activity = context.findActivity()
-            val before = activity?.requestedOrientation
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            onDispose {
-                if (activity != null && before != null) activity.requestedOrientation = before
-            }
-        }
         Dialog(
             onDismissRequest = { fullscreen = false },
             properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
