@@ -101,22 +101,25 @@ fun YouTubeVideoBlock(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = modifier.fillMaxWidth(),
         ) {
-            YouTubePlayer(
-                videoId = videoId,
-                start = start,
-                title = title,
-                onPosition = { t, d, stopped ->
-                    if (articleKey.isNotEmpty()) {
-                        videoPositions.save(articleKey, t, d)
-                        // Sent when it stops, even if a save while playing already wrote this position
-                        if (stopped) runOnceSyncChainSendRead(di)
-                    }
-                },
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(16f / 9f),
-            )
+            // Each article gets its own player and position tracking, even for the same video
+            key(articleKey) {
+                YouTubePlayer(
+                    videoId = videoId,
+                    start = start,
+                    title = title,
+                    onPosition = { t, d, stopped ->
+                        if (articleKey.isNotEmpty()) {
+                            videoPositions.save(articleKey, t, d)
+                            // Sent when it stops, even if a save while playing already wrote this position
+                            if (stopped) runOnceSyncChainSendRead(di)
+                        }
+                    },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(16f / 9f),
+                )
+            }
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -329,6 +332,8 @@ private class PositionTracker(
     /** Writes down where it stopped and sends it to other devices. */
     fun stop() {
         val l = last ?: return
+        // Reported once: a later stop must not overwrite a newer position from another device
+        last = null
         lastSaved = System.currentTimeMillis()
         report(l.first, l.second, true)
     }

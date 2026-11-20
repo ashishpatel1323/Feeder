@@ -685,7 +685,8 @@ class Repository(
         runOnceSyncChainSendRead(di)
     }
 
-    suspend fun shouldDisplayFullTextForItemByDefault(itemId: Long): Boolean = feedItemStore.getFullTextByDefault(itemId)
+    suspend fun shouldDisplayFullTextForItemByDefault(itemId: Long): Boolean =
+        feedItemStore.getFullTextByDefault(itemId) && youtubeVideoId(getLink(itemId)) == null
 
     suspend fun getLink(itemId: Long): String? = feedItemStore.getLink(itemId)
 

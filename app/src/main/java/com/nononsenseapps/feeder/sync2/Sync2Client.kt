@@ -375,7 +375,7 @@ class Sync2Client(
         for ((key, pos) in videoPositions.all.value) {
             val kn = knownVideos[key]
             val value = linkedMapOf<String, Any?>("t" to pos.t, "d" to pos.d)
-            if (kn == null || (pos.ts > kn.ts && !sameVideoValue(parse(kn.v), pos.t, pos.d))) {
+            if (kn == null || pos.ts > kn.ts) {
                 out += Pending("video", key, value, maxOf(pos.ts, (kn?.ts ?: 0) + 1))
             }
         }
