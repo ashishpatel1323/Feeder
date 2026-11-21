@@ -200,7 +200,8 @@ fun YouTubeVideoBlock(
                         onOpenInYouTube = openInYouTube,
                     )
                 } else {
-                    OpenInYouTubeRow(positionLabel, openInYouTube)
+                    // Download stays here too: saving can work when direct playback doesn't
+                    OpenInYouTubeRow(positionLabel, openInYouTube, itemId.takeIf { it > 0 && link != null }, link)
                 }
             }
         }
@@ -211,6 +212,8 @@ fun YouTubeVideoBlock(
 private fun OpenInYouTubeRow(
     positionLabel: String?,
     onOpenInYouTube: () -> Unit,
+    downloadItemId: Long?,
+    link: String?,
 ) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -227,6 +230,9 @@ private fun OpenInYouTubeRow(
                 text = stringResource(R.string.open_in_youtube_app),
                 modifier = Modifier.padding(start = ButtonDefaults.IconSpacing),
             )
+        }
+        if (downloadItemId != null && link != null) {
+            DownloadVideoButton(downloadItemId, link)
         }
         if (positionLabel != null) {
             Text(

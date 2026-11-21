@@ -924,9 +924,7 @@ internal fun VideoInfo(
 ) {
     val di = LocalDI.current
     val playback: YouTubePlayback by di.instance()
-    val offlineVideos: OfflineVideos by di.instance()
     val state by playback.state.collectAsState()
-    val jobs by offlineVideos.jobs.collectAsState()
     val current = state?.takeIf { it.key == key }
     var expanded by rememberSaveable(key) { mutableStateOf(false) }
 
@@ -994,16 +992,7 @@ internal fun VideoInfo(
                 )
             }
             if (itemId > 0 && link != null) {
-                val job = jobs[itemId]
-                val label =
-                    if (job != null && job.phase != VideoPhase.ERROR) {
-                        stringResource(R.string.video_downloading, job.percent.toInt())
-                    } else {
-                        stringResource(R.string.video_download)
-                    }
-                InfoButton(Icons.Outlined.Download, label, padding) {
-                    if (job == null || job.phase == VideoPhase.ERROR) offlineVideos.save(itemId, link)
-                }
+                DownloadVideoButton(itemId, link, padding)
             }
             if (current != null) {
                 InfoButton(
@@ -1032,6 +1021,27 @@ internal fun VideoInfo(
                 }
             }
         }
+    }
+}
+
+/** Save video offline, with its progress: the same job as the panel under the video. */
+@Composable
+internal fun DownloadVideoButton(
+    itemId: Long,
+    link: String,
+    padding: PaddingValues = ButtonDefaults.ContentPadding,
+) {
+    val offlineVideos: OfflineVideos by LocalDI.current.instance()
+    val jobs by offlineVideos.jobs.collectAsState()
+    val job = jobs[itemId]
+    val label =
+        if (job != null && job.phase != VideoPhase.ERROR) {
+            stringResource(R.string.video_downloading, job.percent.toInt())
+        } else {
+            stringResource(R.string.video_download)
+        }
+    InfoButton(Icons.Outlined.Download, label, padding) {
+        if (job == null || job.phase == VideoPhase.ERROR) offlineVideos.save(itemId, link)
     }
 }
 
