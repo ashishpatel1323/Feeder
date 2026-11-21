@@ -821,6 +821,10 @@ fun ArticleContent(
                         videoId = youtubeId,
                         articleKey = viewState.articleKey,
                         title = viewState.articleTitle,
+                        itemId = viewState.articleId,
+                        link = viewState.articleLink,
+                        isBookmarked = viewState.isBookmarked,
+                        onToggleBookmark = onBookmark,
                     )
                 }
             } else {
@@ -832,7 +836,8 @@ fun ArticleContent(
         // YouTube articles: Save video offline, and the saved copy's player
         if (viewState.articleId > ID_UNSET && viewState.articleLink?.let { isYouTubeLink(it) } == true) {
             offsetCounter++
-            OfflineVideoPanel(itemId = viewState.articleId, link = viewState.articleLink)
+            // The player's Download button saves it; this shows progress, errors and the saved copy
+            OfflineVideoPanel(itemId = viewState.articleId, link = viewState.articleLink, showSaveButton = youtubeId == null)
         }
 
         if (viewState.isTranslationLoading) {

@@ -18,7 +18,9 @@ import com.nononsenseapps.feeder.localtranslation.LocalTranslator
 import com.nononsenseapps.feeder.model.OPMLParserHandler
 import com.nononsenseapps.feeder.model.TranslationManager
 import com.nononsenseapps.feeder.model.opml.OPMLImporter
+import com.nononsenseapps.feeder.model.youtube.SponsorBlock
 import com.nononsenseapps.feeder.model.youtube.VideoPositions
+import com.nononsenseapps.feeder.model.youtube.YouTubePlayback
 import com.nononsenseapps.feeder.openai.GeminiNanoSummarizer
 import com.nononsenseapps.feeder.openai.OpenAIApi
 import com.nononsenseapps.feeder.openai.OpenAIClient
@@ -59,6 +61,8 @@ val archModelModule =
         bind<LocalTranslator>() with singleton { LocalTranslator(di) }
         bind<TranslationManager>() with singleton { TranslationManager(di) }
         bind<VideoPositions>() with singleton { VideoPositions(di) }
+        bind<SponsorBlock>() with singleton { SponsorBlock(instance()) }
+        bind<YouTubePlayback>() with singleton { YouTubePlayback(di) }
         bindFactory<OpenAISettings, OpenAIClient> { settings -> OpenAIClientDefault(settings) }
         bind<OpenAIApi>() with
             singleton {

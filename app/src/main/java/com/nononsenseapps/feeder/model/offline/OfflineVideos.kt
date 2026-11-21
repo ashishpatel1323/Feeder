@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import com.nononsenseapps.feeder.ApplicationCoroutineScope
 import com.nononsenseapps.feeder.db.room.FeedItemDao
+import com.nononsenseapps.feeder.model.youtube.VideoDetails
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import kotlinx.coroutines.CancellationException
@@ -32,12 +33,6 @@ data class SavedVideo(
     val sizeBytes: Long
         get() = video.length() + (audio?.length() ?: 0L) + subtitles.sumOf { it.length() }
 }
-
-/** Direct stream addresses of a YouTube video: [audio] is null when [video] already has sound. */
-data class StreamUrls(
-    val video: String,
-    val audio: String?,
-)
 
 /** A Save video offline in progress (or failed). */
 data class VideoJob(
@@ -228,36 +223,34 @@ class OfflineVideos(
         }
     }
 
-    private val streamCache = ConcurrentHashMap<String, Pair<Long, StreamUrls>>()
+    private val detailsCache = ConcurrentHashMap<String, Pair<Long, VideoDetails>>()
 
     /**
-     * The video's own stream addresses, from yt-dlp, for playing it in the app's player instead of
-     * YouTube's embed: no ads, like NewPipe-based apps (Flow, LibreTube). Up to 720p, H.264 when
-     * there is one. Addresses expire after some hours, so they are kept for a while only.
+     * Everything the app's player needs about a video, from yt-dlp: its own streams (every
+     * quality and audio track), subtitles, chapters and info. Playing these streams instead of
+     * YouTube's embed means no ads, like NewPipe-based apps (Flow, LibreTube). Stream addresses
+     * expire after some hours, so details are kept for a while only.
      */
-    suspend fun streamUrls(link: String): StreamUrls =
+    suspend fun videoDetails(link: String): VideoDetails =
         withContext(Dispatchers.IO) {
-            streamCache[link]?.let { (at, urls) ->
-                if (System.currentTimeMillis() - at < STREAM_URLS_FOR_MS) return@withContext urls
+            detailsCache[link]?.let { (at, details) ->
+                if (System.currentTimeMillis() - at < STREAM_URLS_FOR_MS) return@withContext details
             }
             ensureReady()
             val response =
                 YoutubeDL.getInstance().execute(
                     YoutubeDLRequest(link)
                         .addOption("--no-playlist")
-                        .addOption("-f", "bv[height<=720][ext=mp4][vcodec^=avc1]+ba[ext=m4a]/b[height<=720][ext=mp4]/b")
-                        .addOption("-g"),
+                        .addOption("-J"),
                 )
-            val lines = response.out.lines().map { it.trim() }.filter { it.startsWith("http") }
-            check(lines.isNotEmpty()) { "yt-dlp found no stream" }
-            StreamUrls(video = lines[0], audio = lines.getOrNull(1)).also {
-                streamCache[link] = System.currentTimeMillis() to it
-            }
+            val details = VideoDetails.parse(response.out)
+            check(details.hasStreams) { "yt-dlp found no stream" }
+            details.also { detailsCache[link] = System.currentTimeMillis() to it }
         }
 
-    /** Drops cached stream addresses that stopped working. */
-    fun forgetStreams(link: String) {
-        streamCache.remove(link)
+    /** Drops cached details whose streams stopped working. */
+    fun forgetDetails(link: String) {
+        detailsCache.remove(link)
     }
 
     private fun setJob(
