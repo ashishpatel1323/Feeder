@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -27,7 +28,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -554,6 +554,9 @@ private class FlipCardState(
     var body by mutableStateOf<CardBody>(CardBody.Text)
         private set
 
+    // Shared by both halves of the page, so they scroll together
+    val summaryScroll = ScrollState(0)
+
     fun summarize(item: FeedListItem) {
         val cached = flipCardTexts.cachedSummary(itemId)
         if (cached != null) {
@@ -821,7 +824,7 @@ private fun FlipArticleCard(
                         // Scrolls when a long title leaves too little room for all three bullets
                         SummaryBullets(
                             bullets = current.bullets,
-                            modifier = Modifier.verticalScroll(rememberScrollState()),
+                            modifier = Modifier.verticalScroll(state.summaryScroll),
                         )
 
                     is CardBody.Failed ->
