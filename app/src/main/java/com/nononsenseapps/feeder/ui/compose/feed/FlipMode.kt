@@ -51,6 +51,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -308,6 +309,7 @@ fun FeedFlipContent(
                     rememberFlipCardState(
                         item = item,
                         translated = item != loadedItem,
+                        active = pagerState.settledPage == pageIndex,
                         flipCardTexts = flipCardTexts,
                     )
                 } else {
@@ -592,9 +594,11 @@ private class FlipCardState(
 private fun rememberFlipCardState(
     item: FeedListItem,
     translated: Boolean,
+    active: Boolean,
     flipCardTexts: FlipCardTexts,
 ): FlipCardState {
     val scope = rememberCoroutineScope()
+    val offline by flipCardTexts.offlineMode.collectAsState()
     val failedText = stringResource(R.string.flip_summary_failed)
     val state =
         remember(item.id) {
@@ -607,8 +611,10 @@ private fun rememberFlipCardState(
             )
         }
     // The feed snippet is cut at 200 characters, so the longer article text is loaded for the card.
-    // A translated card keeps its translated snippet.
-    LaunchedEffect(item.id, translated, item.snippet) {
+    // A translated card keeps its translated snippet. Loading again when the card comes on screen
+    // or Offline mode is turned off retries a page that could not be fetched before; text that was
+    // loaded in full comes straight from the cache.
+    LaunchedEffect(item.id, translated, item.snippet, active, offline) {
         state.bodyText =
             if (translated) {
                 item.snippet

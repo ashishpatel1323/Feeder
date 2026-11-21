@@ -20,6 +20,7 @@ import com.nononsenseapps.feeder.ui.compose.readaloud.speechText
 import com.nononsenseapps.feeder.util.FilePathProvider
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
@@ -78,6 +79,10 @@ class FlipCardTexts(
         get() = File(application.cacheDir, "flip_summaries")
 
     fun cachedText(itemId: Long): String? = texts.get(itemId)
+
+    /** Cards load their text again when Offline mode is turned off. */
+    val offlineMode: StateFlow<Boolean>
+        get() = repository.offlineMode
 
     /** The article text for a card, or [fallback] when there is nothing longer. */
     suspend fun cardText(
