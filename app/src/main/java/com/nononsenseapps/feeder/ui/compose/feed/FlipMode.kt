@@ -570,11 +570,11 @@ private fun FlipArticleCard(
 
     // The feed snippet is cut at 200 characters, so the longer article text is loaded for the card.
     // A translated card keeps its translated snippet.
-    var bodyText by remember(item.id, translated) {
+    var bodyText by remember(item.id, translated, item.snippet) {
         mutableStateOf(if (translated) item.snippet else flipCardTexts.cachedText(item.id) ?: item.snippet)
     }
     if (!translated) {
-        LaunchedEffect(item.id) {
+        LaunchedEffect(item.id, item.snippet) {
             bodyText = flipCardTexts.cardText(itemId = item.id, link = item.link, fallback = item.snippet)
         }
     }

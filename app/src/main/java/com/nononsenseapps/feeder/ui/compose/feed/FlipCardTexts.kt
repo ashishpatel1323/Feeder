@@ -12,6 +12,7 @@ import com.nononsenseapps.feeder.blob.blobInputStream
 import com.nononsenseapps.feeder.db.room.FeedItemForFetching
 import com.nononsenseapps.feeder.model.FullTextParser
 import com.nononsenseapps.feeder.model.html.HtmlLinearizer
+import com.nononsenseapps.feeder.model.offline.OfflineFiles
 import com.nononsenseapps.feeder.model.youtube.youtubeVideoId
 import com.nononsenseapps.feeder.openai.OnDeviceStatus
 import com.nononsenseapps.feeder.openai.OnDeviceSummarizer
@@ -19,7 +20,9 @@ import com.nononsenseapps.feeder.ui.compose.readaloud.speechText
 import com.nononsenseapps.feeder.util.FilePathProvider
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import org.kodein.di.DI
@@ -27,6 +30,7 @@ import org.kodein.di.DIAware
 import org.kodein.di.instance
 import java.io.File
 import java.io.InputStream
+import java.util.concurrent.ConcurrentHashMap
 
 // Below this the feed sent only a teaser, so the opening of the article page is used instead
 private const val SHORT_FEED_TEXT = 500
@@ -58,12 +62,17 @@ class FlipCardTexts(
     private val filePathProvider: FilePathProvider by instance()
     private val fullTextParser: FullTextParser by instance()
     private val onDeviceSummarizer: OnDeviceSummarizer by instance()
+    private val offlineFiles: OfflineFiles by instance()
 
     private val texts = LruCache<Long, String>(64)
     private val summaries = LruCache<Long, List<String>>(64)
 
     // Flipping fast should not start a page download for every card at once
     private val fetches = Semaphore(2)
+
+    // The card and its Summarize button can ask for the same article at once; one of them fetches
+    // and the other waits, so the page is never written twice or read half written
+    private val articleLocks = ConcurrentHashMap<Long, Mutex>()
 
     private val summaryDir: File
         get() = File(application.cacheDir, "flip_summaries")
@@ -152,18 +161,23 @@ class FlipCardTexts(
                 if (feedText.length >= SHORT_FEED_TEXT) {
                     return@withContext feedText.cutAt(maxChars)
                 }
-                val fullFile = blobFullFile(itemId, filePathProvider.fullArticleDir)
-                if (!fullFile.isFile && link != null && youtubeVideoId(link) == null && !repository.offlineMode.value) {
-                    fetches.withPermit {
-                        fullTextParser.parseFullArticleIfMissing(
-                            object : FeedItemForFetching {
-                                override val id = itemId
-                                override val link = link
-                            },
-                        )
+                val fullText =
+                    articleLocks.getOrPut(itemId) { Mutex() }.withLock {
+                        val fullFile = blobFullFile(itemId, filePathProvider.fullArticleDir)
+                        // A copy saved by Download for offline counts even when the cache was cleared
+                        offlineFiles.restoreFullText(itemId)
+                        if (!fullFile.isFile && link != null && youtubeVideoId(link) == null && !repository.offlineMode.value) {
+                            fetches.withPermit {
+                                fullTextParser.parseFullArticleIfMissing(
+                                    object : FeedItemForFetching {
+                                        override val id = itemId
+                                        override val link = link
+                                    },
+                                )
+                            }
+                        }
+                        if (fullFile.isFile) readText(itemId, link, full = true) else ""
                     }
-                }
-                val fullText = if (fullFile.isFile) readText(itemId, link, full = true) else ""
                 (if (fullText.length > feedText.length) fullText else feedText).cutAt(maxChars)
             } catch (e: CancellationException) {
                 throw e
