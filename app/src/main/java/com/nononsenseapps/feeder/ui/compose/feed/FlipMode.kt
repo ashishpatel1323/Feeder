@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -28,15 +27,20 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.MarkEmailUnread
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -52,6 +56,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -101,6 +106,9 @@ import com.nononsenseapps.feeder.ui.compose.feedarticle.FeedScreenViewState
 import com.nononsenseapps.feeder.ui.compose.feedarticle.TranslatedFeedCards
 import com.nononsenseapps.feeder.util.ActivityLauncher
 import com.nononsenseapps.feeder.util.stripTrackingParameters
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import org.kodein.di.compose.LocalDI
 import org.kodein.di.instance
 import java.util.concurrent.atomic.AtomicBoolean
@@ -117,6 +125,8 @@ private val FlipGreenDark = Color(0xFF0B3A20)
 private val FlipBackground = Color(0xFF0D0F0E)
 private val FlipAccent = Color(0xFFA5F4B8)
 private val FlipDelete = Color(0xFFFF6B6B)
+private val FlipSummary = Color(0xFFE9DDFF)
+private val FlipSummaryOn = Color(0xFF2A1A5E)
 
 /** Whether the article list is shown as flip pages instead of a list. One setting for every feed. */
 @Stable
@@ -149,35 +159,12 @@ internal fun ThumbnailImage.isLargeEnoughForFlip(): Boolean =
         (height ?: MIN_FLIP_IMAGE_SIZE) >= MIN_FLIP_IMAGE_SIZE / 2
 
 /**
- * Splits the list into flip pages, keeping the list order. An article with a large image gets a page
- * of its own; articles without one are paired two to a page.
+ * Splits the list into flip pages, keeping the list order. Every article gets a page of its own, so
+ * there is room for its text.
  *
  * Returns the item indices on each page.
  */
-internal fun <T> buildFlipPages(
-    items: List<T>,
-    hasLargeImage: (T) -> Boolean,
-): List<List<Int>> {
-    val pages = mutableListOf<List<Int>>()
-    var pending: Int? = null
-    items.forEachIndexed { index, item ->
-        if (hasLargeImage(item)) {
-            pending?.let { pages.add(listOf(it)) }
-            pending = null
-            pages.add(listOf(index))
-        } else {
-            val waiting = pending
-            if (waiting == null) {
-                pending = index
-            } else {
-                pages.add(listOf(waiting, index))
-                pending = null
-            }
-        }
-    }
-    pending?.let { pages.add(listOf(it)) }
-    return pages
-}
+internal fun <T> buildFlipPages(items: List<T>): List<List<Int>> = items.indices.map { listOf(it) }
 
 @Composable
 fun FeedFlipContent(
@@ -226,12 +213,13 @@ fun FeedFlipContent(
     }
 
     val activityLauncher: ActivityLauncher by LocalDI.current.instance()
+    val flipCardTexts: FlipCardTexts by LocalDI.current.instance()
     val haptics = LocalHapticFeedback.current
 
     val snapshot = pagedFeedItems.itemSnapshotList
     val pages =
         remember(snapshot) {
-            buildFlipPages(snapshot) { item -> item?.image?.isLargeEnoughForFlip() == true }
+            buildFlipPages(snapshot)
         }
     val currentPages by rememberUpdatedState(pages)
     val pagerState = rememberPagerState { currentPages.size }
@@ -298,82 +286,82 @@ fun FeedFlipContent(
             beyondViewportPageCount = 1,
             modifier = Modifier.fillMaxSize(),
         ) { pageIndex ->
-            val indices = currentPages.getOrNull(pageIndex).orEmpty()
+            val index = currentPages.getOrNull(pageIndex)?.firstOrNull()
+            // get() rather than peek() so paging loads more articles as the user flips
+            val loadedItem = if (index != null && index < pagedFeedItems.itemCount) pagedFeedItems[index] else null
+            if (loadedItem != null) {
+                LaunchedEffect(
+                    loadedItem.id,
+                    loadedItem.title,
+                    loadedItem.snippet,
+                    translatedFeedCards.generation,
+                    onTranslateFeedCard,
+                ) {
+                    onTranslateFeedCard(loadedItem)
+                }
+            }
+            val item = loadedItem?.let { translatedFeedCards.merge(it) }
+            // Kept out of PageTurn, which draws the card twice (once per half), so both halves show the
+            // same text and summary
+            val cardState =
+                if (item != null) {
+                    rememberFlipCardState(
+                        item = item,
+                        translated = item != loadedItem,
+                        flipCardTexts = flipCardTexts,
+                    )
+                } else {
+                    null
+                }
             PageTurn(
                 // How far this page is from the settled position: 0 on screen, 1 flipped away above,
                 // -1 waiting below. Read in the draw phase so flipping does not recompose.
                 offset = { (pagerState.currentPage - pageIndex) + pagerState.currentPageOffsetFraction },
             ) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    indices.forEach { index ->
-                        // get() rather than peek() so paging loads more articles as the user flips
-                        val loadedItem = if (index < pagedFeedItems.itemCount) pagedFeedItems[index] else null
-                        Box(
-                            modifier =
-                                Modifier
-                                    .weight(1f)
-                                    .fillMaxWidth(),
-                        ) {
-                            if (loadedItem == null) {
-                                Box(
-                                    modifier =
-                                        Modifier
-                                            .fillMaxSize()
-                                            .background(FlipBackground),
-                                )
+                if (item == null || cardState == null) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .background(FlipBackground),
+                    )
+                } else {
+                    val kept = item.id in keptUnread
+                    FlipArticleCard(
+                        item = item,
+                        state = cardState,
+                        keptUnread = kept,
+                        onOpen = { onItemClick(item.id) },
+                        onToggleKeepUnread = {
+                            if (kept) {
+                                keptUnread = keptUnread.filter { it != item.id }.toLongArray()
                             } else {
-                                LaunchedEffect(
-                                    loadedItem.id,
-                                    loadedItem.title,
-                                    loadedItem.snippet,
-                                    translatedFeedCards.generation,
-                                    onTranslateFeedCard,
-                                ) {
-                                    onTranslateFeedCard(loadedItem)
+                                keptUnread = keptUnread + item.id
+                                if (!item.unread) {
+                                    markAsUnread(item.id, true)
                                 }
-                                val item = translatedFeedCards.merge(loadedItem)
-                                val kept = item.id in keptUnread
-                                FlipArticleCard(
-                                    item = item,
-                                    compact = indices.size > 1,
-                                    keptUnread = kept,
-                                    onOpen = { onItemClick(item.id) },
-                                    onToggleKeepUnread = {
-                                        if (kept) {
-                                            keptUnread = keptUnread.filter { it != item.id }.toLongArray()
-                                        } else {
-                                            keptUnread = keptUnread + item.id
-                                            if (!item.unread) {
-                                                markAsUnread(item.id, true)
-                                            }
-                                        }
-                                    },
-                                    onToggleBookmark = { onSetBookmark(item.id, !item.bookmarked) },
-                                    onDelete = onDeleteItem?.let { delete -> { delete(item.id) } },
-                                    onShare = {
-                                        val intent =
-                                            Intent.createChooser(
-                                                Intent(Intent.ACTION_SEND).apply {
-                                                    if (item.link != null) {
-                                                        putExtra(Intent.EXTRA_TEXT, stripTrackingParameters(item.link))
-                                                    }
-                                                    putExtra(Intent.EXTRA_TITLE, item.title)
-                                                    type = "text/plain"
-                                                },
-                                                null,
-                                            )
-                                        activityLauncher.startActivity(
-                                            openAdjacentIfSuitable = false,
-                                            intent = intent,
-                                        )
-                                    },
-                                )
                             }
-                        }
-                    }
+                        },
+                        onToggleBookmark = { onSetBookmark(item.id, !item.bookmarked) },
+                        onDelete = onDeleteItem?.let { delete -> { delete(item.id) } },
+                        onShare = {
+                            val intent =
+                                Intent.createChooser(
+                                    Intent(Intent.ACTION_SEND).apply {
+                                        if (item.link != null) {
+                                            putExtra(Intent.EXTRA_TEXT, stripTrackingParameters(item.link))
+                                        }
+                                        putExtra(Intent.EXTRA_TITLE, item.title)
+                                        type = "text/plain"
+                                    },
+                                    null,
+                                )
+                            activityLauncher.startActivity(
+                                openAdjacentIfSuitable = false,
+                                intent = intent,
+                            )
+                        },
+                    )
                 }
             }
         }
@@ -550,10 +538,103 @@ private fun PageTurn(
     }
 }
 
+/**
+ * The text and summary shown on one card. One owner per article, because the page is drawn twice
+ * while it turns.
+ */
+@Stable
+private class FlipCardState(
+    private val itemId: Long,
+    initialText: String,
+    private val flipCardTexts: FlipCardTexts,
+    private val scope: CoroutineScope,
+    private val failedText: String,
+) {
+    var bodyText by mutableStateOf(initialText)
+    var body by mutableStateOf<CardBody>(CardBody.Text)
+        private set
+
+    fun summarize(item: FeedListItem) {
+        val cached = flipCardTexts.cachedSummary(itemId)
+        if (cached != null) {
+            body = CardBody.Summary(cached)
+            return
+        }
+        body = CardBody.Summarizing
+        scope.launch {
+            body =
+                try {
+                    CardBody.Summary(
+                        flipCardTexts.summarize(
+                            itemId = itemId,
+                            title = item.title,
+                            link = item.link,
+                            fallback = bodyText,
+                        ),
+                    )
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    CardBody.Failed(failedText.format(e.message ?: ""))
+                }
+        }
+    }
+
+    fun showText() {
+        body = CardBody.Text
+    }
+}
+
+@Composable
+private fun rememberFlipCardState(
+    item: FeedListItem,
+    translated: Boolean,
+    flipCardTexts: FlipCardTexts,
+): FlipCardState {
+    val scope = rememberCoroutineScope()
+    val failedText = stringResource(R.string.flip_summary_failed)
+    val state =
+        remember(item.id) {
+            FlipCardState(
+                itemId = item.id,
+                initialText = flipCardTexts.cachedText(item.id) ?: item.snippet,
+                flipCardTexts = flipCardTexts,
+                scope = scope,
+                failedText = failedText,
+            )
+        }
+    // The feed snippet is cut at 200 characters, so the longer article text is loaded for the card.
+    // A translated card keeps its translated snippet.
+    LaunchedEffect(item.id, translated, item.snippet) {
+        state.bodyText =
+            if (translated) {
+                item.snippet
+            } else {
+                flipCardTexts.cardText(itemId = item.id, link = item.link, fallback = item.snippet)
+            }
+    }
+    return state
+}
+
+/** What the body of a card shows below the title. */
+private sealed interface CardBody {
+    data object Text : CardBody
+
+    data object Summarizing : CardBody
+
+    data class Summary(
+        val bullets: List<String>,
+    ) : CardBody
+
+    data class Failed(
+        val message: String,
+    ) : CardBody
+}
+
 @Composable
 private fun FlipArticleCard(
     item: FeedListItem,
-    compact: Boolean,
+    state: FlipCardState,
     keptUnread: Boolean,
     onOpen: () -> Unit,
     onToggleKeepUnread: () -> Unit,
@@ -564,6 +645,9 @@ private fun FlipArticleCard(
 ) {
     val image = item.image?.takeIf { it.isLargeEnoughForFlip() }
     val context = LocalContext.current
+    val body = state.body
+    val bodyText = state.bodyText
+
     BoxWithConstraints(
         modifier =
             modifier
@@ -571,6 +655,8 @@ private fun FlipArticleCard(
                 .background(FlipBackground)
                 .clickable(onClick = onOpen),
     ) {
+        // The photo takes about a third of the page, leaving room for the article text below it
+        val photoHeight = maxHeight * 0.36f
         if (image != null) {
             val request =
                 remember(image.url) {
@@ -580,45 +666,34 @@ private fun FlipArticleCard(
                         .precision(Precision.INEXACT)
                         .build()
                 }
-            if (compact) {
-                // Half a screen is wide enough to crop without zooming in much
-                AsyncImage(
-                    model = request,
-                    contentDescription = stringResource(id = R.string.article_image),
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            } else {
-                // A blurred copy fills the page, and the photo itself is shown at full width on top,
-                // so a wide image is not zoomed in to a tall crop
-                AsyncImage(
-                    model = request,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .blur(28.dp),
-                )
-                Box(
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.35f)),
-                )
-                AsyncImage(
-                    model = request,
-                    contentDescription = stringResource(id = R.string.article_image),
-                    contentScale = ContentScale.FillWidth,
-                    alignment = Alignment.TopCenter,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = maxHeight * 0.58f)
-                            .clipToBounds(),
-                )
-            }
-            // Keeps the white text readable on any photo
+            // A blurred copy tints the rest of the page with the photo's colours
+            AsyncImage(
+                model = request,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .blur(28.dp),
+            )
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.55f)),
+            )
+            AsyncImage(
+                model = request,
+                contentDescription = stringResource(id = R.string.article_image),
+                contentScale = ContentScale.Crop,
+                alignment = Alignment.TopCenter,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(photoHeight),
+            )
+            // Keeps the white text readable: dark under the controls at the top, then the photo
+            // fades into near black where the text starts
             Box(
                 modifier =
                     Modifier
@@ -626,9 +701,9 @@ private fun FlipArticleCard(
                         .background(
                             Brush.verticalGradient(
                                 0f to Color.Black.copy(alpha = 0.30f),
-                                0.14f to Color.Transparent,
-                                if (compact) 0.30f to Color.Transparent else 0.40f to Color.Transparent,
-                                if (compact) 0.70f to Color.Black.copy(alpha = 0.85f) else 0.66f to Color.Black.copy(alpha = 0.90f),
+                                0.10f to Color.Transparent,
+                                0.24f to Color.Transparent,
+                                0.38f to Color.Black.copy(alpha = 0.90f),
                                 1f to Color.Black.copy(alpha = 0.96f),
                             ),
                         ),
@@ -640,24 +715,22 @@ private fun FlipArticleCard(
                         .fillMaxSize()
                         .background(Brush.linearGradient(listOf(FlipGreen, FlipGreenDark))),
             )
-            Text(
-                text = "\u201C",
-                fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = if (compact) 80.sp else 120.sp,
-                color = Color.White.copy(alpha = 0.13f),
-                modifier = Modifier.padding(start = 20.dp, top = if (compact) 24.dp else 64.dp),
-            )
         }
 
         Column(
-            verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
             modifier =
                 Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    // Clear of the gesture area at the bottom of the screen
-                    .padding(start = 16.dp, end = 16.dp, bottom = if (compact) 12.dp else 28.dp),
+                    .fillMaxSize()
+                    .padding(
+                        start = 16.dp,
+                        end = 16.dp,
+                        // Text-only cards start right under the close button; image cards just above
+                        // the bottom of the photo
+                        top = if (image != null) photoHeight - 36.dp else 64.dp,
+                        // Clear of the gesture area at the bottom of the screen
+                        bottom = 28.dp,
+                    ),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -703,24 +776,109 @@ private fun FlipArticleCard(
                 text = item.title,
                 fontFamily = FontFamily.Serif,
                 fontWeight = FontWeight.Bold,
-                fontSize = if (compact) 20.sp else 27.sp,
-                lineHeight = if (compact) 25.sp else 33.sp,
+                fontSize = if (image != null) 25.sp else 27.sp,
+                lineHeight = if (image != null) 31.sp else 33.sp,
                 color = Color.White,
-                maxLines = if (compact) 3 else 4,
+                maxLines = 4,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(horizontal = 4.dp),
             )
-            if (!compact && item.snippet.isNotBlank()) {
-                Text(
-                    text = item.snippet,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.82f),
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 4.dp),
+            // Fills the space between the title and the buttons; text that does not fit is cut off
+            Box(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .clipToBounds()
+                        .padding(horizontal = 4.dp),
+            ) {
+                when (val current = body) {
+                    CardBody.Text ->
+                        Text(
+                            text = bodyText,
+                            fontSize = 15.sp,
+                            lineHeight = 22.sp,
+                            color = Color.White.copy(alpha = 0.86f),
+                            overflow = TextOverflow.Ellipsis,
+                        )
+
+                    CardBody.Summarizing ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(
+                                color = FlipSummary,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = stringResource(R.string.summarizing),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.White.copy(alpha = 0.86f),
+                            )
+                        }
+
+                    is CardBody.Summary ->
+                        // Scrolls when a long title leaves too little room for all three bullets
+                        SummaryBullets(
+                            bullets = current.bullets,
+                            modifier = Modifier.verticalScroll(rememberScrollState()),
+                        )
+
+                    is CardBody.Failed ->
+                        Text(
+                            text = current.message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.86f),
+                        )
+                }
+            }
+            // Always visible, so the summary is one tap away
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                when (body) {
+                    CardBody.Text ->
+                        CardPill(
+                            label = stringResource(R.string.summarize),
+                            icon = Icons.Outlined.AutoAwesome,
+                            filled = true,
+                            onClick = { state.summarize(item) },
+                        )
+
+                    CardBody.Summarizing ->
+                        CardPill(
+                            label = stringResource(R.string.summarizing),
+                            icon = Icons.Outlined.AutoAwesome,
+                            filled = false,
+                            onClick = {},
+                        )
+
+                    is CardBody.Summary ->
+                        CardPill(
+                            label = stringResource(R.string.show_text),
+                            icon = Icons.Outlined.AutoAwesome,
+                            filled = false,
+                            onClick = state::showText,
+                        )
+
+                    is CardBody.Failed ->
+                        CardPill(
+                            label = stringResource(R.string.flip_summary_retry),
+                            icon = Icons.Outlined.AutoAwesome,
+                            filled = true,
+                            onClick = { state.summarize(item) },
+                        )
+                }
+                CardPill(
+                    label = stringResource(R.string.read_full_article),
+                    icon = Icons.AutoMirrored.Filled.ArrowForward,
+                    iconAfter = true,
+                    filled = false,
+                    contentColor = FlipAccent,
+                    onClick = onOpen,
                 )
             }
-            Spacer(modifier = Modifier.height(2.dp))
             // One frosted bar, so the actions stay readable on any photo
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -759,6 +917,93 @@ private fun FlipArticleCard(
                     onClick = onShare,
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun SummaryBullets(
+    bullets: List<String>,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .background(Color.Black.copy(alpha = 0.22f))
+                .padding(16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Outlined.AutoAwesome,
+                contentDescription = null,
+                tint = FlipSummary,
+                modifier = Modifier.size(14.dp),
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = stringResource(R.string.flip_summary_label),
+                style = MaterialTheme.typography.labelMedium,
+                color = FlipSummary,
+            )
+        }
+        bullets.forEach { bullet ->
+            Row {
+                Box(
+                    modifier =
+                        Modifier
+                            .padding(top = 8.dp, end = 10.dp)
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(FlipSummary),
+                )
+                Text(
+                    text = bullet,
+                    fontSize = 15.5.sp,
+                    lineHeight = 23.sp,
+                    color = Color.White,
+                )
+            }
+        }
+    }
+}
+
+/** A rounded button under the card text. */
+@Composable
+private fun CardPill(
+    label: String,
+    icon: ImageVector,
+    filled: Boolean,
+    onClick: () -> Unit,
+    iconAfter: Boolean = false,
+    contentColor: Color = if (filled) FlipSummaryOn else FlipSummary,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            Modifier
+                .height(40.dp)
+                .clip(CircleShape)
+                .background(if (filled) FlipSummary else Color.White.copy(alpha = 0.10f))
+                .clickable(role = Role.Button, onClick = onClick)
+                .padding(horizontal = 14.dp),
+    ) {
+        if (!iconAfter) {
+            Icon(imageVector = icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = contentColor,
+            maxLines = 1,
+        )
+        if (iconAfter) {
+            Spacer(modifier = Modifier.width(6.dp))
+            Icon(imageVector = icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(16.dp))
         }
     }
 }

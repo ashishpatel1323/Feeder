@@ -8,4 +8,12 @@
   <string name="original_page_short">Web</string>
   <string name="speed_read_short">Speed</string>
   <string name="summary_short">Summary</string>
+  <string name="read_full_article">Read full article</string>
+  <string name="show_text">Show text</string>
+  <string name="summarizing">Summarizing…</string>
+  <string name="flip_summary_label">Summary · Gemini Nano (on device)</string>
+  <string name="flip_summary_failed">Couldn\'t summarize. %1$s</string>
+  <string name="flip_summary_retry">Try again</string>
+  <string name="flip_summary_unavailable">Gemini Nano isn\'t available on this phone right now. Update AICore from the Play Store, then try again.</string>
+  <string name="flip_summary_no_text">This article has no text to summarize.</string>
 </resources>
