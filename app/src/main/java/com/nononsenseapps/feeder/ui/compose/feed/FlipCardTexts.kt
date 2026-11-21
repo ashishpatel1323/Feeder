@@ -87,7 +87,11 @@ class FlipCardTexts(
     ): String {
         texts.get(itemId)?.let { return it }
         val text = articleText(itemId, link, CARD_TEXT_CHARS).takeIf { it.length > fallback.length } ?: fallback
-        texts.put(itemId, text)
+        // A short result may mean the page could not be fetched yet (offline, or a failed request),
+        // so only a full-length text is kept and a later visit tries again
+        if (text.length >= SHORT_FEED_TEXT) {
+            texts.put(itemId, text)
+        }
         return text
     }
 

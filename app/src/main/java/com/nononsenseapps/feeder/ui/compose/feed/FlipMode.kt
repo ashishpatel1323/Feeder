@@ -27,8 +27,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Bookmark
@@ -105,6 +107,7 @@ import com.nononsenseapps.feeder.ui.compose.feedarticle.TranslatedFeedCards
 import com.nononsenseapps.feeder.util.ActivityLauncher
 import com.nononsenseapps.feeder.util.stripTrackingParameters
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.kodein.di.compose.LocalDI
 import org.kodein.di.instance
@@ -283,83 +286,82 @@ fun FeedFlipContent(
             beyondViewportPageCount = 1,
             modifier = Modifier.fillMaxSize(),
         ) { pageIndex ->
-            val indices = currentPages.getOrNull(pageIndex).orEmpty()
+            val index = currentPages.getOrNull(pageIndex)?.firstOrNull()
+            // get() rather than peek() so paging loads more articles as the user flips
+            val loadedItem = if (index != null && index < pagedFeedItems.itemCount) pagedFeedItems[index] else null
+            if (loadedItem != null) {
+                LaunchedEffect(
+                    loadedItem.id,
+                    loadedItem.title,
+                    loadedItem.snippet,
+                    translatedFeedCards.generation,
+                    onTranslateFeedCard,
+                ) {
+                    onTranslateFeedCard(loadedItem)
+                }
+            }
+            val item = loadedItem?.let { translatedFeedCards.merge(it) }
+            // Kept out of PageTurn, which draws the card twice (once per half), so both halves show the
+            // same text and summary
+            val cardState =
+                if (item != null) {
+                    rememberFlipCardState(
+                        item = item,
+                        translated = item != loadedItem,
+                        flipCardTexts = flipCardTexts,
+                    )
+                } else {
+                    null
+                }
             PageTurn(
                 // How far this page is from the settled position: 0 on screen, 1 flipped away above,
                 // -1 waiting below. Read in the draw phase so flipping does not recompose.
                 offset = { (pagerState.currentPage - pageIndex) + pagerState.currentPageOffsetFraction },
             ) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    indices.forEach { index ->
-                        // get() rather than peek() so paging loads more articles as the user flips
-                        val loadedItem = if (index < pagedFeedItems.itemCount) pagedFeedItems[index] else null
-                        Box(
-                            modifier =
-                                Modifier
-                                    .weight(1f)
-                                    .fillMaxWidth(),
-                        ) {
-                            if (loadedItem == null) {
-                                Box(
-                                    modifier =
-                                        Modifier
-                                            .fillMaxSize()
-                                            .background(FlipBackground),
-                                )
+                if (item == null || cardState == null) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .background(FlipBackground),
+                    )
+                } else {
+                    val kept = item.id in keptUnread
+                    FlipArticleCard(
+                        item = item,
+                        state = cardState,
+                        keptUnread = kept,
+                        onOpen = { onItemClick(item.id) },
+                        onToggleKeepUnread = {
+                            if (kept) {
+                                keptUnread = keptUnread.filter { it != item.id }.toLongArray()
                             } else {
-                                LaunchedEffect(
-                                    loadedItem.id,
-                                    loadedItem.title,
-                                    loadedItem.snippet,
-                                    translatedFeedCards.generation,
-                                    onTranslateFeedCard,
-                                ) {
-                                    onTranslateFeedCard(loadedItem)
+                                keptUnread = keptUnread + item.id
+                                if (!item.unread) {
+                                    markAsUnread(item.id, true)
                                 }
-                                val item = translatedFeedCards.merge(loadedItem)
-                                val kept = item.id in keptUnread
-                                FlipArticleCard(
-                                    item = item,
-                                    translated = item.snippet != loadedItem.snippet || item.title != loadedItem.title,
-                                    flipCardTexts = flipCardTexts,
-                                    keptUnread = kept,
-                                    onOpen = { onItemClick(item.id) },
-                                    onToggleKeepUnread = {
-                                        if (kept) {
-                                            keptUnread = keptUnread.filter { it != item.id }.toLongArray()
-                                        } else {
-                                            keptUnread = keptUnread + item.id
-                                            if (!item.unread) {
-                                                markAsUnread(item.id, true)
-                                            }
-                                        }
-                                    },
-                                    onToggleBookmark = { onSetBookmark(item.id, !item.bookmarked) },
-                                    onDelete = onDeleteItem?.let { delete -> { delete(item.id) } },
-                                    onShare = {
-                                        val intent =
-                                            Intent.createChooser(
-                                                Intent(Intent.ACTION_SEND).apply {
-                                                    if (item.link != null) {
-                                                        putExtra(Intent.EXTRA_TEXT, stripTrackingParameters(item.link))
-                                                    }
-                                                    putExtra(Intent.EXTRA_TITLE, item.title)
-                                                    type = "text/plain"
-                                                },
-                                                null,
-                                            )
-                                        activityLauncher.startActivity(
-                                            openAdjacentIfSuitable = false,
-                                            intent = intent,
-                                        )
-                                    },
-                                )
                             }
-                        }
-                    }
+                        },
+                        onToggleBookmark = { onSetBookmark(item.id, !item.bookmarked) },
+                        onDelete = onDeleteItem?.let { delete -> { delete(item.id) } },
+                        onShare = {
+                            val intent =
+                                Intent.createChooser(
+                                    Intent(Intent.ACTION_SEND).apply {
+                                        if (item.link != null) {
+                                            putExtra(Intent.EXTRA_TEXT, stripTrackingParameters(item.link))
+                                        }
+                                        putExtra(Intent.EXTRA_TITLE, item.title)
+                                        type = "text/plain"
+                                    },
+                                    null,
+                                )
+                            activityLauncher.startActivity(
+                                openAdjacentIfSuitable = false,
+                                intent = intent,
+                            )
+                        },
+                    )
                 }
             }
         }
@@ -536,6 +538,84 @@ private fun PageTurn(
     }
 }
 
+/**
+ * The text and summary shown on one card. One owner per article, because the page is drawn twice
+ * while it turns.
+ */
+@Stable
+private class FlipCardState(
+    private val itemId: Long,
+    initialText: String,
+    private val flipCardTexts: FlipCardTexts,
+    private val scope: CoroutineScope,
+    private val failedText: String,
+) {
+    var bodyText by mutableStateOf(initialText)
+    var body by mutableStateOf<CardBody>(CardBody.Text)
+        private set
+
+    fun summarize(item: FeedListItem) {
+        val cached = flipCardTexts.cachedSummary(itemId)
+        if (cached != null) {
+            body = CardBody.Summary(cached)
+            return
+        }
+        body = CardBody.Summarizing
+        scope.launch {
+            body =
+                try {
+                    CardBody.Summary(
+                        flipCardTexts.summarize(
+                            itemId = itemId,
+                            title = item.title,
+                            link = item.link,
+                            fallback = bodyText,
+                        ),
+                    )
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    CardBody.Failed(failedText.format(e.message ?: ""))
+                }
+        }
+    }
+
+    fun showText() {
+        body = CardBody.Text
+    }
+}
+
+@Composable
+private fun rememberFlipCardState(
+    item: FeedListItem,
+    translated: Boolean,
+    flipCardTexts: FlipCardTexts,
+): FlipCardState {
+    val scope = rememberCoroutineScope()
+    val failedText = stringResource(R.string.flip_summary_failed)
+    val state =
+        remember(item.id) {
+            FlipCardState(
+                itemId = item.id,
+                initialText = flipCardTexts.cachedText(item.id) ?: item.snippet,
+                flipCardTexts = flipCardTexts,
+                scope = scope,
+                failedText = failedText,
+            )
+        }
+    // The feed snippet is cut at 200 characters, so the longer article text is loaded for the card.
+    // A translated card keeps its translated snippet.
+    LaunchedEffect(item.id, translated, item.snippet) {
+        state.bodyText =
+            if (translated) {
+                item.snippet
+            } else {
+                flipCardTexts.cardText(itemId = item.id, link = item.link, fallback = item.snippet)
+            }
+    }
+    return state
+}
+
 /** What the body of a card shows below the title. */
 private sealed interface CardBody {
     data object Text : CardBody
@@ -554,8 +634,7 @@ private sealed interface CardBody {
 @Composable
 private fun FlipArticleCard(
     item: FeedListItem,
-    translated: Boolean,
-    flipCardTexts: FlipCardTexts,
+    state: FlipCardState,
     keptUnread: Boolean,
     onOpen: () -> Unit,
     onToggleKeepUnread: () -> Unit,
@@ -566,46 +645,8 @@ private fun FlipArticleCard(
 ) {
     val image = item.image?.takeIf { it.isLargeEnoughForFlip() }
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-
-    // The feed snippet is cut at 200 characters, so the longer article text is loaded for the card.
-    // A translated card keeps its translated snippet.
-    var bodyText by remember(item.id, translated, item.snippet) {
-        mutableStateOf(if (translated) item.snippet else flipCardTexts.cachedText(item.id) ?: item.snippet)
-    }
-    if (!translated) {
-        LaunchedEffect(item.id, item.snippet) {
-            bodyText = flipCardTexts.cardText(itemId = item.id, link = item.link, fallback = item.snippet)
-        }
-    }
-    var body by remember(item.id) { mutableStateOf<CardBody>(CardBody.Text) }
-    val failedText = stringResource(R.string.flip_summary_failed)
-
-    fun summarize() {
-        val cached = flipCardTexts.cachedSummary(item.id)
-        if (cached != null) {
-            body = CardBody.Summary(cached)
-            return
-        }
-        body = CardBody.Summarizing
-        scope.launch {
-            body =
-                try {
-                    CardBody.Summary(
-                        flipCardTexts.summarize(
-                            itemId = item.id,
-                            title = item.title,
-                            link = item.link,
-                            fallback = bodyText,
-                        ),
-                    )
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    CardBody.Failed(failedText.format(e.message ?: ""))
-                }
-        }
-    }
+    val body = state.body
+    val bodyText = state.bodyText
 
     BoxWithConstraints(
         modifier =
@@ -777,7 +818,11 @@ private fun FlipArticleCard(
                         }
 
                     is CardBody.Summary ->
-                        SummaryBullets(bullets = current.bullets)
+                        // Scrolls when a long title leaves too little room for all three bullets
+                        SummaryBullets(
+                            bullets = current.bullets,
+                            modifier = Modifier.verticalScroll(rememberScrollState()),
+                        )
 
                     is CardBody.Failed ->
                         Text(
@@ -798,7 +843,7 @@ private fun FlipArticleCard(
                             label = stringResource(R.string.summarize),
                             icon = Icons.Outlined.AutoAwesome,
                             filled = true,
-                            onClick = ::summarize,
+                            onClick = { state.summarize(item) },
                         )
 
                     CardBody.Summarizing ->
@@ -814,7 +859,7 @@ private fun FlipArticleCard(
                             label = stringResource(R.string.show_text),
                             icon = Icons.Outlined.AutoAwesome,
                             filled = false,
-                            onClick = { body = CardBody.Text },
+                            onClick = state::showText,
                         )
 
                     is CardBody.Failed ->
@@ -822,7 +867,7 @@ private fun FlipArticleCard(
                             label = stringResource(R.string.flip_summary_retry),
                             icon = Icons.Outlined.AutoAwesome,
                             filled = true,
-                            onClick = ::summarize,
+                            onClick = { state.summarize(item) },
                         )
                 }
                 CardPill(
@@ -877,11 +922,14 @@ private fun FlipArticleCard(
 }
 
 @Composable
-private fun SummaryBullets(bullets: List<String>) {
+private fun SummaryBullets(
+    bullets: List<String>,
+    modifier: Modifier = Modifier,
+) {
     Column(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(18.dp))
                 .background(Color.Black.copy(alpha = 0.22f))
