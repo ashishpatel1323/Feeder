@@ -33,6 +33,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Share
@@ -84,6 +86,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -101,6 +104,7 @@ import coil3.request.ImageRequest
 import coil3.size.Precision
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.db.room.ID_UNSET
+import com.nononsenseapps.feeder.model.TTSStateHolder
 import com.nononsenseapps.feeder.model.ThumbnailImage
 import com.nononsenseapps.feeder.ui.compose.empty.NothingToRead
 import com.nononsenseapps.feeder.ui.compose.feedarticle.FeedScreenViewState
@@ -109,6 +113,7 @@ import com.nononsenseapps.feeder.util.ActivityLauncher
 import com.nononsenseapps.feeder.util.stripTrackingParameters
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.kodein.di.compose.LocalDI
 import org.kodein.di.instance
@@ -117,6 +122,10 @@ import kotlin.math.abs
 
 private const val FLIP_PREFS = "feeder_flip_mode"
 private const val FLIP_PREFS_ENABLED = "enabled"
+private const val FLIP_PREFS_READ_ALOUD = "read_aloud"
+
+// Starts reading without waiting for a slow page download; the full text restarts it when it arrives
+private const val READ_ALOUD_TEXT_WAIT_MS = 3_000L
 
 // Smaller images look bad stretched over a whole page, so those articles are laid out like text-only ones
 private const val MIN_FLIP_IMAGE_SIZE = 300
@@ -134,18 +143,23 @@ private val FlipSummaryOn = Color(0xFF2A1A5E)
 class FlipModePreference(
     private val context: Context,
 ) {
-    var enabled by mutableStateOf(
-        context.getSharedPreferences(FLIP_PREFS, Context.MODE_PRIVATE).getBoolean(FLIP_PREFS_ENABLED, false),
-    )
+    private val prefs = context.getSharedPreferences(FLIP_PREFS, Context.MODE_PRIVATE)
+
+    var enabled by mutableStateOf(prefs.getBoolean(FLIP_PREFS_ENABLED, false))
+        private set
+
+    /** Reads each card aloud as it comes on screen. On until the user turns it off. */
+    var readAloud by mutableStateOf(prefs.getBoolean(FLIP_PREFS_READ_ALOUD, true))
         private set
 
     fun set(value: Boolean) {
         enabled = value
-        context
-            .getSharedPreferences(FLIP_PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putBoolean(FLIP_PREFS_ENABLED, value)
-            .apply()
+        prefs.edit().putBoolean(FLIP_PREFS_ENABLED, value).apply()
+    }
+
+    fun changeReadAloud(value: Boolean) {
+        readAloud = value
+        prefs.edit().putBoolean(FLIP_PREFS_READ_ALOUD, value).apply()
     }
 }
 
@@ -215,6 +229,10 @@ fun FeedFlipContent(
 
     val activityLauncher: ActivityLauncher by LocalDI.current.instance()
     val flipCardTexts: FlipCardTexts by LocalDI.current.instance()
+    val ttsStateHolder: TTSStateHolder by LocalDI.current.instance()
+    val flipPreference = rememberFlipModePreference()
+    val readAloud = flipPreference.readAloud
+    val flipScope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
 
     val snapshot = pagedFeedItems.itemSnapshotList
@@ -224,6 +242,36 @@ fun FeedFlipContent(
         }
     val currentPages by rememberUpdatedState(pages)
     val pagerState = rememberPagerState { currentPages.size }
+
+    // While cards are read aloud, the lock screen's next/previous and the end of a card turn the
+    // pages here instead of opening the next article in the reader
+    if (readAloud) {
+        DisposableEffect(ttsStateHolder) {
+            val previousNavigator = ttsStateHolder.articleNavigator
+
+            fun turnTo(page: Int) {
+                flipScope.launch {
+                    if (page in 0 until pagerState.pageCount) pagerState.animateScrollToPage(page)
+                }
+            }
+            ttsStateHolder.articleNavigator =
+                object : TTSStateHolder.ArticleNavigator {
+                    override fun hasPrevious(): Boolean = pagerState.settledPage > 0
+
+                    override fun hasNext(): Boolean = pagerState.settledPage < pagerState.pageCount - 1
+
+                    override fun previous() = turnTo(pagerState.settledPage - 1)
+
+                    override fun next() = turnTo(pagerState.settledPage + 1)
+
+                    override fun onArticleFinished(articleId: Long) = turnTo(pagerState.settledPage + 1)
+                }
+            onDispose {
+                ttsStateHolder.articleNavigator = previousNavigator
+                ttsStateHolder.stop()
+            }
+        }
+    }
 
     // Articles the user chose to keep unread here, so flipping past them does not mark them read again
     var keptUnread by rememberSaveable { mutableStateOf(LongArray(0)) }
@@ -315,6 +363,24 @@ fun FeedFlipContent(
                 } else {
                     null
                 }
+            // Reads the card on screen: its title, then the text or the summary it shows
+            if (readAloud && item != null && cardState != null && pagerState.settledPage == pageIndex) {
+                val spoken =
+                    when (val body = cardState.body) {
+                        is CardBody.Summary -> body.bullets
+                        else -> listOf(cardState.bodyText)
+                    }
+                LaunchedEffect(item.id, spoken, cardState.loaded) {
+                    if (!cardState.loaded) delay(READ_ALOUD_TEXT_WAIT_MS)
+                    ttsStateHolder.tts(
+                        textArray = (listOf(item.title) + spoken).map { AnnotatedString(it) },
+                        useDetectLanguage = true,
+                        articleId = item.id,
+                        title = item.title,
+                        feedTitle = item.feedTitle,
+                    )
+                }
+            }
             PageTurn(
                 // How far this page is from the settled position: 0 on screen, 1 flipped away above,
                 // -1 waiting below. Read in the draw phase so flipping does not recompose.
@@ -401,6 +467,14 @@ fun FeedFlipContent(
         ) {
             FlipCloseButton(onExit = onExit, tint = Color.White)
             Spacer(modifier = Modifier.weight(1f))
+            // Always visible, so reading aloud is one tap to turn off or on
+            FlipReadAloudToggle(
+                on = readAloud,
+                onToggle = {
+                    if (readAloud) ttsStateHolder.stop()
+                    flipPreference.changeReadAloud(!readAloud)
+                },
+            )
             if (pages.isNotEmpty()) {
                 Text(
                     text = "${pagerState.currentPage + 1} / ${pages.size}",
@@ -438,6 +512,36 @@ private fun FlipCloseButton(
                     .background(Color.Black.copy(alpha = 0.35f))
                     .padding(6.dp)
                     .size(20.dp),
+        )
+    }
+}
+
+@Composable
+private fun FlipReadAloudToggle(
+    on: Boolean,
+    onToggle: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            Modifier
+                .padding(end = 8.dp)
+                .clip(CircleShape)
+                .background(if (on) Color.White.copy(alpha = 0.22f) else Color.Black.copy(alpha = 0.35f))
+                .clickable(role = Role.Switch, onClick = onToggle)
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+    ) {
+        Icon(
+            imageVector = if (on) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
+            contentDescription = null,
+            tint = if (on) FlipAccent else Color.White,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = stringResource(if (on) R.string.flip_read_aloud_on else R.string.flip_read_aloud_off),
+            style = MaterialTheme.typography.labelMedium,
+            color = if (on) FlipAccent else Color.White,
         )
     }
 }
@@ -553,6 +657,9 @@ private class FlipCardState(
     private val failedText: String,
 ) {
     var bodyText by mutableStateOf(initialText)
+
+    // The longer article text has been looked up (it may still be the snippet if there is none)
+    var loaded by mutableStateOf(false)
     var body by mutableStateOf<CardBody>(CardBody.Text)
         private set
 
@@ -621,6 +728,7 @@ private fun rememberFlipCardState(
             } else {
                 flipCardTexts.cardText(itemId = item.id, link = item.link, fallback = item.snippet)
             }
+        state.loaded = true
     }
     return state
 }

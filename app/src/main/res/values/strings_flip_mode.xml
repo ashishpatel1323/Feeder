@@ -16,4 +16,6 @@
   <string name="flip_summary_retry">Try again</string>
   <string name="flip_summary_unavailable">Gemini Nano isn\'t available on this phone right now. Update AICore from the Play Store, then try again.</string>
   <string name="flip_summary_no_text">This article has no text to summarize.</string>
+  <string name="flip_read_aloud_on">Read aloud on</string>
+  <string name="flip_read_aloud_off">Read aloud off</string>
 </resources>
