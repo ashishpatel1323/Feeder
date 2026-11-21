@@ -211,6 +211,16 @@ fun FeedFlipContent(
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.align(Alignment.TopStart),
             )
+            // Keeps Undo reachable after deleting the last article
+            if (snackbarHostState != null) {
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 24.dp),
+                )
+            }
         }
         return
     }
