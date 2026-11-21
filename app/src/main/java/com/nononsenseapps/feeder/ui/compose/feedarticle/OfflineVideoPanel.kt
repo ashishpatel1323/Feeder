@@ -62,6 +62,7 @@ fun OfflineVideoPanel(
     itemId: Long,
     link: String?,
     modifier: Modifier = Modifier,
+    showSaveButton: Boolean = true,
 ) {
     if (link == null || !isYouTubeLink(link)) return
     val di = LocalDI.current
@@ -137,7 +138,7 @@ fun OfflineVideoPanel(
                 }
             }
 
-            else -> {
+            showSaveButton -> {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),

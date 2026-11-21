@@ -1,0 +1,526 @@
+package com.nononsenseapps.feeder.model.youtube
+
+import android.app.Application
+import android.content.Context
+import android.content.Intent
+import android.util.Log
+import androidx.annotation.OptIn
+import androidx.compose.runtime.Immutable
+import androidx.core.net.toUri
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
+import androidx.media3.common.MimeTypes
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.MediaSource
+import androidx.media3.exoplayer.source.MergingMediaSource
+import com.nononsenseapps.feeder.ApplicationCoroutineScope
+import com.nononsenseapps.feeder.background.runOnceSyncChainSendRead
+import com.nononsenseapps.feeder.model.offline.OfflineVideos
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import org.kodein.di.DI
+import org.kodein.di.DIAware
+import org.kodein.di.instance
+
+enum class SubtitleSize(
+    val scale: Float,
+) {
+    SMALL(0.8f),
+    NORMAL(1f),
+    LARGE(1.3f),
+    HUGE(1.6f),
+}
+
+/** The player choices that carry over to the next video. */
+@Immutable
+data class PlayerPrefs(
+    val quality: Int = 720,
+    val speed: Float = 1f,
+    val subtitlesOn: Boolean = false,
+    val subtitleLanguage: String = "",
+    val subtitleSize: SubtitleSize = SubtitleSize.NORMAL,
+    val subtitleBackground: Boolean = true,
+    val sponsorBlock: Boolean = true,
+)
+
+/** What is playing now in the Flow-style player. */
+@Immutable
+data class PlaybackState(
+    /** The article (or "embed:<id>" for a video inside an article's text). */
+    val key: String,
+    val videoId: String,
+    val articleKey: String,
+    val itemId: Long,
+    val title: String,
+    val details: VideoDetails,
+    /** Height of the video stream playing; 0 = the stream with picture and sound. */
+    val height: Int,
+    val audio: AudioStream?,
+    val subtitle: SubtitleTrack?,
+    val speed: Float,
+    /** Keeps playing (sound) with the screen off or in other apps, with lock-screen controls. */
+    val background: Boolean = false,
+    /** When the sleep timer pauses: epoch ms, [SLEEP_AT_END] or 0 = off. */
+    val sleepAt: Long = 0,
+    val segments: List<SkipSegment> = emptyList(),
+) {
+    val isHd: Boolean get() = height >= 720
+
+    companion object {
+        const val SLEEP_AT_END = -1L
+    }
+}
+
+/**
+ * The YouTube player behind the reader, like Flow's: the video's own streams (no ads) in one
+ * ExoPlayer that outlives the screen, so it can keep playing in the background. Remembers where
+ * each article's video was left ([VideoPositions], synced) and skips SponsorBlock segments.
+ * Main thread only.
+ */
+@OptIn(UnstableApi::class)
+class YouTubePlayback(
+    override val di: DI,
+) : DIAware {
+    private val app: Application by instance()
+    private val videoPositions: VideoPositions by instance()
+    private val offlineVideos: OfflineVideos by instance()
+    private val sponsorBlock: SponsorBlock by instance()
+    private val applicationCoroutineScope: ApplicationCoroutineScope by instance()
+
+    private val prefs by lazy { app.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
+
+    private val _prefs = MutableStateFlow(PlayerPrefs())
+    private var prefsLoaded = false
+    val playerPrefs: StateFlow<PlayerPrefs>
+        get() {
+            loadPrefs()
+            return _prefs.asStateFlow()
+        }
+
+    private val _player = MutableStateFlow<ExoPlayer?>(null)
+    val player: StateFlow<ExoPlayer?> = _player.asStateFlow()
+
+    private val _state = MutableStateFlow<PlaybackState?>(null)
+    val state: StateFlow<PlaybackState?> = _state.asStateFlow()
+
+    private val _errors = MutableSharedFlow<String>(extraBufferCapacity = 4)
+
+    /** Keys whose streams would not play: their reader shows YouTube's own player instead. */
+    val errors: SharedFlow<String> = _errors.asSharedFlow()
+
+    private val _skipped = MutableSharedFlow<SkipSegment>(extraBufferCapacity = 4)
+
+    /** A SponsorBlock segment was just skipped. */
+    val skipped: SharedFlow<SkipSegment> = _skipped.asSharedFlow()
+
+    private var reporter: PlaybackReporter? = null
+    private var tick: Job? = null
+    private var attached: String? = null
+    private val skippedSegments = mutableSetOf<String>()
+
+    /**
+     * Plays [details] for [key] from [start] seconds, or picks up the same key when it is still
+     * playing (back to an article that kept playing in the background).
+     */
+    fun open(
+        key: String,
+        videoId: String,
+        articleKey: String,
+        itemId: Long,
+        title: String,
+        details: VideoDetails,
+        start: Int,
+    ) {
+        attached = key
+        if (_state.value?.key == key && _player.value != null) return
+        stop()
+        loadPrefs()
+        val p = _prefs.value
+        val video = details.videoFor(p.quality)
+        val subtitle = if (p.subtitlesOn) pickSubtitle(details, p.subtitleLanguage) else null
+        val initial =
+            PlaybackState(
+                key = key,
+                videoId = videoId,
+                articleKey = articleKey,
+                itemId = itemId,
+                title = title,
+                details = details,
+                height = if (details.audios.isNotEmpty()) video?.height ?: 0 else 0,
+                audio = details.audios.firstOrNull(),
+                subtitle = subtitle,
+                speed = p.speed,
+            )
+        val exo =
+            ExoPlayer
+                .Builder(app)
+                .setSeekBackIncrementMs(SEEK_MS)
+                .setSeekForwardIncrementMs(SEEK_MS)
+                .build()
+                .apply {
+                    setAudioAttributes(
+                        AudioAttributes
+                            .Builder()
+                            .setUsage(C.USAGE_MEDIA)
+                            .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                            .build(),
+                        true,
+                    )
+                    setHandleAudioBecomingNoisy(true)
+                    setWakeMode(C.WAKE_MODE_NETWORK)
+                    setPlaybackSpeed(p.speed)
+                    setMediaSource(buildSource(initial), start * 1000L)
+                    prepare()
+                }
+        exo.addListener(listener(exo))
+        reporter =
+            PlaybackReporter { t, d, stopped ->
+                if (articleKey.isNotEmpty()) {
+                    videoPositions.save(articleKey, t, d)
+                    // Sent when it stops, even if a save while playing already wrote this position
+                    if (stopped) runOnceSyncChainSendRead(di)
+                }
+            }
+        skippedSegments.clear()
+        _state.value = initial
+        _player.value = exo
+        tick = applicationCoroutineScope.launch(Dispatchers.Main) { tickLoop(exo) }
+        if (p.sponsorBlock) {
+            applicationCoroutineScope.launch(Dispatchers.Main) {
+                val segments = sponsorBlock.segments(videoId)
+                _state.update { if (it?.key == key) it.copy(segments = segments) else it }
+            }
+        }
+    }
+
+    /** The reader's player went away: stops, unless it plays in the background. */
+    fun close(key: String) {
+        if (attached == key) attached = null
+        val current = _state.value ?: return
+        if (current.key != key) return
+        if (current.background && _player.value?.playWhenReady == true) return
+        stop()
+    }
+
+    /** The app went to the background: pauses, unless background play is on. */
+    fun onAppPaused(key: String) {
+        val current = _state.value ?: return
+        if (current.key == key && !current.background) _player.value?.pause()
+    }
+
+    fun stop() {
+        val exo = _player.value
+        if (exo != null) {
+            if (exo.isPlaying) reporter?.playing(exo.currentPosition / 1000.0, exo.durationSeconds())
+            reporter?.stop()
+            exo.release()
+        }
+        tick?.cancel()
+        tick = null
+        reporter = null
+        _player.value = null
+        if (_state.value?.background == true) stopService()
+        _state.value = null
+    }
+
+    fun setQuality(height: Int) {
+        savePrefs(playerPrefs.value.copy(quality = height))
+        val current = _state.value ?: return
+        val video = current.details.videoFor(height) ?: return
+        rebuild(current.copy(height = video.height))
+    }
+
+    fun setAudio(audio: AudioStream) {
+        val current = _state.value ?: return
+        rebuild(current.copy(audio = audio))
+    }
+
+    fun setSubtitle(track: SubtitleTrack?) {
+        savePrefs(playerPrefs.value.copy(subtitlesOn = track != null, subtitleLanguage = track?.language ?: playerPrefs.value.subtitleLanguage))
+        val current = _state.value ?: return
+        rebuild(current.copy(subtitle = track))
+    }
+
+    fun setSpeed(speed: Float) {
+        savePrefs(playerPrefs.value.copy(speed = speed))
+        _player.value?.setPlaybackSpeed(speed)
+        _state.update { it?.copy(speed = speed) }
+    }
+
+    fun setSubtitleStyle(
+        size: SubtitleSize,
+        background: Boolean,
+    ) = savePrefs(playerPrefs.value.copy(subtitleSize = size, subtitleBackground = background))
+
+    fun setSponsorBlock(on: Boolean) {
+        savePrefs(playerPrefs.value.copy(sponsorBlock = on))
+        val current = _state.value ?: return
+        if (on && current.segments.isEmpty()) {
+            applicationCoroutineScope.launch(Dispatchers.Main) {
+                val segments = sponsorBlock.segments(current.videoId)
+                _state.update { if (it?.key == current.key) it.copy(segments = segments) else it }
+            }
+        }
+    }
+
+    fun setBackground(on: Boolean) {
+        val current = _state.value ?: return
+        if (current.background == on) return
+        _state.value = current.copy(background = on)
+        if (on) {
+            // Started while the app is in front (the button was tapped): allowed on every Android
+            app.startService(Intent(app, VideoPlaybackService::class.java))
+        } else {
+            stopService()
+        }
+    }
+
+    /** [minutes] from now, [PlaybackState.SLEEP_AT_END], or 0 = off. */
+    fun setSleepTimer(minutes: Int) {
+        val at =
+            when {
+                minutes > 0 -> System.currentTimeMillis() + minutes * 60_000L
+                minutes == SLEEP_END_OF_VIDEO -> PlaybackState.SLEEP_AT_END
+                else -> 0L
+            }
+        _state.update { it?.copy(sleepAt = at) }
+    }
+
+    fun seekTo(seconds: Double) {
+        val exo = _player.value ?: return
+        exo.seekTo((seconds * 1000).toLong().coerceAtLeast(0))
+    }
+
+    private fun stopService() {
+        app.stopService(Intent(app, VideoPlaybackService::class.java))
+    }
+
+    private fun rebuild(next: PlaybackState) {
+        val exo = _player.value ?: return
+        val position = exo.currentPosition
+        val playWhenReady = exo.playWhenReady
+        _state.value = next
+        exo.setMediaSource(buildSource(next), position)
+        exo.prepare()
+        exo.playWhenReady = playWhenReady
+    }
+
+    private fun buildSource(state: PlaybackState): MediaSource {
+        val details = state.details
+        val http =
+            DefaultHttpDataSource
+                .Factory()
+                .setAllowCrossProtocolRedirects(true)
+                .apply { details.userAgent?.let { setUserAgent(it) } }
+        val factory = DefaultMediaSourceFactory(DefaultDataSource.Factory(app, http))
+        val metadata =
+            MediaMetadata
+                .Builder()
+                .setTitle(state.title.ifBlank { details.title })
+                .setArtist(details.channel)
+                .apply { details.thumbnail?.let { setArtworkUri(it.toUri()) } }
+                .build()
+        val subtitles =
+            listOfNotNull(
+                state.subtitle?.let {
+                    MediaItem.SubtitleConfiguration
+                        .Builder(it.url.toUri())
+                        .setMimeType(MimeTypes.TEXT_VTT)
+                        .setLanguage(it.language)
+                        .setLabel(it.label)
+                        .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                        .build()
+                },
+            )
+        val video = if (state.height > 0) details.videoFor(state.height) else null
+        val audio = state.audio ?: details.audios.firstOrNull()
+        return if (video != null && audio != null) {
+            MergingMediaSource(
+                factory.createMediaSource(
+                    MediaItem
+                        .Builder()
+                        .setMediaId(state.videoId)
+                        .setUri(video.url)
+                        .setMediaMetadata(metadata)
+                        .setSubtitleConfigurations(subtitles)
+                        .build(),
+                ),
+                factory.createMediaSource(MediaItem.fromUri(audio.url)),
+            )
+        } else {
+            factory.createMediaSource(
+                MediaItem
+                    .Builder()
+                    .setMediaId(state.videoId)
+                    .setUri(checkNotNull(details.muxedUrl ?: details.videos.firstOrNull()?.url))
+                    .setMediaMetadata(metadata)
+                    .setSubtitleConfigurations(subtitles)
+                    .build(),
+            )
+        }
+    }
+
+    private fun listener(exo: ExoPlayer) =
+        object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (!isPlaying && exo.playbackState != Player.STATE_ENDED) {
+                    reporter?.paused(exo.currentPosition / 1000.0, exo.durationSeconds())
+                }
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_ENDED) {
+                    reporter?.ended(exo.durationSeconds())
+                    _state.update { if (it?.sleepAt == PlaybackState.SLEEP_AT_END) it.copy(sleepAt = 0) else it }
+                    // Nobody is looking at it: done
+                    if (attached == null) stop()
+                }
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                val current = _state.value ?: return
+                Log.w(LOG_TAG, "Stream failed for ${current.videoId}", error)
+                offlineVideos.forgetDetails(youtubeWatchUrl(current.videoId))
+                _errors.tryEmit(current.key)
+                stop()
+            }
+        }
+
+    private suspend fun tickLoop(exo: ExoPlayer) {
+        while (true) {
+            delay(TICK_MS)
+            if (_player.value !== exo) return
+            val current = _state.value ?: return
+            if (exo.isPlaying) {
+                val t = exo.currentPosition / 1000.0
+                reporter?.playing(t, exo.durationSeconds())
+                if (_prefs.value.sponsorBlock) {
+                    current.segments
+                        .firstOrNull { t >= it.start && t < it.end - 0.5 && it.uuid !in skippedSegments }
+                        ?.let { segment ->
+                            // Once: seeking back into it plays it
+                            skippedSegments += segment.uuid
+                            exo.seekTo((segment.end * 1000).toLong())
+                            _skipped.tryEmit(segment)
+                        }
+                }
+            }
+            if (current.sleepAt > 0 && System.currentTimeMillis() >= current.sleepAt) {
+                exo.pause()
+                _state.update { it?.copy(sleepAt = 0) }
+            }
+        }
+    }
+
+    private fun pickSubtitle(
+        details: VideoDetails,
+        language: String,
+    ): SubtitleTrack? =
+        details.subtitles.firstOrNull { it.language == language && !it.automatic }
+            ?: details.subtitles.firstOrNull { it.language.removeSuffix("-orig") == language }
+            ?: details.subtitles.firstOrNull { !it.automatic }
+            ?: details.subtitles.firstOrNull()
+
+    @Synchronized
+    private fun loadPrefs() {
+        if (prefsLoaded) return
+        prefsLoaded = true
+        _prefs.value =
+            PlayerPrefs(
+                quality = prefs.getInt("quality", 720),
+                speed = prefs.getFloat("speed", 1f),
+                subtitlesOn = prefs.getBoolean("subtitles_on", false),
+                subtitleLanguage = prefs.getString("subtitle_language", "") ?: "",
+                subtitleSize = SubtitleSize.entries.firstOrNull { it.name == prefs.getString("subtitle_size", null) } ?: SubtitleSize.NORMAL,
+                subtitleBackground = prefs.getBoolean("subtitle_background", true),
+                sponsorBlock = prefs.getBoolean("sponsorblock", true),
+            )
+    }
+
+    private fun savePrefs(p: PlayerPrefs) {
+        loadPrefs()
+        _prefs.value = p
+        prefs
+            .edit()
+            .putInt("quality", p.quality)
+            .putFloat("speed", p.speed)
+            .putBoolean("subtitles_on", p.subtitlesOn)
+            .putString("subtitle_language", p.subtitleLanguage)
+            .putString("subtitle_size", p.subtitleSize.name)
+            .putBoolean("subtitle_background", p.subtitleBackground)
+            .putBoolean("sponsorblock", p.sponsorBlock)
+            .apply()
+    }
+
+    companion object {
+        private const val LOG_TAG = "FEEDER_YOUTUBE"
+        private const val PREFS = "youtube_player"
+        private const val TICK_MS = 250L
+        const val SEEK_MS = 10_000L
+        const val SLEEP_END_OF_VIDEO = -1
+    }
+}
+
+internal fun Player.durationSeconds(): Double = duration.takeIf { it > 0 }?.let { it / 1000.0 } ?: 0.0
+
+/** Decides when a playing position is worth saving: every few seconds, and when it stops. */
+internal class PlaybackReporter(
+    private val report: (t: Double, d: Double, stopped: Boolean) -> Unit,
+) {
+    private var last: Pair<Double, Double>? = null
+    private var lastSaved = 0L
+
+    fun playing(
+        t: Double,
+        d: Double,
+    ) {
+        last = t to d
+        val now = System.currentTimeMillis()
+        if (now - lastSaved >= SAVE_EVERY_MS) {
+            lastSaved = now
+            report(t, d, false)
+        }
+    }
+
+    fun paused(
+        t: Double,
+        d: Double,
+    ) {
+        if (last != null) last = t to d
+        stop()
+    }
+
+    fun ended(d: Double) {
+        last = d to d
+        stop()
+    }
+
+    /** Writes down where it stopped, once: a later stop must not overwrite a newer position from another device. */
+    fun stop() {
+        val l = last ?: return
+        last = null
+        lastSaved = System.currentTimeMillis()
+        report(l.first, l.second, true)
+    }
+
+    companion object {
+        const val SAVE_EVERY_MS = 5000L
+    }
+}
