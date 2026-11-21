@@ -55,6 +55,8 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.ViewAgenda
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -712,11 +714,43 @@ fun FeedScreen(
     val context = LocalContext.current
     val closeMenuText = stringResource(id = R.string.close_menu)
     val focusRequester = remember { FocusRequester() }
+    val flipMode = rememberFlipModePreference()
 
     LaunchedEffect(viewState.searchBarVisible) {
         if (viewState.searchBarVisible) {
             focusRequester.requestFocus()
         }
+    }
+
+    if (flipMode.enabled) {
+        // Flip view takes the whole screen: no bars, tabs or buttons until the user exits it.
+        // A new pager per feed, so each feed opens at its first page.
+        key(viewState.currentFeedOrTag) {
+            FeedFlipContent(
+                viewState = viewState,
+                pagedFeedItems = pagedFeedItems,
+                translatedFeedCards = translatedFeedCards,
+                onTranslateFeedCard = onTranslateFeedCard,
+                markAsUnread = markAsUnread,
+                onSetBookmark = onSetBookmark,
+                onItemClick = onOpenFeedItem,
+                onOpenNavDrawer = {
+                    coroutineScope.launch {
+                        if (drawerState.isOpen) {
+                            drawerState.close()
+                        } else {
+                            drawerState.open()
+                        }
+                    }
+                },
+                onAddFeed = onAddFeed,
+                onExit = { flipMode.set(false) },
+                onDeleteItem = onDeleteItem,
+                snackbarHostState = snackbarHostState,
+                modifier = modifier,
+            )
+        }
+        return
     }
 
     FeedScreen(
@@ -801,6 +835,16 @@ fun FeedScreen(
                 ) {
                 }
             } else {
+                val flipLabel = stringResource(if (flipMode.enabled) R.string.show_as_list else R.string.show_as_flip_pages)
+                PlainTooltipBox(tooltip = { Text(flipLabel) }) {
+                    IconButton(onClick = { flipMode.set(!flipMode.enabled) }) {
+                        Icon(
+                            if (flipMode.enabled) Icons.Outlined.ViewAgenda else Icons.Outlined.AutoStories,
+                            contentDescription = flipLabel,
+                        )
+                    }
+                }
+
                 PlainTooltipBox(tooltip = { Text(stringResource(R.string.search_verb)) }) {
                     Box {
                         IconButton(

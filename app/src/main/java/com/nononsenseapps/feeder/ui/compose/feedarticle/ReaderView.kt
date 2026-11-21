@@ -32,6 +32,7 @@ import androidx.compose.material.LocalContentAlpha
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BookmarkAdded
 import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Terrain
 import androidx.compose.material.icons.outlined.Timelapse
@@ -61,6 +62,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -107,6 +110,7 @@ fun ReaderView(
     showHeaderImage: Boolean,
     contentImageUrls: Set<String>,
     modifier: Modifier = Modifier,
+    onDelete: (() -> Unit)? = null,
     articleScrollState: ScrollState = rememberScrollState(),
     // YouTube's player for a YouTube article, shown in place of the header image
     video: (@Composable () -> Unit)? = null,
@@ -176,7 +180,11 @@ fun ReaderView(
                                 val interactionSource = remember { MutableInteractionSource() }
                                 Text(
                                     text = articleTitle,
-                                    style = MaterialTheme.typography.headlineLarge,
+                                    style =
+                                        MaterialTheme.typography.headlineLarge.copy(
+                                            fontFamily = FontFamily.Serif,
+                                            fontWeight = FontWeight.Bold,
+                                        ),
                                     modifier =
                                         Modifier
                                             .indication(interactionSource, LocalIndication.current)
@@ -254,9 +262,9 @@ fun ReaderView(
                                     ) { target ->
                                         Text(
                                             if (target) {
-                                                stringResource(R.string.saved_adjective)
+                                                stringResource(R.string.action_saved)
                                             } else {
-                                                stringResource(R.string.save_article)
+                                                stringResource(R.string.action_save)
                                             },
                                         )
                                     }
@@ -277,7 +285,27 @@ fun ReaderView(
                                         },
                                     onClick = onMarkAsUnread,
                                     label = {
-                                        Text(stringResource(R.string.mark_as_unread))
+                                        Text(stringResource(R.string.action_unread))
+                                    },
+                                )
+                            }
+                            if (onDelete != null) {
+                                SuggestionChip(
+                                    icon =
+                                        {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Delete,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier.size(FilterChipDefaults.IconSize),
+                                            )
+                                        },
+                                    onClick = onDelete,
+                                    label = {
+                                        Text(
+                                            stringResource(R.string.action_delete_article),
+                                            color = MaterialTheme.colorScheme.error,
+                                        )
                                     },
                                 )
                             }
