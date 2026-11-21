@@ -22,6 +22,7 @@ import com.nononsenseapps.feeder.model.youtube.SponsorBlock
 import com.nononsenseapps.feeder.model.youtube.VideoPositions
 import com.nononsenseapps.feeder.model.youtube.YouTubePlayback
 import com.nononsenseapps.feeder.openai.GeminiNanoSummarizer
+import com.nononsenseapps.feeder.openai.OnDeviceSummarizer
 import com.nononsenseapps.feeder.openai.OpenAIApi
 import com.nononsenseapps.feeder.openai.OpenAIClient
 import com.nononsenseapps.feeder.openai.OpenAIClientDefault
@@ -31,6 +32,7 @@ import com.nononsenseapps.feeder.ui.NavigationDeepLinkViewModel
 import com.nononsenseapps.feeder.ui.OpenLinkInDefaultActivityViewModel
 import com.nononsenseapps.feeder.ui.compose.editfeed.CreateFeedScreenViewModel
 import com.nononsenseapps.feeder.ui.compose.editfeed.EditFeedScreenViewModel
+import com.nononsenseapps.feeder.ui.compose.feed.FlipCardTexts
 import com.nononsenseapps.feeder.ui.compose.feedarticle.ArticleViewModel
 import com.nononsenseapps.feeder.ui.compose.feedarticle.FeedViewModel
 import com.nononsenseapps.feeder.ui.compose.searchfeed.SearchFeedViewModel
@@ -63,13 +65,15 @@ val archModelModule =
         bind<VideoPositions>() with singleton { VideoPositions(di) }
         bind<SponsorBlock>() with singleton { SponsorBlock(instance()) }
         bind<YouTubePlayback>() with singleton { YouTubePlayback(di) }
+        bind<OnDeviceSummarizer>() with singleton { GeminiNanoSummarizer(instance<Application>()) }
+        bind<FlipCardTexts>() with singleton { FlipCardTexts(di) }
         bindFactory<OpenAISettings, OpenAIClient> { settings -> OpenAIClientDefault(settings) }
         bind<OpenAIApi>() with
             singleton {
                 OpenAIApi(
                     appLang = Locale.getDefault().getISO3Language(),
                     openAIClientFactory = factory(),
-                    onDeviceSummarizer = GeminiNanoSummarizer(instance<Application>()),
+                    onDeviceSummarizer = instance(),
                 )
             }
         bind<SuggestedFeedRepository>() with
