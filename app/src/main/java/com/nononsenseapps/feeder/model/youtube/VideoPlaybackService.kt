@@ -47,7 +47,7 @@ class VideoPlaybackService : MediaSessionService() {
         )
         scope.launch {
             combine(playback.player, playback.state) { player, state ->
-                if (state?.background == true) player to state.itemId else null
+                if (state?.background == true && player != null) player to state.itemId else null
             }.distinctUntilChanged { a, b -> a?.first === b?.first && a?.second == b?.second }
                 .collect { current ->
                     session?.let {
