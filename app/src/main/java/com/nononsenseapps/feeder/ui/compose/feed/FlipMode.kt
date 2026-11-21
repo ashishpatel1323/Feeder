@@ -40,6 +40,8 @@ import androidx.compose.material.icons.outlined.MarkEmailUnread
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -191,6 +193,7 @@ fun FeedFlipContent(
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
     onDeleteItem: ((Long) -> Unit)? = null,
+    snackbarHostState: SnackbarHostState? = null,
 ) {
     // Full screen until the user leaves flip mode
     ImmersiveSystemBars()
@@ -374,6 +377,17 @@ fun FeedFlipContent(
                         .fillMaxWidth((pagerState.currentPage + 1).toFloat() / pages.size)
                         .height(2.dp)
                         .background(Color.White.copy(alpha = 0.85f)),
+            )
+        }
+
+        // Delete shows its Undo snackbar here, as the list screen's host is not composed in flip view
+        if (snackbarHostState != null) {
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 96.dp),
             )
         }
 

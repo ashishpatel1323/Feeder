@@ -746,6 +746,7 @@ fun FeedScreen(
                 onAddFeed = onAddFeed,
                 onExit = { flipMode.set(false) },
                 onDeleteItem = onDeleteItem,
+                snackbarHostState = snackbarHostState,
                 modifier = modifier,
             )
         }
