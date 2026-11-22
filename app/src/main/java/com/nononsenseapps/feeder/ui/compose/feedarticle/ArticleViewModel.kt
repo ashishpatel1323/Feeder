@@ -55,6 +55,7 @@ import com.nononsenseapps.feeder.openai.OpenAIApi
 import com.nononsenseapps.feeder.openai.canSummarize
 import com.nononsenseapps.feeder.openai.canUseAsTranslationApi
 import com.nononsenseapps.feeder.openai.isLocalTranslation
+import com.nononsenseapps.feeder.ui.compose.feed.speechOffsetOfSentence
 import com.nononsenseapps.feeder.ui.compose.readaloud.SpeechHighlight
 import com.nononsenseapps.feeder.ui.compose.readaloud.WordModeState
 import com.nononsenseapps.feeder.ui.compose.readaloud.speechText
@@ -80,11 +81,13 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.jsoup.Jsoup
 import org.kodein.di.DI
 import org.kodein.di.instance
@@ -1201,8 +1204,34 @@ class ArticleViewModel(
         }
     }
 
+    // Opened from a flip card that was being read aloud: go on reading the full article from the
+    // sentence the card had reached, once the article text is on screen. Last in the class, so
+    // everything reading aloud uses is set up first.
+    init {
+        ttsStateHolder.takeHandoff(itemId)?.let { handoff ->
+            viewModelScope.launch {
+                val text =
+                    withTimeoutOrNull(HANDOFF_TEXT_WAIT_MS) {
+                        viewState.map { displayedSpeechText() }.filterNotNull().first()
+                    }
+                // Stopped or another article started meanwhile
+                if (readAloudProgress.value.articleId != itemId) return@launch
+                if (text == null) {
+                    ttsStateHolder.stop()
+                    return@launch
+                }
+                val offset = handoff.sentence?.let { speechOffsetOfSentence(text, it) } ?: 0
+                stopPodcastPlayback()
+                readAloud(text, offset)
+            }
+        }
+    }
+
     companion object {
         private const val LOG_TAG = "FEEDER_ArticleVM"
+
+        // Long enough to download the full text of a slow page
+        private const val HANDOFF_TEXT_WAIT_MS = 30_000L
     }
 }
 

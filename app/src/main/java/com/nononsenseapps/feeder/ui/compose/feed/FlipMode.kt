@@ -70,10 +70,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TransformOrigin
@@ -88,6 +91,9 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -105,6 +111,7 @@ import coil3.request.ImageRequest
 import coil3.size.Precision
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.db.room.ID_UNSET
+import com.nononsenseapps.feeder.model.PlaybackStatus
 import com.nononsenseapps.feeder.model.TTSStateHolder
 import com.nononsenseapps.feeder.model.ThumbnailImage
 import com.nononsenseapps.feeder.ui.compose.empty.NothingToRead
@@ -115,6 +122,8 @@ import com.nononsenseapps.feeder.util.stripTrackingParameters
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.kodein.di.compose.LocalDI
 import org.kodein.di.instance
@@ -243,6 +252,9 @@ fun FeedFlipContent(
         }
     val currentPages by rememberUpdatedState(pages)
     val pagerState = rememberPagerState { currentPages.size }
+    // Set when "Read full article" hands reading over to the article screen, which goes on from the
+    // same sentence; leaving flip view then must not stop it
+    val handedOff = remember { AtomicBoolean(false) }
 
     // While cards are read aloud, the lock screen's next/previous and the end of a card turn the
     // pages here instead of opening the next article in the reader
@@ -279,7 +291,7 @@ fun FeedFlipContent(
                 }
             onDispose {
                 ttsStateHolder.articleNavigator = previousNavigator
-                ttsStateHolder.stop()
+                if (!handedOff.getAndSet(false)) ttsStateHolder.stop()
             }
         }
     }
@@ -374,19 +386,36 @@ fun FeedFlipContent(
                 } else {
                     null
                 }
-            // Reads the card on screen: its title, then the text or the summary it shows
+            // What read aloud speaks for the card: its title, then the text or the summary it shows
+            val spokenParts =
+                if (item != null && cardState != null) {
+                    listOf(item.title) +
+                        when (val body = cardState.body) {
+                            is CardBody.Summary -> body.bullets
+                            else -> listOf(cardState.bodyText)
+                        }
+                } else {
+                    emptyList()
+                }
+            // The sentence and word being spoken, highlighted on the card like in the reader
+            val spokenRanges by remember(item?.id, spokenParts) {
+                ttsStateHolder.progress
+                    .map { progress ->
+                        if (item != null && progress.articleId == item.id && progress.error == null) {
+                            spokenRangesOf(spokenParts, progress.text, progress.segment, progress.word)
+                        } else {
+                            emptyList()
+                        }
+                    }.distinctUntilChanged()
+            }.collectAsState(initial = emptyList())
             if (readAloud && item != null && cardState != null && pagerState.settledPage == pageIndex) {
-                val spoken =
-                    when (val body = cardState.body) {
-                        is CardBody.Summary -> body.bullets
-                        else -> listOf(cardState.bodyText)
-                    }
-                LaunchedEffect(item.id, spoken, cardState.loaded) {
+                LaunchedEffect(item.id, spokenParts, cardState.loaded) {
+                    handedOff.set(false)
                     // The previous card stops at once, also while this one is still loading
                     ttsStateHolder.stop()
                     if (!cardState.loaded) delay(READ_ALOUD_TEXT_WAIT_MS)
                     ttsStateHolder.tts(
-                        textArray = (listOf(item.title) + spoken).map { AnnotatedString(it) },
+                        textArray = spokenParts.map { AnnotatedString(it) },
                         useDetectLanguage = true,
                         articleId = item.id,
                         title = item.title,
@@ -412,7 +441,26 @@ fun FeedFlipContent(
                         item = item,
                         state = cardState,
                         keptUnread = kept,
-                        onOpen = { onItemClick(item.id) },
+                        spokenRanges = spokenRanges,
+                        onOpen = {
+                            // While this card is read aloud, the article goes on from the same sentence
+                            val progress = ttsStateHolder.progress.value
+                            if (readAloud &&
+                                progress.articleId == item.id &&
+                                progress.error == null &&
+                                ttsStateHolder.ttsState.value == PlaybackStatus.PLAYING
+                            ) {
+                                val sentence =
+                                    if (cardState.body is CardBody.Summary) {
+                                        null
+                                    } else {
+                                        spokenBodySentence(spokenParts, progress.text, progress.segment)
+                                    }
+                                handedOff.set(true)
+                                ttsStateHolder.handOff(item.id, sentence)
+                            }
+                            onItemClick(item.id)
+                        },
                         onToggleKeepUnread = {
                             if (kept) {
                                 keptUnread = keptUnread.filter { it != item.id }.toLongArray()
@@ -679,6 +727,9 @@ private class FlipCardState(
     // Shared by both halves of the page, so they scroll together
     val summaryScroll = ScrollState(0)
 
+    // Moved by read aloud to keep the spoken line on screen; the pager takes the user's swipes
+    val textScroll = ScrollState(0)
+
     fun summarize(item: FeedListItem) {
         val cached = flipCardTexts.cachedSummary(itemId)
         if (cached != null) {
@@ -767,6 +818,7 @@ private fun FlipArticleCard(
     item: FeedListItem,
     state: FlipCardState,
     keptUnread: Boolean,
+    spokenRanges: List<SpokenRanges?>,
     onOpen: () -> Unit,
     onToggleKeepUnread: () -> Unit,
     onToggleBookmark: () -> Unit,
@@ -904,7 +956,7 @@ private fun FlipArticleCard(
                 }
             }
             Text(
-                text = item.title,
+                text = highlightSpoken(item.title, spokenRanges.getOrNull(0)),
                 fontFamily = FontFamily.Serif,
                 fontWeight = FontWeight.Bold,
                 fontSize = if (image != null) 25.sp else 27.sp,
@@ -921,16 +973,15 @@ private fun FlipArticleCard(
                         .weight(1f)
                         .fillMaxWidth()
                         .clipToBounds()
+                        .fadeBottomEdge()
                         .padding(horizontal = 4.dp),
             ) {
                 when (val current = body) {
                     CardBody.Text ->
-                        Text(
+                        SpokenBodyText(
                             text = bodyText,
-                            fontSize = 15.sp,
-                            lineHeight = 22.sp,
-                            color = Color.White.copy(alpha = 0.86f),
-                            overflow = TextOverflow.Ellipsis,
+                            spoken = spokenRanges.getOrNull(1),
+                            scroll = state.textScroll,
                         )
 
                     CardBody.Summarizing ->
@@ -952,6 +1003,7 @@ private fun FlipArticleCard(
                         // Scrolls when a long title leaves too little room for all three bullets
                         SummaryBullets(
                             bullets = current.bullets,
+                            spokenRanges = spokenRanges.drop(1),
                             modifier = Modifier.verticalScroll(state.summaryScroll),
                         )
 
@@ -1055,6 +1107,7 @@ private fun FlipArticleCard(
 @Composable
 private fun SummaryBullets(
     bullets: List<String>,
+    spokenRanges: List<SpokenRanges?>,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -1080,7 +1133,7 @@ private fun SummaryBullets(
                 color = FlipSummary,
             )
         }
-        bullets.forEach { bullet ->
+        bullets.forEachIndexed { index, bullet ->
             Row {
                 Box(
                     modifier =
@@ -1091,7 +1144,7 @@ private fun SummaryBullets(
                             .background(FlipSummary),
                 )
                 Text(
-                    text = bullet,
+                    text = highlightSpoken(bullet, spokenRanges.getOrNull(index)),
                     fontSize = 15.5.sp,
                     lineHeight = 23.sp,
                     color = Color.White,
@@ -1100,6 +1153,90 @@ private fun SummaryBullets(
         }
     }
 }
+
+// The sentence being read aloud gets a soft band, the word a solid mark, like in the reader
+private val SpokenSentenceBackground = Color.White.copy(alpha = 0.16f)
+private val SpokenWordBackground = FlipAccent
+private val SpokenWordForeground = FlipGreenDark
+
+private fun highlightSpoken(
+    text: String,
+    spoken: SpokenRanges?,
+): AnnotatedString {
+    if (spoken == null || text.isEmpty()) return AnnotatedString(text)
+    return buildAnnotatedString {
+        append(text)
+        spoken.sentence?.let {
+            addStyle(SpanStyle(background = SpokenSentenceBackground), it.first, (it.last + 1).coerceAtMost(text.length))
+        }
+        spoken.word?.let {
+            addStyle(
+                SpanStyle(background = SpokenWordBackground, color = SpokenWordForeground),
+                it.first,
+                (it.last + 1).coerceAtMost(text.length),
+            )
+        }
+    }
+}
+
+/**
+ * The card's article text. While it is read aloud the spoken part is highlighted, and the text
+ * moves up when reading reaches a line below the bottom of the card.
+ */
+@Composable
+private fun SpokenBodyText(
+    text: String,
+    spoken: SpokenRanges?,
+    scroll: ScrollState,
+) {
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val follow = spoken?.word ?: spoken?.sentence
+    val line =
+        layout?.let { result ->
+            if (follow != null && result.layoutInput.text.length == text.length && text.isNotEmpty()) {
+                result.getLineForOffset(follow.first.coerceIn(0, text.length - 1))
+            } else {
+                null
+            }
+        }
+    LaunchedEffect(line, scroll.viewportSize) {
+        val result = layout ?: return@LaunchedEffect
+        if (line == null || scroll.viewportSize == 0) return@LaunchedEffect
+        val top = result.getLineTop(line).toInt()
+        val bottom = result.getLineBottom(line).toInt()
+        val viewport = scroll.viewportSize
+        // Leaves room for the faded bottom edge, and keeps a line of what was just read above
+        if (bottom > scroll.value + viewport - viewport / 6 || top < scroll.value) {
+            scroll.animateScrollTo((top - viewport / 5).coerceIn(0, scroll.maxValue))
+        }
+    }
+    Text(
+        text = highlightSpoken(text, spoken),
+        fontSize = 15.sp,
+        lineHeight = 22.sp,
+        color = Color.White.copy(alpha = 0.86f),
+        onTextLayout = { layout = it },
+        modifier = Modifier.verticalScroll(scroll, enabled = false),
+    )
+}
+
+/** Fades out text cut off at the bottom of its box, instead of an ellipsis. */
+private fun Modifier.fadeBottomEdge(): Modifier =
+    graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+        .drawWithContent {
+            drawContent()
+            val fade = 28.dp.toPx()
+            drawRect(
+                brush =
+                    Brush.verticalGradient(
+                        0f to Color.Black,
+                        1f to Color.Transparent,
+                        startY = size.height - fade,
+                        endY = size.height,
+                    ),
+                blendMode = BlendMode.DstIn,
+            )
+        }
 
 /** A rounded button under the card text. */
 @Composable
