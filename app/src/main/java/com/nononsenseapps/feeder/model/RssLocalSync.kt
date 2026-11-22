@@ -442,8 +442,8 @@ class RssLocalSync(
                             repository.setSynced(feedItem.id)
                         }
                     }
-                    // Try to look for image if not done before
-                    if (feedSql.imageUrl == null && feedSql.siteFetched == Instant.EPOCH) {
+                    // Try to look for image if not done before, and only when the feed has none of its own
+                    if (feedSql.imageUrl == null && feed.icon.isNullOrBlank() && feedSql.siteFetched == Instant.EPOCH) {
                         val siteUrl =
                             try {
                                 val url = URL(feed.home_page_url)
@@ -455,7 +455,7 @@ class RssLocalSync(
                         if (siteUrl != null) {
                             feedSql.siteFetched = Instant.now()
                             feedParser
-                                .getSiteMetaData(siteUrl)
+                                .getSiteMetaData(siteUrl, quick = true)
                                 .onRight { metadata ->
                                     try {
                                         feedSql.imageUrl = URL(metadata.feedImage)
