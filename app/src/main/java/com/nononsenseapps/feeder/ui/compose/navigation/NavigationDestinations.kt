@@ -195,7 +195,13 @@ data object SearchFeedDestination : NavigationDestination(
 data object DownloadsDestination : NavigationDestination(
     path = "downloads",
     navArguments = emptyList(),
-    deepLinks = emptyList(),
+    // The background-play notification opens Downloads
+    deepLinks =
+        listOf(
+            navDeepLink {
+                uriPattern = "$DEEP_LINK_BASE_URI/downloads"
+            },
+        ),
 ) {
     fun navigate(navController: NavController) {
         navController.navigate(path) {

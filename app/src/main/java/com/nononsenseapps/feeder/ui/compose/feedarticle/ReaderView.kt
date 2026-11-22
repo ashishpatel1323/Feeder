@@ -114,6 +114,8 @@ fun ReaderView(
     articleScrollState: ScrollState = rememberScrollState(),
     // YouTube's player for a YouTube article, shown in place of the header image
     video: (@Composable () -> Unit)? = null,
+    // Download episode, under a podcast's "Open enclosed media" link
+    enclosureActions: (@Composable () -> Unit)? = null,
     articleBody: @Composable (indexOffset: Int) -> Unit,
 ) {
     val dimens = LocalDimens.current
@@ -395,6 +397,11 @@ fun ReaderView(
                                                 }
                                             },
                                 )
+                            }
+                            if (enclosureActions != null) {
+                                Box(modifier = Modifier.width(dimens.maxReaderWidth).padding(top = 8.dp)) {
+                                    enclosureActions()
+                                }
                             }
                         }
                     }

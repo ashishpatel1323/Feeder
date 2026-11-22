@@ -15,6 +15,7 @@ import java.security.MessageDigest
  * - `offline/full/<id>.full.html.gz`: a copy of the full text (the reader's copy is in the cache dir)
  * - `offline/items/<id>.txt`: the image keys an article saved, so deleting it removes them
  * - `offline/videos/<id>.*`: a saved YouTube video, see [OfflineVideos]
+ * - `offline/audio/<id>.*`: a saved podcast episode (the article's audio enclosure)
  */
 class OfflineFiles(
     private val filePathProvider: FilePathProvider,
@@ -29,6 +30,39 @@ class OfflineFiles(
         get() = rootDir.resolve("items")
     val videosDir: File
         get() = rootDir.resolve("videos")
+    val audioDir: File
+        get() = rootDir.resolve("audio")
+
+    private fun audioFiles(itemId: Long): List<File> =
+        audioDir
+            .listFiles { file -> file.name.startsWith("$itemId.") }
+            ?.toList()
+            .orEmpty()
+
+    /** The saved copy of an article's podcast episode, if complete. */
+    fun savedAudio(itemId: Long): File? =
+        audioFiles(itemId).firstOrNull {
+            it.isFile && it.length() > 0 && it.name.startsWith("$itemId.episode.") && !it.name.endsWith(".part")
+        }
+
+    /** Where an episode downloads to before it is complete. */
+    fun partialAudio(itemId: Long): File? = audioFiles(itemId).firstOrNull { it.name.endsWith(".part") }
+
+    /** Cover art of a saved episode (from the file's tags), made once for the Downloads screen. */
+    fun audioThumbnail(itemId: Long): File = audioDir.resolve("$itemId.thumb.jpg")
+
+    fun deleteAudio(itemId: Long) {
+        audioFiles(itemId).forEach { it.delete() }
+    }
+
+    /** Ids of every complete saved episode. */
+    fun savedAudioIds(): List<Long> =
+        audioDir
+            .listFiles()
+            ?.mapNotNull { it.name.substringBefore('.').toLongOrNull() }
+            .orEmpty()
+            .distinct()
+            .filter { savedAudio(it) != null }
 
     private fun videoFiles(itemId: Long): List<File> =
         videosDir
@@ -127,6 +161,7 @@ class OfflineFiles(
                 }
                 fullTextCopy(id).delete()
                 deleteVideo(id)
+                deleteAudio(id)
             } catch (e: Exception) {
                 Log.e(LOG_TAG, "Could not delete downloads of $id", e)
             }
@@ -145,6 +180,10 @@ class OfflineFiles(
                     ?.mapNotNull { it.name.substringBefore('.').toLongOrNull() }
                     .orEmpty() +
                 videosDir
+                    .listFiles()
+                    ?.mapNotNull { it.name.substringBefore('.').toLongOrNull() }
+                    .orEmpty() +
+                audioDir
                     .listFiles()
                     ?.mapNotNull { it.name.substringBefore('.').toLongOrNull() }
                     .orEmpty()

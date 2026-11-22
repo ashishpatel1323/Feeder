@@ -19,6 +19,17 @@ data class VideoStream(
     val formatId: String,
 )
 
+/** A quality the video can be saved in (Download's quality picker): one per codec and height. */
+@Immutable
+data class DownloadOption(
+    val formatId: String,
+    /** "H264" or "VP9". */
+    val codec: String,
+    val height: Int,
+    /** Picture and sound together, roughly; 0 when YouTube does not say. */
+    val approxBytes: Long,
+)
+
 /** A sound stream: one per language (audio track), the best one of each. */
 @Immutable
 data class AudioStream(
@@ -73,6 +84,8 @@ data class VideoDetails(
     val subtitles: List<SubtitleTrack>,
     /** The browser yt-dlp asked as: some streams only play for the same User-Agent. */
     val userAgent: String?,
+    /** Qualities to save it in, best first. */
+    val downloadOptions: List<DownloadOption> = emptyList(),
 ) {
     val hasStreams: Boolean get() = (videos.isNotEmpty() && audios.isNotEmpty()) || muxedUrl != null
 
@@ -120,7 +133,49 @@ data class VideoDetails(
                 userAgent =
                     formats.firstNotNullOfOrNull { (it["http_headers"] as? JsonObject)?.str("User-Agent") }
                         ?: (o["http_headers"] as? JsonObject)?.str("User-Agent"),
+                downloadOptions = downloadOptions(formats, o.double("duration") ?: 0.0),
             )
+        }
+
+        /**
+         * Video-only streams yt-dlp can save, the best of each codec (H.264, VP9) and height up to
+         * 1080p, with their size plus the sound's. Highest first, VP9 before H.264 at a height.
+         */
+        fun downloadOptions(
+            formats: List<JsonObject>,
+            duration: Double,
+        ): List<DownloadOption> {
+            fun bytes(f: JsonObject): Long = f.long("filesize") ?: f.long("filesize_approx") ?: ((f.double("tbr") ?: 0.0) * duration * 1000 / 8).toLong()
+            val sound =
+                formats
+                    .filter { it.hasAudio() && !it.hasVideo() && it.str("ext") == "m4a" }
+                    .maxByOrNull { it.double("tbr") ?: it.double("abr") ?: 0.0 }
+                    ?.let(::bytes) ?: 0L
+            return formats
+                .filter { it.hasVideo() && !it.hasAudio() && it.str("protocol")?.startsWith("http") == true }
+                .mapNotNull { f ->
+                    val height = f.long("height")?.toInt() ?: return@mapNotNull null
+                    if (height > MAX_HEIGHT || height < 144) return@mapNotNull null
+                    val vcodec = f.str("vcodec") ?: return@mapNotNull null
+                    val codec =
+                        when {
+                            vcodec.startsWith("avc1") -> "H264"
+                            vcodec.startsWith("vp9") || vcodec.startsWith("vp09") -> "VP9"
+                            else -> return@mapNotNull null
+                        }
+                    Triple(codec, height, f)
+                }.groupBy { it.first to it.second }
+                .map { (key, list) ->
+                    val best = list.maxBy { it.third.double("tbr") ?: 0.0 }.third
+                    val video = bytes(best)
+                    DownloadOption(
+                        formatId = best.str("format_id") ?: "",
+                        codec = key.first,
+                        height = key.second,
+                        approxBytes = if (video > 0) video + sound else 0L,
+                    )
+                }.filter { it.formatId.isNotEmpty() }
+                .sortedWith(compareByDescending<DownloadOption> { it.height }.thenBy { if (it.codec == "VP9") 0 else 1 })
         }
 
         private fun videoStreams(formats: List<JsonObject>): List<VideoStream> =

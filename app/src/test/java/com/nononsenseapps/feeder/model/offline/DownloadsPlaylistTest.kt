@@ -23,3 +23,12 @@ class DownloadsPlaylistTest {
         assertEquals(100f, overallPercent(VideoPhase.SUBTITLES, 0f))
     }
 }
+
+class AudioExtensionTest {
+    @Test
+    fun extensionFromAddressOrType() {
+        assertEquals("m4a", OfflineVideos.audioExtension("https://x.com/ep/123.m4a?tok=1", null))
+        assertEquals("mp3", OfflineVideos.audioExtension("https://x.com/ep/123", null))
+        assertEquals("ogg", OfflineVideos.audioExtension("https://x.com/play?id=5", "audio/ogg; codecs=vorbis"))
+    }
+}

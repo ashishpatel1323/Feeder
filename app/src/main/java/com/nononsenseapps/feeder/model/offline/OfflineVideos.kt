@@ -11,6 +11,8 @@ import com.yausername.youtubedl_android.YoutubeDLRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,10 +21,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.kodein.di.DI
 import org.kodein.di.DIAware
 import org.kodein.di.instance
 import java.io.File
+import java.io.FileOutputStream
 import java.util.concurrent.ConcurrentHashMap
 
 /** A YouTube video saved on the phone. [audio] is null when [video] already has sound. */
@@ -42,6 +47,8 @@ data class VideoJob(
     val error: String? = null,
     /** How far the whole download is, 0 to 100 (video is most of it, then sound). */
     val overall: Float = 0f,
+    /** A podcast episode (audio file) rather than a YouTube video. */
+    val audio: Boolean = false,
 )
 
 enum class VideoPhase {
@@ -84,6 +91,10 @@ class OfflineVideos(
     private val dao: FeedItemDao by instance()
     private val applicationCoroutineScope: ApplicationCoroutineScope by instance()
     private val prefs: SharedPreferences by instance()
+    private val okHttpClient: OkHttpClient by instance()
+
+    /** Episodes are big: kept out of the app's HTTP cache. */
+    private val audioClient: OkHttpClient by lazy { okHttpClient.newBuilder().cache(null).build() }
 
     /** Links of downloads not finished yet, so Pause/Resume and Retry work after a restart. */
     private val links = ConcurrentHashMap<Long, String>()
@@ -104,10 +115,27 @@ class OfflineVideos(
     /** The saved copy of this article's video, or null. */
     fun savedFiles(itemId: Long): SavedVideo? = offlineFiles.savedVideo(itemId)
 
+    /** Saves the video; [formatId] is the quality picked in Download's quality picker (720p H.264 when null). */
     fun save(
         itemId: Long,
         link: String,
-    ) = start(itemId, link, resume = false)
+        formatId: String? = null,
+    ) = start(itemId, if (formatId.isNullOrBlank()) link else "$FORMAT_PREFIX$formatId|$link", resume = false)
+
+    /** Saves a podcast episode (the article's audio enclosure at [url]) for offline listening. */
+    fun saveAudio(
+        itemId: Long,
+        url: String,
+    ) = start(itemId, AUDIO_PREFIX + url, resume = false)
+
+    /** The saved copy of this article's podcast episode, or null. */
+    fun savedAudio(itemId: Long): File? = offlineFiles.savedAudio(itemId)
+
+    private fun isAudio(itemId: Long) = links[itemId]?.startsWith(AUDIO_PREFIX) == true
+
+    private fun deleteFiles(itemId: Long) {
+        if (isAudio(itemId)) offlineFiles.deleteAudio(itemId) else offlineFiles.deleteVideo(itemId)
+    }
 
     /** Carries on a paused (or interrupted) download from its partial files. */
     fun resume(itemId: Long) {
@@ -133,7 +161,14 @@ class OfflineVideos(
         running[itemId] =
             applicationCoroutineScope.launch(Dispatchers.IO) {
                 try {
-                    download(itemId, link, resume)
+                    if (link.startsWith(AUDIO_PREFIX)) {
+                        downloadAudio(itemId, link.removePrefix(AUDIO_PREFIX), resume)
+                    } else if (link.startsWith(FORMAT_PREFIX)) {
+                        val (format, url) = link.removePrefix(FORMAT_PREFIX).split('|', limit = 2)
+                        download(itemId, url, resume, format)
+                    } else {
+                        download(itemId, link, resume)
+                    }
                     links.remove(itemId)
                     setJob(itemId, null)
                     // Saving a video counts as downloading the article (Downloaded tab)
@@ -144,7 +179,7 @@ class OfflineVideos(
                         val overall = _jobs.value[itemId]?.overall ?: 0f
                         setJob(itemId, VideoJob(VideoPhase.PAUSED, percent = overall, overall = overall))
                     } else {
-                        offlineFiles.deleteVideo(itemId)
+                        deleteFiles(itemId)
                         links.remove(itemId)
                         setJob(itemId, null)
                     }
@@ -155,8 +190,8 @@ class OfflineVideos(
                         val overall = _jobs.value[itemId]?.overall ?: 0f
                         setJob(itemId, VideoJob(VideoPhase.PAUSED, percent = overall, overall = overall))
                     } else {
-                        Log.e(LOG_TAG, "Save video offline failed for $link", e)
-                        offlineFiles.deleteVideo(itemId)
+                        Log.e(LOG_TAG, "Save offline failed for $link", e)
+                        deleteFiles(itemId)
                         setJob(itemId, VideoJob(VideoPhase.ERROR, error = e.message?.lineSequence()?.lastOrNull { it.isNotBlank() } ?: e.toString()))
                     }
                 } finally {
@@ -172,9 +207,12 @@ class OfflineVideos(
             running[itemId]?.cancel()
         } else {
             // Paused or failed: nothing runs, so delete what is left here
+            val audio = isAudio(itemId)
             links.remove(itemId)
             setJob(itemId, null)
-            applicationCoroutineScope.launch(Dispatchers.IO) { offlineFiles.deleteVideo(itemId) }
+            applicationCoroutineScope.launch(Dispatchers.IO) {
+                if (audio) offlineFiles.deleteAudio(itemId) else offlineFiles.deleteVideo(itemId)
+            }
         }
     }
 
@@ -205,6 +243,7 @@ class OfflineVideos(
         for (id in _jobs.value.keys.toList()) cancel(id)
         withContext(Dispatchers.IO) {
             savedIds().forEach { offlineFiles.deleteVideo(it) }
+            offlineFiles.savedAudioIds().forEach { offlineFiles.deleteAudio(it) }
         }
         _changes.update { it + 1 }
     }
@@ -212,6 +251,7 @@ class OfflineVideos(
     suspend fun remove(itemId: Long) {
         withContext(Dispatchers.IO) {
             offlineFiles.deleteVideo(itemId)
+            offlineFiles.deleteAudio(itemId)
         }
         _changes.update { it + 1 }
     }
@@ -238,6 +278,7 @@ class OfflineVideos(
         itemId: Long,
         link: String,
         resume: Boolean,
+        formatId: String? = null,
     ) {
         ensureReady()
         val dir = offlineFiles.videosDir
@@ -252,7 +293,7 @@ class OfflineVideos(
                     itemId,
                     VideoPhase.VIDEO,
                     YoutubeDLRequest(link)
-                        .addOption("-f", "bv[height<=720][ext=mp4][vcodec^=avc1]/bv[height<=720][ext=mp4]/bv[height<=720]")
+                        .addOption("-f", formatId ?: "bv[height<=720][ext=mp4][vcodec^=avc1]/bv[height<=720][ext=mp4]/bv[height<=720]")
                         .addOption("-o", File(dir, "$itemId.video.%(ext)s").absolutePath),
                 )
                 true
@@ -301,6 +342,56 @@ class OfflineVideos(
 
         if (offlineFiles.savedVideo(itemId) == null) {
             throw IllegalStateException("yt-dlp finished but no video file was saved")
+        }
+    }
+
+    /**
+     * Downloads an episode with OkHttp into `<id>.episode.<ext>.part`, then renames it. Resuming
+     * asks the server for the rest (Range); a server that ignores that sends it all again.
+     */
+    private suspend fun downloadAudio(
+        itemId: Long,
+        url: String,
+        resume: Boolean,
+    ) {
+        val dir = offlineFiles.audioDir
+        dir.mkdirs()
+        if (!resume) offlineFiles.deleteAudio(itemId)
+        val part = offlineFiles.partialAudio(itemId) ?: File(dir, "$itemId.episode.${audioExtension(url, null)}.part")
+        val have = if (part.isFile) part.length() else 0L
+        val request =
+            Request
+                .Builder()
+                .url(url)
+                .apply { if (have > 0) header("Range", "bytes=$have-") }
+                .build()
+        audioClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw IllegalStateException("HTTP ${response.code}")
+            val body = response.body
+            val append = response.code == 206 && have > 0
+            val total = if (append) have + body.contentLength() else body.contentLength()
+            var done = if (append) have else 0L
+            var lastShown = -1
+            body.byteStream().use { input ->
+                FileOutputStream(part, append).use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        currentCoroutineContext().ensureActive()
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        output.write(buffer, 0, read)
+                        done += read
+                        val percent = if (total > 0) (done * 100f / total).coerceIn(0f, 100f) else 0f
+                        if (percent.toInt() != lastShown) {
+                            lastShown = percent.toInt()
+                            setJob(itemId, VideoJob(VideoPhase.AUDIO, percent = percent, overall = percent))
+                        }
+                    }
+                }
+            }
+            val ext = audioExtension(url, response.header("Content-Type"))
+            val target = File(dir, "$itemId.episode.$ext")
+            if (!part.renameTo(target)) throw IllegalStateException("Could not save the episode file")
         }
     }
 
@@ -354,8 +445,9 @@ class OfflineVideos(
 
     private fun setJob(
         itemId: Long,
-        job: VideoJob?,
+        newJob: VideoJob?,
     ) {
+        val job = newJob?.copy(audio = isAudio(itemId))
         val old = _jobs.value[itemId]
         _jobs.update { if (job == null) it - itemId else it + (itemId to job) }
         // Progress ticks often; only write when a download starts, stops or changes state
@@ -380,7 +472,7 @@ class OfflineVideos(
                     val percent = parts[2].toFloatOrNull() ?: 0f
                     links[id] = parts[3]
                     val phase = if (parts[1] == VideoPhase.ERROR.name) VideoPhase.ERROR else VideoPhase.PAUSED
-                    id to VideoJob(phase, percent = percent, overall = percent)
+                    id to VideoJob(phase, percent = percent, overall = percent, audio = parts[3].startsWith(AUDIO_PREFIX))
                 }.toMap()
         } catch (e: Exception) {
             Log.w(LOG_TAG, "Could not read unfinished downloads: ${e.message}")
@@ -402,6 +494,38 @@ class OfflineVideos(
     companion object {
         private const val LOG_TAG = "FEEDER_OFFLINE_VIDEO"
         private const val PREF_PENDING = "offline_videos_pending"
+
+        /** Marks a podcast episode's link among the video links of unfinished downloads. */
+        private const val AUDIO_PREFIX = "audio:"
+
+        /** A video saved in a picked quality: `fmt:<format id>|<link>`. */
+        private const val FORMAT_PREFIX = "fmt:"
+
+        /** File extension for an episode, from its address or content type; mp3 when unsure. */
+        fun audioExtension(
+            url: String,
+            contentType: String?,
+        ): String {
+            val fromUrl =
+                url
+                    .substringBefore('?')
+                    .substringBefore('#')
+                    .substringAfterLast('/')
+                    .substringAfterLast('.', "")
+                    .lowercase()
+            if (fromUrl in AUDIO_EXTENSIONS) return fromUrl
+            return when (contentType?.substringBefore(';')?.trim()?.lowercase()) {
+                "audio/mp4", "audio/x-m4a", "audio/m4a" -> "m4a"
+                "audio/aac", "audio/aacp" -> "aac"
+                "audio/ogg", "audio/vorbis" -> "ogg"
+                "audio/opus" -> "opus"
+                "audio/wav", "audio/x-wav" -> "wav"
+                "audio/flac" -> "flac"
+                else -> "mp3"
+            }
+        }
+
+        private val AUDIO_EXTENSIONS = setOf("mp3", "m4a", "aac", "ogg", "oga", "opus", "wav", "flac", "mp4", "m4b")
 
         /** Stream addresses last about 6 hours; use them for less than that. */
         private const val STREAM_URLS_FOR_MS = 4 * 60 * 60 * 1000L

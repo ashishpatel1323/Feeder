@@ -12,6 +12,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -39,7 +40,9 @@ import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.outlined.DownloadForOffline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -49,12 +52,16 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -82,6 +89,8 @@ import androidx.compose.ui.zIndex
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
@@ -109,8 +118,11 @@ fun DownloadsScreen(
     var confirmDeleteAll by remember { mutableStateOf(false) }
     var fullscreen by rememberSaveable { mutableStateOf(false) }
 
+    // Without Background play, leaving the app pauses (the player keeps its place)
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.onAppHidden() }
+
     val current = player
-    if (fullscreen && current != null) {
+    if (fullscreen && current != null && !state.playingAudio) {
         FullscreenPlayer(current, isPlaying = state.isPlaying, onExit = { fullscreen = false })
         return
     }
@@ -127,7 +139,7 @@ fun DownloadsScreen(
                     }
                 },
                 actions = {
-                    if (state.completed.isNotEmpty() || state.incomplete.isNotEmpty()) {
+                    if (state.videos.isNotEmpty() || state.episodes.isNotEmpty() || state.incomplete.isNotEmpty()) {
                         IconButton(onClick = { confirmDeleteAll = true }) {
                             Icon(Icons.Default.DeleteSweep, contentDescription = stringResource(R.string.downloads_delete_all))
                         }
@@ -141,11 +153,18 @@ fun DownloadsScreen(
                 InlinePlayer(
                     player = current,
                     isPlaying = state.isPlaying,
-                    playing = state.completed.firstOrNull { it.id == state.playingId },
+                    playing = state.playing,
+                    audio = state.playingAudio,
                     onFullscreen = { fullscreen = true },
                     onClose = viewModel::closePlayer,
                 )
             }
+            DownloadsTabs(
+                tab = state.tab,
+                videoCount = state.videos.size + state.incomplete.count { !it.job.audio },
+                audioCount = state.episodes.size + state.incomplete.count { it.job.audio },
+                onTab = viewModel::setTab,
+            )
             DownloadsList(state, viewModel, modifier = Modifier.weight(1f))
         }
     }
@@ -186,8 +205,8 @@ private fun DownloadsList(
         }
     }
 
-    if (state.loaded && state.completed.isEmpty() && state.incomplete.isEmpty()) {
-        EmptyDownloads(modifier)
+    if (state.loaded && state.completed.isEmpty() && state.incompleteHere.isEmpty()) {
+        EmptyDownloads(state.audioTab, modifier)
         return
     }
 
@@ -197,11 +216,11 @@ private fun DownloadsList(
                 PlaylistControls(state, viewModel)
             }
         }
-        if (state.incomplete.isNotEmpty()) {
+        if (state.incompleteHere.isNotEmpty()) {
             item(key = "incomplete-header", contentType = "header") {
                 SectionHeader(stringResource(R.string.downloads_incomplete), MaterialTheme.colorScheme.error)
             }
-            items(state.incomplete, key = { "i${it.id}" }, contentType = { "incomplete" }) { download ->
+            items(state.incompleteHere, key = { "i${it.id}" }, contentType = { "incomplete" }) { download ->
                 IncompleteRow(download, viewModel, modifier = Modifier.animateItem())
             }
         }
@@ -214,7 +233,7 @@ private fun DownloadsList(
             val dragging = draggingId == video.id
             CompletedRow(
                 video = video,
-                playing = state.playingId == video.id,
+                playing = state.playingId == video.id && state.playingAudio == state.audioTab,
                 onPlay = { viewModel.play(video.id) },
                 onDelete = { viewModel.delete(video.id) },
                 onMoveUp = { viewModel.move(video.id, -1) },
@@ -307,7 +326,7 @@ private fun PlaylistControls(
             val total = state.completed.sumOf { it.durationMs }
             Text(
                 stringResource(
-                    R.string.downloads_summary,
+                    if (state.audioTab) R.string.downloads_summary_audio else R.string.downloads_summary,
                     state.completed.size,
                     formatDuration(total),
                     formatBytes(state.completed.sumOf { it.sizeBytes }),
@@ -316,7 +335,12 @@ private fun PlaylistControls(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = state.background,
+                onClick = { viewModel.setBackground(!state.background) },
+                label = { Text(stringResource(R.string.downloads_background)) },
+            )
             FilterChip(
                 selected = state.autoplay,
                 onClick = { viewModel.setAutoplay(!state.autoplay) },
@@ -477,6 +501,14 @@ private fun CompletedRow(
                     .background(MaterialTheme.colorScheme.surfaceVariant),
         ) {
             val local = video.thumbnail?.let { rememberAsyncImagePainter(it) }
+            if (video.audio && video.thumbnail == null && video.info.thumbnailUrl == null) {
+                Icon(
+                    Icons.Default.Podcasts,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.align(Alignment.Center).size(36.dp),
+                )
+            }
             AsyncImage(
                 model = video.info.thumbnailUrl ?: video.thumbnail,
                 contentDescription = null,
@@ -548,26 +580,52 @@ private fun InlinePlayer(
     player: ExoPlayer,
     isPlaying: Boolean,
     playing: DownloadedVideo?,
+    audio: Boolean,
     onFullscreen: () -> Unit,
     onClose: () -> Unit,
 ) {
     val onFullscreenNow by rememberUpdatedState(onFullscreen)
     Column {
-        AndroidView(
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    setShowSubtitleButton(true)
-                    setShowNextButton(true)
-                    setShowPreviousButton(true)
-                    setFullscreenButtonClickListener { onFullscreenNow() }
-                }
-            },
-            update = {
-                it.player = player
-                it.keepScreenOn = isPlaying
-            },
-            modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color.Black),
-        )
+        Box(modifier = Modifier.fillMaxWidth().aspectRatio(if (audio) 2f else 16f / 9f).background(Color.Black)) {
+            if (audio && playing != null) {
+                // An episode has no picture: its cover art behind the controls
+                val local = playing.thumbnail?.let { rememberAsyncImagePainter(it) }
+                AsyncImage(
+                    model = playing.thumbnail ?: playing.info.thumbnailUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    error = local,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            key(audio) {
+                AndroidView(
+                    factory = { ctx ->
+                        PlayerView(ctx).apply {
+                            setShowSubtitleButton(!audio)
+                            setShowNextButton(true)
+                            setShowPreviousButton(true)
+                            if (audio) {
+                                // Controls stay on screen; the cover art shows through
+                                setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
+                                setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                                artworkDisplayMode = PlayerView.ARTWORK_DISPLAY_MODE_OFF
+                                controllerShowTimeoutMs = 0
+                                controllerHideOnTouch = false
+                            } else {
+                                setFullscreenButtonClickListener { onFullscreenNow() }
+                            }
+                        }
+                    },
+                    update = {
+                        it.player = player
+                        it.keepScreenOn = isPlaying && !audio
+                        if (audio) it.showController()
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
@@ -638,24 +696,55 @@ private fun FullscreenPlayer(
 }
 
 @Composable
-private fun EmptyDownloads(modifier: Modifier = Modifier) {
+private fun EmptyDownloads(
+    audio: Boolean,
+    modifier: Modifier = Modifier,
+) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
         modifier = modifier.fillMaxSize().padding(32.dp),
     ) {
         Icon(
-            Icons.Outlined.DownloadForOffline,
+            if (audio) Icons.Default.Podcasts else Icons.Outlined.DownloadForOffline,
             contentDescription = null,
             modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            stringResource(R.string.downloads_empty),
+            stringResource(if (audio) R.string.downloads_empty_audio else R.string.downloads_empty),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 16.dp),
         )
+    }
+}
+
+/** Videos | Audio, like the two kinds of downloads in a YouTube client. */
+@Composable
+private fun DownloadsTabs(
+    tab: DownloadsTab,
+    videoCount: Int,
+    audioCount: Int,
+    onTab: (DownloadsTab) -> Unit,
+) {
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        SegmentedButton(
+            selected = tab == DownloadsTab.VIDEOS,
+            onClick = { onTab(DownloadsTab.VIDEOS) },
+            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+            icon = { Icon(Icons.Default.VideoLibrary, contentDescription = null, modifier = Modifier.size(18.dp)) },
+        ) {
+            Text(stringResource(R.string.downloads_tab_videos, videoCount))
+        }
+        SegmentedButton(
+            selected = tab == DownloadsTab.AUDIO,
+            onClick = { onTab(DownloadsTab.AUDIO) },
+            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+            icon = { Icon(Icons.Default.Podcasts, contentDescription = null, modifier = Modifier.size(18.dp)) },
+        ) {
+            Text(stringResource(R.string.downloads_tab_audio, audioCount))
+        }
     }
 }
 

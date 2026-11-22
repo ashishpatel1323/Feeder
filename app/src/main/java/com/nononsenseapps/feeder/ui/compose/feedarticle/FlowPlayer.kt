@@ -1042,11 +1042,22 @@ internal fun DownloadVideoButton(
             job.phase == VideoPhase.PAUSED -> stringResource(R.string.downloads_paused_percent, job.overall.toInt())
             else -> stringResource(R.string.video_downloading, job.overall.toInt())
         }
+    var pickQuality by remember { mutableStateOf(false) }
     InfoButton(Icons.Outlined.Download, label, padding) {
         when {
-            job == null || job.phase == VideoPhase.ERROR -> offlineVideos.save(itemId, link)
+            job == null || job.phase == VideoPhase.ERROR -> pickQuality = true
             job.phase == VideoPhase.PAUSED -> offlineVideos.resume(itemId)
         }
+    }
+    if (pickQuality) {
+        DownloadQualityDialog(
+            link = link,
+            onPick = { format ->
+                pickQuality = false
+                offlineVideos.save(itemId, link, format)
+            },
+            onDismiss = { pickQuality = false },
+        )
     }
 }
 

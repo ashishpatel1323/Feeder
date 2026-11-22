@@ -783,6 +783,12 @@ fun ArticleContent(
         },
         onFeedTitleClick = onFeedTitleClick,
         enclosure = viewState.enclosure,
+        enclosureActions =
+            if (viewState.enclosure.type.startsWith("audio/")) {
+                { OfflineAudioPanel(itemId = viewState.articleId, enclosure = viewState.enclosure) }
+            } else {
+                null
+            },
         articleTitle = viewState.articleTitle,
         feedTitle = viewState.feedDisplayTitle,
         saved = viewState.isBookmarked,
