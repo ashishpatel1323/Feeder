@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="downloads">Downloads</string>
+  <string name="downloads_delete_all">Delete all downloads</string>
+  <string name="downloads_delete_all_message">Every saved video and every unfinished download will be deleted from this device. This can\'t be undone.</string>
+  <string name="downloads_delete_all_confirm">Delete all</string>
+  <string name="downloads_incomplete">Incomplete downloads</string>
+  <string name="downloads_completed">Completed</string>
+  <string name="downloads_play_all">Play all</string>
+  <string name="downloads_summary">%1$d videos · %2$s · %3$s</string>
+  <string name="downloads_autoplay">Autoplay next</string>
+  <string name="downloads_loop">Loop</string>
+  <string name="downloads_remove_watched">Remove after watching</string>
+  <string name="downloads_failed">Failed</string>
+  <string name="downloads_paused_percent">Paused · %1$d%%</string>
+  <string name="downloads_pause">Pause</string>
+  <string name="downloads_resume">Resume</string>
+  <string name="downloads_delete">Delete</string>
+  <string name="downloads_move_up">Move up</string>
+  <string name="downloads_move_down">Move down</string>
+  <string name="downloads_drag_to_reorder">Drag to change the order</string>
+  <string name="downloads_now_playing">Playing</string>
+  <string name="downloads_close_player">Close</string>
+  <string name="downloads_empty">No downloads yet. Tap Download under a YouTube video to save it here.</string>
+</resources>

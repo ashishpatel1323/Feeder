@@ -26,6 +26,7 @@ import com.nononsenseapps.feeder.db.room.ID_ALL_FEEDS
 import com.nononsenseapps.feeder.db.room.ID_UNSET
 import com.nononsenseapps.feeder.ui.MainActivityViewModel
 import com.nononsenseapps.feeder.ui.NavigationDeepLinkViewModel
+import com.nononsenseapps.feeder.ui.compose.downloads.DownloadsScreen
 import com.nononsenseapps.feeder.ui.compose.editfeed.CreateFeedScreen
 import com.nononsenseapps.feeder.ui.compose.editfeed.CreateFeedScreenViewModel
 import com.nononsenseapps.feeder.ui.compose.editfeed.EditFeedScreen
@@ -187,6 +188,31 @@ data object SearchFeedDestination : NavigationDestination(
                 )
             },
             initialFeedUrl = backStackEntry.arguments?.getString("feedUrl"),
+        )
+    }
+}
+
+data object DownloadsDestination : NavigationDestination(
+    path = "downloads",
+    navArguments = emptyList(),
+    deepLinks = emptyList(),
+) {
+    fun navigate(navController: NavController) {
+        navController.navigate(path) {
+            launchSingleTop = true
+        }
+    }
+
+    @Composable
+    override fun RegisterScreen(
+        navController: NavController,
+        backStackEntry: NavBackStackEntry,
+        navDrawerListState: LazyListState,
+        mainActivityViewModel: MainActivityViewModel,
+    ) {
+        DownloadsScreen(
+            onNavigateUp = { navController.popBackStack() },
+            viewModel = backStackEntry.diAwareViewModel(),
         )
     }
 }

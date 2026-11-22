@@ -88,6 +88,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -130,6 +131,7 @@ import com.nononsenseapps.feeder.model.ReadAloudNeighbors
 import com.nononsenseapps.feeder.model.ReadAloudProgress
 import com.nononsenseapps.feeder.model.export.exportSavedArticles
 import com.nononsenseapps.feeder.model.export.importSavedArticles
+import com.nononsenseapps.feeder.model.offline.OfflineVideos
 import com.nononsenseapps.feeder.model.opml.exportOpml
 import com.nononsenseapps.feeder.model.opml.importOpml
 import com.nononsenseapps.feeder.ui.compose.components.TranslationProgressContent
@@ -151,6 +153,7 @@ import com.nononsenseapps.feeder.ui.compose.material3.rememberDrawerState
 import com.nononsenseapps.feeder.ui.compose.modifiers.trackVisibility
 import com.nononsenseapps.feeder.ui.compose.navdrawer.ScreenWithNavDrawer
 import com.nononsenseapps.feeder.ui.compose.navigation.ArticleDestination
+import com.nononsenseapps.feeder.ui.compose.navigation.DownloadsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.EditFeedDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.FeedDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.SearchFeedDestination
@@ -169,9 +172,11 @@ import com.nononsenseapps.feeder.util.ActivityLauncher
 import com.nononsenseapps.feeder.util.ToastMaker
 import com.nononsenseapps.feeder.util.logDebug
 import com.nononsenseapps.feeder.util.stripTrackingParameters
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.kodein.di.compose.LocalDI
 import org.kodein.di.compose.instance
 import org.kodein.di.instance
@@ -322,6 +327,13 @@ fun FeedScreen(
         }
     }
 
+    val offlineVideos: OfflineVideos by LocalDI.current.instance()
+    val downloadChanges by offlineVideos.changes.collectAsStateWithLifecycle()
+    val downloadJobs by offlineVideos.jobs.collectAsStateWithLifecycle()
+    val downloadsCount by produceState(0, downloadChanges) {
+        value = withContext(Dispatchers.IO) { offlineVideos.savedIds().size }
+    }
+
     ScreenWithNavDrawer(
         feedsAndTags = pagedNavDrawerItems,
         onToggleTagExpansion = { tag ->
@@ -336,6 +348,8 @@ fun FeedScreen(
         focusRequester = focusNavDrawer,
         drawerState = drawerState,
         navDrawerListState = navDrawerListStateToUse,
+        downloadsCount = downloadsCount + downloadJobs.size,
+        onDownloadsClick = { DownloadsDestination.navigate(navController) },
     ) {
         FeedScreen(
             viewState = viewState,

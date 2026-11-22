@@ -1,6 +1,7 @@
 package com.nononsenseapps.feeder.model.offline
 
 import android.app.Application
+import android.content.SharedPreferences
 import android.util.Log
 import com.nononsenseapps.feeder.ApplicationCoroutineScope
 import com.nononsenseapps.feeder.db.room.FeedItemDao
@@ -34,11 +35,13 @@ data class SavedVideo(
         get() = video.length() + (audio?.length() ?: 0L) + subtitles.sumOf { it.length() }
 }
 
-/** A Save video offline in progress (or failed). */
+/** A Save video offline in progress (or paused, or failed). */
 data class VideoJob(
     val phase: VideoPhase,
     val percent: Float = 0f,
     val error: String? = null,
+    /** How far the whole download is, 0 to 100 (video is most of it, then sound). */
+    val overall: Float = 0f,
 )
 
 enum class VideoPhase {
@@ -47,7 +50,23 @@ enum class VideoPhase {
     AUDIO,
     SUBTITLES,
     ERROR,
+
+    /** Stopped by Pause; the partial files stay so Resume carries on where it stopped. */
+    PAUSED,
 }
+
+/** How far a whole download is, given the phase and that phase's percent. */
+fun overallPercent(
+    phase: VideoPhase,
+    percent: Float,
+): Float =
+    when (phase) {
+        VideoPhase.PREPARING -> 0f
+        VideoPhase.VIDEO -> percent * 0.8f
+        VideoPhase.AUDIO -> 80f + percent * 0.2f
+        VideoPhase.SUBTITLES -> 100f
+        VideoPhase.ERROR, VideoPhase.PAUSED -> percent
+    }
 
 /**
  * Save video offline for YouTube articles, one video at a time when asked to, with yt-dlp
@@ -64,8 +83,13 @@ class OfflineVideos(
     private val offlineFiles: OfflineFiles by instance()
     private val dao: FeedItemDao by instance()
     private val applicationCoroutineScope: ApplicationCoroutineScope by instance()
+    private val prefs: SharedPreferences by instance()
 
-    private val _jobs = MutableStateFlow<Map<Long, VideoJob>>(emptyMap())
+    /** Links of downloads not finished yet, so Pause/Resume and Retry work after a restart. */
+    private val links = ConcurrentHashMap<Long, String>()
+    private val pausing = ConcurrentHashMap.newKeySet<Long>()
+
+    private val _jobs = MutableStateFlow(loadPending())
     val jobs: StateFlow<Map<Long, VideoJob>> = _jobs.asStateFlow()
 
     /** Bumped when a video is saved or removed, so screens look again. */
@@ -83,37 +107,107 @@ class OfflineVideos(
     fun save(
         itemId: Long,
         link: String,
+    ) = start(itemId, link, resume = false)
+
+    /** Carries on a paused (or interrupted) download from its partial files. */
+    fun resume(itemId: Long) {
+        val link = links[itemId] ?: return
+        start(itemId, link, resume = true)
+    }
+
+    /** Starts a failed download again from the start. */
+    fun retry(itemId: Long) {
+        val link = links[itemId] ?: return
+        start(itemId, link, resume = false)
+    }
+
+    private fun start(
+        itemId: Long,
+        link: String,
+        resume: Boolean,
     ) {
         if (running[itemId]?.isActive == true) return
-        setJob(itemId, VideoJob(VideoPhase.PREPARING))
+        links[itemId] = link
+        val from = _jobs.value[itemId]?.takeIf { resume }?.overall ?: 0f
+        setJob(itemId, VideoJob(VideoPhase.PREPARING, overall = from))
         running[itemId] =
             applicationCoroutineScope.launch(Dispatchers.IO) {
                 try {
-                    download(itemId, link)
+                    download(itemId, link, resume)
+                    links.remove(itemId)
                     setJob(itemId, null)
                     // Saving a video counts as downloading the article (Downloaded tab)
                     dao.setOfflineTime(itemId, System.currentTimeMillis())
                     _changes.update { it + 1 }
                 } catch (e: CancellationException) {
-                    offlineFiles.deleteVideo(itemId)
-                    setJob(itemId, null)
+                    if (pausing.remove(itemId)) {
+                        val overall = _jobs.value[itemId]?.overall ?: 0f
+                        setJob(itemId, VideoJob(VideoPhase.PAUSED, percent = overall, overall = overall))
+                    } else {
+                        offlineFiles.deleteVideo(itemId)
+                        links.remove(itemId)
+                        setJob(itemId, null)
+                    }
                     throw e
                 } catch (e: Exception) {
-                    Log.e(LOG_TAG, "Save video offline failed for $link", e)
-                    offlineFiles.deleteVideo(itemId)
-                    setJob(itemId, VideoJob(VideoPhase.ERROR, error = e.message?.lineSequence()?.lastOrNull { it.isNotBlank() } ?: e.toString()))
+                    if (pausing.remove(itemId)) {
+                        // yt-dlp ends with an error when its process is stopped
+                        val overall = _jobs.value[itemId]?.overall ?: 0f
+                        setJob(itemId, VideoJob(VideoPhase.PAUSED, percent = overall, overall = overall))
+                    } else {
+                        Log.e(LOG_TAG, "Save video offline failed for $link", e)
+                        offlineFiles.deleteVideo(itemId)
+                        setJob(itemId, VideoJob(VideoPhase.ERROR, error = e.message?.lineSequence()?.lastOrNull { it.isNotBlank() } ?: e.toString()))
+                    }
                 } finally {
                     running.remove(itemId)
                 }
             }
     }
 
+    /** Stops and deletes a download in progress (or paused, or failed). */
     fun cancel(itemId: Long) {
+        if (running[itemId]?.isActive == true) {
+            YoutubeDL.getInstance().destroyProcessById(processId(itemId))
+            running[itemId]?.cancel()
+        } else {
+            // Paused or failed: nothing runs, so delete what is left here
+            links.remove(itemId)
+            setJob(itemId, null)
+            applicationCoroutineScope.launch(Dispatchers.IO) { offlineFiles.deleteVideo(itemId) }
+        }
+    }
+
+    /** Stops a download but keeps what it saved so far, see [resume]. */
+    fun pause(itemId: Long) {
+        if (running[itemId]?.isActive != true) return
+        pausing.add(itemId)
         YoutubeDL.getInstance().destroyProcessById(processId(itemId))
         running[itemId]?.cancel()
     }
 
-    fun dismissError(itemId: Long) = setJob(itemId, null)
+    fun dismissError(itemId: Long) {
+        links.remove(itemId)
+        setJob(itemId, null)
+    }
+
+    /** Ids of every saved (complete) video on the phone. */
+    fun savedIds(): List<Long> =
+        offlineFiles.videosDir
+            .listFiles()
+            ?.mapNotNull { it.name.substringBefore('.').toLongOrNull() }
+            .orEmpty()
+            .distinct()
+            .filter { offlineFiles.savedVideo(it) != null }
+
+    /** Deletes every saved video and every unfinished download. */
+    suspend fun removeAll() {
+        for (id in _jobs.value.keys.toList()) cancel(id)
+        withContext(Dispatchers.IO) {
+            savedIds().forEach { offlineFiles.deleteVideo(it) }
+        }
+        _changes.update { it + 1 }
+    }
 
     suspend fun remove(itemId: Long) {
         withContext(Dispatchers.IO) {
@@ -143,11 +237,13 @@ class OfflineVideos(
     private suspend fun download(
         itemId: Long,
         link: String,
+        resume: Boolean,
     ) {
         ensureReady()
         val dir = offlineFiles.videosDir
         dir.mkdirs()
-        offlineFiles.deleteVideo(itemId)
+        // Resuming keeps the partial (.part) files and finished ones; yt-dlp carries on from them
+        if (!resume) offlineFiles.deleteVideo(itemId)
 
         // Video without sound up to 720p (H.264 preferred: every phone plays it), then the sound
         val videoOk =
@@ -213,13 +309,16 @@ class OfflineVideos(
         phase: VideoPhase,
         request: YoutubeDLRequest,
     ) {
+        // .part files (no --no-part) so a paused download carries on instead of starting over
         request
             .addOption("--no-playlist")
             .addOption("--no-mtime")
-            .addOption("--no-part")
-        setJob(itemId, VideoJob(phase))
+            .addOption("--continue")
+        val before = _jobs.value[itemId]?.overall ?: 0f
+        setJob(itemId, VideoJob(phase, overall = maxOf(before, overallPercent(phase, 0f))))
         YoutubeDL.getInstance().execute(request, processId(itemId)) { progress, _, _ ->
-            setJob(itemId, VideoJob(phase, percent = progress.coerceIn(0f, 100f)))
+            val percent = progress.coerceIn(0f, 100f)
+            setJob(itemId, VideoJob(phase, percent = percent, overall = overallPercent(phase, percent)))
         }
     }
 
@@ -257,13 +356,52 @@ class OfflineVideos(
         itemId: Long,
         job: VideoJob?,
     ) {
+        val old = _jobs.value[itemId]
         _jobs.update { if (job == null) it - itemId else it + (itemId to job) }
+        // Progress ticks often; only write when a download starts, stops or changes state
+        if (old?.phase != job?.phase || (job == null) != (old == null)) savePending()
+    }
+
+    /**
+     * Unfinished downloads, kept so the Downloads screen still lists them after a restart.
+     * One line each: id, phase, percent, link. A download that was running when the app
+     * stopped comes back paused, its partial files ready for Resume.
+     */
+    private fun loadPending(): Map<Long, VideoJob> =
+        try {
+            prefs
+                .getString(PREF_PENDING, null)
+                .orEmpty()
+                .lineSequence()
+                .mapNotNull { line ->
+                    val parts = line.split('\t', limit = 4)
+                    if (parts.size < 4) return@mapNotNull null
+                    val id = parts[0].toLongOrNull() ?: return@mapNotNull null
+                    val percent = parts[2].toFloatOrNull() ?: 0f
+                    links[id] = parts[3]
+                    val phase = if (parts[1] == VideoPhase.ERROR.name) VideoPhase.ERROR else VideoPhase.PAUSED
+                    id to VideoJob(phase, percent = percent, overall = percent)
+                }.toMap()
+        } catch (e: Exception) {
+            Log.w(LOG_TAG, "Could not read unfinished downloads: ${e.message}")
+            emptyMap()
+        }
+
+    private fun savePending() {
+        val text =
+            _jobs.value.entries
+                .mapNotNull { (id, job) ->
+                    val link = links[id] ?: return@mapNotNull null
+                    "$id\t${job.phase.name}\t${job.overall}\t$link"
+                }.joinToString("\n")
+        prefs.edit().putString(PREF_PENDING, text).apply()
     }
 
     private fun processId(itemId: Long) = "feeder-video-$itemId"
 
     companion object {
         private const val LOG_TAG = "FEEDER_OFFLINE_VIDEO"
+        private const val PREF_PENDING = "offline_videos_pending"
 
         /** Stream addresses last about 6 hours; use them for less than that. */
         private const val STREAM_URLS_FOR_MS = 4 * 60 * 60 * 1000L

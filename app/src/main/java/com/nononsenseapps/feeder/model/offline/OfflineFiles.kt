@@ -38,13 +38,20 @@ class OfflineFiles(
 
     /** The saved copy of an article's YouTube video, if complete. */
     fun savedVideo(itemId: Long): SavedVideo? {
-        val files = videoFiles(itemId).filter { it.isFile && it.length() > 0 }
+        // .part/.ytdl are a download still going (or paused)
+        val files =
+            videoFiles(itemId).filter {
+                it.isFile && it.length() > 0 && !it.name.endsWith(".part") && !it.name.endsWith(".ytdl")
+            }
         val subtitles = files.filter { it.name.startsWith("$itemId.subs.") && it.name.endsWith(".vtt") }
         files.firstOrNull { it.name.startsWith("$itemId.muxed.") }?.let { return SavedVideo(it, null, subtitles) }
         val video = files.firstOrNull { it.name.startsWith("$itemId.video.") } ?: return null
         val audio = files.firstOrNull { it.name.startsWith("$itemId.audio.") } ?: return null
         return SavedVideo(video, audio, subtitles)
     }
+
+    /** A still picture from the saved video, made once for the Downloads screen. */
+    fun videoThumbnail(itemId: Long): File = videosDir.resolve("$itemId.thumb.jpg")
 
     fun deleteVideo(itemId: Long) {
         videoFiles(itemId).forEach { it.delete() }
