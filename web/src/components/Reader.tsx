@@ -15,7 +15,7 @@ import { applyFastReading } from '../lib/fastReading'
 import { AUTO_SCROLL_SPEEDS, useAutoScroll } from '../lib/autoscroll'
 import { Icon, IconButton } from './Icon'
 import { Player } from './Player'
-import { articleVideoId, youtubeVideoId, youtubeWatchUrl } from '../lib/youtube'
+import { articleVideoId, iinaUrl, isMac, youtubeVideoId, youtubeWatchUrl } from '../lib/youtube'
 import { YouTubeFrame } from './YouTubeFrame'
 import { LocalVideo, VideoOfflineControls } from './Offline'
 import { preferSavedImages, useOnline } from '../lib/offline'
@@ -458,6 +458,11 @@ export function Reader(p: Props) {
                   <a className="open-youtube" href={youtubeWatchUrl(videoId)} target="_blank" rel="noopener noreferrer">
                     <Icon name="open" size={18} /> Open on YouTube
                   </a>
+                  {isMac() ? (
+                    <a className="open-youtube" href={iinaUrl(youtubeWatchUrl(videoId))} title="Play in IINA (live streams too)">
+                      <Icon name="play" size={18} /> Open in IINA
+                    </a>
+                  ) : null}
                   <VideoOfflineControls item={item} videoId={videoId} useLocal={useLocal} onUseLocal={setUseLocal} />
                 </div>
               </div>

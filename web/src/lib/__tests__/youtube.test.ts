@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { youtubeEmbedUrl, youtubeVideoId } from '../youtube'
+import { youtubeEmbedUrl, youtubeVideoId, iinaUrl } from '../youtube'
 import { parseFeed } from '../feedparse'
 
 describe('youtubeVideoId', () => {
@@ -53,5 +53,13 @@ describe('YouTube channel feeds', () => {
       '<p>First line &lt;b&gt;<br>Second line <a href="https://example.com/x">https://example.com/x</a></p><p>New paragraph</p>',
     )
     expect(a.snippet).toContain('First line')
+  })
+})
+
+describe('iinaUrl', () => {
+  it('wraps the page in an IINA weblink, encoded', () => {
+    expect(iinaUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=5')).toBe(
+      'iina://weblink?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DdQw4w9WgXcQ%26t%3D5',
+    )
   })
 })

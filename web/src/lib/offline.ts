@@ -473,6 +473,28 @@ export async function saveSubtitles(itemId: string, videoId: string): Promise<st
 }
 
 /** blob: URLs of the saved subtitle tracks. The caller revokes them. */
+/**
+ * Plays the saved copy in IINA: the local server writes the video (and its subtitles, named
+ * so IINA loads them) to a temp folder on this Mac and opens it. Needs the local server.
+ */
+export async function openSavedInIina(videoId: string, langs: string[]): Promise<void> {
+  if (!hasCaches()) throw new Error('No saved copy in this browser')
+  const videos = await caches.open(VIDEO_CACHE)
+  const video = await videos.match(videoKey(videoId))
+  if (!video) throw new Error('The offline copy is gone. Save it again.')
+  const post = async (body: Blob, lang?: string) => {
+    const url = ytdlUrl('iina', videoId) + (lang ? `&lang=${encodeURIComponent(lang)}` : '')
+    const res = await fetch(url, { method: 'POST', body })
+    if (!res.ok) throw new Error(((await res.json().catch(() => null)) as { error?: string } | null)?.error || `IINA failed (${res.status})`)
+  }
+  for (const lang of langs) {
+    const sub = await videos.match(subsKey(videoId, lang))
+    if (sub) await post(await sub.blob(), lang)
+  }
+  // The video goes last: the server opens IINA once it has it
+  await post(await video.blob())
+}
+
 export async function savedSubtitleUrls(videoId: string, langs: string[]): Promise<{ lang: string; url: string }[]> {
   if (!hasCaches() || !langs.length) return []
   const videos = await caches.open(VIDEO_CACHE)

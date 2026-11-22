@@ -8,10 +8,13 @@
  *   GET  /api/ytdl/status?id=VIDEO { state, percent, size, error }
  *   GET  /api/ytdl/file?id=VIDEO   the finished MP4; the temp copy is removed once sent
  *   POST /api/ytdl/subs?id=VIDEO   subtitles (own, else YouTube's auto captions) as WebVTT text
+ *   POST /api/ytdl/iina?id=VIDEO[&lang=L]  a saved copy from the browser: with lang, a WebVTT
+ *                                  track to keep beside it; without, the MP4, then opens it in IINA
  */
 import { spawn } from 'node:child_process'
-import { createReadStream } from 'node:fs'
-import { access, mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises'
+import { createReadStream, createWriteStream } from 'node:fs'
+import { pipeline } from 'node:stream/promises'
+import { access, mkdir, mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -205,6 +208,25 @@ async function subtitles(id: string): Promise<{ lang: string; vtt: string }[]> {
   }
 }
 
+const LANG = /^[A-Za-z0-9-]{1,20}$/
+
+/**
+ * Writes a saved copy the browser sends to a temp folder and opens the video in IINA. A
+ * subtitle file named <id>.<lang>.vtt beside <id>.mp4 is loaded by IINA on its own.
+ */
+async function openInIina(req: IncomingMessage, id: string, lang: string | null): Promise<void> {
+  const dir = join(tmpdir(), 'feeder-iina')
+  await mkdir(dir, { recursive: true })
+  const file = join(dir, lang ? `${id}.${lang}.vtt` : `${id}.mp4`)
+  const size = Number(req.headers['content-length'] ?? -1)
+  const same = await stat(file).then((s) => s.size === size, () => false)
+  if (same) req.resume()
+  else await pipeline(req, createWriteStream(file))
+  if (lang) return
+  const r = await run('open', ['-a', 'IINA', file])
+  if (r.code !== 0) throw new Error(/Unable to find application/i.test(r.err) ? 'IINA is not installed on this Mac' : r.err.trim() || 'Could not open IINA')
+}
+
 const status = (job: Job | undefined) =>
   job ? { state: job.state, percent: Math.round(job.percent), size: job.size ?? 0, error: job.error ?? null } : { state: 'none', percent: 0, size: 0, error: null }
 
@@ -233,6 +255,12 @@ export async function ytdlMiddleware(req: IncomingMessage, res: ServerResponse, 
     if (action === 'start' && req.method === 'POST') return send(res, 200, status(await startJob(id)))
     if (action === 'status') return send(res, 200, status(jobs.get(id)))
     if (action === 'subs' && req.method === 'POST') return send(res, 200, { tracks: await subtitles(id) })
+    if (action === 'iina' && req.method === 'POST') {
+      const lang = url.searchParams.get('lang')
+      if (lang !== null && !LANG.test(lang)) return send(res, 400, { error: 'Bad language' })
+      await openInIina(req, id, lang)
+      return send(res, 200, { ok: true })
+    }
     if (action === 'file') {
       const job = jobs.get(id)
       if (!job || job.state !== 'done' || !job.file) return send(res, 404, { error: 'Not ready' })

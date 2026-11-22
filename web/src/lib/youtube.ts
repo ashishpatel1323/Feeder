@@ -53,3 +53,16 @@ export function youtubeEmbedUrl(id: string, opts: { start?: number; origin?: str
 export function youtubeWatchUrl(id: string): string {
   return `https://www.youtube.com/watch?v=${id}`
 }
+
+/**
+ * Opens a page (a YouTube watch or live link) in IINA, the Mac video player. IINA plays it
+ * with yt-dlp, so live streams work; its Online Media plugin settings decide subtitles.
+ */
+export function iinaUrl(url: string): string {
+  return `iina://weblink?url=${encodeURIComponent(url)}`
+}
+
+/** IINA only exists on macOS. */
+export function isMac(): boolean {
+  return typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform || navigator.userAgent)
+}

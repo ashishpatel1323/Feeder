@@ -29,9 +29,10 @@ function createWindow() {
     webPreferences: { contextIsolation: true, sandbox: true },
   })
   win.loadURL(ORIGIN)
-  // Article links and "Open on YouTube" open in the default browser
+  // Article links and "Open on YouTube" open in the default browser; "Open in IINA"
+  // (iina://) goes straight to IINA, with no prompt
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:/i.test(url)) shell.openExternal(url)
+    if (/^(https?|iina):/i.test(url)) shell.openExternal(url)
     return { action: 'deny' }
   })
   win.webContents.on('will-navigate', (e, url) => {

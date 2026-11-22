@@ -6,6 +6,7 @@ import {
   clearVideoError,
   downloadForOffline,
   formatBytes,
+  openSavedInIina,
   removeAllVideos,
   removeOfflineCopies,
   removeVideo,
@@ -24,6 +25,7 @@ import { resumeAt, saveVideoPos } from '../lib/videopos'
 import { syncNow } from '../lib/sync2'
 import { updateSettings, useSettings } from '../lib/settings'
 import { Icon } from './Icon'
+import { isMac } from '../lib/youtube'
 
 const LIMITS = [
   { value: 100, label: 'Newest 100' },
@@ -244,6 +246,7 @@ export function VideoOfflineControls({
   const available = useVideoSavingAvailable()
   const subsBusy = !!useSubsRunning()[videoId]
   const [subsError, setSubsError] = useState('')
+  const [iina, setIina] = useState('')
   const run = jobs[videoId]
 
   if (item.offlineVideo) {
@@ -252,6 +255,22 @@ export function VideoOfflineControls({
         <button className="open-youtube" onClick={() => onUseLocal(!useLocal)} title="Switch between the saved copy and YouTube's player">
           <Icon name={useLocal ? 'open' : 'download'} size={18} /> {useLocal ? 'Play on YouTube player' : 'Play offline copy'}
         </button>
+        {isMac() && available ? (
+          <button
+            className="open-youtube"
+            disabled={iina === 'busy'}
+            title="Play the saved copy (with its subtitles) in IINA"
+            onClick={() => {
+              setIina('busy')
+              openSavedInIina(videoId, item.offlineSubs ?? [])
+                .then(() => setIina(''))
+                .catch((e) => setIina(e instanceof Error ? e.message : String(e)))
+            }}
+          >
+            <Icon name="play" size={18} /> {iina === 'busy' ? 'Opening in IINA…' : 'Offline copy in IINA'}
+          </button>
+        ) : null}
+        {iina && iina !== 'busy' ? <span className="video-error">{iina}</span> : null}
         <button className="open-youtube" onClick={() => void removeVideo(item.id, videoId)} title="Delete the saved copy from this browser">
           <Icon name="delete" size={18} /> Remove offline video ({formatBytes(item.offlineVideo)})
         </button>
