@@ -18,6 +18,7 @@ import com.nononsenseapps.feeder.archmodel.SortingOptions
 import com.nononsenseapps.feeder.archmodel.SwipeAsRead
 import com.nononsenseapps.feeder.archmodel.ThemeOptions
 import com.nononsenseapps.feeder.background.runOnceRssSync
+import com.nononsenseapps.feeder.background.runOnceSyncChainSendRead
 import com.nononsenseapps.feeder.base.DIAwareViewModel
 import com.nononsenseapps.feeder.blob.blobFullInputStream
 import com.nononsenseapps.feeder.blob.blobInputStream
@@ -154,6 +155,8 @@ class FeedViewModel(
     fun deleteFeeds(feedIds: List<Long>) =
         applicationCoroutineScope.launch {
             repository.deleteFeeds(feedIds)
+            // Sync now, so the other devices delete it too before they could send it back
+            runOnceSyncChainSendRead(di)
         }
 
     fun renameTag(

@@ -23,6 +23,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -32,6 +35,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -55,6 +59,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
@@ -125,6 +130,7 @@ fun EditFeedScreen(
     editFeedScreenViewModel: EditFeedScreenViewModel,
     onOk: (Long) -> Unit,
     onShowArticles: ((Long) -> Unit)? = null,
+    onDeleted: (() -> Unit)? = null,
 ) {
     val windowSize = LocalWindowSizeMetrics.current
 
@@ -132,6 +138,19 @@ fun EditFeedScreen(
         derivedStateOf {
             getScreenType(windowSize)
         }
+    }
+
+    var confirmDelete by rememberSaveable { mutableStateOf(false) }
+    if (confirmDelete && onDeleted != null) {
+        DeleteFeedDialog(
+            feedTitle = editFeedScreenViewModel.pageTitle.ifBlank { editFeedScreenViewModel.feedUrl },
+            stats = editFeedScreenViewModel.stats,
+            onConfirm = {
+                confirmDelete = false
+                editFeedScreenViewModel.deleteFeed(onDeleted)
+            },
+            onDismiss = { confirmDelete = false },
+        )
     }
 
     @Suppress("ktlint:compose:vm-forwarding-check")
@@ -154,6 +173,7 @@ fun EditFeedScreen(
                     stats = editFeedScreenViewModel.stats,
                     lastSync = editFeedScreenViewModel.lastSync,
                     onShowArticles = { show(editFeedScreenViewModel.feedId) },
+                    onDelete = onDeleted?.let { { confirmDelete = true } },
                 )
             },
     )
@@ -290,6 +310,7 @@ fun EditFeedView(
                 stats = feedPage.stats ?: FeedStats(),
                 lastSync = feedPage.lastSync,
                 onShowArticles = feedPage.onShowArticles,
+                onDelete = feedPage.onDelete,
                 modifier =
                     Modifier
                         .width(dimens.maxContentWidth)
@@ -805,4 +826,50 @@ class FeedPageHeader(
     val stats: FeedStats?,
     val lastSync: Instant?,
     val onShowArticles: () -> Unit,
+    /** Asks to delete the feed (the page shows the confirmation). Null hides the button. */
+    val onDelete: (() -> Unit)? = null,
 )
+
+/**
+ * Confirms deleting a feed from the feed page: says how many articles go with it, and that the
+ * deletion reaches every synced device.
+ */
+@Composable
+fun DeleteFeedDialog(
+    feedTitle: String,
+    stats: FeedStats?,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = modifier,
+        icon = { Icon(Icons.Default.Delete, contentDescription = null) },
+        title = { Text(stringResource(R.string.delete_feed_confirm_title, feedTitle)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val stored = stats?.stored ?: 0
+                Text(pluralStringResource(R.plurals.delete_feed_confirm_articles, stored, stored))
+                val saved = stats?.saved ?: 0
+                if (saved > 0) {
+                    Text(pluralStringResource(R.plurals.delete_feed_confirm_saved, saved, saved))
+                }
+                Text(stringResource(R.string.delete_feed_confirm_sync))
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+            ) {
+                Text(stringResource(R.string.delete_button_text))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(android.R.string.cancel))
+            }
+        },
+    )
+}
