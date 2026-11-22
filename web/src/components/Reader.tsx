@@ -36,6 +36,8 @@ interface Props {
   /** A highlight to scroll to once the article shows (from the Highlights page). */
   focusHighlight: string | null
   onFocusConsumed: () => void
+  /** Opens the feed's own page (stats and settings). */
+  onOpenFeed: (url: string) => void
 }
 
 type Anchor = { start: number; text: string; prefix: string }
@@ -436,7 +438,9 @@ export function Reader(p: Props) {
               )}
             </h1>
             <div className="article-meta">
-              <span>{feedDisplayTitle(feed)}</span>
+              <button type="button" className="meta-feed" title="Open this feed's page: stats and settings" onClick={() => p.onOpenFeed(item.feedUrl)}>
+                {feedDisplayTitle(feed)}
+              </button>
               {item.author ? <span>{item.author}</span> : null}
               <span>{date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</span>
               <span>{readingMinutes(words)} min read</span>

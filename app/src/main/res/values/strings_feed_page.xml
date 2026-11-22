@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+  <!-- The feed page, opened by tapping a feed's name in an article -->
+  <string name="feed_page">Feed</string>
+  <string name="feed_stats_title">Stats</string>
+  <string name="feed_stats_checked">Checked %1$s</string>
+  <string name="feed_stats_never">never</string>
+  <string name="feed_stats_show_articles">Show articles</string>
+  <string name="feed_stats_show_articles_unread">Show articles (%1$d unread)</string>
+  <string name="feed_stats_articles_per_day">Articles per day</string>
+  <string name="feed_stats_per_day">%1$s/day</string>
+  <string name="feed_stats_per_week">%1$s/week</string>
+  <string name="feed_stats_none_in_window">None in %1$d days</string>
+  <string name="feed_stats_average_last_week">%1$d-day average · %2$d last week</string>
+  <string name="feed_stats_last_new_article">Last new article</string>
+  <string name="feed_stats_you_read">You read</string>
+  <string name="feed_stats_read_of">%1$d of %2$d in %3$d days</string>
+  <string name="feed_stats_unread">Unread</string>
+  <string name="feed_stats_average_length">Average length</string>
+  <string name="feed_stats_minutes">%1$d min</string>
+  <string name="feed_stats_words">%1$d words</string>
+  <string name="feed_stats_on_device_since">On this device since</string>
+  <string name="feed_stats_new_articles_chart">New articles, last %1$d days</string>
+  <string name="feed_stats_when_it_posts">When it posts</string>
+  <plurals name="feed_stats_saved">
+    <item quantity="one">%1$d saved</item>
+    <item quantity="other">%1$d saved</item>
+  </plurals>
+  <plurals name="feed_stats_stored">
+    <item quantity="one">%1$d article stored</item>
+    <item quantity="other">%1$d articles stored</item>
+  </plurals>
+</resources>

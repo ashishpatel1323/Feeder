@@ -90,6 +90,30 @@ export function AddFeedDialog({ onClose, toast }: { onClose: () => void; toast: 
 // -----------------------------------------------------------------------------------------------
 
 export function EditFeedDialog({ url, onClose, toast }: { url: string; onClose: () => void; toast: (m: string) => void }) {
+  return (
+    <Modal title="Edit feed" onClose={onClose}>
+      <EditFeedForm url={url} onDone={onClose} onDeleted={onClose} toast={toast} />
+    </Modal>
+  )
+}
+
+/**
+ * The feed's settings form. Used in the Edit feed dialog and, inline, on the feed's own page
+ * (pass `inline`: no Cancel button, and the page stays open after saving).
+ */
+export function EditFeedForm({
+  url,
+  onDone,
+  onDeleted,
+  toast,
+  inline,
+}: {
+  url: string
+  onDone: () => void
+  onDeleted: () => void
+  toast: (m: string) => void
+  inline?: boolean
+}) {
   const feed = useLiveQuery(() => db.feeds.get(url), [url])
   const [draft, setDraft] = useState<Feed | null>(null)
   useEffect(() => {
@@ -98,71 +122,88 @@ export function EditFeedDialog({ url, onClose, toast }: { url: string; onClose: 
   if (!draft) return null
 
   const set = (patch: Partial<Feed>) => setDraft({ ...draft, ...patch })
+  const dirty =
+    !!feed &&
+    (['customTitle', 'tag', 'fullTextByDefault', 'fetchOgImages', 'alternateId', 'blockRules', 'allowRules'] as const).some((k) => draft[k] !== feed[k])
   const save = async (e: React.FormEvent) => {
     e.preventDefault()
-    await db.feeds.put({ ...draft, whenModified: Date.now() })
+    // Start from the stored feed so changes made elsewhere on the page (Opens in…) are kept
+    const latest = (await db.feeds.get(url)) ?? draft
+    const next = {
+      ...latest,
+      customTitle: draft.customTitle,
+      tag: draft.tag,
+      fullTextByDefault: draft.fullTextByDefault,
+      fetchOgImages: draft.fetchOgImages,
+      alternateId: draft.alternateId,
+      blockRules: draft.blockRules,
+      allowRules: draft.allowRules,
+      whenModified: Date.now(),
+    }
+    await db.feeds.put(next)
+    setDraft(next)
     syncNow().catch(() => undefined)
     if (draft.blockRules !== feed?.blockRules || draft.allowRules !== feed?.allowRules || draft.alternateId !== feed?.alternateId) {
       refreshFeeds([url]).catch(() => undefined)
     }
     toast('Feed saved')
-    onClose()
+    onDone()
   }
   const remove = async () => {
     if (!confirm(`Delete "${draft.customTitle || draft.title || draft.url}"? This also removes it from your other devices.`)) return
     await deleteFeed(url)
     syncNow().catch(() => undefined)
     toast('Feed deleted')
-    onClose()
+    onDeleted()
   }
 
   return (
-    <Modal title="Edit feed" onClose={onClose}>
-      <form onSubmit={save} className="form">
-        <p className="muted small">{draft.url}</p>
-        {draft.lastError ? <p className="error small">Last refresh failed: {draft.lastError}</p> : null}
-        <label>
-          Title
-          <input value={draft.customTitle} placeholder={draft.title} onChange={(e) => set({ customTitle: e.target.value })} />
-        </label>
-        <label>
-          Tag
-          <input value={draft.tag} onChange={(e) => set({ tag: e.target.value })} />
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={draft.fullTextByDefault} onChange={(e) => set({ fullTextByDefault: e.target.checked })} />
-          Show full text by default
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={draft.fetchOgImages} onChange={(e) => set({ fetchOgImages: e.target.checked })} />
-          Enhance thumbnails from article metadata
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={draft.alternateId} onChange={(e) => set({ alternateId: e.target.checked })} />
-          Use alternative id (for feeds that reuse ids)
-        </label>
-        <label>
-          Block rules (one Field=regex per line; Title, URL, Author, Tag, Content)
-          <textarea rows={3} value={draft.blockRules} onChange={(e) => set({ blockRules: e.target.value })} />
-        </label>
-        <label>
-          Allow rules
-          <textarea rows={2} value={draft.allowRules} onChange={(e) => set({ allowRules: e.target.value })} />
-        </label>
-        <div className="form-actions">
-          <button type="button" className="danger" onClick={remove}>
-            Delete feed
-          </button>
-          <span className="spacer" />
-          <button type="button" onClick={onClose}>
+    <form onSubmit={save} className="form">
+      {inline ? null : <p className="muted small">{draft.url}</p>}
+      {draft.lastError && !inline ? <p className="error small">Last refresh failed: {draft.lastError}</p> : null}
+      <label>
+        Title
+        <input value={draft.customTitle} placeholder={draft.title} onChange={(e) => set({ customTitle: e.target.value })} />
+      </label>
+      <label>
+        Tag
+        <input value={draft.tag} onChange={(e) => set({ tag: e.target.value })} />
+      </label>
+      <label className="check">
+        <input type="checkbox" checked={draft.fullTextByDefault} onChange={(e) => set({ fullTextByDefault: e.target.checked })} />
+        Show full text by default
+      </label>
+      <label className="check">
+        <input type="checkbox" checked={draft.fetchOgImages} onChange={(e) => set({ fetchOgImages: e.target.checked })} />
+        Enhance thumbnails from article metadata
+      </label>
+      <label className="check">
+        <input type="checkbox" checked={draft.alternateId} onChange={(e) => set({ alternateId: e.target.checked })} />
+        Use alternative id (for feeds that reuse ids)
+      </label>
+      <label>
+        Block rules (one Field=regex per line; Title, URL, Author, Tag, Content)
+        <textarea rows={3} value={draft.blockRules} onChange={(e) => set({ blockRules: e.target.value })} />
+      </label>
+      <label>
+        Allow rules
+        <textarea rows={2} value={draft.allowRules} onChange={(e) => set({ allowRules: e.target.value })} />
+      </label>
+      <div className="form-actions">
+        <button type="button" className="danger" onClick={remove}>
+          {inline ? 'Unsubscribe' : 'Delete feed'}
+        </button>
+        <span className="spacer" />
+        {inline ? null : (
+          <button type="button" onClick={onDone}>
             Cancel
           </button>
-          <button type="submit" className="primary">
-            Save
-          </button>
-        </div>
-      </form>
-    </Modal>
+        )}
+        <button type="submit" className="primary" disabled={inline && !dirty}>
+          {inline && !dirty ? 'Saved' : 'Save'}
+        </button>
+      </div>
+    </form>
   )
 }
 

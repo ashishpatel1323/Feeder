@@ -13,6 +13,7 @@ import com.nononsenseapps.feeder.archmodel.Repository
 import com.nononsenseapps.feeder.background.runOnceRssSync
 import com.nononsenseapps.feeder.base.DIAwareViewModel
 import com.nononsenseapps.feeder.db.room.Feed
+import com.nononsenseapps.feeder.db.room.FeedItemDao
 import com.nononsenseapps.feeder.model.ArticleRuleError
 import com.nononsenseapps.feeder.model.ArticleRuleSet
 import com.nononsenseapps.feeder.ui.compose.utils.mutableSavedStateOf
@@ -28,6 +29,19 @@ class EditFeedScreenViewModel(
 ) : DIAwareViewModel(di),
     EditFeedScreenState {
     private val repository: Repository by instance()
+    private val feedItemDao: FeedItemDao by instance()
+
+    /** The feed page's stats; null until loaded. */
+    var stats: FeedStats? by mutableStateOf(null)
+        private set
+
+    /** When the feed was last checked for new articles. */
+    var lastSync: Instant? by mutableStateOf(null)
+        private set
+
+    /** The feed's name as saved, for the page title (feedTitle changes while it is edited). */
+    var pageTitle: String by mutableStateOf("")
+        private set
 
     val feedId: Long =
         state["feedId"]
@@ -97,6 +111,8 @@ class EditFeedScreenViewModel(
                     ?: throw IllegalArgumentException("No feed with id $feedId!")
 
             defaultTitle = feed.title
+            pageTitle = feed.displayTitle
+            lastSync = feed.lastSync
             feedImage = feed.imageUrl?.toString() ?: ""
 
             if (!state.contains("feedUrl")) {
@@ -135,6 +151,8 @@ class EditFeedScreenViewModel(
             if (!state.contains("allowRules")) {
                 allowRules = feed.allowRules
             }
+
+            stats = computeFeedStats(feedItemDao.loadItemsForStats(feedId))
 
             repository.allTags
                 .collect { value ->
