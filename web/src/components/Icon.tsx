@@ -102,6 +102,9 @@ export function IconButton({
   disabled,
   showLabel,
   title,
+  text,
+  kbd,
+  className,
 }: {
   icon: IconName
   label: string
@@ -111,11 +114,16 @@ export function IconButton({
   active?: boolean
   disabled?: boolean
   showLabel?: boolean
+  /** Visible text when it should be shorter than the label (implies showLabel) */
+  text?: string
+  /** Keyboard shortcut shown next to the visible text */
+  kbd?: string
+  className?: string
 }) {
   return (
     <button
       type="button"
-      className={`icon-btn${active ? ' active' : ''}${showLabel ? ' labeled' : ''}`}
+      className={`icon-btn${active ? ' active' : ''}${showLabel ? ' labeled' : ''}${text ? ' texted' : ''}${className ? ` ${className}` : ''}`}
       onClick={onClick}
       disabled={disabled}
       title={title ?? label}
@@ -123,7 +131,8 @@ export function IconButton({
       aria-pressed={active === undefined ? undefined : active}
     >
       <Icon name={icon} />
-      {showLabel ? <span>{label}</span> : null}
+      {showLabel || text ? <span className="btn-text">{text ?? label}</span> : null}
+      {kbd ? <kbd className="btn-kbd">{kbd}</kbd> : null}
     </button>
   )
 }

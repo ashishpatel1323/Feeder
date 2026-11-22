@@ -379,9 +379,9 @@ export function ArticleList(p: Props) {
             No connection
           </span>
         )}
-        <IconButton icon="flip" label="Flip mode (F)" onClick={p.onFlip} />
-        <IconButton icon="delete" label="Delete read articles on all devices" onClick={p.onDeleteRead} />
-        <IconButton icon="doneAll" label="Mark all as read" onClick={p.onMarkAllRead} />
+        <IconButton icon="flip" label="Flip mode (F)" text="Flip" kbd="F" onClick={p.onFlip} />
+        <IconButton icon="doneAll" label="Mark all as read" text="Mark all read" onClick={p.onMarkAllRead} />
+        <IconButton icon="delete" label="Delete read articles on all devices" text="Delete read" onClick={p.onDeleteRead} />
       </header>
       {selected.length ? (
         <div className="select-bar" role="toolbar" aria-label="Selected articles">

@@ -3489,3 +3489,381 @@ label.check.inline {
 .row-feed.shared {
   cursor: default;
 }
+
+/* ---------------------------------------------------------------- paper desk
+   The regular view borrows Flip mode's look on wide screens: the article sits on a
+   paper card over a desk, and every action keeps a visible label and its key. */
+
+:root {
+  --desk: radial-gradient(ellipse at 55% 25%, #f3efe6 0%, #e4ddcf 80%);
+  --desk-chip: rgba(255, 253, 248, 0.75);
+  --desk-chip-border: #dad2c1;
+  --dock: rgba(255, 253, 248, 0.94);
+  --dock-border: #ddd5c4;
+  --dock-btn: #efe9dc;
+  --paper: #fffdf8;
+  --paper-stack-1: #ece6d9;
+  --paper-stack-2: #ddd5c4;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --desk: radial-gradient(ellipse at 55% 25%, #1c211e 0%, #0b0d0c 75%);
+    --desk-chip: #171b19;
+    --desk-chip-border: #2a312d;
+    --dock: rgba(23, 27, 25, 0.94);
+    --dock-border: #2c332e;
+    --dock-btn: #222724;
+    --paper: #f6f3ec;
+    --paper-stack-1: #e4dfd3;
+    --paper-stack-2: #d3cdbe;
+  }
+}
+:root[data-theme='dark'] {
+  --desk: radial-gradient(ellipse at 55% 25%, #1c211e 0%, #0b0d0c 75%);
+  --desk-chip: #171b19;
+  --desk-chip-border: #2a312d;
+  --dock: rgba(23, 27, 25, 0.94);
+  --dock-border: #2c332e;
+  --dock-btn: #222724;
+  --paper: #f6f3ec;
+  --paper-stack-1: #e4dfd3;
+  --paper-stack-2: #d3cdbe;
+}
+
+.btn-kbd {
+  display: none;
+}
+.read-progress {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  z-index: 2;
+  pointer-events: none;
+}
+.read-progress i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.1s linear;
+}
+
+@media (max-width: 1100px) {
+  /* Narrow screens keep the compact icon buttons */
+  .icon-btn.texted .btn-text {
+    display: none;
+  }
+}
+
+@media (min-width: 1101px) {
+  /* Paper colours inside the page, whatever the app theme */
+  .reader-pane .article,
+  .list-pane .row.selected {
+    --text: #1d1b18;
+    --text-2: #3d3a33;
+    --text-3: #6b6a63;
+    --accent: #1f6f4a;
+    --accent-ink: #ffffff;
+    --accent-soft: #cdeedb;
+    --surface: #fffdf8;
+    --surface-2: #ede8dc;
+    --surface-3: #e2dccd;
+    --border: #ddd6c6;
+    --danger: #b3261e;
+    --hl-sentence: rgba(31, 111, 74, 0.14);
+    --hl-word: rgba(31, 111, 74, 0.38);
+    --hl-tap: #ffe066;
+    color: var(--text);
+    color-scheme: light;
+  }
+
+  .btn-kbd {
+    display: inline-block;
+    font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    padding: 2px 5px;
+    margin-left: 2px;
+    border: 1px solid currentColor;
+    border-radius: 4px;
+    opacity: 0.5;
+  }
+
+  /* A slightly narrower list leaves the reader room for its labeled buttons */
+  .app {
+    grid-template-columns: 270px minmax(320px, 380px) 1fr;
+  }
+  .app.nav-collapsed {
+    grid-template-columns: 56px minmax(320px, 380px) 1fr;
+  }
+
+  /* -- sidebar: labeled tools under the name */
+  .sidebar-top {
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 10px 10px 10px 16px;
+  }
+  .sidebar-top .brand {
+    flex: 1 1 calc(100% - 50px);
+  }
+  .sidebar-top .only-wide {
+    order: 1;
+  }
+  .sidebar-top > .icon-btn.texted {
+    order: 2;
+    flex: 1 1 52px;
+    flex-direction: column;
+    gap: 2px;
+    height: 54px;
+    min-width: 0;
+    padding: 0 2px;
+    border-radius: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-2);
+  }
+  .sidebar-top > .icon-btn.texted.active {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  /* -- list: header actions as labeled chips, rows as cards */
+  .list-pane .pane-bar {
+    flex-wrap: wrap;
+    gap: 6px;
+    border-bottom: 0;
+  }
+  .list-pane .pane-title {
+    flex: 1 1 55%;
+    margin-right: 0;
+    font: 600 21px/1.2 Georgia, 'Iowan Old Style', serif;
+  }
+  .list-pane .pane-bar > .icon-btn.texted {
+    height: 32px;
+    padding: 0 11px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    font-size: 12.5px;
+    color: var(--text-2);
+  }
+  .list-scroll {
+    padding: 4px 0 12px;
+  }
+  .list-pane .row {
+    width: calc(100% - 20px);
+    margin: 0 10px 8px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .list-pane .row:hover {
+    background: var(--surface-2);
+  }
+  .list-pane .row-title {
+    font-family: Georgia, 'Iowan Old Style', serif;
+    font-weight: 600;
+  }
+  .list-pane .row-feed {
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .list-pane .row.selected {
+    background: var(--paper);
+    border-color: transparent;
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.28);
+    transform: translateX(5px);
+  }
+  .list-pane .row.read {
+    opacity: 0.6;
+  }
+  .list-pane .row.read.selected {
+    opacity: 1;
+  }
+
+  /* -- reader: a desk with the article on paper */
+  .reader-pane {
+    background: var(--desk);
+  }
+  .reader-bar {
+    background: transparent;
+    border-bottom: 0;
+    gap: 6px;
+    padding: 10px 20px 6px;
+    flex-wrap: wrap;
+  }
+  .reader-bar .icon-btn,
+  .reader-bar .hl-chip {
+    height: 36px;
+    min-width: 36px;
+    padding: 0 10px;
+    border-radius: 10px;
+    border: 1px solid var(--desk-chip-border);
+    background: var(--desk-chip);
+    color: var(--text);
+    font-size: 12.5px;
+    white-space: nowrap;
+  }
+  .reader-bar .icon-btn.active,
+  .reader-bar .hl-chip.on {
+    background: var(--accent-soft);
+    border-color: transparent;
+    color: var(--accent);
+  }
+  .reader-bar .icon-btn:hover:not(:disabled) {
+    background: var(--surface-2);
+  }
+  .reader-stage {
+    isolation: isolate;
+  }
+  .read-progress {
+    left: 50%;
+    right: auto;
+    top: 6px;
+    width: min(780px, calc(100% - 68px));
+    transform: translateX(-50%);
+    border-radius: 8px 8px 0 0;
+    overflow: hidden;
+  }
+  .reader-stage.with-rail .read-progress {
+    display: none;
+  }
+  .reader-scroll {
+    overflow-x: hidden;
+    padding: 6px 34px 28px;
+    isolation: isolate;
+  }
+  .reader-pane .article {
+    position: relative;
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 42px 56px 56px;
+    border-radius: 8px;
+    background: var(--paper);
+    box-shadow: 0 26px 70px rgba(0, 0, 0, 0.32), 0 2px 6px rgba(0, 0, 0, 0.18);
+  }
+  .reader-pane .article::before,
+  .reader-pane .article::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 8px;
+    z-index: -1;
+  }
+  .reader-pane .article::before {
+    background: var(--paper-stack-1);
+    transform: translate(7px, 7px) rotate(0.5deg);
+  }
+  .reader-pane .article::after {
+    background: var(--paper-stack-2);
+    transform: translate(14px, 12px) rotate(1.1deg);
+    z-index: -2;
+  }
+  .reader-pane .article-title {
+    font: 600 1.9em/1.18 Georgia, 'Iowan Old Style', serif;
+    margin-bottom: 10px;
+  }
+  .reader-pane .article-meta {
+    color: var(--text-3);
+  }
+  .reader-pane .article-meta .meta-feed {
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 700;
+    font-size: 12px;
+    color: var(--accent);
+  }
+  .reader-pane .article-body {
+    font-family: Georgia, 'Iowan Old Style', serif;
+    font-size: 1.06em;
+  }
+  .reader-pane .lead-image {
+    border-radius: 6px;
+  }
+
+  /* -- reader: the floating dock of labeled actions */
+  .action-bar {
+    align-self: center;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 5px;
+    max-width: calc(100% - 24px);
+    margin: 4px auto 14px;
+    padding: 8px;
+    border: 1px solid var(--dock-border);
+    border-radius: 18px;
+    background: var(--dock);
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.25);
+  }
+  .action-bar .icon-btn.labeled {
+    flex: none;
+    flex-direction: row;
+    gap: 6px;
+    height: 42px;
+    max-width: none;
+    padding: 0 11px;
+    border-radius: 12px;
+    background: var(--dock-btn);
+    color: var(--text);
+    font-size: 13.5px;
+    font-weight: 500;
+  }
+  .action-bar .icon-btn.labeled:hover:not(:disabled) {
+    filter: brightness(0.96);
+  }
+  .action-bar .icon-btn.labeled.active {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .action-bar .icon-btn.act-primary {
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 700;
+  }
+  .action-bar .icon-btn.act-tool {
+    order: 1;
+  }
+  .action-bar .icon-btn.act-danger + .icon-btn.act-tool {
+    margin-left: 8px;
+  }
+  .action-bar .icon-btn.act-tool + .icon-btn.act-tool {
+    margin-right: 8px;
+  }
+  .action-bar .icon-btn.act-danger {
+    order: 2;
+    color: var(--danger);
+  }
+}
+
+/* Until there is room, key hints stay in the tooltips of the reader's buttons */
+@media (min-width: 1101px) and (max-width: 1599px) {
+  .reader-bar .btn-kbd,
+  .action-bar .btn-kbd {
+    display: none;
+  }
+  .reader-bar {
+    gap: 4px;
+  }
+  .reader-bar .icon-btn,
+  .reader-bar .hl-chip {
+    padding: 0 9px;
+  }
+  .action-bar {
+    gap: 4px;
+    padding: 7px;
+  }
+  .action-bar .icon-btn.labeled {
+    padding: 0 9px;
+    font-size: 13px;
+  }
+  .action-bar .icon-btn.act-danger + .icon-btn.act-tool {
+    margin-left: 4px;
+  }
+  .action-bar .icon-btn.act-tool + .icon-btn.act-tool {
+    margin-right: 4px;
+  }
+}
