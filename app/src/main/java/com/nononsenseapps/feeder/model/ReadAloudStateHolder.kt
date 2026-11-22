@@ -107,6 +107,36 @@ class TTSStateHolder(
 
     var articleNavigator: ArticleNavigator? = null
 
+    /** Reading of a flip card that the article screen continues in the full article. */
+    data class Handoff(
+        val articleId: Long,
+        // The sentence being spoken, found again in the article; null starts from the top
+        val sentence: String?,
+        val createdAt: Long = System.currentTimeMillis(),
+    )
+
+    private var handoff: Handoff? = null
+
+    /**
+     * Pauses reading of [articleId] so that the article screen, once it shows its text, goes on
+     * reading from [sentence] there.
+     */
+    fun handOff(
+        articleId: Long,
+        sentence: String?,
+    ) {
+        handoff = Handoff(articleId, sentence)
+        pause()
+    }
+
+    /** The hand-off for [articleId], once; null when there is none or it is stale. */
+    fun takeHandoff(articleId: Long): Handoff? {
+        val pending = handoff?.takeIf { it.articleId == articleId } ?: return null
+        handoff = null
+        val fresh = System.currentTimeMillis() - pending.createdAt < HANDOFF_MAX_AGE_MS
+        return pending.takeIf { fresh && _progress.value.articleId == articleId }
+    }
+
     init {
         coroutineScope.launch(Dispatchers.IO) {
             val saved = preferences.getFloat(PREF_SPEED, 1f).coerceIn(MIN_SPEED, MAX_SPEED)
@@ -693,6 +723,7 @@ class TTSStateHolder(
         private const val PREF_SPEED = "playback_speed"
         private const val MIN_SPEED = 0.5f
         private const val MAX_SPEED = 4f
+        private const val HANDOFF_MAX_AGE_MS = 15_000L
     }
 }
 
