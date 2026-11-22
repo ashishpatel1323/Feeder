@@ -50,6 +50,8 @@ interface Props {
     items: Item[]
     onBack: () => void
     onEditFeed: (url: string) => void
+    /** Opens the feed's own page (stats and settings). */
+    onOpenFeed: (url: string) => void
     /** The same handler as the sidebar's drag and drop (PR #49). */
     onMoveFeed: (url: string, tag: string, place?: Place) => void | Promise<void>
     toast: (m: string) => void
@@ -103,7 +105,7 @@ function Spark({ values }: { values: number[] }) {
     )
 }
 
-function StatsPanel({ s, feed }: { s: FeedStats; feed: Feed }) {
+export function StatsPanel({ s, feed }: { s: FeedStats; feed: Feed }) {
     const max = Math.max(1, ...s.perDay)
     const wmax = Math.max(1, ...s.byWeekday)
     const readPct = s.recent ? Math.round((s.recentRead / s.recent) * 100) : null
@@ -528,7 +530,9 @@ export function ManageFeeds(p: Props) {
                                 }}
                             />
                         ) : (
-                            <div className="mf-name">{title}</div>
+                            <button type="button" className="mf-name mf-namelink" title="Open this feed's page: stats and settings" onClick={() => p.onOpenFeed(f.url)}>
+                                {title}
+                            </button>
                         )}
                         <div className="mf-url">
                             {f.url}
