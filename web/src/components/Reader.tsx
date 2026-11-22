@@ -50,6 +50,15 @@ export function Reader(p: Props) {
   const { item, feed } = p
   const bodyRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const progressRef = useRef<HTMLElement>(null)
+  /** Fills the thin bar on top of the page as you scroll through the article */
+  const updateProgress = () => {
+    const el = scrollRef.current
+    const bar = progressRef.current
+    if (!el || !bar) return
+    const room = el.scrollHeight - el.clientHeight
+    bar.style.transform = `scaleX(${room > 0 ? Math.min(1, el.scrollTop / room) : 0})`
+  }
   // A YouTube page has no article text to extract, so videos start on the feed's description
   const fullByDefault = !!feed?.fullTextByDefault && !youtubeVideoId(item.link)
   const [fullMode, setFullMode] = useState<boolean>(fullByDefault)
@@ -73,6 +82,7 @@ export function Reader(p: Props) {
     setPill(null)
     readAloud.showTapWord(null)
     scrollRef.current?.scrollTo({ top: 0 })
+    updateProgress()
   }, [item.id, fullByDefault])
 
   // Load full text when needed
@@ -398,14 +408,14 @@ export function Reader(p: Props) {
         <span className="only-narrow">
           <IconButton icon="back" label="Back to list" onClick={p.onBack} />
         </span>
-        <IconButton icon="prev" label="Previous article (K)" onClick={p.onPrev} disabled={!p.hasPrev} />
-        <IconButton icon="next" label="Next article (J)" onClick={p.onNext} disabled={!p.hasNext} />
+        <IconButton icon="prev" label="Previous article (K)" text="Prev" kbd="K" onClick={p.onPrev} disabled={!p.hasPrev} />
+        <IconButton icon="next" label="Next article (J)" text="Next" kbd="J" onClick={p.onNext} disabled={!p.hasNext} />
         <span className="spacer" />
         {/* Like the Android app, these hide while the player is open: it has the same controls */}
         {playing ? null : (
           <>
-            <IconButton icon="headphones" label="Read aloud (R)" onClick={() => readAloud.play()} disabled={!readAloud.supported} />
-            <IconButton icon="speed" label="Speed read: show the word as it is read (V)" onClick={showWord} disabled={!readAloud.supported} />
+            <IconButton icon="headphones" label="Read aloud (R)" text="Read aloud" kbd="R" onClick={() => readAloud.play()} disabled={!readAloud.supported} />
+            <IconButton icon="speed" label="Speed read: show the word as it is read (V)" text="Speed read" kbd="V" onClick={showWord} disabled={!readAloud.supported} />
           </>
         )}
         <button
@@ -417,16 +427,21 @@ export function Reader(p: Props) {
         >
           <Icon name="highlight" size={18} /> {highlights?.length ?? 0}
         </button>
-        <IconButton icon="article" label={fullMode ? 'Show feed text (F)' : 'Full text (F)'} active={fullMode} onClick={() => setFullMode(!fullMode)} />
+        <IconButton icon="article" label={fullMode ? 'Show feed text' : 'Full text'} text="Full text" active={fullMode} onClick={() => setFullMode(!fullMode)} />
         {item.link ? (
-          <a className="icon-btn" href={item.link} target="_blank" rel="noopener noreferrer" title="Open original page (O)" aria-label="Open original page">
+          <a className="icon-btn texted" href={item.link} target="_blank" rel="noopener noreferrer" title="Open original page (O)" aria-label="Open original page">
             <Icon name="open" />
+            <span className="btn-text">Original</span>
+            <kbd className="btn-kbd">O</kbd>
           </a>
         ) : null}
       </header>
 
       <div className={`reader-stage${railOpen ? ' with-rail' : ''}`}>
-        <div className="reader-scroll" ref={scrollRef} data-scroll onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+        <div className="read-progress" aria-hidden="true">
+          <i ref={progressRef} />
+        </div>
+        <div className="reader-scroll" ref={scrollRef} data-scroll onScroll={updateProgress} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
           <article className="article" style={{ fontSize: p.settings.textSize }}>
             <h1 className="article-title">
               {item.link ? (
@@ -549,26 +564,30 @@ export function Reader(p: Props) {
 
       <footer className="action-bar">
         <IconButton icon="share" label="Share" onClick={shareLink} showLabel />
-        <IconButton icon={item.read ? 'unread' : 'read'} label={item.read ? 'Mark unread' : 'Mark read'} onClick={toggleRead} showLabel />
-        <IconButton icon="summarize" label={summaryState === 'loading' ? 'Summarizing…' : 'Summarize'} onClick={doSummary} disabled={summaryState === 'loading'} showLabel />
-        <IconButton icon={item.saved ? 'bookmarkFilled' : 'bookmark'} label={item.saved ? 'Saved' : 'Save'} active={!!item.saved} onClick={toggleSave} showLabel />
-        <IconButton icon="delete" label="Delete" title="Delete this article on all your devices (Delete key)" onClick={remove} showLabel />
+        <IconButton icon={item.read ? 'unread' : 'read'} label={item.read ? 'Mark unread' : 'Mark read'} kbd="M" onClick={toggleRead} showLabel />
+        <IconButton icon="summarize" label={summaryState === 'loading' ? 'Summarizing…' : 'Summarize'} onClick={doSummary} disabled={summaryState === 'loading'} showLabel className="act-primary" />
+        <IconButton icon={item.saved ? 'bookmarkFilled' : 'bookmark'} label={item.saved ? 'Saved' : 'Save'} active={!!item.saved} kbd="S" onClick={toggleSave} showLabel />
+        <IconButton icon="delete" label="Delete" title="Delete this article on all your devices (Delete key)" kbd="Del" onClick={remove} showLabel className="act-danger" />
         <IconButton
           icon="formatBold"
           label="Fast read"
           title={fastReading ? 'Turn off bold word starts (B)' : 'Bold word starts to read faster (B)'}
+          kbd="B"
           active={fastReading}
           onClick={() => updateSettings({ fastReading: !fastReading })}
           showLabel
+          className="act-tool"
         />
         <IconButton
           icon="autoScroll"
           label="Scroll"
           title={auto.active ? 'Stop auto scroll (A)' : 'Scroll the article on its own while you read (A)'}
+          kbd="A"
           active={auto.active}
           onClick={auto.toggle}
           disabled={playing}
           showLabel
+          className="act-tool"
         />
       </footer>
 
