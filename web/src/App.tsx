@@ -12,6 +12,7 @@ import { cleanupOffline, isOnline, setForcedOffline } from './lib/offline'
 import { Sidebar } from './components/Sidebar'
 import { ArticleList } from './components/ArticleList'
 import { Reader } from './components/Reader'
+import { FlipMode } from './components/FlipMode'
 import { AddFeedDialog, EditFeedDialog, SettingsDialog } from './components/Dialogs'
 import { ManageFeeds } from './components/ManageFeeds'
 import { HighlightsPage } from './components/Highlights'
@@ -110,6 +111,8 @@ export default function App() {
   const [refreshing, setRefreshing] = useState<string | null>(null)
   const [toastMsg, setToastMsg] = useState<{ msg: string; action?: ToastAction } | null>(null)
   const [autoplay, setAutoplay] = useState(false)
+  // Flip mode: the list order and the article to start on, while it's open
+  const [flip, setFlip] = useState<{ queue: string[]; start: string | null } | null>(null)
   const toastTimer = useRef<number | null>(null)
 
   const toast = useCallback((msg: string, action?: ToastAction) => {
@@ -167,12 +170,20 @@ export default function App() {
   const goPrev = useCallback(() => prevId && open(prevId), [prevId, open])
   const goNext = useCallback(() => nextId && open(nextId), [nextId, open])
 
+  const exitFlip = useCallback(() => setFlip(null), [])
+  const startFlip = useCallback(() => {
+    if (!visibleOrder.length) return toast('No articles to flip through here')
+    setFlip({ queue: visibleOrder, start: openId && visibleOrder.includes(openId) ? openId : visibleOrder[0] })
+  }, [visibleOrder, openId, toast])
+
   useEffect(() => {
     readAloud.onError = toast
   }, [toast])
 
   // Read aloud: auto-continue and media keys
   useEffect(() => {
+    // Flip mode turns its own pages when reading ends
+    if (flip) return
     readAloud.onFinished = (finishedId) => {
       if (!settings.readAloudAutoContinue) return
       const i = snapshot.indexOf(finishedId)
@@ -195,7 +206,7 @@ export default function App() {
           open(prevId)
         }
       : null
-  }, [snapshot, settings.readAloudAutoContinue, open, nextId, prevId])
+  }, [snapshot, settings.readAloudAutoContinue, open, nextId, prevId, flip])
 
   // Sync and refresh
   const fullRefresh = useCallback(async () => {
@@ -321,6 +332,9 @@ export default function App() {
         case '[':
           toggleNav()
           break
+        case 'f':
+          startFlip()
+          break
         case 'Escape':
           if (pane === 'reader') setPane('list')
           break
@@ -331,7 +345,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [dialog, visibleOrder, openId, nextId, prevId, goNext, goPrev, open, openItem, pane, toggleNav, managing, showManage, highlightsPage, showHighlights])
+  }, [dialog, visibleOrder, openId, nextId, prevId, goNext, goPrev, open, openItem, pane, toggleNav, managing, showManage, highlightsPage, showHighlights, startFlip])
 
   const markAllRead = async () => {
     const ids = groups.flatMap((g) => g.items).filter((i) => !i.read).map((i) => i.id)
@@ -495,9 +509,10 @@ export default function App() {
         onDeleteRead={deleteRead}
         onSetRead={setReadFromList}
         onDelete={deleteFromList}
+        onFlip={startFlip}
         />
       )}
-      {managing || highlightsPage ? null : openItem ? (
+      {managing || highlightsPage || flip ? null : openItem ? (
         <Reader
           item={openItem}
           feed={feeds.get(openItem.feedUrl)}
@@ -516,7 +531,7 @@ export default function App() {
         />
       ) : (
         <section className="reader-pane empty-reader">
-          <p>Select an article. Keyboard: J / K next and previous, R read aloud, S save, M unread, O open original, [ hide or show feeds.</p>
+          <p>Select an article. Keyboard: J / K next and previous, F flip mode, R read aloud, S save, M unread, O open original, [ hide or show feeds.</p>
         </section>
       )}
       {dialog?.kind === 'settings' ? <SettingsDialog
@@ -531,6 +546,21 @@ export default function App() {
       {dialog?.kind === 'add' ? <AddFeedDialog onClose={() => setDialog(null)} toast={toast} /> : null}
       {dialog?.kind === 'edit' ? <EditFeedDialog url={dialog.url} onClose={() => setDialog(null)} toast={toast} /> : null}
       {pageShare ? <ShareDialog subject={pageShare} onClose={() => setPageShare(null)} toast={toast} /> : null}
+      {flip ? (
+        <FlipMode
+          queue={flip.queue}
+          startId={flip.start}
+          items={items}
+          feeds={feeds}
+          rate={settings.readAloudRate}
+          onExit={exitFlip}
+          onOpenInReader={(id) => {
+            setFlip(null)
+            open(id, flip.queue)
+          }}
+          toast={toast}
+        />
+      ) : null}
       {toastMsg ? (
         <div className="toast" role="status">
           {toastMsg.msg}

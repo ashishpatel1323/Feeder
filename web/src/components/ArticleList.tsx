@@ -23,6 +23,8 @@ interface Props {
   /** From the right-click menu and the selection bar: one article or all selected ones. */
   onSetRead: (items: Item[], read: boolean) => void
   onDelete: (items: Item[]) => void
+  /** Opens Flip mode on this list. */
+  onFlip: () => void
 }
 
 const SHOWS: [ShowFilter, string][] = [
@@ -294,6 +296,7 @@ export function ArticleList(p: Props) {
             No connection
           </span>
         )}
+        <IconButton icon="flip" label="Flip mode (F)" onClick={p.onFlip} />
         <IconButton icon="delete" label="Delete read articles on all devices" onClick={p.onDeleteRead} />
         <IconButton icon="doneAll" label="Mark all as read" onClick={p.onMarkAllRead} />
       </header>
