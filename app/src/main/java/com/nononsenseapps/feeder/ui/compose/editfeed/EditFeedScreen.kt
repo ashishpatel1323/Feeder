@@ -35,6 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -86,6 +87,7 @@ import com.nononsenseapps.feeder.ui.compose.utils.LocalWindowSizeMetrics
 import com.nononsenseapps.feeder.ui.compose.utils.ScreenType
 import com.nononsenseapps.feeder.ui.compose.utils.getScreenType
 import com.nononsenseapps.feeder.ui.compose.utils.rememberApiPermissionState
+import java.time.Instant
 
 @Composable
 fun CreateFeedScreen(
@@ -122,6 +124,7 @@ fun EditFeedScreen(
     onNavigateUp: () -> Unit,
     editFeedScreenViewModel: EditFeedScreenViewModel,
     onOk: (Long) -> Unit,
+    onShowArticles: ((Long) -> Unit)? = null,
 ) {
     val windowSize = LocalWindowSizeMetrics.current
 
@@ -144,6 +147,15 @@ fun EditFeedScreen(
         onCancel = {
             onNavigateUp()
         },
+        title = editFeedScreenViewModel.pageTitle.ifBlank { null },
+        feedPage =
+            onShowArticles?.let { show ->
+                FeedPageHeader(
+                    stats = editFeedScreenViewModel.stats,
+                    lastSync = editFeedScreenViewModel.lastSync,
+                    onShowArticles = { show(editFeedScreenViewModel.feedId) },
+                )
+            },
     )
 }
 
@@ -156,6 +168,8 @@ fun EditFeedScreen(
     onOk: () -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
+    title: String? = null,
+    feedPage: FeedPageHeader? = null,
 ) {
     val notificationsPermissionState =
         rememberApiPermissionState(
@@ -212,7 +226,7 @@ fun EditFeedScreen(
         topBar = {
             SensibleTopAppBar(
                 scrollBehavior = scrollBehavior,
-                title = stringResource(id = R.string.edit_feed),
+                title = title ?: stringResource(id = R.string.edit_feed),
                 navigationIcon = {
                     IconButton(onClick = onNavigateUp) {
                         Icon(
@@ -230,6 +244,7 @@ fun EditFeedScreen(
             onOk = onOk,
             onCancel = onCancel,
             modifier = Modifier.padding(padding),
+            feedPage = feedPage,
         )
 
         if (shouldShowExplanationForPermission && !permissionDismissed) {
@@ -253,6 +268,7 @@ fun EditFeedView(
     onOk: () -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
+    feedPage: FeedPageHeader? = null,
 ) {
     val dimens = LocalDimens.current
 
@@ -269,6 +285,27 @@ fun EditFeedView(
             modifier
                 .padding(horizontal = LocalDimens.current.margin),
     ) {
+        if (feedPage != null) {
+            FeedStatsSection(
+                stats = feedPage.stats ?: FeedStats(),
+                lastSync = feedPage.lastSync,
+                onShowArticles = feedPage.onShowArticles,
+                modifier =
+                    Modifier
+                        .width(dimens.maxContentWidth)
+                        .padding(horizontal = if (screenType == ScreenType.DUAL) dimens.margin else 0.dp),
+            )
+            HorizontalDivider(modifier = Modifier.width(dimens.maxContentWidth).padding(vertical = 16.dp))
+            Text(
+                text = stringResource(R.string.action_settings),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier =
+                    Modifier
+                        .width(dimens.maxContentWidth)
+                        .padding(horizontal = if (screenType == ScreenType.DUAL) dimens.margin else 0.dp),
+            )
+        }
         if (screenType == ScreenType.DUAL) {
             Row(
                 modifier = Modifier.width(dimens.maxContentWidth),
@@ -761,3 +798,11 @@ private fun PreviewEditFeedScreenLarge() {
         )
     }
 }
+
+/** What turns the Edit feed screen into the feed page: its stats and a way to its articles. */
+@Immutable
+class FeedPageHeader(
+    val stats: FeedStats?,
+    val lastSync: Instant?,
+    val onShowArticles: () -> Unit,
+)

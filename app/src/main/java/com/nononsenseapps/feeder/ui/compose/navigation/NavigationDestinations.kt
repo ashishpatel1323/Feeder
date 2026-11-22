@@ -306,9 +306,13 @@ data object EditFeedDestination : NavigationDestination(
                 navController.popBackStack()
             },
             editFeedScreenViewModel = editFeedScreenViewModel,
-        ) { feedId ->
-            FeedDestination.navigate(navController, feedId = feedId)
-        }
+            onOk = { feedId ->
+                FeedDestination.navigate(navController, feedId = feedId)
+            },
+            onShowArticles = { feedId ->
+                FeedDestination.navigate(navController, feedId = feedId)
+            },
+        )
     }
 }
 
@@ -521,8 +525,13 @@ data object ArticleDestination : NavigationDestination(
                     FeedDestination.navigate(navController)
                 }
             },
+            // Tapping the feed's name opens its page: stats and settings, with a button to its articles
             onNavigateToFeed = { feedId ->
-                FeedDestination.navigate(navController, feedId = feedId)
+                if (feedId > 0) {
+                    EditFeedDestination.navigate(navController, feedId = feedId)
+                } else {
+                    FeedDestination.navigate(navController, feedId = feedId)
+                }
             },
             viewModel = backStackEntry.diAwareViewModel(),
             mainActivityViewModel = mainActivityViewModel,

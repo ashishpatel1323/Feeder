@@ -151,6 +151,16 @@ interface FeedItemDao {
     )
     suspend fun loadFeedUrlOfFeedItem(id: Long): URL?
 
+    /** For the feed page's stats: every stored, not blocked article of the feed. */
+    @Query(
+        """
+        SELECT primary_sort_time, first_synced_time, read_time, bookmarked, word_count, word_count_full
+        FROM feed_items
+        WHERE feed_id = :feedId AND block_time IS NULL
+        """,
+    )
+    suspend fun loadItemsForStats(feedId: Long): List<FeedItemForStats>
+
     @Query(
         """
         SELECT *
