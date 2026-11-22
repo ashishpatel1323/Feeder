@@ -22,4 +22,20 @@
   <string name="downloads_now_playing">Playing</string>
   <string name="downloads_close_player">Close</string>
   <string name="downloads_empty">No downloads yet. Tap Download under a YouTube video to save it here.</string>
+  <string name="downloads_background">Background play</string>
+  <string name="downloads_background_channel">Downloads playing in the background</string>
+  <string name="downloads_tab_videos">Videos · %1$d</string>
+  <string name="downloads_tab_audio">Audio · %1$d</string>
+  <string name="downloads_empty_audio">No podcast episodes yet. Tap Download episode in a podcast article to save it here.</string>
+  <string name="downloads_save_episode">Download episode</string>
+  <string name="downloads_episode_saved">Episode saved on this phone · %1$s</string>
+  <string name="downloads_episode_saving">Downloading episode… %1$d%%</string>
+  <string name="downloads_pick_quality">Download video</string>
+  <string name="downloads_pick_quality_hint">Pick a quality</string>
+  <string name="downloads_quality_size">~%1$s</string>
+  <string name="downloads_quality_hd">HD</string>
+  <string name="downloads_quality_loading">Looking up qualities…</string>
+  <string name="downloads_quality_failed">Could not look up qualities: %1$s</string>
+  <string name="downloads_quality_default">Download 720p</string>
+  <string name="downloads_summary_audio">%1$d episodes · %2$s · %3$s</string>
 </resources>

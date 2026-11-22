@@ -20,13 +20,18 @@ class DownloadsPlaylist(
         get() = prefs.getBoolean(PREF_LOOP, false)
         set(value) = prefs.edit().putBoolean(PREF_LOOP, value).apply()
 
+    /** Keep playing with the screen off, in other apps or after leaving Downloads. */
+    var background: Boolean
+        get() = prefs.getBoolean(PREF_BACKGROUND, true)
+        set(value) = prefs.edit().putBoolean(PREF_BACKGROUND, value).apply()
+
     var removeWatched: Boolean
         get() = prefs.getBoolean(PREF_REMOVE_WATCHED, false)
         set(value) = prefs.edit().putBoolean(PREF_REMOVE_WATCHED, value).apply()
 
-    private fun savedOrder(): List<Long> =
+    private fun savedOrder(audio: Boolean): List<Long> =
         prefs
-            .getString(PREF_ORDER, null)
+            .getString(if (audio) PREF_ORDER_AUDIO else PREF_ORDER, null)
             .orEmpty()
             .split(',')
             .mapNotNull { it.trim().toLongOrNull() }
@@ -34,15 +39,22 @@ class DownloadsPlaylist(
     /** [ids] in playlist order. [downloadedAt] says when each was saved, for new ones. */
     fun ordered(
         ids: Collection<Long>,
+        audio: Boolean = false,
         downloadedAt: (Long) -> Long,
-    ): List<Long> = order(savedOrder(), ids, downloadedAt)
+    ): List<Long> = order(savedOrder(audio), ids, downloadedAt)
 
-    fun setOrder(ids: List<Long>) {
-        prefs.edit().putString(PREF_ORDER, ids.joinToString(",")).apply()
+    /** Videos and podcast episodes each have their own order. */
+    fun setOrder(
+        ids: List<Long>,
+        audio: Boolean = false,
+    ) {
+        prefs.edit().putString(if (audio) PREF_ORDER_AUDIO else PREF_ORDER, ids.joinToString(",")).apply()
     }
 
     companion object {
         private const val PREF_ORDER = "downloads_order"
+        private const val PREF_ORDER_AUDIO = "downloads_order_audio"
+        private const val PREF_BACKGROUND = "downloads_background"
         private const val PREF_AUTOPLAY = "downloads_autoplay"
         private const val PREF_LOOP = "downloads_loop"
         private const val PREF_REMOVE_WATCHED = "downloads_remove_watched"

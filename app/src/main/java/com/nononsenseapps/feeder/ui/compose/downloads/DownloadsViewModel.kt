@@ -1,30 +1,25 @@
 package com.nononsenseapps.feeder.ui.compose.downloads
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.util.Log
-import androidx.annotation.OptIn
 import androidx.lifecycle.viewModelScope
-import androidx.media3.common.MediaItem
-import androidx.media3.common.MimeTypes
-import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.exoplayer.source.MediaSource
-import androidx.media3.exoplayer.source.MergingMediaSource
 import com.nononsenseapps.feeder.base.DIAwareViewModel
 import com.nononsenseapps.feeder.db.room.FeedItemDao
+import com.nononsenseapps.feeder.model.offline.DownloadsPlayback
 import com.nononsenseapps.feeder.model.offline.DownloadsPlaylist
 import com.nononsenseapps.feeder.model.offline.OfflineFiles
 import com.nononsenseapps.feeder.model.offline.OfflineVideos
-import com.nononsenseapps.feeder.model.offline.SavedVideo
+import com.nononsenseapps.feeder.model.offline.PlaylistEntry
 import com.nononsenseapps.feeder.model.offline.VideoJob
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -34,7 +29,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.ConcurrentHashMap
 
-/** What the Downloads screen shows about a video, from its article. */
+/** What the Downloads screen shows about a video or episode, from its article. */
 data class VideoInfo(
     val title: String,
     val channel: String,
@@ -47,8 +42,9 @@ data class DownloadedVideo(
     val info: VideoInfo,
     val durationMs: Long,
     val sizeBytes: Long,
-    /** A still from the saved file: works with no network. */
+    /** A still from the saved video, or an episode's cover art: works with no network. */
     val thumbnail: File?,
+    val audio: Boolean = false,
 )
 
 data class IncompleteDownload(
@@ -57,28 +53,46 @@ data class IncompleteDownload(
     val job: VideoJob,
 )
 
+enum class DownloadsTab { VIDEOS, AUDIO }
+
 data class DownloadsViewState(
     val loaded: Boolean = false,
-    val completed: List<DownloadedVideo> = emptyList(),
+    val tab: DownloadsTab = DownloadsTab.VIDEOS,
+    val videos: List<DownloadedVideo> = emptyList(),
+    val episodes: List<DownloadedVideo> = emptyList(),
     val incomplete: List<IncompleteDownload> = emptyList(),
     val playingId: Long? = null,
+    val playingAudio: Boolean = false,
     val isPlaying: Boolean = false,
     val autoplay: Boolean = true,
     val loop: Boolean = false,
     val removeWatched: Boolean = false,
-)
+    val background: Boolean = true,
+) {
+    val audioTab: Boolean get() = tab == DownloadsTab.AUDIO
+
+    /** The finished downloads of the open tab: its playlist. */
+    val completed: List<DownloadedVideo> get() = if (audioTab) episodes else videos
+
+    /** Unfinished downloads of the open tab. */
+    val incompleteHere: List<IncompleteDownload> get() = incomplete.filter { it.job.audio == audioTab }
+
+    /** The item playing, wherever it is. */
+    val playing: DownloadedVideo? get() = (if (playingAudio) episodes else videos).firstOrNull { it.id == playingId }
+}
 
 /**
- * The Downloads screen: every saved video in the user's own order, unfinished downloads with
- * Pause/Resume, and a player that plays the downloads one after another as a playlist.
+ * The Downloads screen: saved videos and podcast episodes (two tabs), each in the user's own
+ * order, unfinished downloads with Pause/Resume, and the playlist player ([DownloadsPlayback],
+ * which keeps playing in the background when that is on).
  */
-@OptIn(UnstableApi::class)
 class DownloadsViewModel(
     di: DI,
 ) : DIAwareViewModel(di) {
     private val offlineVideos: OfflineVideos by instance()
     private val offlineFiles: OfflineFiles by instance()
     private val playlist: DownloadsPlaylist by instance()
+    private val playback: DownloadsPlayback by instance()
     private val dao: FeedItemDao by instance()
 
     private val _state =
@@ -87,23 +101,19 @@ class DownloadsViewModel(
                 autoplay = playlist.autoplay,
                 loop = playlist.loop,
                 removeWatched = playlist.removeWatched,
+                background = playlist.background,
             ),
         )
     val state: StateFlow<DownloadsViewState> = _state.asStateFlow()
 
-    private val _player = MutableStateFlow<ExoPlayer?>(null)
-    val player: StateFlow<ExoPlayer?> = _player.asStateFlow()
+    val player: StateFlow<ExoPlayer?> = playback.player
 
     private val infoCache = ConcurrentHashMap<Long, VideoInfo>()
     private val durationCache = ConcurrentHashMap<Long, Long>()
-    private val savedFiles = ConcurrentHashMap<Long, SavedVideo>()
-
-    /** The id of the video playing before the latest change of video, for Remove after watching. */
-    private var lastPlayingId: Long? = null
 
     init {
         viewModelScope.launch {
-            offlineVideos.changes.collect { reloadCompleted() }
+            offlineVideos.changes.collect { reload() }
         }
         viewModelScope.launch {
             offlineVideos.jobs.collect { jobs ->
@@ -112,6 +122,15 @@ class DownloadsViewModel(
                         .sortedBy { it.key }
                         .map { (id, job) -> IncompleteDownload(id, info(id), job) }
                 _state.update { it.copy(incomplete = incomplete) }
+            }
+        }
+        viewModelScope.launch {
+            combine(playback.playingId, playback.playingAudio, playback.isPlaying, playback.background) { id, audio, playing, bg ->
+                listOf(id, audio, playing, bg)
+            }.collect { (id, audio, playing, bg) ->
+                _state.update {
+                    it.copy(playingId = id as Long?, playingAudio = audio as Boolean, isPlaying = playing as Boolean, background = bg as Boolean)
+                }
             }
         }
     }
@@ -127,40 +146,59 @@ class DownloadsViewModel(
             ).also { if (item != null) infoCache[id] = it }
         }
 
-    private suspend fun reloadCompleted() {
-        val videos =
+    private suspend fun reload() {
+        val (videos, episodes) =
             withContext(Dispatchers.IO) {
-                val saved =
-                    offlineVideos
-                        .savedIds()
-                        .mapNotNull { id ->
-                            offlineFiles.savedVideo(id)?.let { id to it }
-                        }.toMap()
-                savedFiles.clear()
-                savedFiles.putAll(saved)
-                val order = playlist.ordered(saved.keys) { DownloadsPlaylist.downloadedAt(saved[it]) }
-                order.map { id ->
-                    val files = saved.getValue(id)
-                    DownloadedVideo(
-                        id = id,
-                        info = info(id),
-                        durationMs = duration(id, files),
-                        sizeBytes = files.sizeBytes,
-                        thumbnail = thumbnail(id, files),
-                    )
-                }
+                val saved = offlineVideos.savedIds().mapNotNull { id -> offlineFiles.savedVideo(id)?.let { id to it } }.toMap()
+                val videoOrder = playlist.ordered(saved.keys) { DownloadsPlaylist.downloadedAt(saved[it]) }
+                val videos =
+                    videoOrder.map { id ->
+                        val files = saved.getValue(id)
+                        DownloadedVideo(
+                            id = id,
+                            info = info(id),
+                            durationMs = duration(id, files.video),
+                            sizeBytes = files.sizeBytes,
+                            thumbnail = videoThumbnail(id, files.video),
+                        )
+                    }
+                val audio = offlineFiles.savedAudioIds().mapNotNull { id -> offlineFiles.savedAudio(id)?.let { id to it } }.toMap()
+                val audioOrder = playlist.ordered(audio.keys, audio = true) { audio[it]?.lastModified() ?: 0L }
+                val episodes =
+                    audioOrder.map { id ->
+                        val file = audio.getValue(id)
+                        DownloadedVideo(
+                            id = id,
+                            info = info(id),
+                            durationMs = duration(id, file),
+                            sizeBytes = file.length(),
+                            thumbnail = coverArt(id, file),
+                            audio = true,
+                        )
+                    }
+                videos to episodes
             }
-        _state.update { it.copy(loaded = true, completed = videos) }
-        syncPlayer()
+        _state.update { it.copy(loaded = true, videos = videos, episodes = episodes) }
+        playback.sync(videos.map(::entry), audio = false)
+        playback.sync(episodes.map(::entry), audio = true)
     }
+
+    private fun entry(item: DownloadedVideo) =
+        PlaylistEntry(
+            id = item.id,
+            audio = item.audio,
+            title = item.info.title,
+            artist = item.info.channel,
+            artwork = item.thumbnail?.let(Uri::fromFile) ?: item.info.thumbnailUrl?.let(Uri::parse),
+        )
 
     private fun duration(
         id: Long,
-        files: SavedVideo,
+        file: File,
     ): Long =
         durationCache[id] ?: try {
             MediaMetadataRetriever().use { retriever ->
-                retriever.setDataSource(files.video.absolutePath)
+                retriever.setDataSource(file.absolutePath)
                 retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
             }
         } catch (e: Exception) {
@@ -169,28 +207,58 @@ class DownloadsViewModel(
         }.also { durationCache[id] = it }
 
     /** A still from a tenth of the way in, made once and kept next to the video. */
-    private fun thumbnail(
+    private fun videoThumbnail(
         id: Long,
-        files: SavedVideo,
+        video: File,
     ): File? {
         val file = offlineFiles.videoThumbnail(id)
         if (file.isFile && file.length() > 0) return file
         return try {
             MediaMetadataRetriever().use { retriever ->
-                retriever.setDataSource(files.video.absolutePath)
-                val atUs = (duration(id, files) * 100).coerceIn(1_000_000L, 60_000_000L)
+                retriever.setDataSource(video.absolutePath)
+                val atUs = (duration(id, video) * 100).coerceIn(1_000_000L, 60_000_000L)
                 val frame =
                     retriever.getScaledFrameAtTime(atUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 480, 270)
                         ?: return null
-                FileOutputStream(file).use { frame.compress(Bitmap.CompressFormat.JPEG, 80, it) }
-                frame.recycle()
-                file
+                writeJpeg(frame, file)
             }
         } catch (e: Exception) {
             Log.w(LOG_TAG, "No thumbnail for $id: ${e.message}")
             null
         }
     }
+
+    /** The episode's own cover art (ID3/MP4 tags), made once; null when it has none. */
+    private fun coverArt(
+        id: Long,
+        audio: File,
+    ): File? {
+        val file = offlineFiles.audioThumbnail(id)
+        if (file.isFile && file.length() > 0) return file
+        return try {
+            MediaMetadataRetriever().use { retriever ->
+                retriever.setDataSource(audio.absolutePath)
+                val bytes = retriever.embeddedPicture ?: return null
+                val options = BitmapFactory.Options().apply { inSampleSize = 2 }
+                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options) ?: return null
+                writeJpeg(bitmap, file)
+            }
+        } catch (e: Exception) {
+            Log.w(LOG_TAG, "No cover art for $id: ${e.message}")
+            null
+        }
+    }
+
+    private fun writeJpeg(
+        bitmap: Bitmap,
+        file: File,
+    ): File {
+        FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.JPEG, 80, it) }
+        bitmap.recycle()
+        return file
+    }
+
+    fun setTab(tab: DownloadsTab) = _state.update { it.copy(tab = tab) }
 
     fun pause(id: Long) = offlineVideos.pause(id)
 
@@ -206,17 +274,19 @@ class DownloadsViewModel(
 
     fun deleteAll() {
         viewModelScope.launch {
-            _player.value?.stop()
+            playback.stop()
             offlineVideos.removeAll()
         }
     }
 
-    /** New playlist order, after a drag. */
+    /** New order of the open tab's playlist, after a drag. */
     fun setOrder(ids: List<Long>) {
-        playlist.setOrder(ids)
+        val audio = _state.value.audioTab
+        playlist.setOrder(ids, audio)
         val byId = _state.value.completed.associateBy { it.id }
-        _state.update { it.copy(completed = ids.mapNotNull(byId::get)) }
-        syncPlayer()
+        val ordered = ids.mapNotNull(byId::get)
+        _state.update { if (audio) it.copy(episodes = ordered) else it.copy(videos = ordered) }
+        playback.sync(ordered.map(::entry), audio)
     }
 
     fun move(
@@ -235,14 +305,12 @@ class DownloadsViewModel(
     }
 
     fun setAutoplay(value: Boolean) {
-        playlist.autoplay = value
-        _player.value?.pauseAtEndOfMediaItems = !value
+        playback.setAutoplay(value)
         _state.update { it.copy(autoplay = value) }
     }
 
     fun setLoop(value: Boolean) {
-        playlist.loop = value
-        _player.value?.repeatMode = if (value) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
+        playback.setLoop(value)
         _state.update { it.copy(loop = value) }
     }
 
@@ -251,121 +319,19 @@ class DownloadsViewModel(
         _state.update { it.copy(removeWatched = value) }
     }
 
-    /** Plays the downloads in order, starting at [id] (or the first). */
+    fun setBackground(value: Boolean) = playback.setBackground(value)
+
+    /** Plays the open tab's downloads in order, starting at [id] (or the first). */
     fun play(id: Long? = null) {
-        val ids = _state.value.completed.map { it.id }
-        if (ids.isEmpty()) return
-        val player = _player.value ?: createPlayer()
-        if (playerIds(player) != ids) {
-            player.setMediaSources(ids.map(::mediaSource))
-        }
-        val index = id?.let(ids::indexOf)?.takeIf { it >= 0 } ?: 0
-        player.seekTo(index, 0L)
-        player.prepare()
-        player.play()
+        playback.play(_state.value.completed.map(::entry), id)
     }
 
-    fun closePlayer() {
-        _player.value?.release()
-        _player.value = null
-        _state.update { it.copy(playingId = null, isPlaying = false) }
-    }
+    fun closePlayer() = playback.stop()
 
-    private fun createPlayer(): ExoPlayer {
-        val player =
-            ExoPlayer.Builder(getApplication()).build().apply {
-                pauseAtEndOfMediaItems = !_state.value.autoplay
-                repeatMode = if (_state.value.loop) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
-                addListener(
-                    object : Player.Listener {
-                        override fun onMediaItemTransition(
-                            mediaItem: MediaItem?,
-                            reason: Int,
-                        ) {
-                            val finished = lastPlayingId
-                            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && finished != null) {
-                                watched(finished)
-                            }
-                            lastPlayingId = mediaItem?.mediaId?.toLongOrNull()
-                            _state.update { it.copy(playingId = lastPlayingId) }
-                        }
-
-                        override fun onPlaybackStateChanged(playbackState: Int) {
-                            if (playbackState == Player.STATE_ENDED) {
-                                lastPlayingId?.let(::watched)
-                            }
-                        }
-
-                        override fun onIsPlayingChanged(isPlaying: Boolean) {
-                            _state.update { it.copy(isPlaying = isPlaying) }
-                        }
-                    },
-                )
-            }
-        _player.value = player
-        return player
-    }
-
-    private fun watched(id: Long) {
-        if (_state.value.removeWatched) delete(id)
-    }
-
-    private fun mediaSource(id: Long): MediaSource {
-        val context = getApplication<android.app.Application>()
-        val saved = savedFiles.getValue(id)
-        val factory = DefaultMediaSourceFactory(context)
-        val videoItem =
-            MediaItem
-                .Builder()
-                .setMediaId(id.toString())
-                .setUri(Uri.fromFile(saved.video))
-                .setSubtitleConfigurations(
-                    saved.subtitles.map { file ->
-                        MediaItem.SubtitleConfiguration
-                            .Builder(Uri.fromFile(file))
-                            .setMimeType(MimeTypes.TEXT_VTT)
-                            .setLanguage(file.name.split('.').getOrNull(2) ?: "en")
-                            .build()
-                    },
-                ).build()
-        val videoSource = factory.createMediaSource(videoItem)
-        return saved.audio?.let { audio ->
-            MergingMediaSource(videoSource, factory.createMediaSource(MediaItem.fromUri(Uri.fromFile(audio))))
-        } ?: videoSource
-    }
-
-    private fun playerIds(player: Player): List<Long> = (0 until player.mediaItemCount).mapNotNull { player.getMediaItemAt(it).mediaId.toLongOrNull() }
-
-    /** Makes the player's playlist match the list: removed, added and moved videos. */
-    private fun syncPlayer() {
-        val player = _player.value ?: return
-        val wanted = _state.value.completed.map { it.id }
-        val have = playerIds(player).toMutableList()
-        for (index in have.indices.reversed()) {
-            if (have[index] !in wanted) {
-                player.removeMediaItem(index)
-                have.removeAt(index)
-            }
-        }
-        for (id in wanted) {
-            if (id !in have && savedFiles.containsKey(id)) {
-                player.addMediaSource(mediaSource(id))
-                have.add(id)
-            }
-        }
-        wanted.forEachIndexed { target, id ->
-            val from = have.indexOf(id)
-            if (from >= 0 && from != target) {
-                player.moveMediaItem(from, target)
-                have.add(target, have.removeAt(from))
-            }
-        }
-        if (player.mediaItemCount == 0) closePlayer()
-    }
+    fun onAppHidden() = playback.onAppHidden()
 
     override fun onCleared() {
-        _player.value?.release()
-        _player.value = null
+        playback.onScreenGone()
         super.onCleared()
     }
 

@@ -3,6 +3,7 @@ package com.nononsenseapps.feeder.di
 import com.nononsenseapps.feeder.model.FeedParser
 import com.nononsenseapps.feeder.model.FullTextParser
 import com.nononsenseapps.feeder.model.RssLocalSync
+import com.nononsenseapps.feeder.model.offline.DownloadsPlayback
 import com.nononsenseapps.feeder.model.offline.DownloadsPlaylist
 import com.nononsenseapps.feeder.model.offline.OfflineDownloader
 import com.nononsenseapps.feeder.model.offline.OfflineFiles
@@ -35,4 +36,5 @@ val networkModule =
         bind<OfflineDownloader>() with singleton { OfflineDownloader(di) }
         bind<OfflineVideos>() with singleton { OfflineVideos(di) }
         bind<DownloadsPlaylist>() with singleton { DownloadsPlaylist(instance()) }
+        bind<DownloadsPlayback>() with singleton { DownloadsPlayback(di) }
     }
