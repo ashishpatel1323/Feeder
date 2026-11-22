@@ -22,6 +22,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
 import com.nononsenseapps.feeder.base.diAwareViewModel
+import com.nononsenseapps.feeder.db.room.ID_ALL_FEEDS
 import com.nononsenseapps.feeder.db.room.ID_UNSET
 import com.nononsenseapps.feeder.ui.MainActivityViewModel
 import com.nononsenseapps.feeder.ui.NavigationDeepLinkViewModel
@@ -311,6 +312,10 @@ data object EditFeedDestination : NavigationDestination(
             },
             onShowArticles = { feedId ->
                 FeedDestination.navigate(navController, feedId = feedId)
+            },
+            onDeleted = {
+                // The article and feed screens behind this page are gone with the feed
+                FeedDestination.navigate(navController, feedId = ID_ALL_FEEDS)
             },
         )
     }

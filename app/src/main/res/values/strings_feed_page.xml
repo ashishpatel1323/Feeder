@@ -30,4 +30,14 @@
     <item quantity="one">%1$d article stored</item>
     <item quantity="other">%1$d articles stored</item>
   </plurals>
+  <string name="delete_feed_confirm_title">Delete %1$s?</string>
+  <plurals name="delete_feed_confirm_articles">
+    <item quantity="one">The feed and its %1$d article will be deleted.</item>
+    <item quantity="other">The feed and all its %1$d articles will be deleted.</item>
+  </plurals>
+  <plurals name="delete_feed_confirm_saved">
+    <item quantity="one">That includes %1$d saved article.</item>
+    <item quantity="other">That includes %1$d saved articles.</item>
+  </plurals>
+  <string name="delete_feed_confirm_sync">It is also deleted on your other synced devices. This can\'t be undone.</string>
 </resources>

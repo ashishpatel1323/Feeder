@@ -1,6 +1,7 @@
 package com.nononsenseapps.feeder.ui.compose.editfeed
 
 import android.text.format.DateUtils
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,9 +16,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -175,6 +179,7 @@ fun FeedStatsSection(
     lastSync: Instant?,
     onShowArticles: () -> Unit,
     modifier: Modifier = Modifier,
+    onDelete: (() -> Unit)? = null,
 ) {
     val never = stringResource(R.string.feed_stats_never)
     Column(
@@ -186,16 +191,35 @@ fun FeedStatsSection(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Button(onClick = onShowArticles, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.AutoMirrored.Filled.List, contentDescription = null)
-            Spacer(Modifier.size(8.dp))
-            Text(
-                if (stats.unread > 0) {
-                    stringResource(R.string.feed_stats_show_articles_unread, stats.unread)
-                } else {
-                    stringResource(R.string.feed_stats_show_articles)
-                },
-            )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Button(onClick = onShowArticles, modifier = Modifier.weight(1f)) {
+                Icon(Icons.AutoMirrored.Filled.List, contentDescription = null)
+                Spacer(Modifier.size(8.dp))
+                Text(
+                    if (stats.unread > 0) {
+                        stringResource(R.string.feed_stats_show_articles_unread, stats.unread)
+                    } else {
+                        stringResource(R.string.feed_stats_show_articles)
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (onDelete != null) {
+                OutlinedButton(
+                    onClick = onDelete,
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                ) {
+                    Icon(Icons.Default.Delete, contentDescription = null)
+                    Spacer(Modifier.size(8.dp))
+                    Text(stringResource(R.string.delete_feed), maxLines = 1)
+                }
+            }
         }
 
         Text(

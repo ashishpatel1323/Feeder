@@ -11,6 +11,7 @@ import com.nononsenseapps.feeder.archmodel.PREF_VAL_OPEN_WITH_READER
 import com.nononsenseapps.feeder.archmodel.PREF_VAL_OPEN_WITH_WEBVIEW
 import com.nononsenseapps.feeder.archmodel.Repository
 import com.nononsenseapps.feeder.background.runOnceRssSync
+import com.nononsenseapps.feeder.background.runOnceSyncChainSendRead
 import com.nononsenseapps.feeder.base.DIAwareViewModel
 import com.nononsenseapps.feeder.db.room.Feed
 import com.nononsenseapps.feeder.db.room.FeedItemDao
@@ -160,6 +161,17 @@ class EditFeedScreenViewModel(
                 }
         }
     }
+
+    /**
+     * Deletes the feed and all its articles, then syncs right away so the other devices delete
+     * it too (Feeder's own sync sends a deletion for a feed it knew but is gone here).
+     */
+    fun deleteFeed(onDeleted: () -> Unit) =
+        viewModelScope.launch {
+            repository.deleteFeeds(listOf(feedId))
+            runOnceSyncChainSendRead(di)
+            onDeleted()
+        }
 
     fun saveAndRequestSync(action: (Long) -> Unit) =
         viewModelScope.launch {

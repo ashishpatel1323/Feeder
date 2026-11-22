@@ -1,8 +1,8 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { feedDisplayTitle, OPEN_WITH_BROWSER, OPEN_WITH_READER, opensInBrowser, updateFeed, type Feed, type Item } from '../lib/db'
 import { computeFeedStats, noStats, timeAgo } from '../lib/feedstats'
 import { syncNow } from '../lib/sync2'
-import { EditFeedForm } from './Dialogs'
+import { DeleteFeedDialog, deleteFeedEverywhere, EditFeedForm } from './Dialogs'
 import { Icon } from './Icon'
 import { StatsPanel } from './ManageFeeds'
 import { FeedIcon } from './Sidebar'
@@ -23,6 +23,7 @@ interface Props {
  */
 export function FeedPage(p: Props) {
   const f = p.feed
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const stats = useMemo(() => computeFeedStats(p.items.filter((i) => i.feedUrl === p.url)).get(p.url) ?? noStats(), [p.items, p.url])
 
   if (!f) {
@@ -43,6 +44,12 @@ export function FeedPage(p: Props) {
 
   const title = feedDisplayTitle(f)
   const openWith = opensInBrowser(f) ? OPEN_WITH_BROWSER : f.openArticlesWith === OPEN_WITH_READER ? OPEN_WITH_READER : ''
+  const remove = async () => {
+    setConfirmDelete(false)
+    await deleteFeedEverywhere(f.url)
+    p.toast('Feed deleted')
+    p.onBack()
+  }
   const setOpenWith = async (v: string) => {
     if (await updateFeed(f.url, { openArticlesWith: v })) syncNow().catch(() => undefined)
   }
@@ -65,6 +72,10 @@ export function FeedPage(p: Props) {
           <button type="button" className="mf-btn primary" onClick={() => p.onShowArticles(f.url)}>
             <Icon name="article" size={18} />
             <span>Show articles{stats.unread ? ` (${stats.unread} unread)` : ''}</span>
+          </button>
+          <button type="button" className="mf-btn danger" title="Delete this feed and its articles" onClick={() => setConfirmDelete(true)}>
+            <Icon name="delete" size={18} />
+            <span>Delete feed</span>
           </button>
         </header>
 
@@ -91,6 +102,9 @@ export function FeedPage(p: Props) {
           <EditFeedForm key={f.url} url={f.url} inline onDone={() => undefined} onDeleted={p.onBack} toast={p.toast} />
         </section>
       </div>
+      {confirmDelete ? (
+        <DeleteFeedDialog title={title} articles={stats.stored} saved={stats.saved} onConfirm={remove} onClose={() => setConfirmDelete(false)} />
+      ) : null}
     </section>
   )
 }
