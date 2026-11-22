@@ -31,4 +31,16 @@
     <item name="android:windowContentOverlay">@null</item>
     <item name="android:windowBackground">@null</item>
   </style>
+
+  <!-- Share sheet "Save to Feeder": a small sheet over the app the link came from -->
+  <style name="AppThemeTranslucent" parent="Theme.MaterialComponents.Light.NoActionBar">
+    <item name="windowActionBar">false</item>
+    <item name="windowNoTitle">true</item>
+    <item name="colorPrimary">@color/primary</item>
+    <item name="android:windowIsTranslucent">true</item>
+    <item name="android:windowBackground">@android:color/transparent</item>
+    <item name="android:windowContentOverlay">@null</item>
+    <item name="android:backgroundDimEnabled">true</item>
+    <item name="android:windowAnimationStyle">@android:style/Animation.Translucent</item>
+  </style>
 </resources>

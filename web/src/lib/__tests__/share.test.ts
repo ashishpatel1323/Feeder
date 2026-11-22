@@ -19,3 +19,10 @@ describe('shared links', () => {
     expect(siteOf('https://www.paulgraham.com/best.html')).toBe('paulgraham.com')
   })
 })
+
+describe('same keys as Android (SharedLinksTest.kt)', () => {
+  it('normalizes the same way', () => {
+    expect(normalizeLink('https://youtu.be/dQw4w9WgXcQ?si=abc')).toBe('https://www.youtube.com/watch?v=dQw4w9WgXcQ')
+    expect(normalizeLink('https://example.com')).toBe('https://example.com/')
+  })
+})
