@@ -23,6 +23,8 @@ interface Props {
   /** From the right-click menu and the selection bar: one article or all selected ones. */
   onSetRead: (items: Item[], read: boolean) => void
   onDelete: (items: Item[]) => void
+  /** Opens the feed's own page (stats and settings). */
+  onOpenFeed: (url: string) => void
 }
 
 const SHOWS: [ShowFilter, string][] = [
@@ -426,7 +428,20 @@ export function ArticleList(p: Props) {
                         <div className="row-main">
                           <div className="row-title">{item.title || '(no title)'}</div>
                           <div className="row-meta">
-                            <span className="row-feed">{feedDisplayTitle(feed)}</span>
+                            <span
+                              className="row-feed"
+                              role="link"
+                              tabIndex={-1}
+                              title="Open this feed's page: stats and settings"
+                              onClick={(e) => {
+                                // While picking articles, a click anywhere on the row picks it
+                                if (picked.size || e.shiftKey || e.metaKey || e.ctrlKey) return
+                                e.stopPropagation()
+                                p.onOpenFeed(item.feedUrl)
+                              }}
+                            >
+                              {feedDisplayTitle(feed)}
+                            </span>
                             <span>{relativeTime(item.sortTime)}</span>
                             {pos ? (
                               <span className="row-video" title="Where you left this video">

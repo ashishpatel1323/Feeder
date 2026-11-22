@@ -14,6 +14,7 @@ import { ArticleList } from './components/ArticleList'
 import { Reader } from './components/Reader'
 import { AddFeedDialog, EditFeedDialog, SettingsDialog } from './components/Dialogs'
 import { ManageFeeds } from './components/ManageFeeds'
+import { FeedPage } from './components/FeedPage'
 import { HighlightsPage } from './components/Highlights'
 import { combinedSubject, ShareDialog, type ShareSubject } from './components/ShareDialog'
 import { articlePicture, deleteHighlight } from './lib/highlights'
@@ -26,6 +27,17 @@ const isFeedsHash = () => window.location.hash === FEEDS_HASH
 /** The Highlights page, also bookmarkable. */
 const HIGHLIGHTS_HASH = '#/highlights'
 const isHighlightsHash = () => window.location.hash === HIGHLIGHTS_HASH
+/** One feed's own page (stats and settings), opened by clicking a feed name: #/feed/<encoded url>. */
+const FEED_HASH = '#/feed/'
+const feedFromHash = (): string | null => {
+  const h = window.location.hash
+  if (!h.startsWith(FEED_HASH)) return null
+  try {
+    return decodeURIComponent(h.slice(FEED_HASH.length)) || null
+  } catch {
+    return null
+  }
+}
 
 type Dialog = { kind: 'settings' } | { kind: 'add' } | { kind: 'edit'; url: string } | null
 
@@ -76,6 +88,9 @@ export default function App() {
   const [dialog, setDialog] = useState<Dialog>(null)
   const [managing, setManaging] = useState(isFeedsHash)
   const [highlightsPage, setHighlightsPage] = useState(isHighlightsHash)
+  const [feedPage, setFeedPage] = useState<string | null>(feedFromHash)
+  // Whether the feed page was opened from inside the app, so its Back button can go back there
+  const feedPageFromApp = useRef(false)
   const [focusHighlight, setFocusHighlight] = useState<string | null>(null)
   const [pageShare, setPageShare] = useState<ShareSubject | null>(null)
   const allHighlights = useLiveQuery(() => db.highlights.toArray(), []) ?? []
@@ -83,6 +98,7 @@ export default function App() {
     const onHash = () => {
       setManaging(isFeedsHash())
       setHighlightsPage(isHighlightsHash())
+      setFeedPage(feedFromHash())
     }
     window.addEventListener('hashchange', onHash)
     window.addEventListener('popstate', onHash)
@@ -98,6 +114,10 @@ export default function App() {
     }
     setManaging(on)
     if (on) setHighlightsPage(false)
+    if (on) {
+      setFeedPage(null)
+      feedPageFromApp.current = false
+    }
   }, [])
   const showHighlights = useCallback((on: boolean) => {
     if (on !== isHighlightsHash()) {
@@ -106,7 +126,33 @@ export default function App() {
     }
     setHighlightsPage(on)
     if (on) setManaging(false)
+    if (on) {
+      setFeedPage(null)
+      feedPageFromApp.current = false
+    }
   }, [])
+  const openFeedPage = useCallback((url: string) => {
+    feedPageFromApp.current = true
+    window.location.hash = FEED_HASH + encodeURIComponent(url)
+    setFeedPage(url)
+    setManaging(false)
+    setHighlightsPage(false)
+  }, [])
+  /** Leaves the feed page for the article list. */
+  const leaveFeedPage = useCallback(() => {
+    feedPageFromApp.current = false
+    if (feedFromHash()) history.pushState(null, '', window.location.pathname + window.location.search)
+    setFeedPage(null)
+  }, [])
+  /** Back: to wherever the feed page was opened from (Manage feeds, the reader…). */
+  const closeFeedPage = useCallback(() => {
+    if (feedPageFromApp.current) {
+      feedPageFromApp.current = false
+      history.back()
+      return
+    }
+    leaveFeedPage()
+  }, [leaveFeedPage])
   const [refreshing, setRefreshing] = useState<string | null>(null)
   const [toastMsg, setToastMsg] = useState<{ msg: string; action?: ToastAction } | null>(null)
   const [autoplay, setAutoplay] = useState(false)
@@ -276,8 +322,9 @@ export default function App() {
       if (dialog || e.ctrlKey || e.metaKey || e.altKey || /INPUT|TEXTAREA|SELECT/.test(t.tagName)) return
       // Any other modal (e.g. the Sort & group sheet) owns the keyboard while open
       if (document.querySelector('[aria-modal="true"]') || t.closest?.('[aria-modal="true"]')) return
-      if (managing || highlightsPage) {
+      if (managing || highlightsPage || feedPage) {
         if (e.key === 'Escape') {
+          if (feedPage) closeFeedPage()
           showManage(false)
           showHighlights(false)
           e.preventDefault()
@@ -331,7 +378,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [dialog, visibleOrder, openId, nextId, prevId, goNext, goPrev, open, openItem, pane, toggleNav, managing, showManage, highlightsPage, showHighlights])
+  }, [dialog, visibleOrder, openId, nextId, prevId, goNext, goPrev, open, openItem, pane, toggleNav, managing, showManage, highlightsPage, showHighlights, feedPage, closeFeedPage])
 
   const markAllRead = async () => {
     const ids = groups.flatMap((g) => g.items).filter((i) => !i.read).map((i) => i.id)
@@ -424,7 +471,7 @@ export default function App() {
     : 'Not syncing'
 
   return (
-    <div className={`app pane-${pane}${drawer ? ' drawer-open' : ''}${navCollapsed ? ' nav-collapsed' : ''}${managing || highlightsPage ? ' page-feeds' : ''}`}>
+    <div className={`app pane-${pane}${drawer ? ' drawer-open' : ''}${navCollapsed ? ' nav-collapsed' : ''}${managing || highlightsPage || feedPage ? ' page-feeds' : ''}`}>
       <div className="drawer-scrim" onClick={() => setDrawer(false)} />
       <Sidebar
         feeds={feedList}
@@ -436,6 +483,7 @@ export default function App() {
           setPane('list')
           showManage(false)
           showHighlights(false)
+          if (feedPage) leaveFeedPage()
         }}
         highlightCount={allHighlights.length}
         showingHighlights={highlightsPage}
@@ -472,8 +520,22 @@ export default function App() {
           }}
           toast={toast}
         />
+      ) : feedPage ? (
+        <FeedPage
+          url={feedPage}
+          feed={feeds.get(feedPage)}
+          items={items}
+          onBack={closeFeedPage}
+          onShowArticles={(url) => {
+            setSelection({ kind: 'feed', url })
+            setPane('list')
+            leaveFeedPage()
+          }}
+          toast={toast}
+        />
       ) : managing ? (
         <ManageFeeds
+          onOpenFeed={openFeedPage}
           feeds={feedList}
           items={items}
           onBack={() => showManage(false)}
@@ -495,9 +557,10 @@ export default function App() {
         onDeleteRead={deleteRead}
         onSetRead={setReadFromList}
         onDelete={deleteFromList}
+        onOpenFeed={openFeedPage}
         />
       )}
-      {managing || highlightsPage ? null : openItem ? (
+      {managing || highlightsPage || feedPage ? null : openItem ? (
         <Reader
           item={openItem}
           feed={feeds.get(openItem.feedUrl)}
@@ -513,6 +576,7 @@ export default function App() {
           toast={toast}
           focusHighlight={focusHighlight}
           onFocusConsumed={() => setFocusHighlight(null)}
+          onOpenFeed={openFeedPage}
         />
       ) : (
         <section className="reader-pane empty-reader">
