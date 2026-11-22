@@ -14,6 +14,7 @@ import { Sidebar } from './components/Sidebar'
 import { ArticleList } from './components/ArticleList'
 import { Reader } from './components/Reader'
 import { FlipMode } from './components/FlipMode'
+import { DownloadsPage } from './components/Downloads'
 import { AddFeedDialog, EditFeedDialog, SettingsDialog } from './components/Dialogs'
 import { ManageFeeds } from './components/ManageFeeds'
 import { FeedPage } from './components/FeedPage'
@@ -29,6 +30,8 @@ const isFeedsHash = () => window.location.hash === FEEDS_HASH
 /** The Highlights page, also bookmarkable. */
 const HIGHLIGHTS_HASH = '#/highlights'
 const isHighlightsHash = () => window.location.hash === HIGHLIGHTS_HASH
+const DOWNLOADS_HASH = '#/downloads'
+const isDownloadsHash = () => window.location.hash === DOWNLOADS_HASH
 /** One feed's own page (stats and settings), opened by clicking a feed name: #/feed/<encoded url>. */
 const FEED_HASH = '#/feed/'
 const feedFromHash = (): string | null => {
@@ -91,6 +94,7 @@ export default function App() {
   const [dialog, setDialog] = useState<Dialog>(null)
   const [managing, setManaging] = useState(isFeedsHash)
   const [highlightsPage, setHighlightsPage] = useState(isHighlightsHash)
+  const [downloadsPage, setDownloadsPage] = useState(isDownloadsHash)
   const [feedPage, setFeedPage] = useState<string | null>(feedFromHash)
   // Whether the feed page was opened from inside the app, so its Back button can go back there
   const feedPageFromApp = useRef(false)
@@ -101,6 +105,7 @@ export default function App() {
     const onHash = () => {
       setManaging(isFeedsHash())
       setHighlightsPage(isHighlightsHash())
+      setDownloadsPage(isDownloadsHash())
       setFeedPage(feedFromHash())
     }
     window.addEventListener('hashchange', onHash)
@@ -117,6 +122,7 @@ export default function App() {
     }
     setManaging(on)
     if (on) setHighlightsPage(false)
+    if (on) setDownloadsPage(false)
     if (on) {
       setFeedPage(null)
       feedPageFromApp.current = false
@@ -129,7 +135,21 @@ export default function App() {
     }
     setHighlightsPage(on)
     if (on) setManaging(false)
+    if (on) setDownloadsPage(false)
     if (on) {
+      setFeedPage(null)
+      feedPageFromApp.current = false
+    }
+  }, [])
+  const showDownloads = useCallback((on: boolean) => {
+    if (on !== isDownloadsHash()) {
+      if (on) window.location.hash = DOWNLOADS_HASH
+      else if (isDownloadsHash()) history.pushState(null, '', window.location.pathname + window.location.search)
+    }
+    setDownloadsPage(on)
+    if (on) {
+      setManaging(false)
+      setHighlightsPage(false)
       setFeedPage(null)
       feedPageFromApp.current = false
     }
@@ -341,11 +361,12 @@ export default function App() {
       if (dialog || e.ctrlKey || e.metaKey || e.altKey || /INPUT|TEXTAREA|SELECT/.test(t.tagName)) return
       // Any other modal (e.g. the Sort & group sheet) owns the keyboard while open
       if (document.querySelector('[aria-modal="true"]') || t.closest?.('[aria-modal="true"]')) return
-      if (managing || highlightsPage || feedPage) {
+      if (managing || highlightsPage || feedPage || downloadsPage) {
         if (e.key === 'Escape') {
           if (feedPage) closeFeedPage()
           showManage(false)
           showHighlights(false)
+          showDownloads(false)
           e.preventDefault()
         }
         return
@@ -400,7 +421,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [dialog, visibleOrder, openId, nextId, prevId, goNext, goPrev, open, openItem, pane, toggleNav, managing, showManage, highlightsPage, showHighlights, feedPage, closeFeedPage, startFlip])
+  }, [dialog, visibleOrder, openId, nextId, prevId, goNext, goPrev, open, openItem, pane, toggleNav, managing, showManage, highlightsPage, showHighlights, downloadsPage, showDownloads, feedPage, closeFeedPage, startFlip])
 
   const markAllRead = async () => {
     const ids = groups.flatMap((g) => g.items).filter((i) => !i.read).map((i) => i.id)
@@ -535,7 +556,7 @@ export default function App() {
     : 'Not syncing'
 
   return (
-    <div className={`app pane-${pane}${drawer ? ' drawer-open' : ''}${navCollapsed ? ' nav-collapsed' : ''}${managing || highlightsPage || feedPage ? ' page-feeds' : ''}`}>
+    <div className={`app pane-${pane}${drawer ? ' drawer-open' : ''}${navCollapsed ? ' nav-collapsed' : ''}${managing || highlightsPage || feedPage || downloadsPage ? ' page-feeds' : ''}`}>
       <div className="drawer-scrim" onClick={() => setDrawer(false)} />
       <Sidebar
         feeds={feedList}
@@ -547,6 +568,7 @@ export default function App() {
           setPane('list')
           showManage(false)
           showHighlights(false)
+          showDownloads(false)
           if (feedPage) leaveFeedPage()
         }}
         highlightCount={allHighlights.length}
@@ -554,6 +576,11 @@ export default function App() {
         onHighlights={() => {
           setDrawer(false)
           showHighlights(!highlightsPage)
+        }}
+        showingDownloads={downloadsPage}
+        onDownloads={() => {
+          setDrawer(false)
+          showDownloads(!downloadsPage)
         }}
         onEditFeed={(url) => setDialog({ kind: 'edit', url })}
         onMoveFeed={moveFeed}
@@ -570,7 +597,19 @@ export default function App() {
         collapsed={navCollapsed}
         onToggleCollapsed={toggleNav}
       />
-      {highlightsPage ? (
+      {downloadsPage ? (
+        <DownloadsPage
+          items={items}
+          feeds={feeds}
+          onBack={() => showDownloads(false)}
+          onMenu={() => setDrawer(true)}
+          onOpenArticle={(id) => {
+            showDownloads(false)
+            open(id, [id])
+          }}
+          toast={toast}
+        />
+      ) : highlightsPage ? (
         <HighlightsPage
           highlights={allHighlights}
           onBack={() => showHighlights(false)}
@@ -626,7 +665,7 @@ export default function App() {
         onAddLink={selection.kind === 'saved' ? addLink : undefined}
         />
       )}
-      {managing || highlightsPage || feedPage || flip ? null : openItem ? (
+      {managing || highlightsPage || feedPage || downloadsPage || flip ? null : openItem ? (
         <Reader
           item={openItem}
           feed={feeds.get(openItem.feedUrl)}

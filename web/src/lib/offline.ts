@@ -317,20 +317,50 @@ const videoKey = (videoId: string) => `/offline-video/${videoId}`
 const subsKey = (videoId: string, lang: string) => `/offline-video/${videoId}.${lang}.vtt`
 
 export interface VideoJob {
-  phase: 'mac' | 'transfer' | 'error'
+  /** mac: yt-dlp on the Mac; transfer: copying into this browser; paused: stopped by Pause. */
+  phase: 'mac' | 'transfer' | 'paused' | 'error'
   percent: number
   error?: string
+  /** The article, so the Downloads page can show unfinished downloads after a reload. */
+  itemId?: string
 }
 
-const videoJobs = store<Record<string, VideoJob>>({})
+const JOBS_KEY = 'feeder.videoJobs'
+
+/** Unfinished downloads from before a reload: running ones come back paused. */
+function loadVideoJobs(): Record<string, VideoJob> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(JOBS_KEY) ?? '{}') as Record<string, VideoJob>
+    const out: Record<string, VideoJob> = {}
+    for (const [id, j] of Object.entries(raw)) {
+      if (!j?.itemId) continue
+      out[id] = { ...j, phase: j.phase === 'error' ? 'error' : 'paused' }
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+const videoJobs = store<Record<string, VideoJob>>(typeof localStorage === 'undefined' ? {} : loadVideoJobs())
 const videoAborts = new Map<string, AbortController>()
+const pausing = new Set<string>()
 export const useVideoJobs = () => useStore(videoJobs)
 
 function setVideoJob(videoId: string, v: VideoJob | null) {
+  const old = videoJobs.get()[videoId]
   const next = { ...videoJobs.get() }
-  if (v) next[videoId] = v
+  if (v) next[videoId] = { ...v, itemId: v.itemId ?? old?.itemId }
   else delete next[videoId]
   videoJobs.set(next)
+  // Progress ticks every second; only write when a download starts, stops or changes state
+  if (old?.phase !== v?.phase) {
+    try {
+      localStorage.setItem(JOBS_KEY, JSON.stringify(next))
+    } catch {
+      // private window or full storage: the list just won't survive a reload
+    }
+  }
 }
 
 const ytdlUrl = (action: string, videoId?: string) => {
@@ -378,11 +408,12 @@ const sleep = (ms: number, signal: AbortSignal) =>
 
 /** Downloads the video on the Mac with yt-dlp, then keeps the MP4 in this browser. */
 export async function saveVideo(itemId: string, videoId: string): Promise<void> {
-  if (videoJobs.get()[videoId] && videoJobs.get()[videoId].phase !== 'error') return
+  const current = videoJobs.get()[videoId]
+  if (current && current.phase !== 'error' && current.phase !== 'paused') return
   const ctl = new AbortController()
   videoAborts.set(videoId, ctl)
   const signal = ctl.signal
-  setVideoJob(videoId, { phase: 'mac', percent: 0 })
+  setVideoJob(videoId, { phase: 'mac', percent: current?.phase === 'paused' ? current.percent : 0, itemId })
   try {
     if (!isOnline()) throw new Error('Turn off Offline mode to save videos')
     if (!(await videoSavingAvailable())) throw new Error('Saving videos needs Feeder running on your Mac (localhost) with yt-dlp')
@@ -411,20 +442,34 @@ export async function saveVideo(itemId: string, videoId: string): Promise<void> 
     const cache = await caches.open(VIDEO_CACHE)
     await cache.put(videoKey(videoId), new Response(blob, { headers: { 'content-type': 'video/mp4', 'content-length': String(blob.size) } }))
     await navigator.storage?.persist?.().catch(() => false)
-    await db.items.update(itemId, { offlineVideo: blob.size })
+    await db.items.update(itemId, { offlineVideo: blob.size, offlineVideoAt: Date.now() })
     setVideoJob(videoId, null)
     // Subtitles separately: a video without them is still worth keeping
     void saveSubtitles(itemId, videoId).catch(() => undefined)
   } catch (e) {
-    if (signal.aborted) setVideoJob(videoId, null)
+    if (pausing.delete(videoId)) {
+      // pauseVideo already shows it as paused
+    } else if (signal.aborted) setVideoJob(videoId, null)
     else setVideoJob(videoId, { phase: 'error', percent: 0, error: e instanceof Error ? e.message : String(e) })
   } finally {
     videoAborts.delete(videoId)
   }
 }
 
+/** Stops a download but keeps what yt-dlp saved so far on the Mac; saveVideo resumes it. */
+export function pauseVideo(videoId: string) {
+  const j = videoJobs.get()[videoId]
+  if (!j || j.phase === 'paused' || j.phase === 'error') return
+  pausing.add(videoId)
+  videoAborts.get(videoId)?.abort()
+  if (j.phase === 'mac') void fetch(ytdlUrl('pause', videoId), { method: 'POST' }).catch(() => undefined)
+  setVideoJob(videoId, { ...j, phase: 'paused' })
+}
+
+/** Stops a download (running, paused or failed) and deletes what it saved. */
 export function cancelVideo(videoId: string) {
   videoAborts.get(videoId)?.abort()
+  void fetch(ytdlUrl('cancel', videoId), { method: 'POST' }).catch(() => undefined)
   setVideoJob(videoId, null)
 }
 

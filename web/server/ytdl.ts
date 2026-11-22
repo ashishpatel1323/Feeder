@@ -6,12 +6,14 @@
  *   GET  /api/ytdl/health          { ok, version }
  *   POST /api/ytdl/start?id=VIDEO  starts (or reuses) a download job
  *   GET  /api/ytdl/status?id=VIDEO { state, percent, size, error }
+ *   POST /api/ytdl/pause?id=VIDEO  stops yt-dlp but keeps the partial files; start resumes
+ *   POST /api/ytdl/cancel?id=VIDEO stops yt-dlp and deletes what it saved
  *   GET  /api/ytdl/file?id=VIDEO   the finished MP4; the temp copy is removed once sent
  *   POST /api/ytdl/subs?id=VIDEO   subtitles (own, else YouTube's auto captions) as WebVTT text
  *   POST /api/ytdl/iina?id=VIDEO[&lang=L]  a saved copy from the browser: with lang, a WebVTT
  *                                  track to keep beside it; without, the MP4, then opens it in IINA
  */
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { createReadStream, createWriteStream } from 'node:fs'
 import { pipeline } from 'node:stream/promises'
 import { access, mkdir, mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises'
@@ -25,13 +27,14 @@ const FORMAT = 'bv*[height<=720][vcodec^=avc1]+ba[ext=m4a]/b[height<=720][ext=mp
 const JOB_TTL_MS = 60 * 60_000
 
 interface Job {
-  state: 'running' | 'done' | 'error'
+  state: 'running' | 'done' | 'error' | 'paused'
   percent: number
   error?: string
   dir: string
   file?: string
   size?: number
   started: number
+  child?: ChildProcess
 }
 
 const jobs = new Map<string, Job>()
@@ -65,9 +68,15 @@ function findTools() {
   return tools
 }
 
-function run(bin: string, args: string[], onLine?: (line: string) => void): Promise<{ code: number; err: string; out: string }> {
+function run(
+  bin: string,
+  args: string[],
+  onLine?: (line: string) => void,
+  onChild?: (child: ChildProcess) => void,
+): Promise<{ code: number; err: string; out: string }> {
   return new Promise((resolve) => {
     const child = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    onChild?.(child)
     let out = ''
     let err = ''
     let buf = ''
@@ -88,7 +97,8 @@ function run(bin: string, args: string[], onLine?: (line: string) => void): Prom
 function sweep() {
   const now = Date.now()
   for (const [id, job] of jobs) {
-    if (job.state !== 'running' && now - job.started > JOB_TTL_MS) {
+    // Paused downloads wait for Resume (or Delete) however long that takes
+    if (job.state !== 'running' && job.state !== 'paused' && now - job.started > JOB_TTL_MS) {
       jobs.delete(id)
       void rm(job.dir, { recursive: true, force: true })
     }
@@ -98,9 +108,12 @@ function sweep() {
 async function startJob(id: string): Promise<Job> {
   sweep()
   const existing = jobs.get(id)
-  if (existing && existing.state !== 'error') return existing
-  const dir = await mkdtemp(join(tmpdir(), 'feeder-ytdl-'))
-  const job: Job = { state: 'running', percent: 0, dir, started: Date.now() }
+  if (existing && existing.state !== 'error' && existing.state !== 'paused') return existing
+  // Resuming reuses the folder: yt-dlp carries on from its .part files
+  const resumed = existing?.state === 'paused' ? existing : null
+  const dir = resumed?.dir ?? (await mkdtemp(join(tmpdir(), 'feeder-ytdl-')))
+  if (existing && !resumed) void rm(existing.dir, { recursive: true, force: true })
+  const job: Job = { state: 'running', percent: resumed?.percent ?? 0, dir, started: Date.now() }
   jobs.set(id, job)
   const { ytdlp, ffmpeg } = await findTools()
   const args = [
@@ -108,7 +121,7 @@ async function startJob(id: string): Promise<Job> {
     '--merge-output-format', 'mp4',
     '--no-playlist',
     '--newline',
-    '--no-part',
+    '--continue',
     '-o', join(dir, '%(id)s.%(ext)s'),
     ...(ffmpeg ? ['--ffmpeg-location', ffmpeg] : []),
     `https://www.youtube.com/watch?v=${id}`,
@@ -116,14 +129,28 @@ async function startJob(id: string): Promise<Job> {
   // Video then audio: the first stream counts for most of the bar
   let stream = 0
   let lastPct = 0
-  void run(ytdlp, args, (line) => {
-    const m = line.match(/^\[download\]\s+([\d.]+)%/)
-    if (!m) return
-    const pct = Number(m[1])
-    if (pct < lastPct - 20) stream++
-    lastPct = pct
-    job.percent = Math.min(99, stream === 0 ? pct * 0.85 : 85 + pct * 0.15)
-  }).then(async ({ code, err }) => {
+  void run(
+    ytdlp,
+    args,
+    (line) => {
+      // A finished stream on resume reports "has already been downloaded": move on to the next
+      if (/has already been downloaded/.test(line)) {
+        stream++
+        lastPct = 0
+        return
+      }
+      const m = line.match(/^\[download\]\s+([\d.]+)%/)
+      if (!m) return
+      const pct = Number(m[1])
+      if (pct < lastPct - 20) stream++
+      lastPct = pct
+      job.percent = Math.max(job.percent, Math.min(99, stream === 0 ? pct * 0.85 : 85 + pct * 0.15))
+    },
+    (child) => (job.child = child),
+  ).then(async ({ code, err }) => {
+    job.child = undefined
+    // Paused or deleted while running: pause/cancel already set the state
+    if (jobs.get(id) !== job || job.state !== 'running') return
     if (code !== 0) {
       job.state = 'error'
       job.error = code === -1 ? 'yt-dlp is not installed on this Mac' : err.trim().split('\n').pop() || `yt-dlp exited with ${code}`
@@ -254,6 +281,24 @@ export async function ytdlMiddleware(req: IncomingMessage, res: ServerResponse, 
     if (!ID.test(id)) return send(res, 400, { error: 'Bad video id' })
     if (action === 'start' && req.method === 'POST') return send(res, 200, status(await startJob(id)))
     if (action === 'status') return send(res, 200, status(jobs.get(id)))
+    if (action === 'pause' && req.method === 'POST') {
+      const job = jobs.get(id)
+      if (job?.state === 'running') {
+        job.state = 'paused'
+        job.child?.kill('SIGINT')
+      }
+      return send(res, 200, status(job))
+    }
+    if (action === 'cancel' && req.method === 'POST') {
+      const job = jobs.get(id)
+      if (job) {
+        jobs.delete(id)
+        job.child?.kill('SIGINT')
+        // yt-dlp may still be writing for a moment after the signal
+        setTimeout(() => void rm(job.dir, { recursive: true, force: true }), 1500)
+      }
+      return send(res, 200, status(undefined))
+    }
     if (action === 'subs' && req.method === 'POST') return send(res, 200, { tracks: await subtitles(id) })
     if (action === 'iina' && req.method === 'POST') {
       const lang = url.searchParams.get('lang')

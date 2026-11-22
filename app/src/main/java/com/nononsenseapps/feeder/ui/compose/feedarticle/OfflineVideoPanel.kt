@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DownloadForOffline
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -112,6 +113,25 @@ fun OfflineVideoPanel(
                     }
                     TextButton(onClick = { videos.dismissError(itemId) }) {
                         Text(stringResource(android.R.string.cancel))
+                    }
+                }
+            }
+
+            job != null && job.phase == VideoPhase.PAUSED -> {
+                LinearProgressIndicator(progress = { job.overall / 100f }, modifier = Modifier.fillMaxWidth())
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        stringResource(R.string.downloads_paused_percent, job.overall.toInt()),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = { videos.resume(itemId) }, enabled = !offlineMode) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = null)
+                        Text(stringResource(R.string.downloads_resume), modifier = Modifier.padding(start = 4.dp))
+                    }
+                    TextButton(onClick = { videos.cancel(itemId) }) {
+                        Icon(Icons.Default.Close, contentDescription = null)
+                        Text(stringResource(R.string.offline_stop), modifier = Modifier.padding(start = 4.dp))
                     }
                 }
             }

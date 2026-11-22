@@ -564,6 +564,7 @@ private fun SeekBar(
 ) {
     var drag by remember { mutableStateOf<Float?>(null) }
     var width by remember { mutableFloatStateOf(1f) }
+
     fun fractionAt(x: Float) = (x / width).coerceIn(0f, 1f)
     val gestures =
         if (interactive && duration > 0) {
@@ -608,6 +609,7 @@ private fun SeekBar(
         val top = size.height - barHeight - (if (interactive) 6.dp.toPx() else 0f)
         val played = drag ?: (position.toFloat() / duration).coerceIn(0f, 1f)
         val loaded = (buffered.toFloat() / duration).coerceIn(0f, 1f)
+
         fun bar(
             from: Float,
             to: Float,
@@ -1035,13 +1037,16 @@ internal fun DownloadVideoButton(
     val jobs by offlineVideos.jobs.collectAsState()
     val job = jobs[itemId]
     val label =
-        if (job != null && job.phase != VideoPhase.ERROR) {
-            stringResource(R.string.video_downloading, job.percent.toInt())
-        } else {
-            stringResource(R.string.video_download)
+        when {
+            job == null || job.phase == VideoPhase.ERROR -> stringResource(R.string.video_download)
+            job.phase == VideoPhase.PAUSED -> stringResource(R.string.downloads_paused_percent, job.overall.toInt())
+            else -> stringResource(R.string.video_downloading, job.overall.toInt())
         }
     InfoButton(Icons.Outlined.Download, label, padding) {
-        if (job == null || job.phase == VideoPhase.ERROR) offlineVideos.save(itemId, link)
+        when {
+            job == null || job.phase == VideoPhase.ERROR -> offlineVideos.save(itemId, link)
+            job.phase == VideoPhase.PAUSED -> offlineVideos.resume(itemId)
+        }
     }
 }
 
@@ -1081,8 +1086,7 @@ private val SLEEP_MINUTES = listOf(10, 15, 30, 45, 60, 90)
 private fun clock(ms: Long): String = VideoPositions.formatClock((ms / 1000).toInt())
 
 @Composable
-private fun speedLabel(speed: Float): String =
-    if (speed == 1f) stringResource(R.string.player_speed_normal) else "${speed.toString().removeSuffix(".0")}x"
+private fun speedLabel(speed: Float): String = if (speed == 1f) stringResource(R.string.player_speed_normal) else "${speed.toString().removeSuffix(".0")}x"
 
 @Composable
 private fun qualityLabel(state: PlaybackState): String = if (state.height > 0) "${state.height}p" else ""

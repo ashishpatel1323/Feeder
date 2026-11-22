@@ -30,6 +30,7 @@ import com.nononsenseapps.feeder.ui.CommonActivityViewModel
 import com.nononsenseapps.feeder.ui.MainActivityViewModel
 import com.nononsenseapps.feeder.ui.NavigationDeepLinkViewModel
 import com.nononsenseapps.feeder.ui.OpenLinkInDefaultActivityViewModel
+import com.nononsenseapps.feeder.ui.compose.downloads.DownloadsViewModel
 import com.nononsenseapps.feeder.ui.compose.editfeed.CreateFeedScreenViewModel
 import com.nononsenseapps.feeder.ui.compose.editfeed.EditFeedScreenViewModel
 import com.nononsenseapps.feeder.ui.compose.feed.FlipCardTexts
@@ -100,4 +101,5 @@ val archModelModule =
         bindWithComposableViewModelScope<FeedViewModel>()
         bindWithComposableViewModelScope<NavigationDeepLinkViewModel>()
         bindWithComposableViewModelScope<TextSettingsViewModel>()
+        bindWithComposableViewModelScope<DownloadsViewModel>()
     }

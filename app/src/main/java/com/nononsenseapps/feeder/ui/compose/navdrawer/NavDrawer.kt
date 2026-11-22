@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DownloadForOffline
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.UnfoldLess
@@ -89,6 +90,8 @@ fun ScreenWithNavDrawer(
     showFolderControls: Boolean = false,
     onExpandAllTags: () -> Unit = {},
     onCollapseAllTags: () -> Unit = {},
+    downloadsCount: Int = 0,
+    onDownloadsClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -126,6 +129,16 @@ fun ScreenWithNavDrawer(
                     showFolderControls = showFolderControls,
                     onExpandAllTags = onExpandAllTags,
                     onCollapseAllTags = onCollapseAllTags,
+                    downloadsCount = downloadsCount,
+                    onDownloadsClick =
+                        onDownloadsClick?.let { onClick ->
+                            {
+                                coroutineScope.launch {
+                                    drawerState.close()
+                                }
+                                onClick()
+                            }
+                        },
                 )
             }
         },
@@ -144,6 +157,8 @@ fun ListOfFeedsAndTags(
     showFolderControls: Boolean = false,
     onExpandAllTags: () -> Unit = {},
     onCollapseAllTags: () -> Unit = {},
+    downloadsCount: Int = 0,
+    onDownloadsClick: (() -> Unit)? = null,
 ) {
     LazyColumn(
         state = state,
@@ -211,6 +226,20 @@ fun ListOfFeedsAndTags(
                                 onItemClick(item)
                             },
                         )
+                        if (onDownloadsClick != null) {
+                            Feed(
+                                title = stringResource(id = R.string.downloads),
+                                unreadCount = downloadsCount,
+                                onItemClick = onDownloadsClick,
+                                image = {
+                                    Icon(
+                                        Icons.Default.DownloadForOffline,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(24.dp),
+                                    )
+                                },
+                            )
+                        }
                     }
 
                     ContentType.Tag -> {
