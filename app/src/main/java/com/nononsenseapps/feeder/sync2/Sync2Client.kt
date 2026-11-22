@@ -12,6 +12,11 @@ import com.nononsenseapps.feeder.db.room.Sync2ItemKey
 import com.nononsenseapps.feeder.db.room.Sync2Known
 import com.nononsenseapps.feeder.model.offline.OfflineFiles
 import com.nononsenseapps.feeder.model.youtube.VideoPositions
+import com.nononsenseapps.feeder.sharedlinks.LinkInfo
+import com.nononsenseapps.feeder.sharedlinks.SHARED_FEED_URL_STRING
+import com.nononsenseapps.feeder.sharedlinks.SharedLinks
+import com.nononsenseapps.feeder.sharedlinks.isSharedFeed
+import com.nononsenseapps.feeder.sharedlinks.siteOf
 import com.nononsenseapps.feeder.sync.SyncRestClient
 import com.nononsenseapps.feeder.util.logDebug
 import com.squareup.moshi.JsonAdapter
@@ -60,6 +65,7 @@ class Sync2Client(
     private val okHttpClient: OkHttpClient by instance()
     private val oldClient: SyncRestClient by instance()
     private val videoPositions: VideoPositions by instance()
+    private val sharedLinks by lazy { SharedLinks(di) }
     private val offlineFiles: OfflineFiles by instance()
     private val mutex = Mutex()
 
@@ -117,8 +123,7 @@ class Sync2Client(
     // -----------------------------------------------------------------------------------------
     // State (kept in sync2_known under a key no record can have)
 
-    suspend fun getState(): Sync2State =
-        dao.getKnown(STATE_KEY)?.let { stateAdapter.fromJson(it.v) } ?: Sync2State()
+    suspend fun getState(): Sync2State = dao.getKnown(STATE_KEY)?.let { stateAdapter.fromJson(it.v) } ?: Sync2State()
 
     private suspend fun saveState(state: Sync2State) {
         dao.upsertKnown(listOf(Sync2Known(STATE_KEY, stateAdapter.toJson(state), 0)))
@@ -243,8 +248,7 @@ class Sync2Client(
         )
     }
 
-    private suspend fun serverReady(): Boolean =
-        withContext(Dispatchers.IO) { serverReadyBlocking() }
+    private suspend fun serverReady(): Boolean = withContext(Dispatchers.IO) { serverReadyBlocking() }
 
     private fun serverReadyBlocking(): Boolean =
         try {
@@ -291,7 +295,7 @@ class Sync2Client(
                         } ?: continue
                     val kind = payload["k"] as? String ?: continue
                     val key = payload["key"] as? String ?: continue
-                    applyRemote(kind, key, payload["v"], c.ts)
+                    applyRemote(kind, key, payload["v"], c.ts, payload["a"] as? Map<*, *>)
                 }
                 cursor = res.cursor
                 saveState(getState().copy(cursor = cursor))
@@ -332,6 +336,8 @@ class Sync2Client(
         val feeds = repository.getFeedsOrderedByUrl()
         val knownFeeds = dao.getKnownWithPrefix("feed\n").associateBy { it.k.removePrefix("feed\n") }
         for (feed in feeds) {
+            // Shared links are articles, not a feed to subscribe to
+            if (isSharedFeed(feed.url)) continue
             val v = feedValue(feed)
             val kn = knownFeeds[feed.url.toString()]
             if (kn == null || parse(kn.v) != v) {
@@ -394,6 +400,7 @@ class Sync2Client(
         key: String,
         v: Any?,
         ts: Long,
+        article: Map<*, *>? = null,
     ) {
         val k = knownKey(kind, key)
         val kn = dao.getKnown(k)
@@ -428,7 +435,25 @@ class Sync2Client(
                 }
 
                 "saved" -> {
-                    dao.getItemId(feedUrl, guid)?.let { dao.setBookmarked(it, v == true) }
+                    val id = dao.getItemId(feedUrl, guid)
+                    if (id != null) {
+                        dao.setBookmarked(id, v == true)
+                    } else if (v == true && feedUrl == SHARED_FEED_URL_STRING && article != null) {
+                        // A link shared on another device
+                        val read = parse(dao.getKnown(knownKey("read", key))?.v ?: "null") == true
+                        sharedLinks.addFromSync(
+                            link = guid,
+                            info =
+                                LinkInfo(
+                                    title = (article["title"] as? String)?.ifBlank { null } ?: siteOf(guid),
+                                    snippet = article["snippet"] as? String ?: "",
+                                    imageUrl = article["imageUrl"] as? String,
+                                    author = article["author"] as? String,
+                                ),
+                            sortTime = (article["sortTime"] as? Number)?.toLong()?.let { Instant.ofEpochMilli(it) } ?: Instant.ofEpochMilli(ts),
+                            read = read,
+                        )
+                    }
                 }
 
                 "hidden" -> {

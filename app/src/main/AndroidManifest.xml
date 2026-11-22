@@ -139,7 +139,16 @@
         <data android:mimeType="application/xml" />
         <data android:mimeType="application/json" />
       </intent-filter>
-      <!-- Any other URL can be shared with the app -->
+    </activity>
+
+    <!-- Sharing any web page or YouTube video saves it to Saved; "Find feed" there opens the activity above -->
+    <activity
+      android:name=".ui.SaveLinkFromShareActivity"
+      android:exported="true"
+      android:excludeFromRecents="true"
+      android:taskAffinity=""
+      android:label="@string/save_to_feeder"
+      android:theme="@style/AppThemeTranslucent">
       <intent-filter>
         <action android:name="android.intent.action.SEND" />
 
@@ -150,7 +159,6 @@
         <data android:scheme="https" />
         <data android:host="*" />
       </intent-filter>
-      <!-- Also possible to share pure text -->
       <intent-filter>
         <action android:name="android.intent.action.SEND" />
 

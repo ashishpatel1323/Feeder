@@ -8,6 +8,7 @@ import com.nononsenseapps.feeder.archmodel.SettingsStore
 import com.nononsenseapps.feeder.background.runOnceRssSync
 import com.nononsenseapps.feeder.db.room.FeedDao
 import com.nononsenseapps.feeder.model.OPMLParserHandler
+import com.nononsenseapps.feeder.sharedlinks.isSharedFeed
 import com.nononsenseapps.feeder.util.Either
 import com.nononsenseapps.feeder.util.ToastMaker
 import com.nononsenseapps.feeder.util.logDebug
@@ -53,7 +54,8 @@ suspend fun exportOpml(
                             blockedPatterns = settingsStore.blockListPreference.first(),
                             tags = feedDao.loadTags(),
                         ) { tag ->
-                            feedDao.getFeedsByTitle(tag = tag)
+                            // Shared links are not a feed anyone can subscribe to
+                            feedDao.getFeedsByTitle(tag = tag).filterNot { isSharedFeed(it.url) }
                         }
                     }
                 }

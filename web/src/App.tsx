@@ -4,7 +4,8 @@ import { db, FEED_ORDER_KEY, feedDisplayTitle, getKv, hideItems, moveFeedToTag, 
 import type { ToastAction } from './lib/toast'
 import { applyShow, applyToday, buildGroups, selectItems, showCounts, type Selection } from './lib/listquery'
 import { getSettings, offlineNow, updateSettings, useSettings } from './lib/settings'
-import { refreshFeeds } from './lib/refresh'
+import { addFeed, refreshFeeds } from './lib/refresh'
+import { addSharedLink, findLink, SHARED_FEED, SHARED_FEED_URL, undoSharedLink } from './lib/share'
 import { getSyncState, syncNow } from './lib/sync2'
 import { fetchOgImages } from './lib/extras'
 import { readAloud } from './lib/readaloud'
@@ -60,7 +61,8 @@ export default function App() {
   const feedList = useLiveQuery(() => db.feeds.toArray(), []) ?? []
   const items = useLiveQuery(() => db.items.toArray(), []) ?? []
   const syncState = useLiveQuery(() => getSyncState(), [])
-  const feeds = useMemo(() => new Map(feedList.map((f) => [f.url, f])), [feedList])
+  // Shared links belong to a built-in source that is not a real feed (lib/share.ts)
+  const feeds = useMemo(() => new Map([...feedList.map((f) => [f.url, f] as const), [SHARED_FEED_URL, SHARED_FEED] as const]), [feedList])
 
   const [selection, setSelection] = useState<Selection>({ kind: 'all' })
   const [openId, setOpenId] = useState<string | null>(null)
@@ -133,6 +135,12 @@ export default function App() {
     }
   }, [])
   const openFeedPage = useCallback((url: string) => {
+    // Shared links have no feed page: show them in Saved
+    if (url === SHARED_FEED_URL) {
+      setSelection({ kind: 'saved' })
+      setPane('list')
+      return
+    }
     feedPageFromApp.current = true
     window.location.hash = FEED_HASH + encodeURIComponent(url)
     setFeedPage(url)
@@ -436,6 +444,48 @@ export default function App() {
     toast(msg, { label: 'Undo', run: () => void unhideItems(list).then(() => syncNow().catch(() => undefined)) })
   }
 
+  /** Saves a pasted or typed link (web page or YouTube video) to Saved. True when it was added. */
+  const addLink = useCallback(
+    async (text: string): Promise<boolean> => {
+      try {
+        const r = await addSharedLink(text)
+        if (r.kind === 'feed') {
+          toast(`That link is a feed${r.title ? `: ${r.title}` : ''}`, {
+            label: 'Subscribe',
+            run: () =>
+              void addFeed(r.url)
+                .then(() => toast('Subscribed'))
+                .catch((e) => toast(e instanceof Error ? e.message : String(e))),
+          })
+          return false
+        }
+        const name = r.item.title.length > 60 ? `${r.item.title.slice(0, 57)}…` : r.item.title
+        toast(r.existed ? `Already in Saved, moved to the top: ${name}` : `Saved: ${name}`, r.existed ? undefined : { label: 'Undo', run: () => void undoSharedLink(r.item, false).then(() => syncNow().catch(() => undefined)) })
+        syncNow().catch(() => undefined)
+        return true
+      } catch (e) {
+        toast(`Could not add that link: ${e instanceof Error ? e.message : e}`)
+        return false
+      }
+    },
+    [toast],
+  )
+
+  // Pasting a link anywhere (not into a text box) saves it
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const t = e.target as HTMLElement | null
+      if (t && (t.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]') || t.isContentEditable)) return
+      const text = e.clipboardData?.getData('text') ?? ''
+      if (!text || text.length > 2000 || !/https?:\/\//i.test(text) || !findLink(text)) return
+      e.preventDefault()
+      toast('Adding link to Saved…')
+      void addLink(text)
+    }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
+  }, [addLink, toast])
+
   /** Drag and drop in the sidebar and on the Manage feeds page. */
   const moveFeed = async (url: string, tag: string, place?: { beforeUrl: string | null; folderUrls: string[] }) => {
     if (place) {
@@ -573,6 +623,7 @@ export default function App() {
         onDelete={deleteFromList}
         onFlip={startFlip}
         onOpenFeed={openFeedPage}
+        onAddLink={selection.kind === 'saved' ? addLink : undefined}
         />
       )}
       {managing || highlightsPage || feedPage || flip ? null : openItem ? (

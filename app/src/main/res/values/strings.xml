@@ -523,4 +523,14 @@
   <string name="video_download">Download</string>
   <string name="video_downloading">Downloading %1$d%%</string>
   <string name="video_watched">Watched</string>
+  <!-- Sharing a web page or video to Feeder (sharedlinks) -->
+  <string name="save_to_feeder">Save to Feeder</string>
+  <string name="saving_link">Saving to Saved…</string>
+  <string name="added_to_saved">Added to Saved</string>
+  <string name="already_in_saved">Already in Saved, moved to the top</string>
+  <string name="read_now">Read now</string>
+  <string name="find_feed">Find feed</string>
+  <string name="undo">Undo</string>
+  <string name="no_link_shared">There is no link in what was shared</string>
+  <string name="shared_link_full_article">Full article opens in the reader · syncs to web and Mac</string>
 </resources>
