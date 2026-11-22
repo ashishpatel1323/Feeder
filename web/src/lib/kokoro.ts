@@ -42,6 +42,12 @@ class KokoroClient {
   private worker: Worker | null = null
   private nextId = 1
   private pending = new Map<number, { resolve: (a: KokoroAudio) => void; reject: (e: Error) => void }>()
+  /**
+   * Requests not yet sent to the worker. The worker gets one at a time, so the sentence being
+   * read can jump ahead of prefetched ones and requests for passages left behind can be dropped.
+   */
+  private queue: { id: number; text: string; voice: string }[] = []
+  private inFlight: number | null = null
   private listeners = new Set<Listener>()
   private readyWaiters: { resolve: () => void; reject: (e: Error) => void }[] = []
   status: KokoroStatus = { state: 'idle', progress: 0, device: null, error: null }
@@ -73,12 +79,50 @@ class KokoroClient {
     return wait
   }
 
-  generate(text: string, voice: string): Promise<KokoroAudio> {
+  /** Queues speech for [text]; [urgent] puts it ahead of everything still waiting. */
+  generate(text: string, voice: string, urgent = false): { id: number; audio: Promise<KokoroAudio> } {
     const id = this.nextId++
-    return new Promise((resolve, reject) => {
+    const audio = new Promise<KokoroAudio>((resolve, reject) => {
       this.pending.set(id, { resolve, reject })
-      this.ensureWorker().postMessage({ type: 'generate', id, text, voice } satisfies WorkerRequest)
     })
+    if (urgent) this.queue.unshift({ id, text, voice })
+    else this.queue.push({ id, text, voice })
+    this.pump()
+    return { id, audio }
+  }
+
+  /** Moves waiting requests to the front, in the given order. Started or finished ones are left alone. */
+  prioritize(ids: number[]) {
+    const front = ids.map((id) => this.queue.find((q) => q.id === id)).filter((q) => q !== undefined)
+    if (!front.length) return
+    this.queue = [...front, ...this.queue.filter((q) => !front.includes(q))]
+  }
+
+  /** Drops waiting requests other than [keep] and returns their ids (their promises reject). */
+  dropWaiting(keep: Set<number>): number[] {
+    const dropped = this.queue.filter((q) => !keep.has(q.id))
+    if (!dropped.length) return []
+    this.queue = this.queue.filter((q) => keep.has(q.id))
+    const err = new Error('Dropped')
+    for (const q of dropped) {
+      this.pending.get(q.id)?.reject(err)
+      this.pending.delete(q.id)
+    }
+    return dropped.map((q) => q.id)
+  }
+
+  private pump() {
+    if (this.inFlight !== null) return
+    const next = this.queue.shift()
+    if (!next) return
+    this.inFlight = next.id
+    this.ensureWorker().postMessage({ type: 'generate', id: next.id, text: next.text, voice: next.voice } satisfies WorkerRequest)
+  }
+
+  private settled(id: number | undefined) {
+    if (id === undefined || id !== this.inFlight) return
+    this.inFlight = null
+    this.pump()
   }
 
   private reset() {
@@ -87,6 +131,8 @@ class KokoroClient {
     const err = new Error('Voice model restarted')
     this.pending.forEach((p) => p.reject(err))
     this.pending.clear()
+    this.queue = []
+    this.inFlight = null
     this.readyWaiters.forEach((w) => w.reject(err))
     this.readyWaiters = []
     this.set({ state: 'idle', progress: 0, device: null, error: null })
@@ -106,11 +152,13 @@ class KokoroClient {
       } else if (m.type === 'audio') {
         this.pending.get(m.id)?.resolve({ samples: m.samples, sampleRate: m.sampleRate })
         this.pending.delete(m.id)
+        this.settled(m.id)
       } else if (m.type === 'error') {
         const err = new Error(m.message)
         if (m.id !== undefined) {
           this.pending.get(m.id)?.reject(err)
           this.pending.delete(m.id)
+          this.settled(m.id)
         } else {
           this.set({ state: 'error', error: m.message })
           this.readyWaiters.forEach((r) => r.reject(err))
@@ -123,6 +171,8 @@ class KokoroClient {
       this.set({ state: 'error', error: err.message })
       this.pending.forEach((p) => p.reject(err))
       this.pending.clear()
+      this.queue = []
+      this.inFlight = null
       this.readyWaiters.forEach((r) => r.reject(err))
       this.readyWaiters = []
     }

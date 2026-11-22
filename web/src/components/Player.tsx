@@ -6,8 +6,8 @@ import { updateSettings, type Settings } from '../lib/settings'
 import { NATURAL_VOICE } from './Dialogs'
 import { Icon, type IconName } from './Icon'
 
-/** Same speeds as the Android app. */
-const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2]
+/** Same speeds as the Android app. Browsers keep audio audible up to 4× (Firefox mutes above it). */
+const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4]
 // Muted, the ±10 buttons move ten words
 const SKIP_WORDS = 10
 

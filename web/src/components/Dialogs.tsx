@@ -431,7 +431,7 @@ export function SettingsDialog({
         ) : null}
         <label className="row-label">
           Speed
-          <input type="range" min={0.6} max={2.5} step={0.1} value={s.readAloudRate} onChange={(e) => updateSettings({ readAloudRate: Number(e.target.value) })} />
+          <input type="range" min={0.6} max={4} step={0.1} value={s.readAloudRate} onChange={(e) => updateSettings({ readAloudRate: Number(e.target.value) })} />
           <span>{s.readAloudRate.toFixed(1)}×</span>
         </label>
         <label className="check">

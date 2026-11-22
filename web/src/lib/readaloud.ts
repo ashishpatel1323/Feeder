@@ -9,13 +9,17 @@
  * length, like the Android app does for engines without word timings.
  */
 
-import { isKokoroVoice, kokoro, KOKORO_PREFIX, wavBlob, type KokoroAudio } from './kokoro'
+import { isKokoroVoice, kokoro, KOKORO_PREFIX, wavBlob, webGpuAvailable, type KokoroAudio } from './kokoro'
 import { FOOTNOTE_SECTION, isFootnoteLink, isFootnoteMarker, isSkippedLine, speechRemovals } from './speechclean'
 import { minutesLeft, RSVP_DEFAULT_WPM, RSVP_MAX_WPM, RSVP_MIN_WPM, rsvpWords, wordDelay, wordIndexAt, type RsvpWord } from './rsvp'
 
 /** Speaking pace used to estimate times and seek by seconds: about 14 characters a second at 1x. */
 export const CHARS_PER_SECOND = 14
 export const RSVP_WPM_STEP = 25
+/** Natural voice: how much listening to have generated (or queued) past the current sentence. */
+const KOKORO_AHEAD_SECONDS = 25
+const KOKORO_AHEAD_MAX_SENTENCES = 8
+const KOKORO_CACHE_SIZE = 40
 const WPM_KEY = 'feeder.rsvpWpm'
 // The first words after (re)starting the silent reader are shown a little longer so the eye can settle
 const RAMP = [1.8, 1.4, 1.15]
@@ -175,10 +179,14 @@ export class ReadAloudEngine {
   private lang = 'en'
   private kokoroEl: HTMLAudioElement | null = null
   private kokoroUrl: string | null = null
-  private kokoroCache = new Map<string, Promise<KokoroAudio>>()
+  private kokoroCache = new Map<string, { id: number; audio: Promise<KokoroAudio> }>()
   private wordFrame: number | null = null
   /** Use the GPU for the natural voice when the browser supports WebGPU. */
   kokoroGpu = false
+  /** Audio ran up to this point without a pause or skip, so a wait now is a stall. */
+  private kokoroWasPlaying = false
+  private kokoroAdvancing = false
+  private gpuHintShown = false
 
   state: ReadAloudState = {
     status: 'idle',
@@ -447,6 +455,8 @@ export class ReadAloudEngine {
     this.generation++
     cancelSpeech()
     this.stopKokoroAudio()
+    // Nothing to read ahead for any more (the one sentence already being made still finishes)
+    kokoro.dropWaiting(new Set())
     this.clearEstimate()
     highlights()?.delete('ra-sentence')
     highlights()?.delete('ra-word')
@@ -765,6 +775,9 @@ export class ReadAloudEngine {
 
   private speakFrom(index: number, fromOffset: number | null) {
     const gen = ++this.generation
+    // Only moving on to the next sentence by itself keeps counting as uninterrupted playback
+    if (!this.kokoroAdvancing) this.kokoroWasPlaying = false
+    this.kokoroAdvancing = false
     cancelSpeech()
     this.stopKokoroAudio()
     this.clearEstimate()
@@ -873,17 +886,46 @@ export class ReadAloudEngine {
 
   // --- Natural voice (Kokoro): generated on this device, played as audio --------------------
 
-  private kokoroFor(voice: string, text: string): Promise<KokoroAudio> {
+  private kokoroFor(voice: string, text: string): { id: number; audio: Promise<KokoroAudio> } {
     const key = `${voice}\n${text}`
-    let p = this.kokoroCache.get(key)
-    if (!p) {
-      p = kokoro.generate(text, voice)
-      p.catch(() => this.kokoroCache.delete(key))
-      this.kokoroCache.set(key, p)
-      // Keep the last few sentences (going back a sentence is common), drop older ones
-      while (this.kokoroCache.size > 8) this.kokoroCache.delete(this.kokoroCache.keys().next().value!)
+    let entry = this.kokoroCache.get(key)
+    if (!entry) {
+      const made = kokoro.generate(text, voice)
+      entry = made
+      made.audio.catch(() => {
+        if (this.kokoroCache.get(key) === made) this.kokoroCache.delete(key)
+      })
+      this.kokoroCache.set(key, made)
     }
-    return p
+    return entry
+  }
+
+  /**
+   * Asks for the sentence being read (first in line) and enough of the following ones to cover
+   * about KOKORO_AHEAD_SECONDS of listening, so the model keeps working while audio plays instead
+   * of waiting for each sentence to start. Waiting requests outside that window are dropped.
+   */
+  private kokoroWindow(voice: string, index: number, begin: number, end: number) {
+    const current = this.kokoroChunks(begin, end).map((c) => ({ ...c, ...this.kokoroFor(voice, this.text.slice(c.start, c.end)) }))
+    const keep = new Set(current.map((c) => c.id))
+    const aheadChars = KOKORO_AHEAD_SECONDS * CHARS_PER_SECOND * Math.max(1, this.state.rate)
+    let chars = 0
+    for (let i = index + 1; i < this.sentences.length && i <= index + KOKORO_AHEAD_MAX_SENTENCES && chars < aheadChars; i++) {
+      const s = this.sentences[i]
+      for (const c of this.kokoroChunks(s.start, s.end)) keep.add(this.kokoroFor(voice, this.text.slice(c.start, c.end)).id)
+      chars += s.end - s.start
+    }
+    const dropped = new Set(kokoro.dropWaiting(keep))
+    for (const [key, e] of this.kokoroCache) {
+      if (dropped.has(e.id)) this.kokoroCache.delete(key)
+    }
+    kokoro.prioritize(current.map((c) => c.id))
+    // Keep recent audio (going back a sentence is common), drop the oldest beyond that
+    for (const [key, e] of this.kokoroCache) {
+      if (this.kokoroCache.size <= KOKORO_CACHE_SIZE) break
+      if (!keep.has(e.id)) this.kokoroCache.delete(key)
+    }
+    return current
   }
 
   /** The text chunks (absolute offsets) to generate for a sentence. */
@@ -914,17 +956,19 @@ export class ReadAloudEngine {
       this.stop()
       return
     }
-    // Ask for this sentence first (the worker handles requests in order), then the next one,
-    // so it is ready by the time this one ends
-    const chunks = this.kokoroChunks(begin, end).map((c) => ({ ...c, audio: this.kokoroFor(voice, this.text.slice(c.start, c.end)) }))
-    const next = this.sentences[index + 1]
-    if (next) for (const c of this.kokoroChunks(next.start, next.end)) void this.kokoroFor(voice, this.text.slice(c.start, c.end)).catch(() => undefined)
-
+    if (gen !== this.generation) return
+    const chunks = this.kokoroWindow(voice, index, begin, end)
     for (const chunk of chunks) {
       if (gen !== this.generation) return
       let audio: KokoroAudio
+      const waitFrom = performance.now()
       try {
         audio = await chunk.audio
+        // The processor makes speech slower than it plays, so it falls behind; the GPU keeps up
+        if (this.kokoroWasPlaying && performance.now() - waitFrom > 800 && !this.kokoroGpu && !this.gpuHintShown && webGpuAvailable()) {
+          this.gpuHintShown = true
+          this.onError?.('The natural voice is falling behind. Turn on "Use the graphics card" in Settings for smooth playback.')
+        }
       } catch (e) {
         if (gen !== this.generation) return
         console.warn('Natural voice failed', e)
@@ -937,11 +981,13 @@ export class ReadAloudEngine {
         continue
       }
       if (gen !== this.generation) return
+      this.kokoroWasPlaying = true
       const ok = await this.playKokoroChunk(gen, audio, chunk.start, chunk.end)
       if (!ok) return
     }
     if (gen !== this.generation) return
     this.failures = 0
+    this.kokoroAdvancing = true
     this.speakFrom(index + 1, null)
   }
 
