@@ -1,0 +1,127 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Read later mockups</title>
+<style>
+:root{--bg:#fbfdf9;--surface:#fff;--s2:#eef4ee;--s3:#e1ebe2;--text:#191c1a;--t2:#4f5a52;--t3:#75807a;--border:#d6ddd7;--accent:#1f6f4a;--ink:#fff;--soft:#cdeedb;--danger:#b3261e;--yt:#e62117}
+*{box-sizing:border-box}body{margin:0;font:14px/1.45 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:#dfe5df;color:var(--text)}
+svg.i{width:20px;height:20px;fill:currentColor;flex:none}svg.s{width:17px;height:17px}
+.win{width:1440px;height:880px;display:grid;grid-template-columns:268px 1fr;background:var(--bg);overflow:hidden}
+.side{background:var(--s2);border-right:1px solid var(--border);padding:10px 8px;display:flex;flex-direction:column;gap:2px}
+.side .top{display:flex;align-items:center;gap:6px;padding:4px 6px 10px}.side .top b{font-size:17px;flex:1}
+.nav{display:flex;align-items:center;gap:10px;height:38px;padding:0 10px;border-radius:19px;color:var(--t2)}
+.nav .n{margin-left:auto;font-size:12px;color:var(--t3);font-variant-numeric:tabular-nums}
+.nav.sel{background:var(--soft);color:var(--accent);font-weight:600}.nav.sel .n{color:var(--accent)}
+.nav .pin{font-size:10px;letter-spacing:.05em;text-transform:uppercase;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:0 5px;color:var(--t3)}
+.sep{height:1px;background:var(--border);margin:8px 6px}.fh{font-size:12px;color:var(--t3);padding:4px 12px;text-transform:uppercase;letter-spacing:.05em}
+.feed{padding-left:24px}.dot{width:18px;height:18px;border-radius:5px;display:grid;place-items:center;color:#fff;font-size:10px;font-weight:700;flex:none}
+.ib{width:34px;height:34px;border-radius:9px;display:inline-grid;place-items:center;color:var(--t2)}
+.btn{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:9px;border:1px solid var(--border);background:var(--surface);color:var(--text);font:inherit;white-space:nowrap}
+.btn.p{background:var(--accent);color:var(--ink);border-color:var(--accent)}.btn.g{border-color:transparent;background:transparent;color:var(--t2)}.btn.sm{height:28px;padding:0 9px;font-size:13px;border-radius:7px}
+.main{display:grid;grid-template-columns:470px 1fr;min-width:0}
+.list{border-right:1px solid var(--border);display:flex;flex-direction:column;min-width:0}
+.lh{padding:14px 16px 10px;border-bottom:1px solid var(--border)}.lh h2{margin:0 0 10px;font-size:20px;display:flex;align-items:center;gap:8px}.lh h2 small{font-size:13px;color:var(--t3);font-weight:400}
+.add{display:flex;gap:8px}.add .in{flex:1;height:38px;border:1.5px solid var(--accent);border-radius:10px;display:flex;align-items:center;gap:8px;padding:0 10px;color:var(--t3);background:var(--surface)}
+.hint{font-size:12px;color:var(--t3);margin-top:7px;display:flex;gap:6px;align-items:center}
+kbd{font:11px ui-monospace,monospace;border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;padding:0 4px;background:var(--surface);color:var(--t2)}
+.chips{display:flex;gap:6px;margin-top:10px}.chip{height:28px;padding:0 10px;border-radius:14px;border:1px solid var(--border);display:inline-flex;align-items:center;gap:5px;font-size:13px;color:var(--t2);background:var(--surface)}.chip.on{background:var(--soft);border-color:var(--soft);color:var(--accent);font-weight:600}
+.row{display:grid;grid-template-columns:1fr 104px;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border)}.row.sel{background:color-mix(in srgb,var(--soft) 55%,transparent)}
+.src{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--t3)}.row .t{font-weight:600;font-size:15px;margin:3px 0;line-height:1.3}.row.read .t{color:var(--t3);font-weight:500}
+.row .sn{font-size:13px;color:var(--t2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.thumb{width:104px;height:68px;border-radius:8px;background:linear-gradient(135deg,#9bc7ae,#2f6f55);position:relative;overflow:hidden}
+.thumb.v{background:linear-gradient(135deg,#444,#111)}.thumb .dur{position:absolute;right:4px;bottom:4px;background:rgba(0,0,0,.8);color:#fff;font-size:11px;padding:0 4px;border-radius:3px}
+.play{position:absolute;inset:0;display:grid;place-items:center}.play span{width:30px;height:21px;border-radius:6px;background:var(--yt);display:grid;place-items:center}
+.acts{display:flex;gap:2px;margin-top:6px}.acts .ib{width:30px;height:30px}
+.prog{height:3px;background:var(--s3);border-radius:2px;margin-top:6px;width:120px}.prog i{display:block;height:100%;width:40%;background:var(--yt);border-radius:2px}
+.reader{overflow:hidden;display:flex;flex-direction:column}.rbar{height:56px;display:flex;align-items:center;gap:4px;padding:0 14px;border-bottom:1px solid var(--border)}
+.rbar .sp{flex:1}.art{padding:28px 64px;max-width:820px}.art .src{font-size:13px}.art h1{font-size:30px;line-height:1.2;margin:8px 0 10px}
+.note{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--accent);background:var(--soft);padding:3px 9px;border-radius:12px;margin-bottom:16px}
+.art p{font-size:17px;line-height:1.65;color:#2a302c;margin:0 0 14px}.hero{height:230px;border-radius:12px;background:linear-gradient(135deg,#b8d8c5,#356f57);margin:4px 0 18px}
+.lbl{position:absolute;left:18px;bottom:14px;background:#111;color:#fff;font:600 14px system-ui;padding:6px 12px;border-radius:8px;z-index:9}
+.callout{position:absolute;background:#fff5c2;border:1px solid #e3cf6a;color:#4a3d00;font-size:12.5px;padding:6px 9px;border-radius:8px;max-width:250px;box-shadow:0 2px 8px rgba(0,0,0,.12);z-index:9}
+/* B grid */
+.bmain{display:flex;flex-direction:column;min-width:0}.bbar{height:60px;display:flex;align-items:center;gap:10px;padding:0 20px;border-bottom:1px solid var(--border)}.bbar h2{margin:0;font-size:20px}.bbar .sp{flex:1}
+.grid{padding:20px;display:grid;grid-template-columns:repeat(4,1fr);gap:16px}.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.card .img{height:130px;background:linear-gradient(135deg,#9bc7ae,#2f6f55);position:relative}.card .img.v{background:linear-gradient(135deg,#555,#111)}
+.card .b{padding:10px 12px}.card .t{font-weight:600;line-height:1.3;margin:4px 0;height:38px;overflow:hidden}.card .f{display:flex;align-items:center;gap:2px;margin-top:6px;border-top:1px solid var(--border);padding-top:6px}
+.card .f .m{font-size:12px;color:var(--t3);margin-right:auto}.card.read{opacity:.6}
+.scrim{position:absolute;inset:0;background:rgba(20,25,22,.38);z-index:5}.dlg{position:absolute;z-index:6;left:50%;top:150px;transform:translateX(-50%);width:560px;background:var(--surface);border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.25);padding:20px}
+.dlg h3{margin:0 0 12px;font-size:18px}.dlg .in{height:40px;border:1.5px solid var(--accent);border-radius:10px;display:flex;align-items:center;padding:0 10px;font-size:14px}
+.pv{display:grid;grid-template-columns:150px 1fr;gap:14px;border:1px solid var(--border);border-radius:12px;padding:10px;margin:14px 0}.pv .img{height:96px;border-radius:8px;background:linear-gradient(135deg,#555,#111);position:relative}
+.seg{display:flex;gap:6px;margin:4px 0 16px;flex-wrap:wrap}.dlg .ft{display:flex;justify-content:flex-end;gap:8px}
+/* phones */
+.phones{width:1440px;height:880px;display:flex;gap:56px;justify-content:center;align-items:center;background:#dfe5df}
+.ph{width:380px;height:800px;border-radius:44px;background:#111;padding:12px;box-shadow:0 10px 30px rgba(0,0,0,.25);position:relative}
+.scr{width:100%;height:100%;border-radius:34px;overflow:hidden;background:var(--bg);position:relative;display:flex;flex-direction:column}
+.sb{height:34px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-size:13px;font-weight:600}
+.cap{text-align:center;font-size:15px;font-weight:600;color:#2b332e;margin-top:14px;width:380px}
+.web{flex:1;background:#fff;padding:14px 18px;color:#333}.web h4{font-size:20px;margin:6px 0}.web .bar{height:12px;background:#eee;border-radius:6px;margin:10px 0}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--surface);border-radius:26px 26px 0 0;box-shadow:0 -6px 24px rgba(0,0,0,.18);padding:10px 18px 26px}
+.grab{width:36px;height:4px;border-radius:2px;background:var(--border);margin:0 auto 14px}
+.ok{display:flex;align-items:center;gap:10px;font-weight:600;font-size:16px;color:var(--accent)}.ok .c{width:30px;height:30px;border-radius:50%;background:var(--soft);display:grid;place-items:center}
+.mini{display:grid;grid-template-columns:84px 1fr;gap:10px;margin:14px 0;align-items:center}.mini .img{height:56px;border-radius:8px;background:linear-gradient(135deg,#555,#111);position:relative}
+.sbtns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}.sbtns .btn{justify-content:center;height:44px;flex-direction:column;gap:0;font-size:12px;padding:0 4px}
+.tb{height:56px;display:flex;align-items:center;gap:10px;padding:0 12px}.tb b{font-size:19px;flex:1}
+.prow{display:grid;grid-template-columns:1fr 84px;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)}.prow .t{font-weight:600;font-size:14.5px;line-height:1.3;margin:2px 0}.prow .thumb{width:84px;height:58px}
+.fab{position:absolute;right:16px;bottom:22px;height:52px;border-radius:16px;background:var(--soft);color:var(--accent);display:flex;align-items:center;gap:8px;padding:0 16px;font-weight:600;box-shadow:0 3px 10px rgba(0,0,0,.18)}
+</style></head><body><div id="r"></div>
+<script>
+const P={menu:'M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z',all:'M4 5h16v2H4zm0 6h16v2H4zm0 6h10v2H4z',star:'M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27Z',
+later:'M17 3H7a2 2 0 0 0-2 2v16l7-3 7 3V5a2 2 0 0 0-2-2Zm-4 11h-2v-2H9v-2h2V8h2v2h2v2h-2v2Z',link:'M10.59 13.41a1 1 0 0 1 0-1.41l3.54-3.54a1 1 0 1 1 1.41 1.41L12 13.41a1 1 0 0 1-1.41 0M7.05 20.49a5 5 0 0 1 0-7.07l1.42-1.42 1.41 1.42-1.41 1.41a3 3 0 0 0 4.24 4.24l1.41-1.41 1.42 1.41-1.42 1.42a5 5 0 0 1-7.07 0m9.9-9.9-1.42-1.41 1.42-1.42a3 3 0 0 0-4.25-4.24L11.29 5 9.88 3.59l1.41-1.42a5 5 0 0 1 7.07 7.07l-1.41 1.35Z',
+done:'M21 7 9 19l-5.5-5.5 1.41-1.41L9 16.17 19.59 5.59 21 7Z',del:'M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12M19 4h-3.5l-1-1h-5l-1 1H5v2h14V4Z',open:'M14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3m-2 16H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7Z',
+save:'M17 3H7a2 2 0 0 0-2 2v16l7-3 7 3V5a2 2 0 0 0-2-2Z',speak:'M3 9v6h4l5 5V4L7 9H3m13.5 3A4.5 4.5 0 0 0 14 8v8a4.47 4.47 0 0 0 2.5-4M14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4-.91 7-4.49 7-8.77 0-4.28-3-7.86-7-8.77Z',
+share:'M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11A2.99 2.99 0 0 0 21 5a3 3 0 0 0-6 0c0 .24.04.47.09.7L8.04 9.81A2.99 2.99 0 0 0 3 12a2.99 2.99 0 0 0 5.04 2.19l7.12 4.15c-.05.21-.08.43-.08.65A2.92 2.92 0 1 0 18 16.08Z',
+add:'M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2Z',search:'M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z',
+rss:'M6.18 15.64a2.18 2.18 0 0 1 2.18 2.18C8.36 19 7.38 20 6.18 20 5 20 4 19 4 17.82a2.18 2.18 0 0 1 2.18-2.18M4 4.44A15.56 15.56 0 0 1 19.56 20h-2.83A12.73 12.73 0 0 0 4 7.27V4.44m0 5.66a9.9 9.9 0 0 1 9.9 9.9h-2.83A7.07 7.07 0 0 0 4 12.93V10.1Z',undo:'M12.5 8c-2.65 0-5.05 1-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8Z',
+back:'M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z'};
+const ic=(n,c='')=>`<svg class="i ${c}" viewBox="0 0 24 24"><path d="${P[n]}"/></svg>`;
+const play=`<div class="play"><span><svg viewBox="0 0 24 24" width="14" height="14" fill="#fff"><path d="M8 5v14l11-7z"/></svg></span></div>`;
+const ITEMS=[
+ {s:'youtube.com',c:'#e62117',t:'How the Indian payments stack actually works',sn:'A 24-minute explainer on UPI, the switch, and why interchange is zero.',v:1,d:'24:10',p:1,a:'Added 10 min ago'},
+ {s:'paulgraham.com',c:'#b5651d',t:'The Best Essay',sn:'Despite its title this isn’t meant to be the best essay. My goal here is to figure out what the best essay would be like.',a:'Added 1 h ago · 14 min read'},
+ {s:'stratechery.com',c:'#264653',t:'Aggregation Theory, ten years later',sn:'The internet changed the cost structure of distribution. Here is what that meant for the companies that won.',a:'Added 3 h ago · 11 min read'},
+ {s:'youtube.com',c:'#e62117',t:'Kokoro TTS running on a laptop GPU, benchmarked',sn:'Real-time factor, quality, and the trade-offs between CPU and GPU inference.',v:1,d:'12:48',a:'Added yesterday'},
+ {s:'nytimes.com',c:'#111',t:'The quiet return of the long walk',sn:'Cities are redesigning streets for people on foot. Researchers say the effects go beyond health.',a:'Added 2 d ago · 9 min read',r:1},
+ {s:'lennysnewsletter.com',c:'#f4a261',t:'How the best PMs write specs that engineers love',sn:'Six habits from 40 interviews with staff engineers.',a:'Added 3 d ago · 17 min read',r:1},
+];
+function sidebar(){return `<aside class="side"><div class="top"><span class="ib">${ic('menu')}</span><b>Feeder</b><span class="ib">${ic('search')}</span></div>
+<div class="nav">${ic('all','s')}All articles<span class="n">214</span></div>
+<div class="nav sel">${ic('later','s')}Read later<span class="pin">pinned</span><span class="n">4</span></div>
+<div class="nav">${ic('star','s')}Saved<span class="n">37</span></div><div class="sep"></div><div class="fh">Folders</div>
+${[['Tech',96],['Product',12],['India',31]].map(([n,c])=>`<div class="nav">▾ ${n}<span class="n">${c}</span></div>`).join('')}
+${[['Hacker News','#e4572e',42],['The Verge','#3b7dd8',18],['Ars Technica','#2a9d8f',9]].map(([n,c,k])=>`<div class="nav feed"><span class="dot" style="background:${c}">${n[0]}</span>${n}<span class="n">${k}</span></div>`).join('')}
+<div class="nav">▸ Kottke<span class="n">11</span></div></aside>`}
+const src=(it)=>`<div class="src"><span class="dot" style="background:${it.c};width:16px;height:16px;font-size:9px">${it.v?'▶':it.s[0].toUpperCase()}</span>${it.s} · ${it.a}</div>`;
+function A(){const rows=ITEMS.map((it,i)=>`<div class="row${i==1?' sel':''}${it.r?' read':''}"><div>${src(it)}<div class="t">${it.t}</div><div class="sn">${it.sn}</div>
+${it.p?'<div class="prog"><i></i></div>':''}<div class="acts"><span class="ib" title="Done">${ic('done','s')}</span><span class="ib" title="Save">${ic('save','s')}</span><span class="ib" title="Open original">${ic('open','s')}</span><span class="ib" title="Delete">${ic('del','s')}</span></div></div>
+<div class="thumb${it.v?' v':''}" style="${it.v?'':`background:linear-gradient(135deg,${['#9bc7ae','#d7c6a5','#a9bcd6','#c7b0c9'][i%4]},#2f4f45)`}">${it.v?play+`<span class="dur">${it.d}</span>`:''}</div></div>`).join('');
+return `<div class="win" style="position:relative"><span class="lbl">A · Pinned “Read later” list with a paste box</span>${sidebar()}<div class="main"><section class="list"><div class="lh"><h2>${ic('later')}Read later <small>4 unread · 6 total</small></h2>
+<div class="add"><div class="in">${ic('link','s')}Paste a link to an article or YouTube video…</div><span class="btn p">${ic('add','s')}Add</span></div>
+<div class="hint">Or <kbd>⌘V</kbd> anywhere · phone share sheet · Chrome “Send to Feeder”</div>
+<div class="chips"><span class="chip on">Unread 4</span><span class="chip">Articles 3</span><span class="chip">Videos 2</span><span class="chip">Done 2</span></div></div>${rows}</section>
+<section class="reader"><div class="rbar"><span class="ib">${ic('done')}</span><span class="ib">${ic('save')}</span><span class="ib">${ic('speak')}</span><span class="ib">${ic('share')}</span><span class="ib">${ic('open')}</span><span class="sp"></span><span class="btn sm">${ic('del','s')}Delete</span></div>
+<div class="art">${src(ITEMS[1])}<h1>The Best Essay</h1><div class="note">${ic('done','s')}Full article fetched from paulgraham.com</div>
+<p>Despite its title this isn't meant to be the best essay. My goal here is to figure out what the best essay would be like.</p><div class="hero"></div>
+<p>It would be well-written, but you can write well about any topic. What made it special would be what it was about. Obviously some topics would be better than others.</p>
+<p>It probably wouldn't be about this year's lipstick colors. But it wouldn't be vaporous talk about elevated themes either. A good essay has to be surprising.</p></div></section></div>
+<div class="callout" style="left:640px;top:150px">Always visible. Pasting a feed URL still offers “Subscribe instead”.</div>
+<div class="callout" style="left:640px;top:330px">Every action is a button on the row. Done = read; it moves out of Unread but stays under “Done”.</div>
+<div class="callout" style="left:1150px;top:96px">Same reader as feeds: read aloud, highlights, Save. YouTube links open in the in-reader player and remember where you stopped.</div></div>`}
+function B(){const cards=ITEMS.slice(0,8).map((it,i)=>`<div class="card${it.r?' read':''}"><div class="img${it.v?' v':''}" style="${it.v?'':`background:linear-gradient(135deg,${['#9bc7ae','#d7c6a5','#a9bcd6','#c7b0c9'][i%4]},#2f4f45)`}">${it.v?play+`<span class="thumb" style="all:unset"><span class="dur" style="position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.8);color:#fff;font-size:11px;padding:0 4px;border-radius:3px">${it.d}</span></span>`:''}</div>
+<div class="b">${src({...it,a:it.a.split(' · ')[0]})}<div class="t">${it.t}</div><div class="f"><span class="m">${it.v?it.d+' video':(it.a.split(' · ')[1]||'')}</span><span class="ib">${ic('done','s')}</span><span class="ib">${ic('save','s')}</span><span class="ib">${ic('del','s')}</span></div></div></div>`).join('');
+return `<div class="win" style="position:relative"><span class="lbl">B · Card grid + “Add link” button in every top bar</span>${sidebar()}<div class="bmain"><div class="bbar">${ic('later')}<h2>Read later</h2><span style="color:var(--t3)">4 unread</span><span class="sp"></span>
+<span class="chip on">Unread</span><span class="chip">Videos</span><span class="chip">Done</span><span class="btn p">${ic('add','s')}Add link</span></div><div class="grid">${cards}</div></div>
+<div class="scrim"></div><div class="dlg"><h3>Add to Read later</h3><div class="in">https://youtu.be/dQw9xKk2Mq8</div>
+<div class="pv"><div class="img">${play}<span class="dur" style="position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.8);color:#fff;font-size:11px;padding:0 4px;border-radius:3px">31:02</span></div><div><div class="src">${ic('rss','s')} youtube.com · Acquired</div><div style="font-weight:600;font-size:15px;margin:4px 0">Visa: the complete history and strategy</div><div style="font-size:13px;color:var(--t2)">Video · plays inside Feeder</div></div></div>
+<div style="font-size:13px;color:var(--t2)">This channel has a feed too:</div><div class="seg"><span class="chip on">${ic('later','s')}Just this video</span><span class="chip">${ic('rss','s')}Also subscribe to Acquired</span></div>
+<div class="ft"><span class="btn g">Cancel</span><span class="btn p">Add to Read later</span></div></div>
+<div class="callout" style="left:1180px;top:72px">“Add link” sits in the top bar of every view, not only here. ⌘V also opens this.</div></div>`}
+function M(){const prow=ITEMS.slice(0,5).map((it,i)=>`<div class="prow"${it.r?' style="opacity:.55"':''}><div>${src({...it,a:it.a.split(' · ')[0]})}<div class="t">${it.t}</div>${it.p?'<div class="prog"><i></i></div>':''}</div><div class="thumb${it.v?' v':''}" style="${it.v?'':`background:linear-gradient(135deg,${['#9bc7ae','#d7c6a5','#a9bcd6','#c7b0c9'][i%4]},#2f4f45)`}">${it.v?play+`<span class="dur">${it.d}</span>`:''}</div></div>`).join('');
+return `<div class="phones" style="position:relative"><span class="lbl">Android · share any page or video into Feeder</span>
+<div><div class="ph"><div class="scr"><div class="sb"><span>9:41</span><span>●●● 5G</span></div><div class="web"><div style="font-size:12px;color:#888">paulgraham.com/best.html</div><h4>The Best Essay</h4><div class="bar"></div><div class="bar" style="width:80%"></div><div class="bar"></div><div class="bar" style="width:60%"></div></div>
+<div class="sheet"><div class="grab"></div><div class="ok"><span class="c">${ic('done','s')}</span>Added to Read later</div>
+<div class="mini"><div class="img" style="background:linear-gradient(135deg,#d7c6a5,#2f4f45)"></div><div><div class="src">paulgraham.com</div><div style="font-weight:600;font-size:14px">The Best Essay</div><div style="font-size:12px;color:var(--t3)">Full article saved for offline · 14 min</div></div></div>
+<div class="sbtns"><span class="btn p">${ic('open','s')}Read now</span><span class="btn">${ic('rss','s')}Find feed</span><span class="btn">${ic('undo','s')}Undo</span></div>
+<div style="font-size:12px;color:var(--t3);text-align:center;margin-top:10px">Closes by itself in 4 s. Syncs to web and Mac.</div></div></div></div><div class="cap">1 · Share from Chrome or YouTube → “Feeder”</div></div>
+<div><div class="ph"><div class="scr"><div class="sb"><span>9:42</span><span>●●● 5G</span></div><div class="tb">${ic('menu')}<b>Read later</b>${ic('search')}</div>
+<div class="chips" style="padding:0 14px 8px;margin:0"><span class="chip on">Unread 4</span><span class="chip">Videos 2</span><span class="chip">Done 2</span></div>${prow}
+<div class="fab">${ic('link','s')}Paste link</div></div></div><div class="cap">2 · Pinned first in the drawer, same list as web</div></div></div>`}
+const v=new URLSearchParams(location.search).get('v')||'A';document.getElementById('r').innerHTML=({A,B,M})[v]();
+</script></body></html>

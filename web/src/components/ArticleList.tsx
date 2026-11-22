@@ -7,6 +7,8 @@ import { proxiedUrl } from '../lib/api'
 import { useNetwork } from '../lib/offline'
 import { isWatched, positionLabel } from '../lib/videopos'
 import { Icon, IconButton } from './Icon'
+import { isShared, siteOf } from '../lib/share'
+import { articleVideoId } from '../lib/youtube'
 
 interface Props {
   title: string
@@ -27,6 +29,82 @@ interface Props {
   onFlip: () => void
   /** Opens the feed's own page (stats and settings). */
   onOpenFeed: (url: string) => void
+  /** On Saved: the always-visible "Paste a link" box. Resolves true when the link was added. */
+  onAddLink?: (text: string) => Promise<boolean>
+}
+
+type SavedKind = 'all' | 'links' | 'videos'
+
+/** Saved only: paste any web page or YouTube link to keep it here. */
+function AddLinkBar(p: { onAdd: (text: string) => Promise<boolean>; kind: SavedKind; onKind: (k: SavedKind) => void }) {
+  const [text, setText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const submit = async () => {
+    if (!text.trim() || busy) return
+    setBusy(true)
+    try {
+      if (await p.onAdd(text)) setText('')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="add-link">
+      <form
+        className="add-link-row"
+        onSubmit={(e) => {
+          e.preventDefault()
+          void submit()
+        }}
+      >
+        <label className="add-link-input">
+          <Icon name="link" size={18} />
+          <input
+            type="url"
+            inputMode="url"
+            placeholder="Paste a link to an article or YouTube video"
+            aria-label="Link to save"
+            value={text}
+            disabled={busy}
+            onChange={(e) => setText(e.target.value)}
+            onPaste={(e) => {
+              // Pasting into the box adds it straight away
+              const t = e.clipboardData.getData('text')
+              if (t && !text) {
+                e.preventDefault()
+                setText(t)
+                setBusy(true)
+                p.onAdd(t)
+                  .then((ok) => ok && setText(''))
+                  .finally(() => setBusy(false))
+              }
+            }}
+          />
+        </label>
+        <button type="submit" className="add-link-btn" disabled={busy || !text.trim()}>
+          <Icon name="add" size={18} />
+          {busy ? 'Adding…' : 'Add'}
+        </button>
+      </form>
+      <div className="add-link-hint">
+        Or paste a link anywhere in Feeder (<kbd>⌘V</kbd>), or share it to Feeder on your phone.
+      </div>
+      <div className="add-link-kinds" role="radiogroup" aria-label="Kind">
+        {(
+          [
+            ['all', 'Everything'],
+            ['links', 'Shared links'],
+            ['videos', 'Videos'],
+          ] as [SavedKind, string][]
+        ).map(([k, l]) => (
+          <button key={k} role="radio" aria-checked={p.kind === k} className={`chip${p.kind === k ? ' on' : ''}`} onClick={() => p.onKind(k)}>
+            {p.kind === k ? <Icon name="check" size={16} /> : null}
+            {l}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 const SHOWS: [ShowFilter, string][] = [
@@ -188,10 +266,13 @@ export function ArticleList(p: Props) {
   const s = p.settings
   const network = useNetwork()
   const online = network && !s.offlineMode
-  const total = p.groups.reduce((n, g) => n + g.items.length, 0)
   const grouped = s.grouping !== 'none'
 
   const [sheet, setSheet] = useState(false)
+  const [savedKind, setSavedKind] = useState<SavedKind>('all')
+  const kindFilter = p.onAddLink && savedKind !== 'all' ? (i: Item) => (savedKind === 'links' ? isShared(i) : !!articleVideoId(i)) : null
+  const groups = kindFilter ? p.groups.map((g) => ({ ...g, items: g.items.filter(kindFilter) })).filter((g) => g.items.length) : p.groups
+  const total = groups.reduce((n, g) => n + g.items.length, 0)
   // Where YouTube videos were left, shown in place of the reading time
   const videoPos = useLiveQuery(async () => new Map((await db.videoPos.toArray()).map((v) => [v.id, v])), [])
   const countOf = (v: ShowFilter) => (v === 'unread' ? p.counts.unread : v === 'saved' ? p.counts.saved : v === 'downloaded' ? p.counts.downloaded : 0)
@@ -203,7 +284,7 @@ export function ArticleList(p: Props) {
     })
   }
   const collapseAll = () => {
-    const ids = p.groups.map((g) => `${s.grouping}:${g.key}`)
+    const ids = groups.map((g) => `${s.grouping}:${g.key}`)
     const allClosed = ids.every((id) => s.collapsedGroups.includes(id))
     updateSettings({
       collapsedGroups: allClosed
@@ -212,7 +293,7 @@ export function ArticleList(p: Props) {
     })
   }
   // Articles in list order, for Shift-click ranges, Select all, and dropping ones that left the list
-  const shown = p.groups.flatMap((g) => (grouped && s.collapsedGroups.includes(`${s.grouping}:${g.key}`) ? [] : g.items))
+  const shown = groups.flatMap((g) => (grouped && s.collapsedGroups.includes(`${s.grouping}:${g.key}`) ? [] : g.items))
   const selected = shown.filter((i) => picked.has(i.id))
   useEffect(() => {
     if (picked.size && selected.length !== picked.size) setPicked(new Set(selected.map((i) => i.id)))
@@ -317,6 +398,7 @@ export function ArticleList(p: Props) {
           <IconButton icon="delete" label="Delete on all devices" onClick={() => remove(selected)} />
         </div>
       ) : null}
+      {p.onAddLink ? <AddLinkBar onAdd={p.onAddLink} kind={savedKind} onKind={setSavedKind} /> : null}
       <div className="list-filters">
         <div className="filter-row">
           <div className="segmented" role="radiogroup" aria-label="Show">
@@ -365,7 +447,7 @@ export function ArticleList(p: Props) {
       {sheet ? <SortGroupSheet s={s} onClose={() => setSheet(false)} /> : null}
       <div className="list-scroll">
         {total === 0 ? <p className="empty">Nothing here. Try another tab, turn off Today, or refresh.</p> : null}
-        {p.groups.map((g) => {
+        {groups.map((g) => {
           const collapsed = grouped && s.collapsedGroups.includes(`${s.grouping}:${g.key}`)
           return (
             <div key={g.key} className="group">
@@ -431,6 +513,11 @@ export function ArticleList(p: Props) {
                         <div className="row-main">
                           <div className="row-title">{item.title || '(no title)'}</div>
                           <div className="row-meta">
+                            {isShared(item) ? (
+                              <span className="row-feed shared" title="Added by sharing a link">
+                                {siteOf(item.link) || 'Shared link'}
+                              </span>
+                            ) : (
                             <span
                               className="row-feed"
                               role="link"
@@ -445,6 +532,7 @@ export function ArticleList(p: Props) {
                             >
                               {feedDisplayTitle(feed)}
                             </span>
+                            )}
                             <span>{relativeTime(item.sortTime)}</span>
                             {pos ? (
                               <span className="row-video" title="Where you left this video">
