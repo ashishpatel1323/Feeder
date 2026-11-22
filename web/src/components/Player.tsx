@@ -355,7 +355,7 @@ function VoiceList({ settings, onBack, onPicked }: { settings: Settings; onBack:
   const sorted = [...browserVoices].sort((a, b) => Number(natural(b)) - Number(natural(a)) || a.name.localeCompare(b.name))
   const pick = (uri: string) => {
     void updateSettings({ readAloudVoice: uri })
-    if (isKokoroVoice(uri)) kokoro.load(settings.readAloudKokoroGpu).catch(() => undefined)
+    if (isKokoroVoice(uri)) kokoro.load(settings.readAloudKokoroUseGpu).catch(() => undefined)
     onPicked()
   }
   const current = settings.readAloudVoice

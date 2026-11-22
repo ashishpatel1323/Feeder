@@ -127,9 +127,9 @@ export default function App() {
 
   useEffect(() => {
     readAloud.setVoice(settings.readAloudVoice)
-    readAloud.kokoroGpu = settings.readAloudKokoroGpu
+    readAloud.kokoroGpu = settings.readAloudKokoroUseGpu
     if (readAloud.state.rate !== settings.readAloudRate && readAloud.state.status === 'idle') readAloud.setRate(settings.readAloudRate)
-  }, [settings.readAloudVoice, settings.readAloudRate, settings.readAloudKokoroGpu])
+  }, [settings.readAloudVoice, settings.readAloudRate, settings.readAloudKokoroUseGpu])
 
   const [groups, counts] = useMemo(() => {
     // Keep the open article in the list even after it's marked read

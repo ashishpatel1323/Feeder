@@ -182,7 +182,7 @@ export class ReadAloudEngine {
   private kokoroCache = new Map<string, { id: number; audio: Promise<KokoroAudio> }>()
   private wordFrame: number | null = null
   /** Use the GPU for the natural voice when the browser supports WebGPU. */
-  kokoroGpu = false
+  kokoroGpu = true
   /** Audio ran up to this point without a pause or skip, so a wait now is a stall. */
   private kokoroWasPlaying = false
   private kokoroAdvancing = false

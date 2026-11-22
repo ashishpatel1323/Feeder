@@ -386,7 +386,7 @@ export function SettingsDialog({
             onChange={(e) => {
               updateSettings({ readAloudVoice: e.target.value })
               // Start the one-time download as soon as a natural voice is picked
-              if (isKokoroVoice(e.target.value)) kokoro.load(s.readAloudKokoroGpu).catch(() => undefined)
+              if (isKokoroVoice(e.target.value)) kokoro.load(s.readAloudKokoroUseGpu).catch(() => undefined)
             }}
           >
             <option value="">Default for the article's language</option>
@@ -416,14 +416,14 @@ export function SettingsDialog({
                   ? `Downloading the voice model… ${Math.round(voiceModel.progress * 100)}% (once; the browser keeps it)`
                   : voiceModel.state === 'error'
                     ? `The voice model failed to load: ${voiceModel.error}`
-                    : `The voice model downloads once (about ${s.readAloudKokoroGpu && webGpuAvailable() ? '310' : '90'} MB) the first time you use it.`}
+                    : `The voice model downloads once (about ${s.readAloudKokoroUseGpu && webGpuAvailable() ? '310' : '90'} MB) the first time you use it.`}
             </p>
             {voiceModel.state === 'idle' || voiceModel.state === 'error' ? (
-              <button onClick={() => kokoro.load(s.readAloudKokoroGpu).catch(() => undefined)}>Download now</button>
+              <button onClick={() => kokoro.load(s.readAloudKokoroUseGpu).catch(() => undefined)}>Download now</button>
             ) : null}
             {webGpuAvailable() ? (
               <label className="check">
-                <input type="checkbox" checked={s.readAloudKokoroGpu} onChange={(e) => updateSettings({ readAloudKokoroGpu: e.target.checked })} />
+                <input type="checkbox" checked={s.readAloudKokoroUseGpu} onChange={(e) => updateSettings({ readAloudKokoroUseGpu: e.target.checked })} />
                 Use the graphics card (faster, about 310 MB download)
               </label>
             ) : null}
