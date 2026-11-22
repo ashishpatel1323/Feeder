@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -249,6 +250,11 @@ fun FeedFlipContent(
         DisposableEffect(ttsStateHolder) {
             val previousNavigator = ttsStateHolder.articleNavigator
 
+            fun idOnPage(page: Int): Long? =
+                currentPages.getOrNull(page)?.firstOrNull()?.let { index ->
+                    if (index < pagedFeedItems.itemCount) pagedFeedItems.peek(index)?.id else null
+                }
+
             fun turnTo(page: Int) {
                 flipScope.launch {
                     if (page in 0 until pagerState.pageCount) pagerState.animateScrollToPage(page)
@@ -264,7 +270,12 @@ fun FeedFlipContent(
 
                     override fun next() = turnTo(pagerState.settledPage + 1)
 
-                    override fun onArticleFinished(articleId: Long) = turnTo(pagerState.settledPage + 1)
+                    // A card the user already flipped away from can finish speaking late; only the
+                    // card on screen turns the page
+                    override fun onArticleFinished(articleId: Long) {
+                        val settled = pagerState.settledPage
+                        if (idOnPage(settled) == articleId) turnTo(settled + 1)
+                    }
                 }
             onDispose {
                 ttsStateHolder.articleNavigator = previousNavigator
@@ -371,6 +382,8 @@ fun FeedFlipContent(
                         else -> listOf(cardState.bodyText)
                     }
                 LaunchedEffect(item.id, spoken, cardState.loaded) {
+                    // The previous card stops at once, also while this one is still loading
+                    ttsStateHolder.stop()
                     if (!cardState.loaded) delay(READ_ALOUD_TEXT_WAIT_MS)
                     ttsStateHolder.tts(
                         textArray = (listOf(item.title) + spoken).map { AnnotatedString(it) },
@@ -528,7 +541,7 @@ private fun FlipReadAloudToggle(
                 .padding(end = 8.dp)
                 .clip(CircleShape)
                 .background(if (on) Color.White.copy(alpha = 0.22f) else Color.Black.copy(alpha = 0.35f))
-                .clickable(role = Role.Switch, onClick = onToggle)
+                .toggleable(value = on, role = Role.Switch, onValueChange = { onToggle() })
                 .padding(horizontal = 10.dp, vertical = 6.dp),
     ) {
         Icon(
@@ -722,6 +735,7 @@ private fun rememberFlipCardState(
     // or Offline mode is turned off retries a page that could not be fetched before; text that was
     // loaded in full comes straight from the cache.
     LaunchedEffect(item.id, translated, item.snippet, active, offline) {
+        state.loaded = false
         state.bodyText =
             if (translated) {
                 item.snippet

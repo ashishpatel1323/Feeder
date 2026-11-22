@@ -185,7 +185,7 @@ class FlipCardTexts(
                                 )
                             }
                         }
-                        if (fullFile.isFile) readText(itemId, link, full = true) else ""
+                        if (fullFile.isFile) readFullOrDiscard(itemId, link) else ""
                     }
                 (if (fullText.length > feedText.length) fullText else feedText).cutAt(maxChars)
             } catch (e: CancellationException) {
@@ -194,6 +194,20 @@ class FlipCardTexts(
                 Log.w(LOG_TAG, "Could not load text for card $itemId", e)
                 ""
             }
+        }
+
+    // A page left half written (for example when storage ran out) would otherwise stop every later
+    // fetch, so a copy that can't be read is removed and the next online load fetches it again
+    private fun readFullOrDiscard(
+        itemId: Long,
+        link: String?,
+    ): String =
+        try {
+            readText(itemId, link, full = true)
+        } catch (e: Exception) {
+            Log.w(LOG_TAG, "Discarding unreadable full text of $itemId", e)
+            blobFullFile(itemId, filePathProvider.fullArticleDir).delete()
+            ""
         }
 
     private fun readText(
