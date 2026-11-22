@@ -4,6 +4,7 @@ import { FEED_ORDER_KEY, feedDisplayTitle, FOLDER_ORDER_KEY, getKv, sortFolder, 
 import type { Selection } from '../lib/listquery'
 import { Icon, IconButton } from './Icon'
 import { proxiedUrl } from '../lib/api'
+import { useVideoJobs, useVideoSavingAvailable } from '../lib/offline'
 import { collapseAllFolders, loadClosedFolders, saveClosedFolders, toggleFolder } from '../lib/folders'
 
 interface Props {
@@ -24,6 +25,8 @@ interface Props {
   highlightCount: number
   showingHighlights: boolean
   onHighlights: () => void
+  showingDownloads: boolean
+  onDownloads: () => void
   onRefresh: () => void
   onSettings: () => void
   refreshing: string | null
@@ -90,6 +93,11 @@ export function Sidebar(p: Props) {
   }, [p.items])
   const totalUnread = useMemo(() => [...unreadByFeed.values()].reduce((a, b) => a + b, 0), [unreadByFeed])
   const savedCount = useMemo(() => p.items.filter((i) => i.saved).length, [p.items])
+  const videoJobs = useVideoJobs()
+  const canSaveVideos = useVideoSavingAvailable()
+  // Saved videos plus unfinished downloads; the entry shows where videos can be saved or already are
+  const downloadCount = useMemo(() => p.items.filter((i) => i.offlineVideo).length, [p.items]) + Object.keys(videoJobs).length
+  const showDownloads = canSaveVideos || downloadCount > 0 || p.showingDownloads
 
   const tags = useMemo(() => {
     const byTag = new Map<string, Feed[]>()
@@ -102,7 +110,7 @@ export function Sidebar(p: Props) {
 
   const folderNames = tags.map(([t]) => t).filter(Boolean)
 
-  const isSel = (s: Selection) => !p.managing && !p.showingHighlights && JSON.stringify(s) === JSON.stringify(p.selection)
+  const isSel = (s: Selection) => !p.managing && !p.showingHighlights && !p.showingDownloads && JSON.stringify(s) === JSON.stringify(p.selection)
 
   const feedRow = (f: Feed, i: number, folder: Feed[]) => (
     <li
@@ -182,6 +190,16 @@ export function Sidebar(p: Props) {
         >
           <Icon name="highlight" size={20} />
         </button>
+        {showDownloads ? (
+          <button
+            className={`rail-btn${p.showingDownloads ? ' selected' : ''}`}
+            title="Downloads"
+            aria-label="Downloads"
+            onClick={p.onDownloads}
+          >
+            <Icon name="download" size={20} />
+          </button>
+        ) : null}
         <span className="rail-gap" />
         <IconButton icon="refresh" label={p.refreshing ? `Refreshing ${p.refreshing}` : 'Refresh'} onClick={p.onRefresh} disabled={!!p.refreshing} />
         <IconButton icon="add" label="Add feed" onClick={p.onAddFeed} />
@@ -221,6 +239,15 @@ export function Sidebar(p: Props) {
             {p.highlightCount ? <span className="count muted">{p.highlightCount}</span> : null}
           </button>
         </li>
+        {showDownloads ? (
+          <li>
+            <button className={`nav-row${p.showingDownloads ? ' selected' : ''}`} onClick={p.onDownloads}>
+              <Icon name="download" size={20} />
+              <span className="nav-title">Downloads</span>
+              {downloadCount ? <span className="count muted">{downloadCount}</span> : null}
+            </button>
+          </li>
+        ) : null}
       </ul>
       {folderNames.length ? (
         <div className="folder-tools">

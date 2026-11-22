@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Item } from '../lib/db'
 import {
   cancelVideo,
+  pauseVideo,
   clearVideoError,
   downloadForOffline,
   formatBytes,
@@ -299,6 +300,22 @@ export function VideoOfflineControls({
       </>
     )
   }
+  if (run?.phase === 'paused') {
+    return (
+      <span className="video-saving">
+        <span className="progress-bar small" aria-hidden="true">
+          <span style={{ width: `${run.percent}%` }} />
+        </span>
+        Paused {run.percent}%
+        <button className="link-btn" onClick={() => void saveVideo(item.id, videoId)} disabled={!available}>
+          Resume
+        </button>
+        <button className="link-btn" onClick={() => cancelVideo(videoId)}>
+          Cancel
+        </button>
+      </span>
+    )
+  }
   if (run && run.phase !== 'error') {
     return (
       <span className="video-saving">
@@ -306,6 +323,11 @@ export function VideoOfflineControls({
           <span style={{ width: `${run.percent}%` }} />
         </span>
         {run.phase === 'mac' ? `Downloading on your Mac ${run.percent}%` : `Saving to this browser ${run.percent}%`}
+        {run.phase === 'mac' ? (
+          <button className="link-btn" onClick={() => pauseVideo(videoId)}>
+            Pause
+          </button>
+        ) : null}
         <button className="link-btn" onClick={() => cancelVideo(videoId)}>
           Cancel
         </button>

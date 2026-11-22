@@ -53,6 +53,8 @@ export interface Item {
   offlineImages?: string[]
   /** Size in bytes of the YouTube video saved for offline watching. */
   offlineVideo?: number
+  /** When the video was saved (ms), for the Downloads order of new downloads. */
+  offlineVideoAt?: number
   /** Subtitle languages saved with the video ([] = none available, unset = not tried). */
   offlineSubs?: string[]
 }
@@ -391,6 +393,6 @@ export async function unhideItems(items: Item[]): Promise<void> {
   await db.transaction('rw', db.items, db.hidden, async () => {
     await db.hidden.bulkDelete(items.map((i) => i.id))
     // Deleting removed the downloaded copies (offline.ts), so they come back without them
-    await db.items.bulkPut(items.map((i) => ({ ...i, readSynced: 0, offlineAt: undefined, offlineImages: undefined, offlineVideo: undefined, offlineSubs: undefined })))
+    await db.items.bulkPut(items.map((i) => ({ ...i, readSynced: 0, offlineAt: undefined, offlineImages: undefined, offlineVideo: undefined, offlineVideoAt: undefined, offlineSubs: undefined })))
   })
 }
