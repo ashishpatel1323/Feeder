@@ -62,7 +62,7 @@ data class ReadAloudProgress(
 )
 
 /** Speeds offered by the read-aloud player. Playback speed changes keep the highlight in sync. */
-val READ_ALOUD_SPEEDS = listOf(0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
+val READ_ALOUD_SPEEDS = listOf(0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 2.5f, 3f, 3.5f, 4f)
 
 /** Application facade; the foreground service owns the player and its lifetime. */
 class TTSStateHolder(
@@ -692,7 +692,7 @@ class TTSStateHolder(
         private const val PREFERENCES_NAME = "read_aloud"
         private const val PREF_SPEED = "playback_speed"
         private const val MIN_SPEED = 0.5f
-        private const val MAX_SPEED = 3f
+        private const val MAX_SPEED = 4f
     }
 }
 

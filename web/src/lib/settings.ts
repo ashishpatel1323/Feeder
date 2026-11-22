@@ -27,7 +27,8 @@ export interface Settings {
   /** Speed reading in the player: show the current word big, with a focus letter. */
   readAloudShowWord: boolean
   /** Run the natural (Kokoro) voice on the GPU where WebGPU exists: faster, bigger download. */
-  readAloudKokoroGpu: boolean
+  /** Replaces readAloudKokoroGpu (off by default), so saved settings pick up the new default. */
+  readAloudKokoroUseGpu: boolean
   summaryProvider: 'none' | 'openai'
   /** OpenAI-compatible base URL, e.g. https://api.openai.com/v1 or http://localhost:11434/v1 for Ollama. */
   summaryBaseUrl: string
@@ -54,7 +55,8 @@ export const DEFAULT_SETTINGS: Settings = {
   readAloudVoice: '',
   readAloudAutoContinue: true,
   readAloudShowWord: false,
-  readAloudKokoroGpu: false,
+  // On by default; Kokoro falls back to the processor where WebGPU is missing
+  readAloudKokoroUseGpu: true,
   summaryProvider: 'none',
   summaryBaseUrl: 'http://localhost:11434/v1',
   summaryApiKey: '',
@@ -73,7 +75,7 @@ const SHOWS: ShowFilter[] = ['unread', 'all', 'saved', 'downloaded']
  * plus a Today chip, and Group by Status went away.
  */
 export function normalizeSettings(stored: Record<string, unknown> | undefined): Settings {
-  const { filters, ...rest } = (stored ?? {}) as Partial<Settings> & { filters?: unknown }
+  const { filters, readAloudKokoroGpu: _oldGpu, ...rest } = (stored ?? {}) as Partial<Settings> & { filters?: unknown; readAloudKokoroGpu?: unknown }
   const s: Settings = { ...DEFAULT_SETTINGS, ...rest }
   if (Array.isArray(filters) && !(stored && 'show' in stored)) {
     const old = filters as string[]
