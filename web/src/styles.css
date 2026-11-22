@@ -3630,35 +3630,72 @@ label.check.inline {
     color: var(--accent);
   }
 
-  /* -- list: header actions as labeled chips, rows as cards */
+  /* -- list: a quiet header and soft rows; only the open article is a card */
   .list-pane .pane-bar {
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 2px 4px;
+    min-height: 0;
+    padding: 12px 12px 4px 16px;
     border-bottom: 0;
   }
   .list-pane .pane-title {
     flex: 1 1 55%;
-    margin-right: 0;
-    font: 600 21px/1.2 Georgia, 'Iowan Old Style', serif;
+    margin: 0;
+    font: 600 19px/1.25 Georgia, 'Iowan Old Style', serif;
   }
   .list-pane .pane-bar > .icon-btn.texted {
-    height: 32px;
-    padding: 0 11px;
-    border-radius: 999px;
-    border: 1px solid var(--border);
-    background: var(--surface);
+    height: 30px;
+    min-width: 0;
+    padding: 0 8px;
+    margin-left: -4px;
+    border-radius: 8px;
     font-size: 12.5px;
     color: var(--text-2);
   }
+  .list-pane .pane-bar .btn-kbd {
+    display: none;
+  }
+  .list-pane .list-filters {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 12px 10px 16px;
+  }
+  .list-pane .filter-row {
+    display: contents;
+  }
+  .list-pane .segmented {
+    padding: 2px;
+  }
+  .list-pane .seg {
+    min-height: 28px;
+    padding: 2px 11px;
+    font-size: 13px;
+  }
+  .list-pane .list-filters .chip,
+  .list-pane .select-chip {
+    min-height: 28px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--surface-2);
+    font-size: 13px;
+  }
+  .list-pane .select-chip select {
+    font-size: 13px;
+  }
+  .list-pane .list-filters .chip.on {
+    background: var(--accent-soft);
+  }
   .list-scroll {
-    padding: 4px 0 12px;
+    padding: 6px 0 12px;
   }
   .list-pane .row {
-    width: calc(100% - 20px);
-    margin: 0 10px 8px;
-    border: 1px solid var(--border);
+    width: calc(100% - 16px);
+    margin: 0 8px 2px;
+    padding: 10px 12px;
+    border: 0;
     border-radius: 12px;
-    background: var(--surface);
+    background: transparent;
     transition: transform 0.15s ease, box-shadow 0.15s ease;
   }
   .list-pane .row:hover {
@@ -3670,16 +3707,18 @@ label.check.inline {
   }
   .list-pane .row-feed {
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--accent);
+    letter-spacing: 0.04em;
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--text-3);
   }
   .list-pane .row.selected {
     background: var(--paper);
-    border-color: transparent;
-    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.28);
-    transform: translateX(5px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+    transform: translateX(4px);
+  }
+  .list-pane .row.selected .row-feed {
+    color: var(--accent);
   }
   .list-pane .row.read {
     opacity: 0.6;
