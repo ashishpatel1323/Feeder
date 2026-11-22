@@ -11,7 +11,7 @@ import { isKokoroVoice, kokoro, KOKORO_PREFIX, KOKORO_VOICES, webGpuAvailable, t
 import { readAloud } from '../lib/readaloud'
 import { IconButton } from './Icon'
 
-function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
+export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
@@ -97,6 +97,50 @@ export function EditFeedDialog({ url, onClose, toast }: { url: string; onClose: 
   )
 }
 
+const articlesText = (n: number) => (n === 1 ? 'its 1 article' : `all its ${n} articles`)
+
+/** Deletes a feed and its articles here, then syncs so every other device deletes it too. */
+export async function deleteFeedEverywhere(url: string) {
+  await deleteFeed(url)
+  // Feeder's own sync sends a deletion for a feed it knew that is gone here
+  syncNow().catch(() => undefined)
+}
+
+/** Confirms deleting a feed from its page, saying how many articles go with it. */
+export function DeleteFeedDialog({
+  title,
+  articles,
+  saved,
+  onConfirm,
+  onClose,
+}: {
+  title: string
+  articles: number
+  saved: number
+  onConfirm: () => void
+  onClose: () => void
+}) {
+  return (
+    <Modal title={`Delete ${title}?`} onClose={onClose}>
+      <div className="form">
+        <p>
+          The feed and {articlesText(articles)} will be deleted{saved ? `, including ${saved} saved` : ''}.
+        </p>
+        <p className="muted small">It is also deleted on your other synced devices. This can't be undone.</p>
+        <div className="form-actions">
+          <span className="spacer" />
+          <button type="button" onClick={onClose} autoFocus>
+            Cancel
+          </button>
+          <button type="button" className="danger" onClick={onConfirm}>
+            Delete feed
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 /**
  * The feed's settings form. Used in the Edit feed dialog and, inline, on the feed's own page
  * (pass `inline`: no Cancel button, and the page stays open after saving).
@@ -150,9 +194,9 @@ export function EditFeedForm({
     onDone()
   }
   const remove = async () => {
-    if (!confirm(`Delete "${draft.customTitle || draft.title || draft.url}"? This also removes it from your other devices.`)) return
-    await deleteFeed(url)
-    syncNow().catch(() => undefined)
+    const count = await db.items.where('feedUrl').equals(url).count()
+    if (!confirm(`Delete "${draft.customTitle || draft.title || draft.url}" and ${articlesText(count)}? This also removes it from your other devices.`)) return
+    await deleteFeedEverywhere(url)
     toast('Feed deleted')
     onDeleted()
   }
@@ -190,9 +234,11 @@ export function EditFeedForm({
         <textarea rows={2} value={draft.allowRules} onChange={(e) => set({ allowRules: e.target.value })} />
       </label>
       <div className="form-actions">
-        <button type="button" className="danger" onClick={remove}>
-          {inline ? 'Unsubscribe' : 'Delete feed'}
-        </button>
+        {inline ? null : (
+          <button type="button" className="danger" onClick={remove}>
+            Delete feed
+          </button>
+        )}
         <span className="spacer" />
         {inline ? null : (
           <button type="button" onClick={onDone}>
