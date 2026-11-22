@@ -28,6 +28,7 @@ import okhttp3.Response
 import okhttp3.ResponseBody
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
+import okio.BufferedSource
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.kodein.di.DI
@@ -50,10 +51,28 @@ class FeedParser(
     private val goFeedAdapter = GoFeedAdapter()
 
     /**
-     * Parses all relevant information from a main site so duplicate calls aren't needed
+     * For optional lookups (a site's icon) that must never hold up adding or syncing a feed.
+     * The default client waits 30 seconds per connection attempt, which a dead home page uses up.
      */
-    suspend fun getSiteMetaData(url: URL): Either<FeedParserError, SiteMetaData> =
-        curl(url)
+    private val quickClient: OkHttpClient by lazy {
+        client
+            .newBuilder()
+            .connectTimeout(QUICK_CONNECT_TIMEOUT_SECS, TimeUnit.SECONDS)
+            .callTimeout(QUICK_CALL_TIMEOUT_SECS, TimeUnit.SECONDS)
+            .build()
+    }
+
+    /**
+     * Parses all relevant information from a main site so duplicate calls aren't needed
+     *
+     * @param quick use short timeouts, for best-effort lookups such as a feed's home page icon
+     */
+    suspend fun getSiteMetaData(
+        url: URL,
+        quick: Boolean = false,
+    ): Either<FeedParserError, SiteMetaData> =
+        (if (quick) quickClient else client)
+            .curl(url)
             .flatMap { html ->
                 getSiteMetaDataInHtml(url, html)
             }
@@ -221,6 +240,45 @@ class FeedParser(
                 it.copy(feed_url = url.toString())
             }
 
+    /**
+     * Parses only the feed's own header (title, description, icon) for previews.
+     *
+     * Reads the response until the first item and stops there, so a podcast feed of several
+     * megabytes isn't downloaded and parsed in full just to show its title. Falls back to
+     * reading and parsing everything when the header can't be cut out cleanly.
+     * The returned feed has no items.
+     */
+    suspend fun parseFeedPreviewUrl(url: URL): Either<FeedParserError, ParsedFeed> =
+        client
+            .curlAndOnResponse(url) { response ->
+                val body = response.body ?: return@curlAndOnResponse Either.Left(NoBody(url = url.toString()))
+                val responseUrl = response.request.url.toUrl()
+                if (!body.hasFeedContentType()) {
+                    return@curlAndOnResponse Either.Left(
+                        UnsupportedContentType(url = url.toString(), mimeType = body.contentType().toString()),
+                    )
+                }
+                Either.catching(
+                    onCatch = { t -> RSSParseError(url = url.toString(), throwable = t) },
+                ) {
+                    withContext(IO) {
+                        val source = body.source()
+                        val head = readFeedHead(source)
+                        head.truncated
+                            ?.let { runCatching { goFeedAdapter.parseBody(it)?.asFeed(responseUrl) }.getOrNull() }
+                            ?.takeIf { it.title != null || it.description != null }
+                            ?: run {
+                                // Not cut cleanly (unusual root, JSON feed, no items): parse everything
+                                head.buffer.writeAll(source)
+                                parseFeedBytes(responseUrl, head.buffer.readByteArray())
+                            }
+                    }?.copy(items = emptyList())
+                        ?: throw NullPointerException("Parsed feed is null")
+                }
+            }.map {
+                it.copy(feed_url = url.toString())
+            }
+
     internal fun parseFeedResponse(response: Response): Either<FeedParserError, ParsedFeed> =
         response.body?.use {
             // OkHttp string method handles BOM and Content-Type header in request
@@ -283,7 +341,53 @@ class FeedParser(
 
     companion object {
         private const val LOG_TAG = "FEEDER_FEEDPARSER"
+        private const val QUICK_CONNECT_TIMEOUT_SECS = 5L
+        private const val QUICK_CALL_TIMEOUT_SECS = 10L
     }
+}
+
+internal class FeedHead(
+    /** Everything read so far */
+    val buffer: Buffer,
+    /** The document up to its first item, with the root closed again; null when it couldn't be cut */
+    val truncated: ByteArray?,
+)
+
+private const val FEED_HEAD_LIMIT_BYTES = 1024L * 1024L
+private const val FEED_HEAD_CHUNK_BYTES = 16L * 1024L
+private val FIRST_ITEM_REGEX = Regex("<(item|entry)[\\s>/]")
+private val ATOM_ROOT_REGEX = Regex("<feed[\\s>]")
+
+/**
+ * Reads [source] until the first `<item>` (RSS) or `<entry>` (Atom), at most [FEED_HEAD_LIMIT_BYTES].
+ * Markers are ASCII, so searching a Latin-1 view of the bytes works for UTF-8 and single byte charsets.
+ */
+@VisibleForTesting
+internal fun readFeedHead(source: BufferedSource): FeedHead {
+    val buffer = Buffer()
+    val text = StringBuilder()
+    while (buffer.size < FEED_HEAD_LIMIT_BYTES) {
+        val chunk = Buffer()
+        if (source.read(chunk, FEED_HEAD_CHUNK_BYTES) == -1L) break
+        // Overlap a little so a marker split across two chunks is still found
+        val searchFrom = maxOf(0, text.length - 8)
+        text.append(chunk.snapshot().string(Charsets.ISO_8859_1))
+        buffer.writeAll(chunk)
+        // JSON feeds have no items to cut at, and "<item" may appear inside their HTML strings
+        if (text.firstOrNull { !it.isWhitespace() && it != '\u00EF' && it != '\u00BB' && it != '\u00BF' } == '{') {
+            return FeedHead(buffer, null)
+        }
+        val match = FIRST_ITEM_REGEX.find(text, startIndex = searchFrom) ?: continue
+        val head = text.substring(0, match.range.first)
+        val close =
+            when {
+                head.contains("<rdf:RDF", ignoreCase = true) -> "</rdf:RDF>"
+                ATOM_ROOT_REGEX.containsMatchIn(head) -> "</feed>"
+                else -> "</channel></rss>"
+            }
+        return FeedHead(buffer, (head + close).toByteArray(Charsets.ISO_8859_1))
+    }
+    return FeedHead(buffer, null)
 }
 
 private fun GoFeed.asFeed(url: URL): ParsedFeed =

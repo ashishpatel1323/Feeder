@@ -1,20 +1,38 @@
 /** Fetching feeds and storing their articles. */
 import { proxyFetch } from './api'
 import { db, getKv, itemId, newFeed, type Feed, type Item } from './db'
-import { countWords, findFeedLinks, htmlToText, parseFeed } from './feedparse'
+import { countWords, findFeedLinks, htmlToText, parseFeed, type ParsedArticle, type ParsedFeed } from './feedparse'
 import { makeFilter } from './filterrules'
 import { getSyncState, knownStateFor } from './sync2'
 
 export const MAX_ITEMS_PER_FEED_KEY = 'maxItemsPerFeed'
 
-async function fetchOne(feed: Feed): Promise<number> {
-  const { text } = await proxyFetch(feed.url)
-  const parsed = parseFeed(text, feed.url, feed.alternateId)
+/**
+ * The [max] newest articles, in feed order. Only that many are kept per feed anyway, so a podcast
+ * serving its whole archive (hundreds of episodes) shouldn't have every one stored and then pruned.
+ * Uses publish dates when every article has one, else the feed's own newest-first order.
+ */
+export function newestArticles(articles: ParsedArticle[], max: number): ParsedArticle[] {
+  if (articles.length <= max) return articles
+  if (articles.some((a) => a.published === null)) return articles.slice(0, max)
+  const keep = new Set(
+    articles
+      .map((a, i) => ({ t: a.published as number, i }))
+      .sort((x, y) => y.t - x.t)
+      .slice(0, max)
+      .map((x) => x.i),
+  )
+  return articles.filter((_, i) => keep.has(i))
+}
+
+/** Downloads (unless [prefetched], the feed just downloaded for adding it) and stores a feed's articles. */
+async function fetchOne(feed: Feed, prefetched?: ParsedFeed): Promise<number> {
+  const parsed = prefetched ?? parseFeed((await proxyFetch(feed.url)).text, feed.url, feed.alternateId)
   const keep = makeFilter(feed.blockRules, feed.allowRules)
   const now = Date.now()
-  const articles = parsed.articles.filter(keep)
-  let added = 0
   const max = await getKv<number>(MAX_ITEMS_PER_FEED_KEY, 200)
+  const articles = newestArticles(parsed.articles.filter(keep), max)
+  let added = 0
   const syncing = (await getSyncState()) !== null
 
   await db.transaction('rw', [db.items, db.feeds, db.remoteReadMarks, db.syncKnown, db.hidden], async () => {
@@ -136,19 +154,29 @@ export async function addFeed(input: string, tag = ''): Promise<string> {
   if (!/^https?:\/\//i.test(url)) url = `https://${url}`
   const { text, finalUrl, contentType } = await proxyFetch(url)
   let feedUrl = url
-  let title = ''
+  let parsed: ParsedFeed
   try {
-    title = parseFeed(text, url).title
+    parsed = parseFeed(text, url)
   } catch {
     if (!/html/i.test(contentType) && !/<html/i.test(text)) throw new Error('That address is not a feed')
     const links = findFeedLinks(text, finalUrl)
     if (!links.length) throw new Error('No feed found on that page')
     feedUrl = links[0].url
-    title = parseFeed((await proxyFetch(feedUrl)).text, feedUrl).title
+    parsed = parseFeed((await proxyFetch(feedUrl)).text, feedUrl)
   }
   const existing = await db.feeds.get(feedUrl)
-  if (!existing) await db.feeds.put(newFeed(feedUrl, { title, tag }))
-  await refreshFeeds([feedUrl])
+  if (existing) {
+    await refreshFeeds([feedUrl])
+  } else {
+    const feed = newFeed(feedUrl, { title: parsed.title, tag })
+    await db.feeds.put(feed)
+    // Store what was just downloaded and parsed instead of fetching a big feed a second time
+    try {
+      await fetchOne(feed, parsed)
+    } catch (e) {
+      await db.feeds.update(feedUrl, { lastError: e instanceof Error ? e.message : String(e), lastFetched: Date.now() })
+    }
+  }
   return feedUrl
 }
 

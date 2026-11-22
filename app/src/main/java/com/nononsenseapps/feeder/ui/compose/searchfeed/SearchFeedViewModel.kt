@@ -74,13 +74,16 @@ class SearchFeedViewModel(
                 }
         }.map { urlResult ->
             urlResult.flatMap { url ->
+                // Header only: a big podcast feed is megabytes of episodes nobody sees here
                 feedParser
-                    .parseFeedUrl(url)
+                    .parseFeedPreviewUrl(url)
                     .onRight { feed ->
-                        if (siteMetaData.isLeft()) {
+                        // The feed's own image beats a favicon, and saves a trip to a home page
+                        // that may be slow or down
+                        if (siteMetaData.isLeft() && feed.icon.isNullOrBlank()) {
                             feed.home_page_url?.let { pageLink ->
                                 sloppyLinkToStrictURLOrNull(pageLink)?.let { pageUrl ->
-                                    siteMetaData = feedParser.getSiteMetaData(pageUrl)
+                                    siteMetaData = feedParser.getSiteMetaData(pageUrl, quick = true)
                                 }
                             }
                         }
@@ -89,7 +92,7 @@ class SearchFeedViewModel(
                             title = feed.title ?: "",
                             url = feed.feed_url ?: url.toString(),
                             description = feed.description ?: "",
-                            feedImage = siteMetaData.getOrNull()?.feedImage ?: "",
+                            feedImage = siteMetaData.getOrNull()?.feedImage ?: feed.icon ?: "",
                         )
                     }.onLeft {
                         if (it is HttpError) {
