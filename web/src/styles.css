@@ -3598,6 +3598,9 @@ label.check.inline {
 
   /* -- sidebar: labeled tools under the name */
   .sidebar-top {
+    /* The sidebar is a flex column: without this a long feed list squeezes the
+       header back to one row and the tool buttons spill over the nav below */
+    flex: none;
     flex-wrap: wrap;
     gap: 4px;
     padding: 10px 10px 10px 16px;
