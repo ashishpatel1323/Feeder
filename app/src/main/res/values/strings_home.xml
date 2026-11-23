@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
   <string name="home">Home</string>
+  <string name="discover">Discover</string>
   <string name="home_type_all">All</string>
   <string name="home_podcasts">Podcasts</string>
   <string name="home_youtube">YouTube</string>

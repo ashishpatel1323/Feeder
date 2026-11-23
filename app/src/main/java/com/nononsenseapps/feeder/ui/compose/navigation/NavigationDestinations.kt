@@ -26,6 +26,7 @@ import com.nononsenseapps.feeder.db.room.ID_ALL_FEEDS
 import com.nononsenseapps.feeder.db.room.ID_UNSET
 import com.nononsenseapps.feeder.ui.MainActivityViewModel
 import com.nononsenseapps.feeder.ui.NavigationDeepLinkViewModel
+import com.nononsenseapps.feeder.ui.compose.discover.DiscoverScreen
 import com.nononsenseapps.feeder.ui.compose.downloads.DownloadsScreen
 import com.nononsenseapps.feeder.ui.compose.editfeed.CreateFeedScreen
 import com.nononsenseapps.feeder.ui.compose.editfeed.CreateFeedScreenViewModel
@@ -287,6 +288,34 @@ data object HomeDestination : NavigationDestination(
             onOpenArticles = { FeedDestination.navigate(navController, feedId = ID_ALL_FEEDS, keepBackStack = true) },
             onAddFeed = { SearchFeedDestination.navigate(navController) },
             onOpenPlaylists = { PlaylistsDestination.navigate(navController) },
+            onDiscover = { DiscoverDestination.navigate(navController) },
+        )
+    }
+}
+
+/** Discover: find new text feeds, podcasts and YouTube channels and add them to folders. */
+data object DiscoverDestination : NavigationDestination(
+    path = "discover",
+    navArguments = emptyList(),
+    deepLinks = emptyList(),
+) {
+    fun navigate(navController: NavController) {
+        navController.navigate(path) {
+            launchSingleTop = true
+        }
+    }
+
+    @Composable
+    override fun RegisterScreen(
+        navController: NavController,
+        backStackEntry: NavBackStackEntry,
+        navDrawerListState: LazyListState,
+        mainActivityViewModel: MainActivityViewModel,
+    ) {
+        DiscoverScreen(
+            viewModel = backStackEntry.diAwareViewModel(),
+            onNavigateUp = { navController.popBackStack() },
+            onOpenFeed = { id -> FeedDestination.navigate(navController, feedId = id, keepBackStack = true) },
         )
     }
 }
