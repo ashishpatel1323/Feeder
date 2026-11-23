@@ -18,6 +18,7 @@ import java.time.ZonedDateTime
 
 const val PREVIEW_COLUMNS = """
     feed_items.id AS id, guid, plain_title, plain_snippet, feed_items.image_url, enclosure_link,
+    enclosure_type, enclosure_duration,
     author, pub_date, link, read_time, feeds.tag AS tag, feeds.id AS feed_id, feeds.title AS feed_title,
     feeds.custom_title as feed_customtitle, feeds.url AS feed_url,
     feeds.open_articles_with AS feed_open_articles_with, bookmarked,
@@ -34,6 +35,9 @@ data class PreviewItem
         @ColumnInfo(name = "plain_snippet") var plainSnippet: String = "",
         @ColumnInfo(name = COL_IMAGEURL) var image: ThumbnailImage? = null,
         @ColumnInfo(name = "enclosure_link") var enclosureLink: String? = null,
+        @ColumnInfo(name = "enclosure_type") var enclosureType: String? = null,
+        // Episode length in seconds from the feed (itunes:duration), null when not given
+        @ColumnInfo(name = "enclosure_duration") var enclosureDuration: Long? = null,
         var author: String? = null,
         @ColumnInfo(name = "pub_date") var pubDate: ZonedDateTime? = null,
         var link: String? = null,
