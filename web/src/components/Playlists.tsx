@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, feedDisplayTitle, getKv, sortFolders, type Feed, type Item } from '../lib/db'
-import { FEED_KINDS_KEY, type FeedKind } from '../lib/home'
+import { feedDisplayTitle, sortFolders, type Feed, type Item } from '../lib/db'
 import {
   deletePlaylist,
   describeRules,
@@ -9,11 +8,9 @@ import {
   formatTotal,
   ITEM_KIND_LABELS,
   ITEM_KINDS,
-  itemSeconds,
   kindOf,
   loadPlaylists,
   seedPlaylists,
-  makeContext,
   matchesRules,
   moveItem,
   newPlaylist,
@@ -35,11 +32,12 @@ import {
   type SmartRules,
 } from '../lib/playlists'
 import { playQueue, useQueue } from '../lib/playqueue'
-import { knownDurations } from '../lib/downloads'
 import { saveVideo, useVideoSavingAvailable } from '../lib/offline'
 import { articleVideoId } from '../lib/youtube'
 import { Icon, IconButton } from './Icon'
-import { AddToPlaylistChip } from './AddToPlaylist'
+import { deleteItemWithUndo, ItemRow, usePlaylistContext } from './ItemRow'
+
+export { usePlaylistContext }
 
 type Toast = (msg: string, action?: { label: string; run: () => void }) => void
 
@@ -56,16 +54,6 @@ interface Props {
   toast: Toast
 }
 
-/** Everything the rules look at, kept live. */
-export function usePlaylistContext(feeds: Map<string, Feed>, rate: number): PlaylistContext {
-  const feedKinds = useLiveQuery(() => getKv<Record<string, FeedKind>>(FEED_KINDS_KEY, {}), []) ?? {}
-  const positions = useLiveQuery(() => db.videoPos.toArray(), []) ?? []
-  return useMemo(
-    () => makeContext({ feeds, feedKinds, positions: new Map(positions.map((p) => [p.id, p])), videoDurations: knownDurations(), rate }),
-    [feeds, feedKinds, positions, rate],
-  )
-}
-
 export function usePlaylists(): Playlist[] {
   useEffect(() => void seedPlaylists().catch(() => undefined), [])
   return useLiveQuery(() => loadPlaylists(), []) ?? []
@@ -77,21 +65,6 @@ function Tile({ pl, size = 44 }: { pl: Pick<Playlist, 'icon' | 'color'>; size?: 
       {pl.icon}
     </span>
   )
-}
-
-function Thumb({ src, kind }: { src: string | null; kind: string }) {
-  const [broken, setBroken] = useState(false)
-  if (src && !broken) return <img className="pl-thumb" src={src} alt="" loading="lazy" onError={() => setBroken(true)} />
-  return (
-    <span className="pl-thumb gen">
-      <Icon name={kind === 'article' ? 'article' : 'headphones'} size={20} />
-    </span>
-  )
-}
-
-function lengthLabel(s: number | null): string {
-  if (s == null) return ''
-  return formatTotal(s)
 }
 
 export function PlaylistsPage(p: Props) {
@@ -360,62 +333,73 @@ function PlaylistDetail(p: {
         <ol className="pl-items">
           {its.map((it, index) => {
             const kind = kindOf(it, p.ctx)
-            const secs = itemSeconds(it, p.ctx)
-            const feed = p.feeds.get(it.feedUrl)
             const needsDownload = kind === 'youtube' && !it.offlineVideo
             return (
-              <li
-                key={it.id}
-                className={`pl-item${it.id === playingId ? ' playing' : ''}${dragging === it.id ? ' dragging' : ''}${it.read ? ' read' : ''}`}
-                draggable={!pl.smart}
-                onDragStart={(e) => {
-                  setDragging(it.id)
-                  e.dataTransfer.effectAllowed = 'move'
-                  e.dataTransfer.setData('text/plain', it.id)
-                }}
-                onDragEnd={() => setDragging(null)}
-                onDragOver={(e) => {
-                  if (!pl.smart && dragging) e.preventDefault()
-                }}
-                onDrop={(e) => {
-                  e.preventDefault()
-                  if (dragging && dragging !== it.id) move(dragging, index)
-                  setDragging(null)
-                }}
-              >
-                {pl.smart ? <span className="pl-num">{index + 1}</span> : <span className="pl-grip" aria-hidden="true"><Icon name="dragHandle" size={18} /></span>}
-                <Thumb src={it.imageUrl} kind={kind} />
-                <button className="pl-item-main" onClick={() => p.onOpenArticle(it.id, its.map((x) => x.id))} title="Open">
-                  <span className="pl-item-title">{it.title || '(no title)'}</span>
-                  <span className="pl-item-meta">
-                    <span className={`ty ${kind}`}>{ITEM_KIND_LABELS[kind]}</span>
-                    {feedDisplayTitle(feed)}
-                    {secs != null ? ` · ${lengthLabel(secs)}${kind === 'article' ? ' read aloud' : ''}` : ''}
-                    {needsDownload ? ' · needs download to play' : ''}
-                    {it.read ? ' · read' : ''}
-                  </span>
-                </button>
-                <span className="pl-item-actions">
-                  <button className="mf-btn" onClick={() => p.onPlay(index)} title="Play from here">
-                    <Icon name="play" size={16} />
-                    <span>Play</span>
-                  </button>
-                  <AddToPlaylistChip id={it.id} title={it.title} />
-                  {!pl.smart ? (
-                    <>
-                      <IconButton icon="collapse" label="Move up" onClick={() => move(it.id, index - 1)} disabled={index === 0} />
-                      <IconButton icon="expand" label="Move down" onClick={() => move(it.id, index + 1)} disabled={index === its.length - 1} />
-                      <IconButton
-                        icon="close"
-                        label="Take out of this playlist"
-                        onClick={() => {
-                          void removeFromPlaylist(pl.id, [it.id])
-                          p.toast('Taken out of the playlist', { label: 'Undo', run: () => void savePlaylist(pl) })
-                        }}
-                      />
-                    </>
-                  ) : null}
-                </span>
+              <li key={it.id}>
+                <ItemRow
+                  item={it}
+                  feed={p.feeds.get(it.feedUrl)}
+                  ctx={p.ctx}
+                  className={`pl-item${it.id === playingId ? ' playing' : ''}${dragging === it.id ? ' dragging' : ''}`}
+                  rowProps={{
+                    draggable: !pl.smart,
+                    onDragStart: (e) => {
+                      setDragging(it.id)
+                      e.dataTransfer.effectAllowed = 'move'
+                      e.dataTransfer.setData('text/plain', it.id)
+                    },
+                    onDragEnd: () => setDragging(null),
+                    onDragOver: (e) => {
+                      if (!pl.smart && dragging) e.preventDefault()
+                    },
+                    onDrop: (e) => {
+                      e.preventDefault()
+                      if (dragging && dragging !== it.id) move(dragging, index)
+                      setDragging(null)
+                    },
+                  }}
+                  leading={
+                    pl.smart ? (
+                      <span className="ir-lead pl-num">{index + 1}</span>
+                    ) : (
+                      <span className="ir-lead pl-grip" aria-hidden="true">
+                        <Icon name="dragHandle" size={18} />
+                      </span>
+                    )
+                  }
+                  onOpen={() => p.onOpenArticle(it.id, its.map((x) => x.id))}
+                  onPrimary={() => p.onPlay(index)}
+                  primaryLabel={it.id === playingId ? 'Playing' : 'Play'}
+                  primaryIcon="play"
+                  metaExtra={needsDownload ? <span>Needs download to play</span> : null}
+                  inPlaylist
+                  onDelete={() => void deleteItemWithUndo(it, p.toast)}
+                  extras={
+                    !pl.smart ? (
+                      <>
+                        <button type="button" className="ir-btn" onClick={() => move(it.id, index - 1)} disabled={index === 0}>
+                          <Icon name="collapse" size={16} />
+                          Move up
+                        </button>
+                        <button type="button" className="ir-btn" onClick={() => move(it.id, index + 1)} disabled={index === its.length - 1}>
+                          <Icon name="expand" size={16} />
+                          Move down
+                        </button>
+                        <button
+                          type="button"
+                          className="ir-btn"
+                          onClick={() => {
+                            void removeFromPlaylist(pl.id, [it.id])
+                            p.toast('Taken out of the playlist', { label: 'Undo', run: () => void savePlaylist(pl) })
+                          }}
+                        >
+                          <Icon name="close" size={16} />
+                          Remove
+                        </button>
+                      </>
+                    ) : null
+                  }
+                />
               </li>
             )
           })}
