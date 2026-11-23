@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CLOSED_FOLDERS_KEY, collapseAllFolders, loadClosedFolders, saveClosedFolders, toggleFolder } from '../folders'
+import { CLOSED_FOLDERS_KEY, collapseAllFolders, MANAGE_CLOSED_FOLDERS_KEY, loadClosedFolders, saveClosedFolders, toggleFolder } from '../folders'
 
 const mem = () => {
   const m = new Map<string, string>()
@@ -31,5 +31,14 @@ describe('sidebar folder collapse state', () => {
     s.setItem(CLOSED_FOLDERS_KEY, '[1,"x"]')
     expect(loadClosedFolders(s)).toEqual(['x'])
     expect(loadClosedFolders(undefined)).toEqual([])
+  })
+
+  it('keeps the Manage feeds page state apart, including No folder', () => {
+    const s = mem()
+    saveClosedFolders(['News'], s)
+    saveClosedFolders(['', 'Tech'], s, MANAGE_CLOSED_FOLDERS_KEY)
+    expect(loadClosedFolders(s)).toEqual(['News'])
+    expect(loadClosedFolders(s, MANAGE_CLOSED_FOLDERS_KEY)).toEqual(['', 'Tech'])
+    expect(toggleFolder(['', 'Tech'], '')).toEqual(['Tech'])
   })
 })

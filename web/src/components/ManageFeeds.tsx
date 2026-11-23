@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
     addEmptyFolder,
@@ -24,6 +24,7 @@ import {
     type Item,
 } from '../lib/db'
 import { computeFeedStats, formatRate, noStats, STATS_DAYS, timeAgo, type FeedStats } from '../lib/feedstats'
+import { loadClosedFolders, MANAGE_CLOSED_FOLDERS_KEY, saveClosedFolders, toggleFolder } from '../lib/folders'
 import { addFeed, exportOpml, importOpml, refreshFeeds } from '../lib/refresh'
 import { syncNow } from '../lib/sync2'
 import { FeedIcon } from './Sidebar'
@@ -187,6 +188,9 @@ export function ManageFeeds(p: Props) {
 
     const [filter, setFilter] = useState('')
     const [sort, setSort] = useState<Sort>('folder')
+    /** Collapsed folder cards ("" is No folder), remembered in this browser like the sidebar's folders. */
+    const [closedTags, setClosedTags] = useState<string[]>(() => loadClosedFolders(globalThis.localStorage, MANAGE_CLOSED_FOLDERS_KEY))
+    useEffect(() => saveClosedFolders(closedTags, globalThis.localStorage, MANAGE_CLOSED_FOLDERS_KEY), [closedTags])
     const [selected, setSelected] = useState<Set<string>>(new Set())
     const [renaming, setRenaming] = useState<{
         url: string
@@ -265,7 +269,13 @@ export function ManageFeeds(p: Props) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sort, folders, stats, q])
 
-    const visibleUrls = shownFolders.flatMap(([, , shown]) => shown.map((f) => f.url))
+    /** A search or a filtering sort opens every folder so no match is hidden. */
+    const filtering = !!q || sort === 'stale' || sort === 'errors'
+    const isClosed = (tag: string) => !filtering && closedTags.includes(tag)
+    /** Folder cards on screen right now, for Expand all / Collapse all. */
+    const cardTags = folders.filter(([tag, list]) => tag || list.length).map(([tag]) => tag)
+    /** Select all only picks feeds you can see, never ones inside a collapsed folder. */
+    const visibleUrls = shownFolders.flatMap(([tag, , shown]) => (isClosed(tag) ? [] : shown.map((f) => f.url)))
     const allVisibleSelected = visibleUrls.length > 0 && visibleUrls.every((u) => selected.has(u))
 
     const toggleSel = (url: string) =>
@@ -619,9 +629,15 @@ export function ManageFeeds(p: Props) {
         const unread = list.reduce((n, f) => n + statsOf(f.url).unread, 0)
         const isRenaming = renamingTag?.tag === tag
         const isDeleting = deletingTag === tag
+        const closed = isClosed(tag)
+        const name = tag || 'No folder'
         const target = dropTag === tag && ((dragUrl && p.feeds.find((f) => f.url === dragUrl)?.tag !== tag) || (dragTag !== null && dragTag !== tag))
         return (
-            <section key={`tag:${tag}`} className={`mf-card${target ? ' drop-target' : ''}${dragTag === tag ? ' dragging' : ''}`} {...folderDrop(tag)}>
+            <section
+                key={`tag:${tag}`}
+                className={`mf-card${target ? ' drop-target' : ''}${dragTag === tag ? ' dragging' : ''}${closed ? ' closed' : ''}`}
+                {...folderDrop(tag)}
+            >
                 <div
                     className="mf-fhead"
                     draggable={!!tag && !isRenaming}
@@ -633,6 +649,17 @@ export function ManageFeeds(p: Props) {
                     }}
                     onDragEnd={endDrag}
                 >
+                    <button
+                        type="button"
+                        className="mf-toggle"
+                        disabled={filtering}
+                        title={filtering ? 'Folders stay open while searching or filtering' : closed ? `Expand ${name}` : `Collapse ${name}`}
+                        aria-label={closed ? `Expand ${name}` : `Collapse ${name}`}
+                        aria-expanded={!closed}
+                        onClick={() => setClosedTags((t) => toggleFolder(t, tag))}
+                    >
+                        <Icon name={closed ? 'next' : 'expand'} size={18} />
+                    </button>
                     {tag ? (
                         <span className="mf-handle" title="Drag to reorder folders">
                             <Icon name="dragHandle" size={18} />
@@ -660,7 +687,12 @@ export function ManageFeeds(p: Props) {
                             <Btn icon="close" label="Cancel" onClick={() => setRenamingTag(null)} />
                         </>
                     ) : (
-                        <span className={`mf-fname${tag ? '' : ' none'}`}>{tag || 'No folder'}</span>
+                        <span
+                            className={`mf-fname${tag ? '' : ' none'}${filtering ? '' : ' toggle'}`}
+                            onClick={filtering ? undefined : () => setClosedTags((t) => toggleFolder(t, tag))}
+                        >
+                            {name}
+                        </span>
                     )}
                     <span className="mf-fcount">
                         {list.length} feed{list.length === 1 ? '' : 's'}
@@ -691,8 +723,8 @@ export function ManageFeeds(p: Props) {
                         </>
                     ) : null}
                 </div>
-                {shown.map((f, i) => feedRow(f, i, list, sort === 'folder'))}
-                {!list.length ? <div className="mf-emptyrow">Drop feeds here</div> : null}
+                {closed ? null : shown.map((f, i) => feedRow(f, i, list, sort === 'folder'))}
+                {!closed && !list.length ? <div className="mf-emptyrow">Drop feeds here</div> : null}
             </section>
         )
     }
@@ -794,6 +826,28 @@ export function ManageFeeds(p: Props) {
                             {label}
                         </button>
                     ))}
+                    {cardTags.length > 1 ? (
+                        <span className="mf-foldall">
+                            <button
+                                type="button"
+                                className="mf-btn ghost"
+                                disabled={filtering || !closedTags.some((t) => cardTags.includes(t))}
+                                onClick={() => setClosedTags((t) => t.filter((x) => !cardTags.includes(x)))}
+                            >
+                                <Icon name="unfoldMore" size={18} />
+                                <span>Expand all</span>
+                            </button>
+                            <button
+                                type="button"
+                                className="mf-btn ghost"
+                                disabled={filtering || cardTags.every((t) => closedTags.includes(t))}
+                                onClick={() => setClosedTags((t) => [...new Set([...t, ...cardTags])])}
+                            >
+                                <Icon name="unfoldLess" size={18} />
+                                <span>Collapse all</span>
+                            </button>
+                        </span>
+                    ) : null}
                 </div>
 
                 {selected.size ? (
