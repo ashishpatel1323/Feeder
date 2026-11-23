@@ -475,6 +475,19 @@ class PlaylistPlayer(
         _state.value = _state.value.copy(audioSpeed = speed)
     }
 
+    fun articleSpeed(): Float = tts.progress.value.speed.takeIf { it > 0f } ?: 1f
+
+    /** Speed of what plays now: read-aloud speed for articles, audio speed for the rest. */
+    fun setSpeed(speed: Float) {
+        if (_state.value.kind == ItemKind.ARTICLE) tts.setSpeed(speed) else setAudioSpeed(speed)
+    }
+
+    /** The car's Speed button: 1, 1.25, 1.5, 1.75, 2, then back to 1. */
+    fun cycleSpeed() {
+        val now = if (_state.value.kind == ItemKind.ARTICLE) articleSpeed() else _state.value.audioSpeed
+        setSpeed(CAR_SPEEDS.firstOrNull { it > now + 0.01f } ?: CAR_SPEEDS.first())
+    }
+
     /** Takes an item out of the queue (not out of any playlist). */
     fun remove(index: Int) {
         val s = _state.value
@@ -519,3 +532,5 @@ class PlaylistPlayer(
         app.stopService(Intent(app, PlaylistPlaybackService::class.java))
     }
 }
+
+private val CAR_SPEEDS = listOf(1f, 1.25f, 1.5f, 1.75f, 2f)
