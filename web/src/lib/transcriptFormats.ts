@@ -188,3 +188,33 @@ export function bestTranscriptLink(links: TranscriptLink[]): TranscriptLink | nu
   }
   return links.filter(isTimedLink).sort((a, b) => score(a) - score(b))[0] ?? null
 }
+
+/** One place the search text appears: in cue `cue`, characters `start` to `end` of its text. */
+export interface TranscriptMatch {
+  cue: number
+  start: number
+  end: number
+}
+
+/** Every place `query` appears in the transcript, ignoring case and accents. */
+export function findMatches(cues: TranscriptCue[], query: string): TranscriptMatch[] {
+  const fold = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
+  const q = fold(query.trim())
+  if (!q) return []
+  const matches: TranscriptMatch[] = []
+  cues.forEach((cue, i) => {
+    // Folding only drops accent marks, so positions are mapped back through the original text
+    const original = cue.text
+    const map: number[] = []
+    let folded = ''
+    for (let j = 0; j < original.length; j++) {
+      const f = fold(original[j])
+      for (let k = 0; k < f.length; k++) map.push(j)
+      folded += f
+    }
+    for (let at = folded.indexOf(q); at >= 0; at = folded.indexOf(q, at + q.length)) {
+      matches.push({ cue: i, start: map[at], end: map[at + q.length - 1] + 1 })
+    }
+  })
+  return matches
+}

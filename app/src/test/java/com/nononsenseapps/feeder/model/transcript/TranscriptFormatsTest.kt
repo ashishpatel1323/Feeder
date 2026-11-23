@@ -66,6 +66,21 @@ class TranscriptFormatsTest {
     }
 
     @Test
+    fun searchesIgnoringCaseAndAccents() {
+        val cues =
+            listOf(
+                TranscriptCue(0, 1, "Café au lait, cafe noir"),
+                TranscriptCue(1, 2, "No coffee here"),
+                TranscriptCue(2, 3, "CAFE again"),
+            )
+        assertEquals(
+            listOf(TranscriptMatch(0, 0, 4), TranscriptMatch(0, 14, 18), TranscriptMatch(2, 0, 4)),
+            cues.findMatches("cafe"),
+        )
+        assertEquals(emptyList<TranscriptMatch>(), cues.findMatches("  "))
+    }
+
+    @Test
     fun findsCueAtPosition() {
         val cues = listOf(TranscriptCue(1000, 2000, "a"), TranscriptCue(2000, 3000, "b"), TranscriptCue(5000, 6000, "c"))
         assertEquals(-1, cues.indexAt(500))

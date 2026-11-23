@@ -1,5 +1,25 @@
 package com.nononsenseapps.feeder.ui.compose.transcript
 
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.IconButton
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.input.ImeAction
+import com.nononsenseapps.feeder.model.transcript.TranscriptMatch
+import com.nononsenseapps.feeder.model.transcript.findMatches
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
@@ -72,22 +92,125 @@ fun TranscriptPanel(
     LaunchedEffect(itemId) { transcripts.load(itemId) }
     val state by remember(itemId) { transcripts.state(itemId) }.collectAsState(transcripts.current(itemId))
 
+    var searchOpen by rememberSaveable(itemId) { mutableStateOf(false) }
+    var query by rememberSaveable(itemId) { mutableStateOf("") }
+    var active by remember(itemId) { mutableIntStateOf(0) }
+    val matches = remember(searchOpen, state.cues, query) { if (searchOpen) state.cues.findMatches(query) else emptyList() }
+    // A new search starts at the first match from where the episode is now
+    LaunchedEffect(query) {
+        val now = state.cues.indexAt(positionMs)
+        active = matches.indexOfFirst { it.cue >= now }.coerceAtLeast(0)
+    }
+    fun step(by: Int) {
+        if (matches.isNotEmpty()) active = (active + by + matches.size) % matches.size
+    }
+
     Column(modifier = modifier) {
-        TranscriptStatusRow(
-            state = state,
-            canGenerate = transcripts.canGenerate,
-            modelSizeMb = transcripts.modelSizeMb,
-            onGenerate = { transcripts.generate(itemId) },
-            onStop = transcripts::stopGenerating,
-            onRedo = { transcripts.delete(itemId) },
-        )
+        Row(verticalAlignment = Alignment.Top) {
+            Box(modifier = Modifier.weight(1f)) {
+                TranscriptStatusRow(
+                    state = state,
+                    canGenerate = transcripts.canGenerate,
+                    modelSizeMb = transcripts.modelSizeMb,
+                    onGenerate = { transcripts.generate(itemId) },
+                    onStop = transcripts::stopGenerating,
+                    onRedo = { transcripts.delete(itemId) },
+                )
+            }
+            if (state.cues.isNotEmpty() && !searchOpen) {
+                IconButton(onClick = { searchOpen = true }) {
+                    Icon(Icons.Default.Search, contentDescription = stringResource(R.string.transcript_search))
+                }
+            }
+        }
+        if (searchOpen) {
+            TranscriptSearchBar(
+                query = query,
+                onQuery = { query = it },
+                count = matches.size,
+                active = active,
+                onPrevious = { step(-1) },
+                onNext = { step(1) },
+                onClose = {
+                    searchOpen = false
+                    query = ""
+                },
+            )
+        }
         if (state.cues.isNotEmpty()) {
             TranscriptLines(
                 cues = state.cues,
                 positionMs = positionMs,
                 onSeek = onSeek,
+                matches = matches,
+                activeMatch = if (matches.isEmpty()) -1 else active,
+                searching = searchOpen && query.isNotBlank(),
                 modifier = Modifier.weight(1f, fill = false),
             )
+        }
+    }
+}
+
+@Composable
+private fun TranscriptSearchBar(
+    query: String,
+    onQuery: (String) -> Unit,
+    count: Int,
+    active: Int,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onClose: () -> Unit,
+) {
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 4.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                .padding(start = 14.dp),
+    ) {
+        Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        BasicTextField(
+            value = query,
+            onValueChange = onQuery,
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { onNext() }),
+            decorationBox = { inner ->
+                Box {
+                    if (query.isEmpty()) {
+                        Text(
+                            stringResource(R.string.transcript_search),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    inner()
+                }
+            },
+            modifier = Modifier.weight(1f).padding(horizontal = 10.dp).focusRequester(focus),
+        )
+        if (query.isNotBlank()) {
+            Text(
+                if (count > 0) stringResource(R.string.transcript_search_count, active + 1, count) else stringResource(R.string.transcript_search_none),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        IconButton(onClick = onPrevious, enabled = count > 0) {
+            Icon(Icons.Default.KeyboardArrowUp, contentDescription = stringResource(R.string.transcript_search_previous))
+        }
+        IconButton(onClick = onNext, enabled = count > 0) {
+            Icon(Icons.Default.KeyboardArrowDown, contentDescription = stringResource(R.string.transcript_search_next))
+        }
+        IconButton(onClick = onClose) {
+            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.transcript_search_close))
         }
     }
 }
@@ -210,6 +333,9 @@ private fun TranscriptLines(
     cues: List<TranscriptCue>,
     positionMs: Long,
     onSeek: (Long) -> Unit,
+    matches: List<TranscriptMatch>,
+    activeMatch: Int,
+    searching: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -225,7 +351,15 @@ private fun TranscriptLines(
             handScrolledAt = System.currentTimeMillis()
         }
     }
-    LaunchedEffect(current, following, handScrolledAt) {
+    val byCue = remember(matches) { matches.groupBy { it.cue } }
+    val selected = matches.getOrNull(activeMatch)
+    // While searching, the list stays on the results instead of following playback
+    LaunchedEffect(selected) {
+        // The panel can be short (above the player bar), so the match itself goes to the top
+        if (selected != null) listState.animateScrollToItem(selected.cue)
+    }
+    LaunchedEffect(current, following, handScrolledAt, searching) {
+        if (searching) return@LaunchedEffect
         if (!following) {
             kotlinx.coroutines.delay(FOLLOW_AGAIN_AFTER_MS)
             following = true
@@ -243,6 +377,8 @@ private fun TranscriptLines(
                 val showSpeaker = cue.speaker != null && cue.speaker != cues.getOrNull(index - 1)?.speaker
                 CueLine(
                     cue = cue,
+                    matches = byCue[index].orEmpty(),
+                    selected = selected,
                     speaker = if (showSpeaker) cue.speaker else null,
                     state =
                         when {
@@ -256,7 +392,7 @@ private fun TranscriptLines(
                 )
             }
         }
-        if (!following && current >= 0) {
+        if (!following && !searching && current >= 0) {
             SmallFloatingActionButton(
                 onClick = {
                     following = true
@@ -275,6 +411,8 @@ private enum class CueState { PAST, NOW, LATER }
 @Composable
 private fun CueLine(
     cue: TranscriptCue,
+    matches: List<TranscriptMatch>,
+    selected: TranscriptMatch?,
     speaker: String?,
     state: CueState,
     onClick: () -> Unit,
@@ -301,7 +439,7 @@ private fun CueLine(
                 modifier = Modifier.padding(top = 3.dp).width(44.dp),
             )
             Text(
-                cue.text,
+                markedText(cue.text, matches, selected, colors.tertiaryContainer, colors.tertiary),
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = if (state == CueState.NOW) FontWeight.Medium else FontWeight.Normal,
                 color =
@@ -314,6 +452,29 @@ private fun CueLine(
         }
     }
 }
+
+/** The cue's text with the search matches marked; the selected one stands out. */
+private fun markedText(
+    text: String,
+    matches: List<TranscriptMatch>,
+    selected: TranscriptMatch?,
+    markColor: Color,
+    selectedColor: Color,
+): AnnotatedString =
+    buildAnnotatedString {
+        append(text)
+        for (m in matches) {
+            addStyle(
+                if (m == selected) {
+                    SpanStyle(background = selectedColor, color = Color.White, fontWeight = FontWeight.SemiBold)
+                } else {
+                    SpanStyle(background = markColor)
+                },
+                m.start,
+                m.end.coerceAtMost(text.length),
+            )
+        }
+    }
 
 private const val FOLLOW_AGAIN_AFTER_MS = 5000L
 private const val PAUSE_GRACE_MS = 2000L
