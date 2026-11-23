@@ -41,7 +41,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -202,7 +202,7 @@ fun SwipeableFeedItemPreview(
         modifier =
             modifier
                 .width(dimens.maxContentWidth)
-                .clip(MaterialTheme.shapes.medium)
+                .clipToBounds()
                 .combinedClickable(
                     // Long press starts multi-select; every action also has a button on the row
                     onLongClick = onToggleSelect,
@@ -382,7 +382,7 @@ fun SwipeableFeedItemPreview(
             },
             modifier =
                 rowOffset
-                    .background(MaterialTheme.colorScheme.surface),
+                    .background(MaterialTheme.colorScheme.background),
         )
 
         if (selected) {

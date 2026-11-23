@@ -838,6 +838,17 @@ fun ArticleContent(
                         }
                     },
                 )
+                // The episode's media block, right under the header like in Flip
+                if (kind == ItemKind.PODCAST && viewState.useInAppAudioPlayer && viewState.enclosure.link.isNotBlank()) {
+                    PodcastMediaBlock(
+                        itemId = viewState.articleId,
+                        link = viewState.enclosure.link,
+                        lengthSeconds = lengthSeconds,
+                        image = viewState.image?.url,
+                        progress = progress,
+                        showTranscript = showTranscript,
+                    )
+                }
             }
         },
         screenType = screenType,
@@ -892,18 +903,7 @@ fun ArticleContent(
         modifier = if (onUserScroll != null) modifier.stopSpeechFollowingOnAccessibilityScroll(articleScrollState, onUserScroll) else modifier,
         articleScrollState = articleScrollState,
         video =
-            if (kind == ItemKind.PODCAST && viewState.useInAppAudioPlayer) {
-                {
-                    PodcastMediaBlock(
-                        itemId = viewState.articleId,
-                        link = viewState.enclosure.link,
-                        lengthSeconds = lengthSeconds,
-                        image = viewState.image?.url,
-                        progress = progress,
-                        showTranscript = showTranscript,
-                    )
-                }
-            } else if (youtubeId != null) {
+            if (youtubeId != null) {
                 {
                     YouTubeVideoBlock(
                         videoId = youtubeId,

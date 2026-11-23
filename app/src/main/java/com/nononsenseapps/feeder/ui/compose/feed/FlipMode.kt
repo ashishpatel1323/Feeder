@@ -469,7 +469,7 @@ fun FeedFlipContent(
                 // How far this page is from the settled position: 0 on screen, 1 flipped away above,
                 // -1 waiting below. Read in the draw phase so flipping does not recompose.
                 offset = { (pagerState.currentPage - pageIndex) + pagerState.currentPageOffsetFraction },
-            ) {
+            ) { live ->
                 if (item == null || cardState == null) {
                     Box(
                         modifier =
@@ -482,6 +482,7 @@ fun FeedFlipContent(
                     FlipArticleCard(
                         item = item,
                         state = cardState,
+                        live = live,
                         keptUnread = kept,
                         spokenRanges = spokenRanges,
                         onOpen = {
@@ -706,14 +707,24 @@ private val BottomHalf =
  * over the fold; a page below (offset < 0) swings its top half down. Each moving half disappears
  * once it is edge-on, where the neighbouring page's half takes over, so a flip reads as one leaf
  * turning over. The halves under the turning leaf are shaded to give it depth.
+ *
+ * At rest the page is drawn once (live = true), so a video player on it exists only once. The
+ * card's state lives in FlipCardState, so starting the content afresh in each branch is intended.
  */
+@Suppress("ktlint:compose:content-slot-reused")
 @Composable
 private fun PageTurn(
     offset: () -> Float,
-    content: @Composable () -> Unit,
+    content: @Composable (live: Boolean) -> Unit,
 ) {
     // The page whose leaf is turning has to draw above its neighbours
     val onTop by remember { derivedStateOf { abs(offset()) < 0.5f } }
+    // A page at rest is drawn once, so a video player on it exists only once and takes taps
+    val atRest by remember { derivedStateOf { offset() == 0f } }
+    if (atRest) {
+        Box(modifier = Modifier.fillMaxSize().zIndex(1f)) { content(true) }
+        return
+    }
     val density = LocalDensity.current.density
     Box(
         modifier =
@@ -742,7 +753,7 @@ private fun PageTurn(
                             alpha = if (moving && abs(o) >= 0.5f) 0f else 1f
                         },
             ) {
-                content()
+                content(false)
                 Box(
                     modifier =
                         Modifier
@@ -771,6 +782,12 @@ private class FlipCardState(
     private val failedText: String,
 ) {
     var bodyText by mutableStateOf(initialText)
+
+    // Video page: the player is shown in place of the text
+    var watching by mutableStateOf(false)
+
+    // Episode page: the transcript is shown under the player
+    var showTranscript by mutableStateOf(false)
 
     // The longer article text has been looked up (it may still be the snippet if there is none)
     var loaded by mutableStateOf(false)
@@ -872,6 +889,8 @@ private fun FlipArticleCard(
     state: FlipCardState,
     keptUnread: Boolean,
     spokenRanges: List<SpokenRanges?>,
+    // False while the page turns (drawn as two halves): no video player then
+    live: Boolean,
     onOpen: () -> Unit,
     onToggleRead: () -> Unit,
     onToggleBookmark: () -> Unit,
@@ -892,9 +911,10 @@ private fun FlipArticleCard(
             positionLength = progress?.lengthSeconds,
         )
     val player = rememberItemPlayer()
-    // Watch on a video page swaps the text for the player
-    var watching by remember(item.id) { mutableStateOf(false) }
-    var showTranscript by remember(item.id) { mutableStateOf(false) }
+    // Watch on a video page swaps the text for the player; kept in the card state so both halves
+    // of a turning page agree
+    val watching = state.watching
+    var showTranscript by state::showTranscript
     // Play on an episode page counts as starting its media, for auto-turn
     val playingHere = player.isPlaying(item.id)
     val currentOnMediaStart by rememberUpdatedState(onMediaStart)
@@ -984,9 +1004,9 @@ private fun FlipArticleCard(
                         .padding(
                             start = 16.dp,
                             end = 16.dp,
-                            // Text-only cards start right under the close button; image cards just above
+                            // Text-only cards (and a video being watched) start under the close button; image cards just above
                             // the bottom of the photo
-                            top = if (image != null && !watching) photoHeight - 36.dp else 64.dp,
+                            top = if (image != null && !watching) photoHeight - 36.dp else 100.dp,
                             // Clear of the gesture area at the bottom of the screen
                             bottom = 28.dp,
                         ),
@@ -1034,7 +1054,7 @@ private fun FlipArticleCard(
                             .padding(horizontal = 4.dp),
                 ) {
                     val videoId = youtubeVideoId(item.link)
-                    if (watching && videoId != null) {
+                    if (watching && live && videoId != null) {
                         YouTubeVideoBlock(
                             videoId = videoId,
                             articleKey = item.videoKey,
@@ -1122,7 +1142,7 @@ private fun FlipArticleCard(
                                     icon = primaryIcon(kind),
                                     label = primaryLabel(kind, progress),
                                     onClick = {
-                                        watching = true
+                                        state.watching = true
                                         onMediaStart()
                                     },
                                     primary = true,
