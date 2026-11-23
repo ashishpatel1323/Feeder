@@ -1661,6 +1661,10 @@ details summary {
   border-color: var(--accent);
   color: var(--accent-ink);
 }
+.mf-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
 .mf-btn.primary:disabled {
   opacity: 0.55;
   cursor: default;
@@ -1747,6 +1751,11 @@ details summary {
   color: var(--text-3);
   font-size: 13px;
 }
+.mf-foldall {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: auto;
+}
 .mf-chip {
   height: 30px;
   padding: 0 12px;
@@ -1815,9 +1824,35 @@ details summary {
   border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
 }
+.mf-card.closed > .mf-fhead {
+  border-bottom: 0;
+}
+.mf-toggle {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin: 0 -4px 0 -2px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.mf-toggle:hover:not(:disabled) {
+  background: var(--surface);
+  color: var(--text);
+}
+.mf-toggle:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
 .mf-fname {
   font-weight: 600;
   font-size: 15px;
+}
+.mf-fname.toggle {
+  cursor: pointer;
 }
 .mf-fname.none {
   color: var(--text-2);
