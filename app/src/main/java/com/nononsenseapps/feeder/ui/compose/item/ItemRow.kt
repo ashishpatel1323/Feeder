@@ -113,6 +113,8 @@ fun ItemRow(
     primaryLabel: String? = null,
     primaryIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
     onContentLayout: ((top: Int, height: Int) -> Unit)? = null,
+    // After the text, e.g. a drag handle
+    trailing: @Composable () -> Unit = {},
     extras: @Composable FlowRowScope.() -> Unit = {},
 ) {
     val length = lengthText(model.kind, model.lengthSeconds, model.progress)
@@ -157,6 +159,7 @@ fun ItemRow(
                         parts = listOfNotNull(model.feedTitle.ifBlank { null }, model.age.ifBlank { null }, length?.label()),
                     )
                 }
+                trailing()
             }
         }
         FlowRow(

@@ -103,8 +103,8 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.nononsenseapps.feeder.R
-import com.nononsenseapps.feeder.db.room.PlaylistCandidate
 import com.nononsenseapps.feeder.model.playlists.ItemKind
+import com.nononsenseapps.feeder.model.playlists.ItemProgress
 import com.nononsenseapps.feeder.model.playlists.PLAYLIST_COLORS
 import com.nononsenseapps.feeder.model.playlists.PLAYLIST_ICONS
 import com.nononsenseapps.feeder.model.playlists.PlayStatus
@@ -115,13 +115,19 @@ import com.nononsenseapps.feeder.model.playlists.SmartRules
 import com.nononsenseapps.feeder.model.playlists.describe
 import com.nononsenseapps.feeder.model.playlists.formatTotal
 import com.nononsenseapps.feeder.model.playlists.isDownloaded
+import com.nononsenseapps.feeder.model.playlists.itemSeconds
 import com.nononsenseapps.feeder.model.playlists.items
 import com.nononsenseapps.feeder.model.playlists.kind
 import com.nononsenseapps.feeder.model.playlists.label
 import com.nononsenseapps.feeder.model.playlists.matches
-import com.nononsenseapps.feeder.model.playlists.seconds
 import com.nononsenseapps.feeder.model.playlists.totalSeconds
 import com.nononsenseapps.feeder.model.playlists.withinLabel
+import com.nononsenseapps.feeder.ui.compose.item.ItemActionButton
+import com.nononsenseapps.feeder.ui.compose.item.ItemRow
+import com.nononsenseapps.feeder.ui.compose.item.ItemRowActions
+import com.nononsenseapps.feeder.ui.compose.item.ItemRowModel
+import com.nononsenseapps.feeder.ui.compose.item.ageText
+import com.nononsenseapps.feeder.ui.compose.item.rememberItemCommands
 import com.nononsenseapps.feeder.ui.compose.theme.FeederTokens
 import com.nononsenseapps.feeder.ui.compose.theme.SensibleTopAppBar
 import kotlinx.coroutines.launch
@@ -190,7 +196,7 @@ fun PlaylistsScreen(
             } else {
                 PlaylistDetail(open, state, queue, viewModel, onEdit = { editing = open }, onOpenArticle = onOpenArticle, onMessage = { text ->
                     scope.launch { snackbar.showSnackbar(text) }
-                })
+                }, snackbar = snackbar)
             }
         }
     }
@@ -343,8 +349,10 @@ private fun PlaylistDetail(
     onEdit: () -> Unit,
     onOpenArticle: (Long) -> Unit,
     onMessage: (String) -> Unit,
+    snackbar: SnackbarHostState? = null,
 ) {
     val items = remember(pl, state) { pl.items(state.candidates, state.ctx, state.byId) }
+    val commands = rememberItemCommands()
     val (total, unknown) = remember(items, state.ctx) { items.totalSeconds(state.ctx) }
     val toDownload = items.filter { it.kind != ItemKind.ARTICLE && !it.isDownloaded(state.ctx) }
     val feedTitles = remember(state.feeds) { state.feeds.toMap() }
@@ -447,143 +455,74 @@ private fun PlaylistDetail(
             }
         }
         itemsIndexed(items, key = { _, it -> it.id }) { index, it ->
+            val kind = it.kind
+            val pos = state.ctx.positions[it.id]
+            val progress = pos?.let { (p, len) -> ItemProgress(p, len) }
             ItemRow(
-                item = it,
-                state = state,
-                playing = it.id == playingId,
+                model =
+                    ItemRowModel(
+                        id = it.id,
+                        title = it.title,
+                        feedTitle = it.feedTitle,
+                        age = ageText(it.sortTime),
+                        kind = kind,
+                        lengthSeconds =
+                            itemSeconds(
+                                kind = kind,
+                                wordCount = if (it.fullTextByDefault && it.wordCountFull > 0) it.wordCountFull else it.wordCount,
+                                enclosureDuration = it.enclosureDuration,
+                                knownLength = state.ctx.knownLengths[it.id],
+                                positionLength = pos?.second,
+                            ),
+                        read = it.read,
+                        saved = it.bookmarked,
+                        image = it.image?.url ?: it.feedImage,
+                        progress = progress,
+                    ),
+                actions =
+                    ItemRowActions(
+                        // Episodes and videos play here, in this playlist's order; articles open
+                        onPrimary = { if (kind == ItemKind.PODCAST) viewModel.play(pl, start = index) else onOpenArticle(it.id) },
+                        onToggleSave = { commands.setSaved(it.id, !it.bookmarked) },
+                        onPlaylist = { addToPlaylist(it.id, it.title) },
+                        onToggleRead = { commands.setRead(it.id, !it.read) },
+                        onDelete = { commands.delete(it.id, snackbar) },
+                    ),
                 onOpen = { onOpenArticle(it.id) },
-                onPlay = { viewModel.play(pl, start = index) },
-                onAdd = { addToPlaylist(it.id, it.title) },
-                manual =
-                    if (pl.smart) {
-                        null
-                    } else {
-                        ManualActions(
-                            canUp = index > 0,
-                            canDown = index < items.size - 1,
-                            onUp = { viewModel.move(pl.id, it.id, index - 1) },
-                            onDown = { viewModel.move(pl.id, it.id, index + 1) },
-                            onRemove = { viewModel.remove(pl.id, it.id) },
+                highlighted = it.id == playingId,
+                primaryLabel = if (it.id == playingId) stringResource(R.string.item_now_playing) else null,
+                extras = {
+                    if (!pl.smart) {
+                        ItemActionButton(
+                            icon = Icons.Default.KeyboardArrowUp,
+                            label = stringResource(R.string.item_action_move_up),
+                            onClick = { viewModel.move(pl.id, it.id, index - 1) },
+                            enabled = index > 0,
                         )
-                    },
-            )
-        }
-    }
-}
-
-private data class ManualActions(
-    val canUp: Boolean,
-    val canDown: Boolean,
-    val onUp: () -> Unit,
-    val onDown: () -> Unit,
-    val onRemove: () -> Unit,
-)
-
-@Composable
-fun KindTag(kind: ItemKind) {
-    val (bg, fg) =
-        when (kind) {
-            ItemKind.PODCAST -> Color(0xFF3B2D55) to Color(0xFFD9C4FF)
-            ItemKind.YOUTUBE -> Color(0xFF4D2323) to Color(0xFFFFB3B3)
-            ItemKind.ARTICLE -> Color(0xFF20384D) to Color(0xFFB8DCFF)
-        }
-    Text(
-        kind.label,
-        style = MaterialTheme.typography.labelSmall,
-        fontWeight = FontWeight.Bold,
-        color = fg,
-        modifier =
-            Modifier
-                .background(bg, RoundedCornerShape(4.dp))
-                .padding(horizontal = 5.dp, vertical = 1.dp),
-    )
-}
-
-@Composable
-private fun Thumb(
-    item: PlaylistCandidate,
-    size: Int,
-) {
-    val url = item.image?.url ?: item.feedImage
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier =
-            Modifier
-                .size(size.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-    ) {
-        Icon(
-            if (item.kind == ItemKind.ARTICLE) Icons.AutoMirrored.Filled.Article else Icons.Default.Headphones,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (url != null) {
-            AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-        }
-    }
-}
-
-@Composable
-private fun ItemRow(
-    item: PlaylistCandidate,
-    state: PlaylistsViewState,
-    playing: Boolean,
-    onOpen: () -> Unit,
-    onPlay: () -> Unit,
-    onAdd: () -> Unit,
-    manual: ManualActions?,
-) {
-    val secs = item.seconds(state.ctx)
-    Surface(color = if (playing) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent) {
-        Column(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(horizontal = 16.dp, vertical = 10.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Thumb(item, 52)
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        item.title.ifBlank { "(no title)" },
-                        fontWeight = FontWeight.SemiBold,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = if (item.read) MaterialTheme.colorScheme.onSurfaceVariant else Color.Unspecified,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 3.dp)) {
-                        KindTag(item.kind)
-                        Text(
-                            buildString {
-                                append(item.feedTitle)
-                                if (secs != null) append(" · ${formatTotal(secs)}${if (item.kind == ItemKind.ARTICLE) " read aloud" else ""}")
-                                if (item.kind == ItemKind.YOUTUBE && !item.isDownloaded(state.ctx)) append(" · needs download")
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                        ItemActionButton(
+                            icon = Icons.Default.KeyboardArrowDown,
+                            label = stringResource(R.string.item_action_move_down),
+                            onClick = { viewModel.move(pl.id, it.id, index + 1) },
+                            enabled = index < items.size - 1,
+                        )
+                        ItemActionButton(
+                            icon = Icons.Default.Close,
+                            label = stringResource(R.string.item_action_remove),
+                            onClick = { viewModel.remove(pl.id, it.id) },
                         )
                     }
-                }
-            }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(start = 64.dp, top = 4.dp),
-            ) {
-                OutlinedButton(onClick = onPlay, contentPadding = PaddingValues(horizontal = 12.dp), modifier = Modifier.height(32.dp)) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(2.dp))
-                    Text(stringResource(R.string.playlist_play), style = MaterialTheme.typography.bodyMedium)
-                }
-                AddToPlaylistChip(onClick = onAdd)
-                if (manual != null) {
-                    Spacer(Modifier.weight(1f))
-                    IconButton(onClick = manual.onUp, enabled = manual.canUp) { Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Move up") }
-                    IconButton(onClick = manual.onDown, enabled = manual.canDown) { Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Move down") }
-                    IconButton(onClick = manual.onRemove) { Icon(Icons.Default.Close, contentDescription = "Take out of this playlist") }
-                }
-            }
+                },
+            )
+            HorizontalDivider()
         }
     }
+}
+
+/** The shared type badge (Article / Podcast / Video), as every item view shows it. */
+@Composable
+fun KindTag(kind: ItemKind) {
+    com.nononsenseapps.feeder.ui.compose.item
+        .TypeBadge(kind)
 }
 
 private fun QueueState.fraction(): Float = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
