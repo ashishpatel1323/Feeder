@@ -32,4 +32,14 @@
     <string name="item_downloaded">Downloaded</string>
     <string name="seek_back_10_seconds_short">Back 10 s</string>
     <string name="seek_forward_30_seconds_short">Forward 30 s</string>
+    <!-- Podcast player: mini player and Now playing sheet -->
+    <string name="player_open_now_playing">Open player</string>
+    <string name="player_collapse">Collapse player</string>
+    <string name="player_more_options">More player options</string>
+    <string name="player_stop_and_close">Stop and close</string>
+    <string name="seek_forward_30_seconds">Seek forward 30 seconds</string>
+    <string name="player_sleep">Sleep</string>
+    <!-- Row swipes -->
+    <string name="swipe_to_save">Save</string>
+    <string name="swipe_to_unsave">Unsave</string>
 </resources>

@@ -535,7 +535,10 @@ fun ArticleScreen(
             } else {
                 Column {
                     // The action bar below takes the navigation bar inset, so the player must not add it again
-                    Box(modifier = Modifier.consumeWindowInsets(WindowInsets.navigationBars)) {
+                    Box(
+                        modifier =
+                            if (itemKindHere == ItemKind.ARTICLE) Modifier.consumeWindowInsets(WindowInsets.navigationBars) else Modifier,
+                    ) {
                         if (viewState.podcastPlayerState.isVisible) {
                             HideablePodcastPlayer(
                                 visibleState = bottomBarVisibleState,

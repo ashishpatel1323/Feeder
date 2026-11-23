@@ -203,8 +203,11 @@ checks: `.claude/skills/feeder-design/SKILL.md`.
   per-feature button class.
 - **Android** uses `MaterialTheme.typography` roles (never `fontSize = N.sp`) and
   `ui/compose/theme/FeederTokens.kt` for spacing and corner sizes.
-- **Every action is visible and labeled** (icon + text) on every screen size. No overflow menus,
-  except the player's ⋮. On phones, wrap rows instead of hiding labels.
+- **Material 3 first.** List rows show one action at most (Play/Resume for media, as a round tonal
+  icon button); Save and Mark read are swipes, Delete is in the multi-select bar, and all of them are
+  TalkBack actions. Labeled icon + text buttons stay on detail screens, the selection bar and the
+  Now playing sheet (wrap there instead of hiding labels). Overflow (⋮) only for rare actions.
+- **Media** uses the M3 mini player + Now playing sheet (see the skill's "Media players").
 - Section labels are sentence case, never ALL CAPS. Selected chips/segments use the soft accent
   (`--accent-soft` / `secondaryContainer`). Dark mode must follow the theme everywhere, including
   the paper reading card (Flip mode is the only always-dark screen).

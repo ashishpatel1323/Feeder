@@ -27,6 +27,8 @@ class PodcastPlayerStateHolder(
     private var mediaPlayer: MediaPlayer? = null
     private var progressJob: Job? = null
     private var startAtMillis: Int = 0
+    private var speed: Float = 1f
+    private var sleepJob: Job? = null
 
     /**
      * Gets (item id, seconds played, length in seconds) now and then while an episode plays, and
@@ -57,6 +59,8 @@ class PodcastPlayerStateHolder(
                 itemId = itemId,
                 isVisible = true,
                 isLoading = true,
+                speed = speed,
+                sleepEndsAtMillis = _playerState.value.sleepEndsAtMillis,
             )
 
         initializePlayer(link)
@@ -65,8 +69,39 @@ class PodcastPlayerStateHolder(
     fun play() {
         val player = mediaPlayer ?: return
         player.start()
+        applySpeed(player)
         startProgressUpdates()
         _playerState.update { it.copy(isPlaying = true) }
+    }
+
+    /** Playback speed, kept for the next episode too. Applied when playing (setting it while paused would start playback). */
+    fun setSpeed(value: Float) {
+        speed = value.coerceIn(0.5f, 3f)
+        _playerState.update { it.copy(speed = speed) }
+        val player = mediaPlayer ?: return
+        if (_playerState.value.isPlaying) applySpeed(player)
+    }
+
+    /** Pauses after [minutes]; null or 0 turns the timer off. */
+    fun setSleepTimer(minutes: Int?) {
+        sleepJob?.cancel()
+        sleepJob = null
+        if (minutes == null || minutes <= 0) {
+            _playerState.update { it.copy(sleepEndsAtMillis = null) }
+            return
+        }
+        val endsAt = System.currentTimeMillis() + minutes * 60_000L
+        _playerState.update { it.copy(sleepEndsAtMillis = endsAt) }
+        sleepJob =
+            coroutineScope.launch {
+                delay(minutes * 60_000L)
+                pause()
+                _playerState.update { it.copy(sleepEndsAtMillis = null) }
+            }
+    }
+
+    private fun applySpeed(player: MediaPlayer) {
+        runCatching { player.playbackParams = player.playbackParams.setSpeed(speed) }
     }
 
     fun pause() {
@@ -77,9 +112,11 @@ class PodcastPlayerStateHolder(
     }
 
     fun stop() {
+        sleepJob?.cancel()
+        sleepJob = null
         reportPosition()
         releaseCurrentPlayer()
-        _playerState.value = PodcastPlayerState()
+        _playerState.value = PodcastPlayerState(speed = speed)
     }
 
     fun seekBy(deltaMillis: Int) {
@@ -124,6 +161,7 @@ class PodcastPlayerStateHolder(
                     setOnPreparedListener { player ->
                         if (startAtMillis > 0 && startAtMillis < player.duration) player.seekTo(startAtMillis)
                         player.start()
+                        applySpeed(player)
                         _playerState.update {
                             it.copy(
                                 isLoading = false,
@@ -260,4 +298,7 @@ data class PodcastPlayerState(
     val durationMillis: Int = 0,
     val positionMillis: Int = 0,
     val errorMessage: String? = null,
+    val speed: Float = 1f,
+    // Wall-clock time the sleep timer pauses at; null = off
+    val sleepEndsAtMillis: Long? = null,
 )

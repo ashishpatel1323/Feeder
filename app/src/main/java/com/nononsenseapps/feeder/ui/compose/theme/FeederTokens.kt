@@ -17,7 +17,8 @@ import androidx.compose.ui.unit.dp
  * | --fs-xl 22  | titleLarge (screen titles)        |
  *
  * Section labels are sentence case (no uppercase), selected chips and segmented buttons use
- * secondaryContainer, and every action keeps a visible label.
+ * secondaryContainer. Rows show one action; labeled buttons live on detail screens (see the
+ * feeder-design skill).
  */
 object FeederTokens {
     object Space {
