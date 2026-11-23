@@ -76,7 +76,8 @@ function Segmented<T extends string>({ label, value, options, onChange }: { labe
 /** Feed artwork, or a generated tile with the feed's initials when it has none (or it fails to load). */
 function Art({ h, mini = false }: { h: HomeFeed; mini?: boolean }) {
   const [broken, setBroken] = useState(false)
-  const src = h.feed.imageUrl
+  // Site favicons are tiny and look smudged on a tile
+  const src = h.feed.imageUrl && !/\.ico$/i.test(h.feed.imageUrl.split('?')[0]) ? h.feed.imageUrl : null
   if (src && !broken) return <img className="home-art" src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(true)} />
   const [bg, fg] = tileColors(h.title)
   return (
