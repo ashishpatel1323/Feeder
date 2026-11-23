@@ -56,7 +56,27 @@ android {
 
         // For espresso tests
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        externalNativeBuild {
+            cmake {
+                // whisper.cpp for podcast transcripts: phones and the emulator only (other ABIs
+                // build slowly and the feature says it is unavailable there)
+                abiFilters.addAll(
+                    (project.findProperty("ABI_FILTERS") as String?)?.split(",")?.map(String::trim)
+                        ?: listOf("arm64-v8a", "x86_64"),
+                )
+                arguments += listOf("-DCMAKE_BUILD_TYPE=Release", "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON")
+            }
+        }
     }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+    ndkVersion = "26.1.10909125"
 
     dependenciesInfo {
         // Disables dependency metadata when building APKs (not wanted for reproducible builds)

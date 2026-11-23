@@ -855,7 +855,7 @@ class ArticleViewModel(
         }
 
         ttsStop()
-        podcastPlayerStateHolder.playLink(link)
+        podcastPlayerStateHolder.playLink(link, itemId)
     }
 
     fun podcastPlay() {

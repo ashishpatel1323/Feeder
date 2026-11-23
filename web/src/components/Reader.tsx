@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { hasEpisode, PodcastEpisode } from './Podcast'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, feedDisplayTitle, hideItems, unhideItems, type Feed, type Highlight, type HighlightColor, type Item } from '../lib/db'
 import { anchorOf, articlePicture, applyHighlights, deleteHighlight, newHighlight, quoteText, saveHighlight, updateHighlight } from '../lib/highlights'
@@ -489,6 +490,7 @@ export function Reader(p: Props) {
             ) : item.imageUrl && !html.includes(item.imageUrl) ? (
               <img className="lead-image" src={item.imageUrl} alt="" referrerPolicy="no-referrer" onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
             ) : null}
+            {!videoId && hasEpisode(item) ? <PodcastEpisode key={item.id} item={item} /> : null}
             {item.summary ? (
               <aside className="summary">
                 <div className="summary-head">

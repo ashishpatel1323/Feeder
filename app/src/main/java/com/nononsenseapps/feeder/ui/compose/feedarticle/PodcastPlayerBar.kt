@@ -10,15 +10,20 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.outlined.ClosedCaption
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -31,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -39,6 +45,7 @@ import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.model.PodcastPlayerState
 import com.nononsenseapps.feeder.ui.compose.components.PaddedBottomAppBar
 import com.nononsenseapps.feeder.ui.compose.feed.PlainTooltipBox
+import com.nononsenseapps.feeder.ui.compose.transcript.TranscriptPanel
 
 @Composable
 fun HideablePodcastPlayer(
@@ -83,6 +90,7 @@ fun PodcastPlayerBar(
 ) {
     var sliderPosition by remember(viewState.audioUrl) { mutableFloatStateOf(0f) }
     var isDragging by remember(viewState.audioUrl) { mutableStateOf(false) }
+    var showTranscript by rememberSaveable { mutableStateOf(false) }
     val containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp)
 
     LaunchedEffect(viewState.positionMillis, viewState.audioUrl, isDragging) {
@@ -97,6 +105,16 @@ fun PodcastPlayerBar(
         tonalElevation = 0.dp,
     ) {
         Column {
+            val itemId = viewState.itemId
+            if (showTranscript && itemId != null) {
+                TranscriptPanel(
+                    itemId = itemId,
+                    positionMs = viewState.positionMillis.toLong(),
+                    onSeek = { onSeekTo(it.toInt()) },
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 280.dp).padding(top = 4.dp),
+                )
+                HorizontalDivider()
+            }
             if (viewState.isLoading || viewState.isBuffering) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
@@ -198,6 +216,17 @@ fun PodcastPlayerBar(
                                 Icons.Default.Forward10,
                                 contentDescription = stringResource(R.string.seek_forward_10_seconds),
                             )
+                        }
+                    }
+                    if (viewState.itemId != null) {
+                        PlainTooltipBox(tooltip = { Text(stringResource(R.string.transcript)) }) {
+                            IconToggleButton(checked = showTranscript, onCheckedChange = { showTranscript = it }) {
+                                Icon(
+                                    if (showTranscript) Icons.Default.ClosedCaption else Icons.Outlined.ClosedCaption,
+                                    contentDescription =
+                                        stringResource(if (showTranscript) R.string.transcript_hide else R.string.transcript_show),
+                                )
+                            }
                         }
                     }
                 },
