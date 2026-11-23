@@ -717,34 +717,9 @@ fun SettingsList(
                 onCheckedChange = onOpenDrawerOnFab,
             )
 
-            MenuSetting(
-                title = stringResource(id = R.string.feed_item_style),
-                currentValue = feedItemStyleValue.asFeedItemStyleOption(),
-                values = ImmutableHolder(FeedItemStyle.entries.map { it.asFeedItemStyleOption() }),
-                onSelection = {
-                    onFeedItemStyleChange(it.feedItemStyle)
-                },
-                modifier =
-                    Modifier
-                        .width(dimens.maxContentWidth),
-            )
-
-            MenuSetting(
-                title = stringResource(id = R.string.max_lines),
-                currentValue = maxLines,
-                values = ImmutableHolder(listOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)),
-                onSelection = setMaxLines,
-                modifier =
-                    Modifier
-                        .width(dimens.maxContentWidth),
-            )
-
-            SwitchSetting(
-                title = stringResource(id = R.string.show_only_title),
-                checked = showOnlyTitle,
-                onCheckedChange = onShowOnlyTitle,
-            )
-
+            // Every list uses the one item row (thumbnail, type, real length, labeled buttons), so
+            // the old layout, max lines, title-only and reading-time options are no longer offered.
+            // Their stored values are kept so nothing breaks on downgrade or OPML import.
             MenuSetting(
                 title = stringResource(id = R.string.swipe_to_mark_as_read),
                 currentValue = swipeAsReadValue.asSwipeAsReadOption(),
@@ -767,12 +742,6 @@ fun SettingsList(
                 title = stringResource(id = R.string.show_thumbnails),
                 checked = showThumbnailsValue,
                 onCheckedChange = onShowThumbnailsChange,
-            )
-
-            SwitchSetting(
-                title = stringResource(id = R.string.show_reading_time),
-                checked = showReadingTime,
-                onCheckedChange = onShowReadingTimeChange,
             )
 
             SwitchSetting(

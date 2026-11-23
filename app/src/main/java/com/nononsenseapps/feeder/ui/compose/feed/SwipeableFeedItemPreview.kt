@@ -11,11 +11,10 @@ import androidx.compose.foundation.gestures.DraggableAnchors
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.anchoredDraggable
 import androidx.compose.foundation.gestures.animateTo
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -23,35 +22,30 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -63,16 +57,23 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.nononsenseapps.feeder.R
-import com.nononsenseapps.feeder.archmodel.FeedItemStyle
 import com.nononsenseapps.feeder.archmodel.SwipeAsRead
+import com.nononsenseapps.feeder.model.playlists.ItemKind
+import com.nononsenseapps.feeder.model.playlists.itemSeconds
 import com.nononsenseapps.feeder.ui.compose.components.safeSemantics
 import com.nononsenseapps.feeder.ui.compose.feedarticle.FeedListFilter
 import com.nononsenseapps.feeder.ui.compose.feedarticle.onlyUnread
+import com.nononsenseapps.feeder.ui.compose.item.ItemActionButton
+import com.nononsenseapps.feeder.ui.compose.item.ItemRow
+import com.nononsenseapps.feeder.ui.compose.item.ItemRowActions
+import com.nononsenseapps.feeder.ui.compose.item.ItemRowModel
+import com.nononsenseapps.feeder.ui.compose.item.ageText
+import com.nononsenseapps.feeder.ui.compose.item.rememberItemPlayer
+import com.nononsenseapps.feeder.ui.compose.item.rememberItemProgress
 import com.nononsenseapps.feeder.ui.compose.theme.LocalDimens
 import com.nononsenseapps.feeder.ui.compose.theme.SwipingItemToDeleteColor
 import com.nononsenseapps.feeder.ui.compose.theme.SwipingItemToReadColor
 import com.nononsenseapps.feeder.ui.compose.theme.SwipingItemToUnreadColor
-import com.nononsenseapps.feeder.ui.compose.utils.isCompactLandscape
 import com.nononsenseapps.feeder.util.logDebug
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -90,12 +91,7 @@ fun SwipeableFeedItemPreview(
     filter: FeedListFilter,
     item: FeedListItem,
     showThumbnail: Boolean,
-    feedItemStyle: FeedItemStyle,
     swipeAsRead: SwipeAsRead,
-    bookmarkIndicator: Boolean,
-    maxLines: Int,
-    showOnlyTitle: Boolean,
-    showReadingTime: Boolean,
     onMarkAboveAsRead: () -> Unit,
     onMarkBelowAsRead: () -> Unit,
     onToggleBookmark: () -> Unit,
@@ -108,18 +104,16 @@ fun SwipeableFeedItemPreview(
     swipeEnabled: Boolean = true,
     // Swiping toward the end (right in left-to-right languages) deletes the article for good
     onDelete: (() -> Unit)? = null,
-    // Multi-select: "Select" in the long-press menu starts it, then taps add or remove articles
+    // Multi-select: "Select" on the row (or a long press) starts it, then taps add or remove articles
     selectionMode: Boolean = false,
     selected: Boolean = false,
     onToggleSelect: (() -> Unit)? = null,
 ) {
     val coroutineScope = rememberCoroutineScope()
-    // The swipe layer sits above the row, so the Playlist button can't take taps itself: a tap
-    // that lands on it (window coordinates) opens Add to playlist instead of the article
-    val playlistChipBounds = remember { PlaylistChipBounds() }
     val addToPlaylist = com.nononsenseapps.feeder.ui.compose.playlists.LocalAddToPlaylist.current
-    var rowOrigin by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
-    var lastDown by remember { mutableStateOf<androidx.compose.ui.geometry.Offset?>(null) }
+    // Where the row's thumbnail and text are, so the swipe layer covers them and not the buttons
+    var contentTop by remember { mutableIntStateOf(0) }
+    var contentHeight by remember { mutableIntStateOf(0) }
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val anchoredDraggableState = remember { AnchoredDraggableState(FeedItemSwipeState.CENTER) }
     val onSwipeCallback by rememberUpdatedState(newValue = onSwipe)
@@ -179,10 +173,6 @@ fun SwipeableFeedItemPreview(
         }
     }
 
-    var dropDownMenuExpanded by rememberSaveable {
-        mutableStateOf(false)
-    }
-
     val toggleReadStatusLabel = stringResource(R.string.toggle_read_status)
     val openFeedItemInReaderLabel = stringResource(R.string.open_article_in_reader)
     val openFeedItemInCustomTabLabel = stringResource(R.string.open_article_in_custom_tab)
@@ -212,32 +202,13 @@ fun SwipeableFeedItemPreview(
         modifier =
             modifier
                 .width(dimens.maxContentWidth)
-                .clip(
-                    shape =
-                        when (feedItemStyle) {
-                            FeedItemStyle.COMPACT, FeedItemStyle.SUPER_COMPACT -> RectangleShape
-                            else -> MaterialTheme.shapes.medium
-                        },
-                ).onGloballyPositioned { rowOrigin = it.positionInWindow() }
-                .pointerInput(Unit) {
-                    awaitEachGesture {
-                        lastDown = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial).position
-                    }
-                }.combinedClickable(
-                    onLongClick = {
-                        if (selectionMode && onToggleSelect != null) {
-                            onToggleSelect()
-                        } else {
-                            dropDownMenuExpanded = true
-                        }
-                    },
+                .clipToBounds()
+                .combinedClickable(
+                    // Long press starts multi-select; every action also has a button on the row
+                    onLongClick = onToggleSelect,
                     onClick = {
-                        val tap = lastDown?.let { rowOrigin + it }
-                        val onChip = tap != null && playlistChipBounds.bounds?.contains(tap) == true
                         if (selectionMode && onToggleSelect != null) {
                             onToggleSelect()
-                        } else if (onChip && addToPlaylist != null) {
-                            addToPlaylist(item.id, item.title)
                         } else {
                             onItemClick()
                         }
@@ -347,138 +318,72 @@ fun SwipeableFeedItemPreview(
             )
         }
 
-        val compactLandscape = isCompactLandscape()
-
-        CompositionLocalProvider(
-            LocalFeedItemSelect provides if (selectionMode) null else onToggleSelect,
-            LocalPlaylistChipBounds provides playlistChipBounds,
-        ) {
-            when (feedItemStyle) {
-                FeedItemStyle.CARD -> {
-                    FeedItemCard(
-                        item = item,
-                        showThumbnail = showThumbnail && !compactLandscape,
-                        onOpenFeedItemInReader = onOpenFeedItemInReader,
-                        onOpenFeedItemInCustomTab = onOpenFeedItemInCustomTab,
-                        onOpenFeedItemInBrowser = onOpenFeedItemInBrowser,
-                        onMarkAboveAsRead = onMarkAboveAsRead,
-                        onMarkBelowAsRead = onMarkBelowAsRead,
-                        onShareItem = onShareItem,
-                        onToggleBookmark = onToggleBookmark,
-                        dropDownMenuExpanded = dropDownMenuExpanded,
-                        onDismissDropdown = { dropDownMenuExpanded = false },
-                        bookmarkIndicator = bookmarkIndicator,
-                        maxLines = maxLines,
-                        showOnlyTitle = showOnlyTitle,
-                        showReadingTime = showReadingTime,
-                        modifier =
-                            Modifier.offset {
-                                try {
-                                    IntOffset(anchoredDraggableState.requireOffset().roundToInt(), 0)
-                                } catch (_: IllegalStateException) {
-                                    IntOffset(0, 0)
-                                }
-                            },
-                    )
-                }
-
-                FeedItemStyle.COMPACT_CARD -> {
-                    FeedItemCompactCard(
-                        state =
-                            FeedItemState(
-                                item = item,
-                                showThumbnail = showThumbnail && !compactLandscape,
-                                dropDownMenuExpanded = dropDownMenuExpanded,
-                                bookmarkIndicator = bookmarkIndicator,
-                                maxLines = maxLines,
-                                showReadingTime = showReadingTime,
-                            ),
-                        modifier =
-                            Modifier.offset {
-                                try {
-                                    IntOffset(anchoredDraggableState.requireOffset().roundToInt(), 0)
-                                } catch (_: IllegalStateException) {
-                                    IntOffset(0, 0)
-                                }
-                            },
-                        onEvent = { event ->
-                            when (event) {
-                                FeedItemEvent.DismissDropdown -> {
-                                    dropDownMenuExpanded = false
-                                }
-                                FeedItemEvent.OpenInReader -> onOpenFeedItemInReader()
-                                FeedItemEvent.OpenInCustomTab -> onOpenFeedItemInCustomTab()
-                                FeedItemEvent.OpenInBrowser -> onOpenFeedItemInBrowser()
-                                FeedItemEvent.MarkAboveAsRead -> onMarkAboveAsRead()
-                                FeedItemEvent.MarkBelowAsRead -> onMarkBelowAsRead()
-                                FeedItemEvent.ShareItem -> onShareItem()
-                                FeedItemEvent.ToggleBookmarked -> onToggleBookmark()
-                            }
-                        },
-                    )
-                }
-
-                FeedItemStyle.COMPACT -> {
-                    FeedItemCompact(
-                        item = item,
-                        showThumbnail = showThumbnail,
-                        onOpenFeedItemInReader = onOpenFeedItemInReader,
-                        onOpenFeedItemInCustomTab = onOpenFeedItemInCustomTab,
-                        onOpenFeedItemInBrowser = onOpenFeedItemInBrowser,
-                        onMarkAboveAsRead = onMarkAboveAsRead,
-                        onMarkBelowAsRead = onMarkBelowAsRead,
-                        onShareItem = onShareItem,
-                        onToggleBookmark = onToggleBookmark,
-                        dropDownMenuExpanded = dropDownMenuExpanded,
-                        onDismissDropdown = { dropDownMenuExpanded = false },
-                        bookmarkIndicator = bookmarkIndicator,
-                        maxLines = maxLines,
-                        showOnlyTitle = showOnlyTitle,
-                        showReadingTime = showReadingTime,
-                        modifier =
-                            Modifier.offset {
-                                try {
-                                    IntOffset(anchoredDraggableState.requireOffset().roundToInt(), 0)
-                                } catch (_: IllegalStateException) {
-                                    IntOffset(0, 0)
-                                }
-                            },
-                        imageWidth =
-                            when (compactLandscape) {
-                                true -> 196.dp
-                                false -> 64.dp
-                            },
-                    )
-                }
-
-                FeedItemStyle.SUPER_COMPACT -> {
-                    FeedItemSuperCompact(
-                        item = item,
-                        onOpenFeedItemInReader = onOpenFeedItemInReader,
-                        onOpenFeedItemInCustomTab = onOpenFeedItemInCustomTab,
-                        onOpenFeedItemInBrowser = onOpenFeedItemInBrowser,
-                        onMarkAboveAsRead = onMarkAboveAsRead,
-                        onMarkBelowAsRead = onMarkBelowAsRead,
-                        onShareItem = onShareItem,
-                        onToggleBookmark = onToggleBookmark,
-                        dropDownMenuExpanded = dropDownMenuExpanded,
-                        onDismissDropdown = { dropDownMenuExpanded = false },
-                        bookmarkIndicator = bookmarkIndicator,
-                        maxLines = maxLines,
-                        showOnlyTitle = showOnlyTitle,
-                        showReadingTime = showReadingTime,
-                        modifier =
-                            Modifier.offset {
-                                try {
-                                    IntOffset(anchoredDraggableState.requireOffset().roundToInt(), 0)
-                                } catch (_: IllegalStateException) {
-                                    IntOffset(0, 0)
-                                }
-                            },
-                    )
+        val rowOffset =
+            Modifier.offset {
+                try {
+                    IntOffset(anchoredDraggableState.requireOffset().roundToInt(), 0)
+                } catch (_: IllegalStateException) {
+                    IntOffset(0, 0)
                 }
             }
-        }
+        val progress = rememberItemProgress(item.id, item.videoKey)
+        val kind = item.kind
+        val itemPlayer = rememberItemPlayer()
+        val playingHere = itemPlayer.isPlaying(item.id)
+        ItemRow(
+            model =
+                ItemRowModel(
+                    id = item.id,
+                    title = item.title.ifBlank { item.snippet },
+                    feedTitle = item.feedTitle,
+                    age = remember(item.rawPubDate) { ageText(item.rawPubDate?.toInstant()?.toEpochMilli()) }.ifBlank { item.pubDate },
+                    kind = kind,
+                    lengthSeconds =
+                        itemSeconds(
+                            kind = kind,
+                            wordCount = item.wordCount,
+                            enclosureDuration = item.enclosureDuration,
+                            positionLength = progress?.lengthSeconds,
+                        ),
+                    read = !item.unread,
+                    saved = item.bookmarked,
+                    image = if (showThumbnail) item.image?.url else null,
+                    progress = progress,
+                ),
+            actions =
+                ItemRowActions(
+                    onPrimary = {
+                        when {
+                            selectionMode && onToggleSelect != null -> onToggleSelect()
+                            kind == ItemKind.PODCAST && item.enclosureLink != null ->
+                                itemPlayer.togglePodcast(item.id, item.enclosureLink, progress)
+                            else -> onOpenFeedItemInReader()
+                        }
+                    },
+                    onToggleSave = onToggleBookmark,
+                    onPlaylist = addToPlaylist?.let { add -> { add(item.id, item.title) } },
+                    onToggleRead = { onSwipe(item.unread) },
+                    onDelete = onDelete,
+                ),
+            primaryLabel = if (playingHere) stringResource(R.string.item_action_pause) else null,
+            primaryIcon = if (playingHere) Icons.Default.Pause else null,
+            onContentLayout = { top, height ->
+                contentTop = top
+                contentHeight = height
+            },
+            extras = {
+                if (onToggleSelect != null && !selectionMode) {
+                    ItemActionButton(
+                        icon = Icons.Outlined.CheckCircle,
+                        label = stringResource(R.string.select_article),
+                        onClick = onToggleSelect,
+                    )
+                }
+            },
+            modifier =
+                rowOffset
+                    .background(MaterialTheme.colorScheme.background),
+        )
 
         if (selected) {
             Box(
@@ -501,11 +406,15 @@ fun SwipeableFeedItemPreview(
         // This box handles swiping - it uses padding to allow the nav drawer to still be dragged
         // It's very important that clickable stuff is handled by its parent - or a direct child
         // Wrapped in an outer box to get the height set properly
-        if (swipeAsRead != SwipeAsRead.DISABLED) {
+        // Only over the thumbnail and text: the buttons below take their own taps
+        if (swipeAsRead != SwipeAsRead.DISABLED && contentHeight > 0) {
+            val density = LocalDensity.current
             Box(
                 modifier =
                     Modifier
-                        .matchParentSize(),
+                        .fillMaxWidth()
+                        .padding(top = with(density) { contentTop.toDp() })
+                        .height(with(density) { contentHeight.toDp() }),
             ) {
                 Box(
                     modifier =
@@ -561,16 +470,6 @@ fun SwipeableFeedItemPreview(
         }
     }
 }
-
-/** Where the row's Playlist button is on screen, so a tap there can be told from a tap on the row. */
-class PlaylistChipBounds {
-    var bounds: androidx.compose.ui.geometry.Rect? = null
-}
-
-val LocalPlaylistChipBounds = compositionLocalOf<PlaylistChipBounds?> { null }
-
-/** Set by [SwipeableFeedItemPreview] so the long-press menu can offer "Select". */
-val LocalFeedItemSelect = compositionLocalOf<(() -> Unit)?> { null }
 
 enum class FeedItemSwipeState {
     CENTER,

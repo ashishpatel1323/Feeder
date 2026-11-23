@@ -190,23 +190,23 @@ export function ItemRow(p: RowProps) {
       </div>
       </div>
         <div className="ir-acts" onClick={stop} onPointerDown={stop}>
-          <button type="button" className="ir-btn pri" onClick={primary}>
+          <button type="button" className="mf-btn ir-btn" onClick={primary}>
             <Icon name={primaryIcon} size={16} />
             {primaryLabel}
           </button>
-          <button type="button" className={`ir-btn${item.saved ? ' on' : ''}`} aria-pressed={!!item.saved} onClick={() => void toggleSaved(item)}>
+          <button type="button" className={`mf-btn ir-btn${item.saved ? ' on' : ''}`} aria-pressed={!!item.saved} onClick={() => void toggleSaved(item)}>
             <Icon name={item.saved ? 'bookmarkFilled' : 'bookmark'} size={16} />
             {item.saved ? 'Saved' : 'Save'}
           </button>
-          <button type="button" className={`ir-btn${p.inPlaylist ? ' on' : ''}`} title="Add to a playlist, or play next" onClick={(e) => openAddToPlaylist([item.id], item.title, e.currentTarget)}>
+          <button type="button" className={`mf-btn ir-btn${p.inPlaylist ? ' on' : ''}`} title="Add to a playlist, or play next" onClick={(e) => openAddToPlaylist([item.id], item.title, e.currentTarget)}>
             <Icon name="playlistAdd" size={16} />
             {p.inPlaylist ? 'In playlist' : 'Playlist'}
           </button>
-          <button type="button" className="ir-btn" onClick={() => setRead(!item.read)}>
+          <button type="button" className="mf-btn ir-btn" onClick={() => setRead(!item.read)}>
             <Icon name={item.read ? 'unread' : 'read'} size={16} />
             {facts.readLabel}
           </button>
-          <button type="button" className="ir-btn del" title="Delete on all your devices" onClick={p.onDelete}>
+          <button type="button" className="mf-btn danger ir-btn" title="Delete on all your devices" onClick={p.onDelete}>
             <Icon name="delete" size={16} />
             Delete
           </button>

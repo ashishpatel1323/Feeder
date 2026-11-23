@@ -404,6 +404,7 @@ class ArticleViewModel(
                 articleContent = if (isShowingTranslated) translatedArticleContent else articleContent,
                 youtubeId = article?.youtubeId,
                 articleKey = article?.articleKey ?: "",
+                enclosureDuration = article?.enclosureDuration,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -626,6 +627,13 @@ class ArticleViewModel(
     fun markAsUnread() {
         applicationCoroutineScope.launch {
             repository.markAsUnread(itemId)
+        }
+    }
+
+    /** Mark read / Mark unread (Mark played, Mark watched) on the article screen's action row. */
+    fun toggleRead() {
+        applicationCoroutineScope.launch {
+            if (viewState.value.isUnread) repository.markAsReadAndNotified(itemId) else repository.markAsUnread(itemId)
         }
     }
 
@@ -1271,6 +1279,7 @@ private data class ArticleState(
     override val articleContent: LinearArticle = LinearArticle(emptyList()),
     override val youtubeId: String? = null,
     override val articleKey: String = "",
+    override val enclosureDuration: Long? = null,
 ) : ArticleScreenViewState
 
 @Immutable
@@ -1280,6 +1289,9 @@ interface ArticleScreenViewState {
 
     /** feedUrl + "\n" + guid, as in sync */
     val articleKey: String
+
+    /** Episode length in seconds from the feed, null when not given */
+    val enclosureDuration: Long?
     val useDetectLanguage: Boolean
     val isBottomBarVisible: Boolean
     val isTTSPlaying: Boolean

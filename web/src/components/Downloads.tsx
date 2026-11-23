@@ -303,7 +303,7 @@ export function DownloadsPage(p: {
                           extras={
                             <button
                               type="button"
-                              className="ir-btn"
+                              className="mf-btn ir-btn"
                               onClick={() => {
                                 if (d.item.id === playingId) playNext(1)
                                 void removeVideo(d.item.id, d.videoId)

@@ -42,6 +42,17 @@ interface FeedItemDao {
     )
     fun loadPlaylistCandidates(): Flow<List<PlaylistCandidate>>
 
+    /** Read and saved state of [ids], kept up to date (Save and Mark read on download rows). */
+    @Query(
+        """
+        SELECT i.id AS id, (i.read_time IS NOT NULL) AS is_read, i.bookmarked AS bookmarked,
+            i.primary_sort_time AS sort_time
+        FROM feed_items i
+        WHERE i.id IN (:ids)
+        """,
+    )
+    fun loadItemStatus(ids: List<Long>): Flow<List<ItemStatus>>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertFeedItem(item: FeedItem): Long
 

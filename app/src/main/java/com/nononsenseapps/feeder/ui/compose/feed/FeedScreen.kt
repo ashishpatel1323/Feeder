@@ -16,8 +16,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -50,12 +51,17 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ImportExport
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.VerticalAlignBottom
+import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.MarkEmailUnread
+import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material.icons.outlined.ViewAgenda
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -119,7 +125,6 @@ import androidx.paging.compose.itemContentType
 import androidx.paging.compose.itemKey
 import com.nononsenseapps.feeder.ApplicationCoroutineScope
 import com.nononsenseapps.feeder.R
-import com.nononsenseapps.feeder.archmodel.FeedItemStyle
 import com.nononsenseapps.feeder.archmodel.FeedListGrouping
 import com.nononsenseapps.feeder.archmodel.FeedType
 import com.nononsenseapps.feeder.archmodel.SortingOptions
@@ -148,6 +153,7 @@ import com.nononsenseapps.feeder.ui.compose.feedarticle.HideablePodcastPlayer
 import com.nononsenseapps.feeder.ui.compose.feedarticle.TranslatedFeedCards
 import com.nononsenseapps.feeder.ui.compose.feedarticle.onlyUnread
 import com.nononsenseapps.feeder.ui.compose.feedarticle.onlyUnreadAndSaved
+import com.nononsenseapps.feeder.ui.compose.item.ItemActionButton
 import com.nononsenseapps.feeder.ui.compose.material3.DrawerState
 import com.nononsenseapps.feeder.ui.compose.material3.DrawerValue
 import com.nononsenseapps.feeder.ui.compose.material3.rememberDrawerState
@@ -167,6 +173,7 @@ import com.nononsenseapps.feeder.ui.compose.pullrefresh.PullRefreshIndicator
 import com.nononsenseapps.feeder.ui.compose.pullrefresh.pullRefresh
 import com.nononsenseapps.feeder.ui.compose.pullrefresh.rememberPullRefreshState
 import com.nononsenseapps.feeder.ui.compose.readaloud.HideableCompactTTSPlayer
+import com.nononsenseapps.feeder.ui.compose.theme.FeederTokens
 import com.nononsenseapps.feeder.ui.compose.theme.LocalDimens
 import com.nononsenseapps.feeder.ui.compose.theme.SensibleTopAppBar
 import com.nononsenseapps.feeder.ui.compose.utils.ImmutableHolder
@@ -611,6 +618,38 @@ fun FeedScreen(
                             deleteWithUndo(selectedIds.toList())
                             selectedIds = emptySet()
                         },
+                        // What the old long-press menu offered for one article, as labeled buttons
+                        onMarkAboveAsRead = { id ->
+                            pagedFeedItems.itemSnapshotList.firstOrNull { it?.id == id }?.let { viewModel.markBeforeAsRead(it.cursor) }
+                            selectedIds = emptySet()
+                        },
+                        onMarkBelowAsRead = { id ->
+                            pagedFeedItems.itemSnapshotList.firstOrNull { it?.id == id }?.let { viewModel.markAfterAsRead(it.cursor) }
+                            selectedIds = emptySet()
+                        },
+                        onShare = { id ->
+                            pagedFeedItems.itemSnapshotList.firstOrNull { it?.id == id }?.let { item ->
+                                val intent =
+                                    Intent.createChooser(
+                                        Intent(Intent.ACTION_SEND).apply {
+                                            item.link?.let { putExtra(Intent.EXTRA_TEXT, stripTrackingParameters(it)) }
+                                            putExtra(Intent.EXTRA_TITLE, item.title)
+                                            type = "text/plain"
+                                        },
+                                        null,
+                                    )
+                                activityLauncher.startActivity(openAdjacentIfSuitable = false, intent = intent)
+                            }
+                        },
+                        onOpenInBrowser = { id ->
+                            viewModel.openArticleInBrowser(
+                                itemId = id,
+                                openInBrowser = { link -> activityLauncher.openLinkInBrowser(link) },
+                                onNoArticleLink = {
+                                    coroutineScope.launch { toastMaker.makeToast(R.string.no_article_link_browser) }
+                                },
+                            )
+                        },
                     ),
             )
         }
@@ -625,11 +664,20 @@ class FeedSelection(
     val onClear: () -> Unit,
     val onMarkRead: (Boolean) -> Unit,
     val onDelete: () -> Unit,
+    val onMarkAboveAsRead: (Long) -> Unit = {},
+    val onMarkBelowAsRead: (Long) -> Unit = {},
+    val onShare: (Long) -> Unit = {},
+    val onOpenInBrowser: (Long) -> Unit = {},
 ) {
     val active: Boolean get() = ids.isNotEmpty()
 }
 
-/** Shown under the list while articles are selected. */
+/**
+ * Shown under the list while articles are selected. Every action is a labeled button; with one
+ * article selected it also offers what the old long-press menu did (read above/below, share,
+ * open in the browser).
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun FeedSelectionBar(
     selection: FeedSelection,
@@ -640,26 +688,30 @@ fun FeedSelectionBar(
         shadowElevation = 3.dp,
         modifier = modifier.fillMaxWidth(),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+        Column(
+            verticalArrangement = Arrangement.spacedBy(FeederTokens.Space.xs),
+            modifier =
+                Modifier.padding(horizontal = FeederTokens.Space.lg, vertical = FeederTokens.Space.sm),
         ) {
-            IconButton(onClick = selection.onClear) {
-                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear_selection))
-            }
             Text(
                 text = stringResource(R.string.n_selected, selection.ids.size),
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleSmall,
             )
-            IconButton(onClick = { selection.onMarkRead(true) }) {
-                Icon(Icons.Default.VisibilityOff, contentDescription = stringResource(R.string.mark_as_read))
-            }
-            IconButton(onClick = { selection.onMarkRead(false) }) {
-                Icon(Icons.Default.Visibility, contentDescription = stringResource(R.string.mark_as_unread))
-            }
-            IconButton(onClick = selection.onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.delete_selected))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(FeederTokens.Space.sm),
+                verticalArrangement = Arrangement.spacedBy(FeederTokens.Space.xs),
+            ) {
+                ItemActionButton(Icons.Outlined.TaskAlt, stringResource(R.string.item_action_mark_read), { selection.onMarkRead(true) })
+                ItemActionButton(Icons.Outlined.MarkEmailUnread, stringResource(R.string.item_action_mark_unread), { selection.onMarkRead(false) })
+                ItemActionButton(Icons.Outlined.Delete, stringResource(R.string.action_delete_article), selection.onDelete, danger = true)
+                val single = selection.ids.singleOrNull()
+                if (single != null) {
+                    ItemActionButton(Icons.Default.VerticalAlignTop, stringResource(R.string.item_action_read_above), { selection.onMarkAboveAsRead(single) })
+                    ItemActionButton(Icons.Default.VerticalAlignBottom, stringResource(R.string.item_action_read_below), { selection.onMarkBelowAsRead(single) })
+                    ItemActionButton(Icons.Default.Share, stringResource(R.string.share), { selection.onShare(single) })
+                    ItemActionButton(Icons.Default.OpenInBrowser, stringResource(R.string.item_action_browser), { selection.onOpenInBrowser(single) })
+                }
+                ItemActionButton(Icons.Default.Close, stringResource(R.string.item_action_cancel), selection.onClear)
             }
         }
     }
@@ -1513,9 +1565,6 @@ fun FeedListContent(
         }
 
         val grouping = viewState.feedListGrouping
-        val cardStyle =
-            viewState.feedItemStyle == FeedItemStyle.CARD ||
-                viewState.feedItemStyle == FeedItemStyle.COMPACT_CARD
         // Groups the user has collapsed, by collapseKey. Survives opening an article and
         // coming back; cleared when the grouping changes.
         var collapsedGroups by rememberSaveable(grouping) { mutableStateOf(ArrayList<String>()) }
@@ -1538,14 +1587,8 @@ fun FeedListContent(
                 }
         }
 
-        val arrangement =
-            when {
-                // Collapsed rows have no height, and list spacing would still pile up between
-                // them, so with grouping on the card gap is drawn inside each visible row instead
-                grouping != FeedListGrouping.NONE -> Arrangement.spacedBy(0.dp)
-                cardStyle -> Arrangement.spacedBy(LocalDimens.current.margin)
-                else -> Arrangement.spacedBy(0.dp)
-            }
+        // Divided rows, no gaps (collapsed groups have no height and must not leave gaps either)
+        val arrangement = Arrangement.spacedBy(0.dp)
 
         AnimatedVisibility(
             enter = fadeIn(),
@@ -1563,14 +1606,7 @@ fun FeedListContent(
                         WindowInsets.navigationBars
                             .only(
                                 WindowInsetsSides.Bottom,
-                            ).run {
-                                when (viewState.feedItemStyle) {
-                                    FeedItemStyle.CARD -> addMargin(horizontal = LocalDimens.current.margin)
-                                    FeedItemStyle.COMPACT_CARD -> addMargin(horizontal = LocalDimens.current.margin)
-                                    // No margin since dividers
-                                    FeedItemStyle.COMPACT, FeedItemStyle.SUPER_COMPACT -> this
-                                }
-                            }.asPaddingValues()
+                            ).asPaddingValues()
                     },
                 modifier =
                     Modifier
@@ -1593,7 +1629,7 @@ fun FeedListContent(
                 items(
                     count = pagedFeedItems.itemCount,
                     key = pagedFeedItems.itemKey { it.id },
-                    contentType = pagedFeedItems.itemContentType { it.contentType(viewState.feedItemStyle) },
+                    contentType = pagedFeedItems.itemContentType { it.contentType() },
                 ) { itemIndex ->
                     val loadedItem = pagedFeedItems[itemIndex] ?: PLACEHOLDER_ITEM
                     val previewItem = translatedFeedCards.merge(loadedItem)
@@ -1633,9 +1669,6 @@ fun FeedListContent(
                     if (groupKey != null) {
                         val previous = if (itemIndex > 0) pagedFeedItems.peek(itemIndex - 1) else null
                         if (previous == null || previous.groupKey != loadedItem.groupKey) {
-                            if (cardStyle && itemIndex > 0) {
-                                Spacer(modifier = Modifier.height(LocalDimens.current.margin))
-                            }
                             FeedListGroupHeader(
                                 text = rememberGroupHeaderText(loadedItem, grouping),
                                 collapsed = collapsed,
@@ -1653,9 +1686,6 @@ fun FeedListContent(
                             onTranslateFeedCard(loadedItem)
                         }
 
-                        if (cardStyle && grouping != FeedListGrouping.NONE) {
-                            Spacer(modifier = Modifier.height(LocalDimens.current.margin))
-                        }
                         SwipeableFeedItemPreview(
                             onSwipe = { currentState ->
                                 markAsReadOnSwipe(
@@ -1671,12 +1701,7 @@ fun FeedListContent(
                             filter = viewState.filter,
                             item = previewItem,
                             showThumbnail = viewState.showThumbnails,
-                            feedItemStyle = viewState.feedItemStyle,
                             swipeAsRead = viewState.swipeAsRead,
-                            bookmarkIndicator = !viewState.currentFeedOrTag.isSavedArticles,
-                            maxLines = viewState.maxLines,
-                            showOnlyTitle = viewState.showOnlyTitle,
-                            showReadingTime = viewState.showReadingTime,
                             onMarkAboveAsRead = {
                                 markBeforeAsRead(previewItem.cursor)
                                 if (viewState.filter.onlyUnread) {
@@ -1775,10 +1800,7 @@ fun FeedListContent(
                         // whose colour comes from DividerTokens, which resolved to nothing visible on this
                         // surface. A background modifier has no token and no Canvas, so what is drawn is
                         // exactly the colour written here.
-                        if (viewState.feedItemStyle != FeedItemStyle.CARD &&
-                            viewState.feedItemStyle != FeedItemStyle.COMPACT_CARD &&
-                            itemIndex < pagedFeedItems.itemCount - 1
-                        ) {
+                        if (itemIndex < pagedFeedItems.itemCount - 1) {
                             Box(
                                 modifier =
                                     Modifier
@@ -1890,13 +1912,7 @@ fun FeedGridContent(
             )
         }
 
-        val arrangement =
-            when (viewState.feedItemStyle) {
-                FeedItemStyle.CARD -> Arrangement.spacedBy(LocalDimens.current.gutter)
-                FeedItemStyle.COMPACT_CARD -> Arrangement.spacedBy(LocalDimens.current.gutter)
-                FeedItemStyle.COMPACT -> Arrangement.spacedBy(LocalDimens.current.gutter)
-                FeedItemStyle.SUPER_COMPACT -> Arrangement.spacedBy(LocalDimens.current.gutter)
-            }
+        val arrangement = Arrangement.spacedBy(LocalDimens.current.gutter)
 
         AnimatedVisibility(
             enter = fadeIn(),
@@ -1923,7 +1939,7 @@ fun FeedGridContent(
                 items(
                     count = pagedFeedItems.itemCount,
                     key = pagedFeedItems.itemKey { it.id },
-                    contentType = pagedFeedItems.itemContentType { it.contentType(viewState.feedItemStyle) },
+                    contentType = pagedFeedItems.itemContentType { it.contentType() },
                 ) { itemIndex ->
                     val loadedItem = pagedFeedItems[itemIndex] ?: PLACEHOLDER_ITEM
                     val previewItem = translatedFeedCards.merge(loadedItem)
@@ -1970,12 +1986,7 @@ fun FeedGridContent(
                         filter = viewState.filter,
                         item = previewItem,
                         showThumbnail = viewState.showThumbnails,
-                        feedItemStyle = viewState.feedItemStyle,
                         swipeAsRead = viewState.swipeAsRead,
-                        bookmarkIndicator = !viewState.currentFeedOrTag.isSavedArticles,
-                        maxLines = viewState.maxLines,
-                        showOnlyTitle = viewState.showOnlyTitle,
-                        showReadingTime = viewState.showReadingTime,
                         onMarkAboveAsRead = {
                             markBeforeAsRead(previewItem.cursor)
                             if (viewState.filter.onlyUnread) {

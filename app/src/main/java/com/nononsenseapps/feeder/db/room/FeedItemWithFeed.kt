@@ -6,6 +6,7 @@ import com.nononsenseapps.feeder.db.COL_AUTHOR
 import com.nononsenseapps.feeder.db.COL_BOOKMARKED
 import com.nononsenseapps.feeder.db.COL_CUSTOM_TITLE
 import com.nononsenseapps.feeder.db.COL_ENCLOSURELINK
+import com.nononsenseapps.feeder.db.COL_ENCLOSURE_DURATION
 import com.nononsenseapps.feeder.db.COL_ENCLOSURE_TYPE
 import com.nononsenseapps.feeder.db.COL_FEEDCUSTOMTITLE
 import com.nononsenseapps.feeder.db.COL_FEEDID
@@ -47,7 +48,8 @@ const val FEED_ITEM_COLUMNS_WITH_FEED = """
     $COL_BOOKMARKED,
     $COL_PRIMARYSORTTIME,
     $COL_WORD_COUNT,
-    $COL_WORD_COUNT_FULL
+    $COL_WORD_COUNT_FULL,
+    $COL_ENCLOSURE_DURATION
 """
 
 data class FeedItemWithFeed
@@ -76,6 +78,8 @@ data class FeedItemWithFeed
         @ColumnInfo(name = COL_PRIMARYSORTTIME) var primarySortTime: Instant = Instant.EPOCH,
         @ColumnInfo(name = COL_WORD_COUNT) var wordCount: Int = 0,
         @ColumnInfo(name = COL_WORD_COUNT_FULL) var wordCountFull: Int = 0,
+        // Episode length in seconds from the feed (itunes:duration), null when not given
+        @ColumnInfo(name = COL_ENCLOSURE_DURATION) var enclosureDuration: Long? = null,
     ) : FeedItemForFetching {
         constructor() : this(id = ID_UNSET)
 

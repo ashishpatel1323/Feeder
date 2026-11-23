@@ -7,7 +7,6 @@ import android.content.pm.ActivityInfo
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -49,6 +48,7 @@ import androidx.compose.material.icons.outlined.DownloadForOffline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconToggleButton
@@ -58,6 +58,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -85,7 +87,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -103,7 +104,18 @@ import androidx.media3.ui.PlayerView
 import coil3.compose.AsyncImage
 import coil3.compose.rememberAsyncImagePainter
 import com.nononsenseapps.feeder.R
+import com.nononsenseapps.feeder.db.room.ItemStatus
 import com.nononsenseapps.feeder.model.offline.VideoPhase
+import com.nononsenseapps.feeder.model.playlists.ItemKind
+import com.nononsenseapps.feeder.ui.compose.item.ItemActionButton
+import com.nononsenseapps.feeder.ui.compose.item.ItemCommands
+import com.nononsenseapps.feeder.ui.compose.item.ItemRow
+import com.nononsenseapps.feeder.ui.compose.item.ItemRowActions
+import com.nononsenseapps.feeder.ui.compose.item.ItemRowModel
+import com.nononsenseapps.feeder.ui.compose.item.ageText
+import com.nononsenseapps.feeder.ui.compose.item.rememberItemCommands
+import com.nononsenseapps.feeder.ui.compose.item.rememberItemProgress
+import com.nononsenseapps.feeder.ui.compose.playlists.rememberAddToPlaylist
 import com.nononsenseapps.feeder.ui.compose.settings.formatBytes
 import com.nononsenseapps.feeder.ui.compose.theme.SensibleTopAppBar
 import com.nononsenseapps.feeder.ui.compose.transcript.TranscriptPanel
@@ -125,6 +137,7 @@ fun DownloadsScreen(
     var confirmDeleteAll by remember { mutableStateOf(false) }
     var fullscreen by rememberSaveable { mutableStateOf(false) }
     var showTranscript by rememberSaveable { mutableStateOf(false) }
+    val snackbar = remember { SnackbarHostState() }
 
     // Without Background play, leaving the app pauses (the player keeps its place)
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.onAppHidden() }
@@ -138,6 +151,7 @@ fun DownloadsScreen(
     Scaffold(
         modifier = modifier.windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal)),
         contentWindowInsets = WindowInsets.statusBars,
+        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             SensibleTopAppBar(
                 title = stringResource(R.string.downloads),
@@ -185,7 +199,7 @@ fun DownloadsScreen(
                     audioCount = state.episodes.size + state.incomplete.count { it.job.audio },
                     onTab = viewModel::setTab,
                 )
-                DownloadsList(state, viewModel, modifier = Modifier.weight(1f))
+                DownloadsList(state, viewModel, snackbar = snackbar, modifier = Modifier.weight(1f))
             }
         }
     }
@@ -212,9 +226,12 @@ fun DownloadsScreen(
 private fun DownloadsList(
     state: DownloadsViewState,
     viewModel: DownloadsViewModel,
+    snackbar: SnackbarHostState?,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
+    val status by viewModel.status.collectAsStateWithLifecycle()
+    val commands = rememberItemCommands()
     // The list being dragged; the view model's order otherwise
     val order = remember { mutableStateListOf<DownloadedVideo>() }
     var draggingId by remember { mutableStateOf<Long?>(null) }
@@ -254,12 +271,15 @@ private fun DownloadsList(
             val dragging = draggingId == video.id
             CompletedRow(
                 video = video,
+                status = status[video.id],
+                commands = commands,
+                snackbar = snackbar,
                 playing = state.playingId == video.id && state.playingAudio == state.audioTab,
                 onPlay = { viewModel.play(video.id) },
                 onDelete = { viewModel.delete(video.id) },
                 onMoveUp = { viewModel.move(video.id, -1) },
                 onMoveDown = { viewModel.move(video.id, 1) },
-                dragHandle =
+                dragHandleModifier =
                     Modifier.dragToReorder(
                         id = video.id,
                         listState = listState,
@@ -288,6 +308,7 @@ private fun DownloadsList(
                         Modifier.animateItem()
                     },
             )
+            HorizontalDivider()
         }
     }
 }
@@ -479,120 +500,84 @@ private fun IncompleteRow(
     }
 }
 
+/** A saved video or episode: the shared item row, plus Delete download and a drag handle. */
 @Composable
 private fun CompletedRow(
     video: DownloadedVideo,
+    status: ItemStatus?,
+    commands: ItemCommands,
+    snackbar: SnackbarHostState?,
     playing: Boolean,
     onPlay: () -> Unit,
     onDelete: () -> Unit,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
-    dragHandle: Modifier = Modifier,
     modifier: Modifier = Modifier,
+    dragHandleModifier: Modifier = Modifier,
 ) {
     val moveUp = stringResource(R.string.downloads_move_up)
     val moveDown = stringResource(R.string.downloads_move_down)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
+    val addToPlaylist = rememberAddToPlaylist()
+    val progress = rememberItemProgress(video.id)
+    val read = status?.read ?: false
+    val saved = status?.bookmarked ?: false
+    ItemRow(
+        model =
+            ItemRowModel(
+                id = video.id,
+                title = video.info.title,
+                feedTitle = video.info.channel,
+                age = ageText(status?.sortTime),
+                kind = if (video.audio) ItemKind.PODCAST else ItemKind.YOUTUBE,
+                lengthSeconds = (video.durationMs / 1000).takeIf { it > 0 },
+                read = read,
+                saved = saved,
+                // A still from the saved file or its cover art works with no network
+                image = video.thumbnail ?: video.info.thumbnailUrl,
+                progress = progress,
+            ),
+        actions =
+            ItemRowActions(
+                onPrimary = onPlay,
+                onToggleSave = { commands.setSaved(video.id, !saved) },
+                onPlaylist = { addToPlaylist(video.id, video.info.title) },
+                onToggleRead = { commands.setRead(video.id, !read) },
+                onDelete = { commands.delete(video.id, snackbar) },
+            ),
+        onOpen = onPlay,
+        highlighted = playing,
+        primaryLabel = if (playing) stringResource(R.string.item_now_playing) else null,
+        trailing = {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = dragHandleModifier.size(48.dp),
+            ) {
+                Icon(Icons.Default.DragHandle, contentDescription = stringResource(R.string.downloads_drag_to_reorder))
+            }
+        },
+        extras = {
+            ItemActionButton(
+                icon = Icons.Default.DeleteOutline,
+                label = stringResource(R.string.item_action_delete_download),
+                onClick = onDelete,
+                danger = true,
+            )
+        },
         modifier =
-            modifier
-                .fillMaxWidth()
-                .then(if (playing) Modifier.background(MaterialTheme.colorScheme.secondaryContainer) else Modifier)
-                .clickable(onClick = onPlay)
-                .semantics {
-                    customActions =
-                        listOf(
-                            CustomAccessibilityAction(moveUp) {
-                                onMoveUp()
-                                true
-                            },
-                            CustomAccessibilityAction(moveDown) {
-                                onMoveDown()
-                                true
-                            },
-                        )
-                }.padding(start = 16.dp, top = 6.dp, bottom = 6.dp),
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .width(THUMB_WIDTH)
-                    .aspectRatio(16f / 9f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-        ) {
-            val local = video.thumbnail?.let { rememberAsyncImagePainter(it) }
-            if (video.audio && video.thumbnail == null && video.info.thumbnailUrl == null) {
-                Icon(
-                    Icons.Default.Podcasts,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.align(Alignment.Center).size(36.dp),
-                )
-            }
-            AsyncImage(
-                model = video.info.thumbnailUrl ?: video.thumbnail,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                error = local,
-                fallback = local,
-                modifier = Modifier.fillMaxSize(),
-            )
-            if (playing) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)),
-                ) {
-                    Text(stringResource(R.string.downloads_now_playing), color = Color.White, style = MaterialTheme.typography.labelLarge)
-                }
-            }
-            if (video.durationMs > 0) {
-                Text(
-                    formatDuration(video.durationMs),
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier =
-                        Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(6.dp)
-                            .background(Color.Black.copy(alpha = 0.75f), RoundedCornerShape(4.dp))
-                            .padding(horizontal = 4.dp, vertical = 1.dp),
-                )
-            }
-        }
-        Column(modifier = Modifier.weight(1f).padding(start = 12.dp, end = 4.dp)) {
-            Text(
-                video.info.title,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = if (playing) FontWeight.Bold else null,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (video.info.channel.isNotBlank()) {
-                Text(
-                    video.info.channel,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Text(
-                formatBytes(video.sizeBytes),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        IconButton(onClick = onDelete) {
-            Icon(Icons.Default.DeleteOutline, contentDescription = stringResource(R.string.downloads_delete))
-        }
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = dragHandle.size(48.dp),
-        ) {
-            Icon(Icons.Default.DragHandle, contentDescription = stringResource(R.string.downloads_drag_to_reorder))
-        }
-    }
+            modifier.semantics {
+                customActions =
+                    listOf(
+                        CustomAccessibilityAction(moveUp) {
+                            onMoveUp()
+                            true
+                        },
+                        CustomAccessibilityAction(moveDown) {
+                            onMoveDown()
+                            true
+                        },
+                    )
+            },
+    )
 }
 
 @OptIn(UnstableApi::class)

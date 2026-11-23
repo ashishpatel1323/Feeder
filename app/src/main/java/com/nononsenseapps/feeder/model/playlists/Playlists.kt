@@ -115,7 +115,7 @@ data class PlaylistContext(
 fun PlaylistCandidate.seconds(ctx: PlaylistContext): Long? =
     when (kind) {
         ItemKind.ARTICLE -> readAloudSeconds(if (fullTextByDefault && wordCountFull > 0) wordCountFull else wordCount, ctx.speed)
-        else -> ctx.knownLengths[id] ?: enclosureDuration?.takeIf { it > 0 } ?: ctx.positions[id]?.second?.takeIf { it > 0 }
+        else -> mediaSeconds(ctx.knownLengths[id], enclosureDuration, ctx.positions[id]?.second)
     }
 
 /** The last this many seconds count as played. */

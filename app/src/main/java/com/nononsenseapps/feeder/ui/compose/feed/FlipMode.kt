@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -28,6 +27,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,13 +36,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.BookmarkBorder
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.MarkEmailUnread
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -58,6 +53,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -81,7 +77,7 @@ import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -112,17 +108,36 @@ import coil3.size.Precision
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.db.room.ID_UNSET
 import com.nononsenseapps.feeder.model.PlaybackStatus
+import com.nononsenseapps.feeder.model.PodcastPlayerStateHolder
 import com.nononsenseapps.feeder.model.TTSStateHolder
 import com.nononsenseapps.feeder.model.ThumbnailImage
+import com.nononsenseapps.feeder.model.playlists.ItemKind
+import com.nononsenseapps.feeder.model.playlists.itemSeconds
+import com.nononsenseapps.feeder.model.youtube.VideoPositions
+import com.nononsenseapps.feeder.model.youtube.youtubeVideoId
 import com.nononsenseapps.feeder.ui.compose.empty.NothingToRead
 import com.nononsenseapps.feeder.ui.compose.feedarticle.FeedScreenViewState
 import com.nononsenseapps.feeder.ui.compose.feedarticle.TranslatedFeedCards
+import com.nononsenseapps.feeder.ui.compose.feedarticle.YouTubeVideoBlock
+import com.nononsenseapps.feeder.ui.compose.item.ItemActionButton
+import com.nononsenseapps.feeder.ui.compose.item.ItemContentActionRow
+import com.nononsenseapps.feeder.ui.compose.item.ItemContentActions
+import com.nononsenseapps.feeder.ui.compose.item.ItemHeader
+import com.nononsenseapps.feeder.ui.compose.item.PodcastMediaBlock
+import com.nononsenseapps.feeder.ui.compose.item.primaryIcon
+import com.nononsenseapps.feeder.ui.compose.item.primaryLabel
+import com.nononsenseapps.feeder.ui.compose.item.rememberItemPlayer
+import com.nononsenseapps.feeder.ui.compose.item.rememberItemProgress
+import com.nononsenseapps.feeder.ui.compose.playlists.LocalAddToPlaylist
+import com.nononsenseapps.feeder.ui.compose.theme.FeederDarkColors
 import com.nononsenseapps.feeder.util.ActivityLauncher
 import com.nononsenseapps.feeder.util.stripTrackingParameters
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.kodein.di.compose.LocalDI
@@ -144,9 +159,7 @@ private val FlipGreen = Color(0xFF1B6D3C)
 private val FlipGreenDark = Color(0xFF0B3A20)
 private val FlipBackground = Color(0xFF0D0F0E)
 private val FlipAccent = Color(0xFFA5F4B8)
-private val FlipDelete = Color(0xFFFF6B6B)
 private val FlipSummary = Color(0xFFE9DDFF)
-private val FlipSummaryOn = Color(0xFF2A1A5E)
 
 /** Whether the article list is shown as flip pages instead of a list. One setting for every feed. */
 @Stable
@@ -238,6 +251,13 @@ fun FeedFlipContent(
     }
 
     val activityLauncher: ActivityLauncher by LocalDI.current.instance()
+    val podcastPlayer: PodcastPlayerStateHolder by LocalDI.current.instance()
+    val videoPositions: VideoPositions by LocalDI.current.instance()
+    val addToPlaylist = LocalAddToPlaylist.current
+    val toolbarColor = MaterialTheme.colorScheme.surface.toArgb()
+    // Items whose episode or video was started here (id to when): their page waits for the media
+    // to end before auto-turning, instead of turning when the card has been read aloud
+    val mediaStarted = remember { mutableStateMapOf<Long, Long>() }
     val flipCardTexts: FlipCardTexts by LocalDI.current.instance()
     val ttsStateHolder: TTSStateHolder by LocalDI.current.instance()
     val flipPreference = rememberFlipModePreference()
@@ -286,7 +306,7 @@ fun FeedFlipContent(
                     // card on screen turns the page
                     override fun onArticleFinished(articleId: Long) {
                         val settled = pagerState.settledPage
-                        if (idOnPage(settled) == articleId) turnTo(settled + 1)
+                        if (idOnPage(settled) == articleId && articleId !in mediaStarted) turnTo(settled + 1)
                     }
                 }
             onDispose {
@@ -423,11 +443,33 @@ fun FeedFlipContent(
                     )
                 }
             }
+            // Auto-turn on a media page: once its episode or video has played to the end
+            val startedAt = item?.let { mediaStarted[it.id] }
+            if (readAloud && item != null && startedAt != null && pagerState.settledPage == pageIndex) {
+                LaunchedEffect(item.id, startedAt) {
+                    when (item.kind) {
+                        ItemKind.PODCAST ->
+                            podcastPlayer.playerState.first { p ->
+                                p.itemId == item.id &&
+                                    !p.isPlaying &&
+                                    !p.isLoading &&
+                                    p.durationMillis > 0 &&
+                                    p.positionMillis >= p.durationMillis - 1_000
+                            }
+                        ItemKind.YOUTUBE ->
+                            videoPositions.all.first { all ->
+                                all[item.videoKey]?.let { it.ts >= startedAt && VideoPositions.isWatched(it) } == true
+                            }
+                        ItemKind.ARTICLE -> awaitCancellation()
+                    }
+                    if (pageIndex + 1 < pagerState.pageCount) pagerState.animateScrollToPage(pageIndex + 1)
+                }
+            }
             PageTurn(
                 // How far this page is from the settled position: 0 on screen, 1 flipped away above,
                 // -1 waiting below. Read in the draw phase so flipping does not recompose.
                 offset = { (pagerState.currentPage - pageIndex) + pagerState.currentPageOffsetFraction },
-            ) {
+            ) { live ->
                 if (item == null || cardState == null) {
                     Box(
                         modifier =
@@ -440,6 +482,7 @@ fun FeedFlipContent(
                     FlipArticleCard(
                         item = item,
                         state = cardState,
+                        live = live,
                         keptUnread = kept,
                         spokenRanges = spokenRanges,
                         onOpen = {
@@ -461,16 +504,27 @@ fun FeedFlipContent(
                             }
                             onItemClick(item.id)
                         },
-                        onToggleKeepUnread = {
-                            if (kept) {
+                        onToggleRead = {
+                            if (item.unread || kept) {
+                                // Mark read (played, watched) now
                                 keptUnread = keptUnread.filter { it != item.id }.toLongArray()
+                                markAsUnread(item.id, false)
                             } else {
+                                // Mark unread, and keep it so flipping past does not mark it read again
                                 keptUnread = keptUnread + item.id
-                                if (!item.unread) {
-                                    markAsUnread(item.id, true)
-                                }
+                                markAsUnread(item.id, true)
                             }
                         },
+                        onMediaStart = {
+                            if (item.id !in mediaStarted) mediaStarted[item.id] = System.currentTimeMillis()
+                            // The episode or video plays instead of the card being read aloud
+                            ttsStateHolder.stop()
+                        },
+                        onPlaylist = addToPlaylist?.let { add -> { add(item.id, item.title) } },
+                        onOriginal =
+                            item.link?.let { link ->
+                                { activityLauncher.openLinkInCustomTab(link, toolbarColor) }
+                            },
                         onToggleBookmark = { onSetBookmark(item.id, !item.bookmarked) },
                         onDelete = onDeleteItem?.let { delete -> { delete(item.id) } },
                         onShare = {
@@ -653,14 +707,24 @@ private val BottomHalf =
  * over the fold; a page below (offset < 0) swings its top half down. Each moving half disappears
  * once it is edge-on, where the neighbouring page's half takes over, so a flip reads as one leaf
  * turning over. The halves under the turning leaf are shaded to give it depth.
+ *
+ * At rest the page is drawn once (live = true), so a video player on it exists only once. The
+ * card's state lives in FlipCardState, so starting the content afresh in each branch is intended.
  */
+@Suppress("ktlint:compose:content-slot-reused")
 @Composable
 private fun PageTurn(
     offset: () -> Float,
-    content: @Composable () -> Unit,
+    content: @Composable (live: Boolean) -> Unit,
 ) {
     // The page whose leaf is turning has to draw above its neighbours
     val onTop by remember { derivedStateOf { abs(offset()) < 0.5f } }
+    // A page at rest is drawn once, so a video player on it exists only once and takes taps
+    val atRest by remember { derivedStateOf { offset() == 0f } }
+    if (atRest) {
+        Box(modifier = Modifier.fillMaxSize().zIndex(1f)) { content(true) }
+        return
+    }
     val density = LocalDensity.current.density
     Box(
         modifier =
@@ -689,7 +753,7 @@ private fun PageTurn(
                             alpha = if (moving && abs(o) >= 0.5f) 0f else 1f
                         },
             ) {
-                content()
+                content(false)
                 Box(
                     modifier =
                         Modifier
@@ -718,6 +782,12 @@ private class FlipCardState(
     private val failedText: String,
 ) {
     var bodyText by mutableStateOf(initialText)
+
+    // Video page: the player is shown in place of the text
+    var watching by mutableStateOf(false)
+
+    // Episode page: the transcript is shown under the player
+    var showTranscript by mutableStateOf(false)
 
     // The longer article text has been looked up (it may still be the snippet if there is none)
     var loaded by mutableStateOf(false)
@@ -819,14 +889,37 @@ private fun FlipArticleCard(
     state: FlipCardState,
     keptUnread: Boolean,
     spokenRanges: List<SpokenRanges?>,
+    // False while the page turns (drawn as two halves): no video player then
+    live: Boolean,
     onOpen: () -> Unit,
-    onToggleKeepUnread: () -> Unit,
+    onToggleRead: () -> Unit,
     onToggleBookmark: () -> Unit,
     onDelete: (() -> Unit)?,
     onShare: () -> Unit,
+    onMediaStart: () -> Unit,
     modifier: Modifier = Modifier,
+    onPlaylist: (() -> Unit)? = null,
+    onOriginal: (() -> Unit)? = null,
 ) {
-    val image = item.image?.takeIf { it.isLargeEnoughForFlip() }
+    val kind = item.kind
+    val progress = rememberItemProgress(item.id, item.videoKey)
+    val lengthSeconds =
+        itemSeconds(
+            kind = kind,
+            wordCount = item.wordCount,
+            enclosureDuration = item.enclosureDuration,
+            positionLength = progress?.lengthSeconds,
+        )
+    val player = rememberItemPlayer()
+    // Watch on a video page swaps the text for the player; kept in the card state so both halves
+    // of a turning page agree
+    val watching = state.watching
+    var showTranscript by state::showTranscript
+    // Play on an episode page counts as starting its media, for auto-turn
+    val playingHere = player.isPlaying(item.id)
+    val currentOnMediaStart by rememberUpdatedState(onMediaStart)
+    LaunchedEffect(playingHere) { if (playingHere) currentOnMediaStart() }
+    val image = item.image?.takeIf { it.isLargeEnoughForFlip() && !watching }
     val context = LocalContext.current
     val body = state.body
     val bodyText = state.bodyText
@@ -900,204 +993,170 @@ private fun FlipArticleCard(
             )
         }
 
-        Column(
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(
-                        start = 16.dp,
-                        end = 16.dp,
-                        // Text-only cards start right under the close button; image cards just above
-                        // the bottom of the photo
-                        top = if (image != null) photoHeight - 36.dp else 64.dp,
-                        // Clear of the gesture area at the bottom of the screen
-                        bottom = 28.dp,
-                    ),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 4.dp),
-            ) {
-                item.feedImageUrl?.let { favicon ->
-                    AsyncImage(
-                        model =
-                            ImageRequest
-                                .Builder(LocalContext.current)
-                                .data(favicon.toString())
-                                .build(),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier =
-                            Modifier
-                                .size(20.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.2f)),
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                }
-                Text(
-                    text = listOf(item.feedTitle, item.pubDate).filter { it.isNotBlank() }.joinToString(" · "),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = Color.White.copy(alpha = 0.87f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                if (item.unread) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(FlipAccent),
-                    )
-                }
-            }
-            Text(
-                text = highlightSpoken(item.title, spokenRanges.getOrNull(0)),
-                fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.Bold,
-                fontSize = if (image != null) 25.sp else 27.sp,
-                lineHeight = if (image != null) 31.sp else 33.sp,
-                color = Color.White,
-                maxLines = 4,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 4.dp),
-            )
-            // Fills the space between the title and the buttons; text that does not fit is cut off
-            Box(
+        // The shared item view (same header, media block and labeled actions as the article
+        // screen), in the app's dark colours since Flip is always dark
+        MaterialTheme(colorScheme = FeederDarkColors) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier =
                     Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .clipToBounds()
-                        .fadeBottomEdge()
-                        .padding(horizontal = 4.dp),
+                        .fillMaxSize()
+                        .padding(
+                            start = 16.dp,
+                            end = 16.dp,
+                            // Text-only cards (and a video being watched) start under the close button; image cards just above
+                            // the bottom of the photo
+                            top = if (image != null && !watching) photoHeight - 36.dp else 100.dp,
+                            // Clear of the gesture area at the bottom of the screen
+                            bottom = 28.dp,
+                        ),
             ) {
-                when (val current = body) {
-                    CardBody.Text ->
-                        SpokenBodyText(
-                            text = bodyText,
-                            spoken = spokenRanges.getOrNull(1),
-                            scroll = state.textScroll,
-                        )
-
-                    CardBody.Summarizing ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            CircularProgressIndicator(
-                                color = FlipSummary,
-                                strokeWidth = 2.dp,
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = stringResource(R.string.summarizing),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Color.White.copy(alpha = 0.86f),
-                            )
-                        }
-
-                    is CardBody.Summary ->
-                        // Scrolls when a long title leaves too little room for all three bullets
-                        SummaryBullets(
-                            bullets = current.bullets,
-                            spokenRanges = spokenRanges.drop(1),
-                            modifier = Modifier.verticalScroll(state.summaryScroll),
-                        )
-
-                    is CardBody.Failed ->
+                ItemHeader(
+                    kind = kind,
+                    title = item.title,
+                    feedTitle = item.feedTitle,
+                    date = item.pubDate,
+                    lengthSeconds = lengthSeconds,
+                    progress = progress,
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                    titleContent = {
                         Text(
-                            text = current.message,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.86f),
+                            text = highlightSpoken(item.title, spokenRanges.getOrNull(0)),
+                            fontFamily = FontFamily.Serif,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = if (image != null) 25.sp else 27.sp,
+                            lineHeight = if (image != null) 31.sp else 33.sp,
+                            color = Color.White,
+                            maxLines = if (kind == ItemKind.ARTICLE) 4 else 3,
+                            overflow = TextOverflow.Ellipsis,
                         )
-                }
-            }
-            // Always visible, so the summary is one tap away
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                when (body) {
-                    CardBody.Text ->
-                        CardPill(
-                            label = stringResource(R.string.summarize),
-                            icon = Icons.Outlined.AutoAwesome,
-                            filled = true,
-                            onClick = { state.summarize(item) },
-                        )
-
-                    CardBody.Summarizing ->
-                        CardPill(
-                            label = stringResource(R.string.summarizing),
-                            icon = Icons.Outlined.AutoAwesome,
-                            filled = false,
-                            onClick = {},
-                        )
-
-                    is CardBody.Summary ->
-                        CardPill(
-                            label = stringResource(R.string.show_text),
-                            icon = Icons.Outlined.AutoAwesome,
-                            filled = false,
-                            onClick = state::showText,
-                        )
-
-                    is CardBody.Failed ->
-                        CardPill(
-                            label = stringResource(R.string.flip_summary_retry),
-                            icon = Icons.Outlined.AutoAwesome,
-                            filled = true,
-                            onClick = { state.summarize(item) },
-                        )
-                }
-                CardPill(
-                    label = stringResource(R.string.read_full_article),
-                    icon = Icons.AutoMirrored.Filled.ArrowForward,
-                    iconAfter = true,
-                    filled = false,
-                    contentColor = FlipAccent,
-                    onClick = onOpen,
+                    },
                 )
-            }
-            // One frosted bar, so the actions stay readable on any photo
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(26.dp))
-                        .background(Color(0xCC1A1D1B))
-                        .padding(4.dp),
-            ) {
-                BarAction(
-                    icon = Icons.Outlined.MarkEmailUnread,
-                    label = stringResource(R.string.action_unread),
-                    onClick = onToggleKeepUnread,
-                    selected = keptUnread || !item.unread,
-                )
-                BarAction(
-                    icon = if (item.bookmarked) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
-                    label = stringResource(if (item.bookmarked) R.string.action_saved else R.string.action_save),
-                    onClick = onToggleBookmark,
-                    selected = item.bookmarked,
-                )
-                if (onDelete != null) {
-                    BarAction(
-                        icon = Icons.Outlined.Delete,
-                        label = stringResource(R.string.action_delete_article),
-                        onClick = onDelete,
-                        contentColor = FlipDelete,
+                if (kind == ItemKind.PODCAST && item.enclosureLink != null) {
+                    PodcastMediaBlock(
+                        itemId = item.id,
+                        link = item.enclosureLink,
+                        lengthSeconds = lengthSeconds,
+                        image = item.image?.url ?: item.feedImageUrl?.toString(),
+                        progress = progress,
+                        showTranscript = showTranscript,
+                        player = player,
                     )
                 }
-                BarAction(
-                    icon = Icons.Default.Share,
-                    label = null,
-                    contentDescription = stringResource(R.string.share),
-                    onClick = onShare,
+                // Fills the space between the header and the buttons; text that does not fit is cut off
+                Box(
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .clipToBounds()
+                            .then(if (watching) Modifier else Modifier.fadeBottomEdge())
+                            .padding(horizontal = 4.dp),
+                ) {
+                    val videoId = youtubeVideoId(item.link)
+                    if (watching && live && videoId != null) {
+                        YouTubeVideoBlock(
+                            videoId = videoId,
+                            articleKey = item.videoKey,
+                            title = item.title,
+                            itemId = item.id,
+                            link = item.link,
+                            isBookmarked = item.bookmarked,
+                            onToggleBookmark = onToggleBookmark,
+                            modifier = Modifier.verticalScroll(rememberScrollState()),
+                        )
+                    } else {
+                        when (val current = body) {
+                            CardBody.Text ->
+                                SpokenBodyText(
+                                    text = bodyText,
+                                    spoken = spokenRanges.getOrNull(1),
+                                    scroll = state.textScroll,
+                                )
+
+                            CardBody.Summarizing ->
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    CircularProgressIndicator(
+                                        color = FlipSummary,
+                                        strokeWidth = 2.dp,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = stringResource(R.string.summarizing),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = Color.White.copy(alpha = 0.86f),
+                                    )
+                                }
+
+                            is CardBody.Summary ->
+                                // Scrolls when a long title leaves too little room for all three bullets
+                                SummaryBullets(
+                                    bullets = current.bullets,
+                                    spokenRanges = spokenRanges.drop(1),
+                                    modifier = Modifier.verticalScroll(state.summaryScroll),
+                                )
+
+                            is CardBody.Failed ->
+                                Text(
+                                    text = current.message,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color.White.copy(alpha = 0.86f),
+                                )
+                        }
+                    }
+                }
+                ItemContentActionRow(
+                    actions =
+                        ItemContentActions(
+                            kind = kind,
+                            saved = item.bookmarked,
+                            read = !item.unread && !keptUnread,
+                            onToggleSave = onToggleBookmark,
+                            onToggleRead = onToggleRead,
+                            onPlaylist = onPlaylist,
+                            onSummarize = {
+                                when (body) {
+                                    is CardBody.Summary -> state.showText()
+                                    CardBody.Summarizing -> Unit
+                                    else -> state.summarize(item)
+                                }
+                            },
+                            summarizeLabel =
+                                when (body) {
+                                    CardBody.Text -> stringResource(R.string.summarize)
+                                    CardBody.Summarizing -> stringResource(R.string.summarizing)
+                                    is CardBody.Summary -> stringResource(R.string.show_text)
+                                    is CardBody.Failed -> stringResource(R.string.flip_summary_retry)
+                                },
+                            onShare = onShare,
+                            onOriginal = onOriginal,
+                            onDelete = onDelete,
+                            onTranscript = { showTranscript = !showTranscript },
+                            transcriptShown = showTranscript,
+                        ),
+                    leading = {
+                        when {
+                            kind == ItemKind.YOUTUBE && !watching ->
+                                ItemActionButton(
+                                    icon = primaryIcon(kind),
+                                    label = primaryLabel(kind, progress),
+                                    onClick = {
+                                        state.watching = true
+                                        onMediaStart()
+                                    },
+                                    primary = true,
+                                )
+                            kind == ItemKind.PODCAST -> Unit
+                            else ->
+                                ItemActionButton(
+                                    icon = Icons.AutoMirrored.Filled.ArrowForward,
+                                    label = stringResource(R.string.read_full_article),
+                                    onClick = onOpen,
+                                    primary = kind == ItemKind.ARTICLE,
+                                )
+                        }
+                    },
                 )
             }
         }
@@ -1237,82 +1296,3 @@ private fun Modifier.fadeBottomEdge(): Modifier =
                 blendMode = BlendMode.DstIn,
             )
         }
-
-/** A rounded button under the card text. */
-@Composable
-private fun CardPill(
-    label: String,
-    icon: ImageVector,
-    filled: Boolean,
-    onClick: () -> Unit,
-    iconAfter: Boolean = false,
-    contentColor: Color = if (filled) FlipSummaryOn else FlipSummary,
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier =
-            Modifier
-                .height(40.dp)
-                .clip(CircleShape)
-                .background(if (filled) FlipSummary else Color.White.copy(alpha = 0.10f))
-                .clickable(role = Role.Button, onClick = onClick)
-                .padding(horizontal = 14.dp),
-    ) {
-        if (!iconAfter) {
-            Icon(imageVector = icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-        }
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
-            color = contentColor,
-            maxLines = 1,
-        )
-        if (iconAfter) {
-            Spacer(modifier = Modifier.width(6.dp))
-            Icon(imageVector = icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(16.dp))
-        }
-    }
-}
-
-/** A button in the frosted action bar: white on dark, highlighted when on. */
-@Composable
-private fun RowScope.BarAction(
-    icon: ImageVector,
-    label: String?,
-    onClick: () -> Unit,
-    selected: Boolean = false,
-    contentColor: Color = Color.White,
-    contentDescription: String? = null,
-) {
-    val color = if (selected) FlipAccent else contentColor
-    Row(
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-        modifier =
-            (if (label != null) Modifier.weight(1f) else Modifier.width(48.dp))
-                .height(44.dp)
-                .clip(CircleShape)
-                .background(if (selected) Color.White.copy(alpha = 0.14f) else Color.Transparent)
-                .clickable(role = Role.Button, onClick = onClick),
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = if (label == null) contentDescription else null,
-            tint = color,
-            modifier = Modifier.size(20.dp),
-        )
-        if (label != null) {
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = color,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
-}

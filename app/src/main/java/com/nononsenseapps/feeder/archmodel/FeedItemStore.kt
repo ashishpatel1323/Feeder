@@ -561,6 +561,9 @@ private fun PreviewItem.toFeedListItem(
     primarySortTime = primarySortTime,
     wordCount = bestWordCount,
     videoKey = if (youtubeVideoId(link) != null) VideoPositions.articleKey(feedUrl.toString(), guid) else "",
+    enclosureLink = enclosureLink,
+    enclosureType = enclosureType,
+    enclosureDuration = enclosureDuration,
 )
 
 internal fun ZonedDateTime?.formatForFeed(

@@ -17,9 +17,15 @@ import com.nononsenseapps.feeder.model.offline.PlaylistEntry
 import com.nononsenseapps.feeder.model.offline.VideoJob
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -107,6 +113,16 @@ class DownloadsViewModel(
     val state: StateFlow<DownloadsViewState> = _state.asStateFlow()
 
     val player: StateFlow<ExoPlayer?> = playback.player
+
+    /** Read and saved state of every downloaded item, for the rows' Save and Mark read. */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val status: StateFlow<Map<Long, com.nononsenseapps.feeder.db.room.ItemStatus>> =
+        _state
+            .map { s -> (s.videos + s.episodes).map { it.id } }
+            .distinctUntilChanged()
+            .flatMapLatest { ids -> if (ids.isEmpty()) flowOf(emptyList()) else dao.loadItemStatus(ids) }
+            .map { list -> list.associateBy { it.id } }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     private val infoCache = ConcurrentHashMap<Long, VideoInfo>()
     private val durationCache = ConcurrentHashMap<Long, Long>()

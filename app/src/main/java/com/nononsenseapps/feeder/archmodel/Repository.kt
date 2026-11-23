@@ -724,8 +724,7 @@ class Repository(
         runOnceSyncChainSendRead(di)
     }
 
-    suspend fun shouldDisplayFullTextForItemByDefault(itemId: Long): Boolean =
-        feedItemStore.getFullTextByDefault(itemId) && youtubeVideoId(getLink(itemId)) == null
+    suspend fun shouldDisplayFullTextForItemByDefault(itemId: Long): Boolean = feedItemStore.getFullTextByDefault(itemId) && youtubeVideoId(getLink(itemId)) == null
 
     suspend fun getLink(itemId: Long): String? = feedItemStore.getLink(itemId)
 
@@ -1224,6 +1223,7 @@ data class Article(
     val feedId: Long = item?.feedId ?: ID_UNSET
     val feedUrl: String? = item?.feedUrl?.toString()
     val bookmarked: Boolean = item?.bookmarked ?: false
+
     /** YouTube video of the article link, played in the reader instead of a full text. */
     val youtubeId: String? = youtubeVideoId(item?.link)
 
@@ -1236,6 +1236,9 @@ data class Article(
     val wordCountFull: Int = item?.wordCountFull ?: 0
     val image: ThumbnailImage? = item?.thumbnailImage
     val isUnread: Boolean = item?.readTime == null
+
+    /** Episode length in seconds from the feed, null when not given. */
+    val enclosureDuration: Long? = item?.enclosureDuration
 }
 
 enum class TextToDisplay {
