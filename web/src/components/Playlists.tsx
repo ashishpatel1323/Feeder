@@ -229,7 +229,6 @@ function PlaylistIndex(p: {
           <Icon name="add" size={18} />
           <span>New playlist</span>
         </button>
-        <IconButton icon="close" label="Close playlists" onClick={p.onBack} />
       </div>
       <h2 className="pl-section">Smart playlists · fill themselves from rules</h2>
       {smart.length ? <ul className="pl-list">{smart.map(row)}</ul> : <p className="mf-note">No smart playlists. Make one to collect, say, every unread episode under 40 minutes.</p>}

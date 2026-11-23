@@ -122,6 +122,7 @@ import com.nononsenseapps.feeder.model.playlists.matches
 import com.nononsenseapps.feeder.model.playlists.seconds
 import com.nononsenseapps.feeder.model.playlists.totalSeconds
 import com.nononsenseapps.feeder.model.playlists.withinLabel
+import com.nononsenseapps.feeder.ui.compose.theme.FeederTokens
 import com.nononsenseapps.feeder.ui.compose.theme.SensibleTopAppBar
 import kotlinx.coroutines.launch
 
@@ -244,17 +245,17 @@ private fun LabeledAction(
                 .padding(horizontal = 8.dp, vertical = 4.dp),
     ) {
         Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
-        Text(label, fontSize = 11.sp, maxLines = 1)
+        Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
     }
 }
 
 @Composable
 private fun SectionLabel(text: String) {
     Text(
-        text.uppercase(),
-        style = MaterialTheme.typography.labelMedium,
+        text,
+        style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 6.dp),
+        modifier = Modifier.padding(start = FeederTokens.Space.lg, top = FeederTokens.Space.lg, bottom = FeederTokens.Space.sm),
     )
 }
 
@@ -314,7 +315,7 @@ private fun PlaylistRow(
     ) {
         PlaylistTile(pl.icon, pl.color, 48)
         Column(Modifier.weight(1f)) {
-            Text(pl.name, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(pl.name, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val meta =
                 buildString {
                     append(stringResource(if (pl.smart) R.string.playlist_smart else R.string.playlist_manual))
@@ -360,7 +361,7 @@ private fun PlaylistDetail(
                 PlaylistTile(pl.icon, pl.color, 56)
                 Column {
                     Text(
-                        stringResource(if (pl.smart) R.string.playlist_smart else R.string.playlist_manual).uppercase(),
+                        stringResource(if (pl.smart) R.string.playlist_smart else R.string.playlist_manual),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold,
@@ -409,7 +410,7 @@ private fun PlaylistDetail(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
                 ) {
                     pl.rules.describe { feedTitles[it] ?: "?" }.forEach { text ->
-                        FilterChip(selected = false, onClick = onEdit, label = { Text(text, fontSize = 13.sp) })
+                        FilterChip(selected = false, onClick = onEdit, label = { Text(text, style = MaterialTheme.typography.bodyMedium) })
                     }
                     FilterChip(selected = false, onClick = onEdit, label = { Text("+ " + stringResource(R.string.playlist_add_rule), color = MaterialTheme.colorScheme.primary) })
                 }
@@ -420,7 +421,7 @@ private fun PlaylistDetail(
                             onClick = { viewModel.save(pl.copy(sort = s)) },
                             shape = SegmentedButtonDefaults.itemShape(i, PlaylistSort.entries.size),
                             icon = {},
-                        ) { Text(s.label, fontSize = 12.sp, maxLines = 1) }
+                        ) { Text(s.label, style = MaterialTheme.typography.bodySmall, maxLines = 1) }
                     }
                 }
             } else {
@@ -488,7 +489,7 @@ fun KindTag(kind: ItemKind) {
         }
     Text(
         kind.label,
-        fontSize = 10.5.sp,
+        style = MaterialTheme.typography.labelSmall,
         fontWeight = FontWeight.Bold,
         color = fg,
         modifier =
@@ -542,7 +543,7 @@ private fun ItemRow(
                     Text(
                         item.title.ifBlank { "(no title)" },
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 15.sp,
+                        style = MaterialTheme.typography.bodyLarge,
                         color = if (item.read) MaterialTheme.colorScheme.onSurfaceVariant else Color.Unspecified,
                         maxLines = 3,
                         overflow = TextOverflow.Ellipsis,
@@ -571,7 +572,7 @@ private fun ItemRow(
                 OutlinedButton(onClick = onPlay, contentPadding = PaddingValues(horizontal = 12.dp), modifier = Modifier.height(32.dp)) {
                     Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(2.dp))
-                    Text(stringResource(R.string.playlist_play), fontSize = 13.sp)
+                    Text(stringResource(R.string.playlist_play), style = MaterialTheme.typography.bodyMedium)
                 }
                 AddToPlaylistChip(onClick = onAdd)
                 if (manual != null) {
@@ -620,7 +621,7 @@ fun NowPlayingBar(
                     queue.artwork?.let { AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
                 }
                 Column(Modifier.weight(1f)) {
-                    Text(queue.title, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 14.sp)
+                    Text(queue.title, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
                     Text(
                         "${queue.kind?.label ?: ""} · ${queue.name} · ${queue.index + 1} of ${queue.ids.size}",
                         style = MaterialTheme.typography.bodySmall,
@@ -689,10 +690,10 @@ private fun CarMode(
                             (if (isArticle) "Article · read aloud" else queue.kind?.label ?: "").uppercase(),
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
+                            style = MaterialTheme.typography.bodyMedium,
                         )
                         Text(queue.title, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 26.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                        Text(queue.feedTitle, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
+                        Text(queue.feedTitle, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
                     }
                 }
                 Column {
@@ -721,17 +722,17 @@ private fun CarMode(
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                     val speed = if (isArticle) state.ctx.speed else queue.audioSpeed
                     OutlinedButton(onClick = { viewModel.setSpeed(nextSpeed(speed), isArticle) }, modifier = Modifier.weight(1f).height(52.dp)) {
-                        Text("${stringResource(R.string.queue_speed)} ${speedLabel(speed)}", fontSize = 16.sp)
+                        Text("${stringResource(R.string.queue_speed)} ${speedLabel(speed)}", style = MaterialTheme.typography.bodyLarge)
                     }
                     OutlinedButton(onClick = { showQueue = !showQueue }, modifier = Modifier.weight(1f).height(52.dp)) {
                         Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.queue_up_next), fontSize = 16.sp)
+                        Text(stringResource(R.string.queue_up_next), style = MaterialTheme.typography.bodyLarge)
                     }
                     OutlinedButton(onClick = {
                         viewModel.stop()
                         onClose()
-                    }, modifier = Modifier.height(52.dp)) { Text(stringResource(R.string.queue_stop), fontSize = 16.sp) }
+                    }, modifier = Modifier.height(52.dp)) { Text(stringResource(R.string.queue_stop), style = MaterialTheme.typography.bodyLarge) }
                 }
                 if (showQueue) {
                     LazyColumn(Modifier.weight(1f)) {
@@ -795,7 +796,7 @@ private fun BigButton(
                 modifier = Modifier.size((size * 0.5).dp),
             )
         }
-        if (label != null) Text(label, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+        if (label != null) Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
     }
 }
 
@@ -940,7 +941,7 @@ private fun Field(
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                 .padding(12.dp),
     ) {
-        Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+        Text(label, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(6.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { content() }
     }

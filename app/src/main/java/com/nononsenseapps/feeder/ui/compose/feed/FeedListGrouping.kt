@@ -317,11 +317,6 @@ fun FeedListFilterBar(
                         selected = option == current,
                         onClick = { filterCallback.setShow(option) },
                         shape = SegmentedButtonDefaults.itemShape(index = index, count = FeedListShow.entries.size),
-                        colors =
-                            SegmentedButtonDefaults.colors(
-                                activeContainerColor = MaterialTheme.colorScheme.primary,
-                                activeContentColor = MaterialTheme.colorScheme.onPrimary,
-                            ),
                         icon = {},
                         label = {
                             Row(
@@ -450,8 +445,8 @@ private fun <T> SheetChoiceChips(
     val notSelectedString = stringResource(androidx.compose.ui.R.string.not_selected)
     Column(modifier = modifier.padding(vertical = 8.dp)) {
         Text(
-            title.uppercase(),
-            style = MaterialTheme.typography.labelLarge,
+            title,
+            style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier =
                 Modifier

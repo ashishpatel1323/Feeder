@@ -257,7 +257,6 @@ export function HighlightsPage(p: {
           <h1>Highlights</h1>
           <span className="mf-meta">{p.highlights.length}</span>
           <span className="mf-sp" />
-          <IconButton icon="close" label="Close highlights" onClick={p.onBack} />
         </div>
         <div className="hl-filters">
           <button type="button" className={`hl-filter${color === 'all' ? ' on' : ''}`} onClick={() => setColor('all')}>

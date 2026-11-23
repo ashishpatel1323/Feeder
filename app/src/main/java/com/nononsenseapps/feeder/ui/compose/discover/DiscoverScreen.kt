@@ -249,7 +249,7 @@ fun DiscoverScreen(
                         DiscoverKind.YOUTUBE -> ""
                     }
                 if (source.isNotEmpty()) {
-                    Text(source, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                    Text(source, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
                 }
             }
         }
@@ -265,8 +265,8 @@ private fun <T> ChipRow(
 ) {
     Column {
         Text(
-            label.uppercase(),
-            fontSize = 11.sp,
+            label,
+            style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp),
@@ -335,10 +335,10 @@ private fun ResultCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(r.title, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     r.meta?.takeIf { it.isNotBlank() }?.let {
-                        Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     r.description?.let {
-                        Text(it, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
@@ -368,10 +368,10 @@ private fun ResultCard(
                     }
                 }
             }
-            error?.let { Text("Could not add: $it", color = MaterialTheme.colorScheme.error, fontSize = 13.sp) }
+            error?.let { Text("Could not add: $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
             if (picking && added == null && !followed) {
                 val ordered = if (lastFolder in folders) listOf(lastFolder) + folders.filter { it != lastFolder } else folders
-                Text("Add to", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp))
+                Text("Add to", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 10.dp))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ordered.forEach { f ->
                         FilterChip(
@@ -421,6 +421,6 @@ private fun Done(text: String) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 10.dp)) {
         Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(4.dp))
-        Text(text, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        Text(text, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
     }
 }

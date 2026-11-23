@@ -91,7 +91,7 @@ fun AddToPlaylistChip(
 ) {
     AssistChip(
         onClick = onClick,
-        label = { Text(stringResource(R.string.playlist_add_button), fontSize = 12.sp) },
+        label = { Text(stringResource(R.string.playlist_add_button), style = MaterialTheme.typography.bodySmall) },
         leadingIcon = { Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null, modifier = Modifier.size(16.dp)) },
         colors =
             if (inPlaylist) {
@@ -175,8 +175,8 @@ fun AddToPlaylistHost() {
                 close()
             }
             Text(
-                stringResource(R.string.playlist_my_playlists).uppercase(),
-                style = MaterialTheme.typography.labelMedium,
+                stringResource(R.string.playlist_my_playlists),
+                style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp),
             )
@@ -295,6 +295,6 @@ fun SmallPlaylistButton(
                 .padding(horizontal = 8.dp, vertical = 3.dp),
     ) {
         Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(15.dp))
-        Text(stringResource(R.string.playlist_add_button), fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.playlist_add_button), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
     }
 }
