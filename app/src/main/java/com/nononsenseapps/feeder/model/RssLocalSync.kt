@@ -15,6 +15,7 @@ import com.nononsenseapps.feeder.db.room.Sync2Dao
 import com.nononsenseapps.feeder.sync2.Sync2Client
 import com.nononsenseapps.feeder.util.Either
 import com.nononsenseapps.feeder.util.FilePathProvider
+import com.nononsenseapps.feeder.util.fetchOgImage
 import com.nononsenseapps.feeder.util.flatMap
 import com.nononsenseapps.feeder.util.left
 import com.nononsenseapps.feeder.util.logDebug
@@ -29,7 +30,6 @@ import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import com.nononsenseapps.feeder.util.fetchOgImage
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.kodein.di.DI
@@ -702,6 +702,10 @@ internal suspend fun youtubeChannelAvatar(
             val source = response.body.source()
             source.request(2_000_000)
             val html = source.buffer.snapshot().utf8()
-            OG_IMAGE_REGEX.find(html)?.groupValues?.get(1)?.replace("&amp;", "&")
+            OG_IMAGE_REGEX
+                .find(html)
+                ?.groupValues
+                ?.get(1)
+                ?.replace("&amp;", "&")
         }
     }

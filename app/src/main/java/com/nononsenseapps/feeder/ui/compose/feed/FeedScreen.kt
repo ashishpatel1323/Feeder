@@ -154,9 +154,9 @@ import com.nononsenseapps.feeder.ui.compose.modifiers.trackVisibility
 import com.nononsenseapps.feeder.ui.compose.navdrawer.ScreenWithNavDrawer
 import com.nononsenseapps.feeder.ui.compose.navigation.ArticleDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.DownloadsDestination
-import com.nononsenseapps.feeder.ui.compose.navigation.HomeDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.EditFeedDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.FeedDestination
+import com.nononsenseapps.feeder.ui.compose.navigation.HomeDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.SearchFeedDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.SettingsDestination
 import com.nononsenseapps.feeder.ui.compose.pullrefresh.PullRefreshIndicator

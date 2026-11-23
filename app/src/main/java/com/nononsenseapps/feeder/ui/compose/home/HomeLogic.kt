@@ -119,7 +119,12 @@ fun initials(title: String): String {
             .split(Regex("[^\\p{L}\\p{N}]+"))
             .filter { it.isNotBlank() && it.lowercase() !in SMALL_WORDS }
     return when {
-        words.isEmpty() -> title.trim().take(1).uppercase().ifEmpty { "?" }
+        words.isEmpty() ->
+            title
+                .trim()
+                .take(1)
+                .uppercase()
+                .ifEmpty { "?" }
         words.size == 1 -> words[0].take(2).uppercase()
         else -> "${words[0].first()}${words[1].first()}".uppercase()
     }
