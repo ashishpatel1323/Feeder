@@ -27,6 +27,8 @@ interface Props {
   showingHighlights: boolean
   onHighlights: () => void
   showingHome: boolean
+  showingDiscover: boolean
+  onDiscover: () => void
   onHome: () => void
   showingDownloads: boolean
   onDownloads: () => void
@@ -117,7 +119,7 @@ export function Sidebar(p: Props) {
   const folderNames = tags.map(([t]) => t).filter(Boolean)
 
   const playlists = usePlaylists()
-  const isSel = (s: Selection) => !p.showingHome && !p.managing && !p.showingHighlights && !p.showingDownloads && p.showingPlaylist === null && JSON.stringify(s) === JSON.stringify(p.selection)
+  const isSel = (s: Selection) => !p.showingHome && !p.showingDiscover && !p.managing && !p.showingHighlights && !p.showingDownloads && p.showingPlaylist === null && JSON.stringify(s) === JSON.stringify(p.selection)
 
   const feedRow = (f: Feed, i: number, folder: Feed[]) => (
     <li
@@ -175,6 +177,9 @@ export function Sidebar(p: Props) {
         <IconButton icon="panelOpen" label="Show feeds" title="Show feeds ( [ )" onClick={p.onToggleCollapsed} />
         <button className={`rail-btn${p.showingHome ? ' selected' : ''}`} title="Home: all your feeds as tiles" aria-label="Home" onClick={p.onHome}>
           <Icon name="home" size={20} />
+        </button>
+        <button className={`rail-btn${p.showingDiscover ? ' selected' : ''}`} title="Discover new feeds, podcasts and channels" aria-label="Discover" onClick={p.onDiscover}>
+          <Icon name="explore" size={20} />
         </button>
         <button
           className={`rail-btn${isSel({ kind: 'all' }) ? ' selected' : ''}`}
@@ -241,6 +246,12 @@ export function Sidebar(p: Props) {
             <Icon name="home" size={20} />
             <span className="nav-title">Home</span>
             <span className="count muted">{p.feeds.length}</span>
+          </button>
+        </li>
+        <li>
+          <button className={`nav-row${p.showingDiscover ? ' selected' : ''}`} onClick={p.onDiscover}>
+            <Icon name="explore" size={20} />
+            <span className="nav-title">Discover</span>
           </button>
         </li>
         <li>
