@@ -19,7 +19,7 @@ import { isWatched } from './videopos'
 
 export type ItemKind = 'podcast' | 'youtube' | 'article'
 export const ITEM_KINDS: ItemKind[] = ['podcast', 'youtube', 'article']
-export const ITEM_KIND_LABELS: Record<ItemKind, string> = { podcast: 'Podcast', youtube: 'YouTube', article: 'Article' }
+export const ITEM_KIND_LABELS: Record<ItemKind, string> = { podcast: 'Podcast', youtube: 'Video', article: 'Article' }
 
 export type PlayStatus = 'unread' | 'inprogress' | 'read'
 export const PLAY_STATUSES: PlayStatus[] = ['unread', 'inprogress', 'read']

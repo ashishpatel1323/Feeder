@@ -4914,40 +4914,40 @@ label.check.inline {
   padding: 1px 5px;
   margin-right: 6px;
 }
-.ty.podcast {
+.ty.k-podcast {
   background: #e9ddff;
   color: #4a2a8a;
 }
-.ty.youtube {
+.ty.k-youtube {
   background: #ffdcdc;
   color: #8a1f1f;
 }
-.ty.article {
+.ty.k-article {
   background: #d6ebff;
   color: #154a7a;
 }
-:root[data-theme='dark'] .ty.podcast {
+:root[data-theme='dark'] .ty.k-podcast {
   background: #3b2d55;
   color: #d9c4ff;
 }
-:root[data-theme='dark'] .ty.youtube {
+:root[data-theme='dark'] .ty.k-youtube {
   background: #4d2323;
   color: #ffb3b3;
 }
-:root[data-theme='dark'] .ty.article {
+:root[data-theme='dark'] .ty.k-article {
   background: #20384d;
   color: #b8dcff;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .ty.podcast {
+  :root:not([data-theme='light']) .ty.k-podcast {
     background: #3b2d55;
     color: #d9c4ff;
   }
-  :root:not([data-theme='light']) .ty.youtube {
+  :root:not([data-theme='light']) .ty.k-youtube {
     background: #4d2323;
     color: #ffb3b3;
   }
-  :root:not([data-theme='light']) .ty.article {
+  :root:not([data-theme='light']) .ty.k-article {
     background: #20384d;
     color: #b8dcff;
   }
@@ -6083,4 +6083,303 @@ input:focus-visible {
   .narrow-label {
     display: inline;
   }
+}
+
+/* ---------------------------------------------------------------- one item row (ItemRow.tsx)
+   The same row for articles, episodes and videos in the list, Saved, playlists and Downloads. */
+.row.ir {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--sp-2) 0;
+  cursor: pointer;
+}
+/* Wide: buttons sit under the title, next to the thumbnail */
+.ir-top {
+  display: contents;
+}
+.ir-lead {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  margin-right: var(--sp-2);
+}
+.ir-thumb-btn {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  margin-right: var(--sp-3);
+}
+.ir-main {
+  grid-column: 3;
+}
+.ir-acts {
+  grid-column: 3;
+  /* Its buttons must not widen the thumbnail's column when it spans the row */
+  contain: inline-size;
+}
+.list-pane,
+.pl-items,
+.dl-side {
+  container-type: inline-size;
+}
+/* Narrow columns (the list pane, phones): the five buttons share one strip, label under the icon */
+@container (max-width: 560px) {
+  .row.ir .ir-thumb-btn {
+    grid-row: 1;
+  }
+  .row.ir .ir-acts {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .row.ir .ir-btn {
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    height: 46px;
+    padding: 0 2px;
+    font-size: var(--fs-2xs);
+    white-space: normal;
+    text-align: center;
+    line-height: 1.15;
+  }
+  .row.ir .ir-thumb {
+    width: 96px;
+  }
+}
+.ir-btn svg {
+  flex: none;
+}
+.list-pane .row.ir.read {
+  opacity: 1;
+}
+.row.ir.read .ir-thumb img {
+  opacity: 0.6;
+}
+.ir-thumb-btn {
+  border: 0;
+  padding: 0;
+  background: none;
+  flex: none;
+  cursor: pointer;
+}
+.ir-thumb {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 128px;
+  aspect-ratio: 16 / 10;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background: var(--surface-3);
+  color: var(--text-2);
+}
+.ir-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.ir-len {
+  position: absolute;
+  right: var(--sp-1);
+  bottom: var(--sp-1);
+  padding: 0 5px;
+  border-radius: var(--r-xs);
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.ir-prog {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.4);
+}
+.ir-prog i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.ir-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.row.ir .ir-title {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--text);
+  text-align: left;
+  font-family: var(--font-ui);
+  font-size: var(--fs-base);
+  font-weight: 600;
+  cursor: pointer;
+}
+.row.ir.read .ir-title {
+  font-weight: 500;
+  color: var(--text-2);
+}
+.row.ir .row-meta {
+  margin-top: 0;
+  color: var(--text-2);
+}
+.row.ir .row-feed {
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+}
+.row.ir .ty {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-right: 0;
+}
+.ir-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  cursor: default;
+}
+.ir-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.ir-btn:hover {
+  background: var(--surface-2);
+}
+.ir-btn:disabled {
+  background: var(--disabled-bg);
+  color: var(--disabled-ink);
+  border-color: transparent;
+  cursor: default;
+}
+.ir-btn.pri {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.ir-btn.on {
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+.ir-btn.del {
+  color: var(--danger);
+}
+.row.ir.playing {
+  background: var(--accent-soft);
+}
+.ir-lead {
+  align-self: center;
+  color: var(--text-3);
+  display: inline-flex;
+  min-width: 20px;
+  justify-content: center;
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/* -- podcast episode card: plays in Feeder's own bottom player (Podcast.tsx) */
+.pod-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  padding: var(--sp-3);
+}
+.pod-track {
+  flex: 1 1 180px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.pod-bar {
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  overflow: hidden;
+  cursor: pointer;
+}
+.pod-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.pod-time {
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.mf-btn.on {
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+.article-meta .ty {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-right: 0;
+}
+
+/* -- Flip: episodes and videos play on the page */
+.flip-media {
+  flex: none;
+  margin-bottom: 14px;
+  /* The Flip page is always light paper: keep the light tokens for the player inside it */
+  --surface: #ffffff;
+  --surface-2: #eef4ee;
+  --surface-3: #e1ebe2;
+  --text: #191c1a;
+  --text-2: #4f5a52;
+  --text-3: #5c6760;
+  --border: #d6ddd7;
+  --accent: #1f6f4a;
+  --accent-ink: #ffffff;
+  --accent-soft: #cdeedb;
+  color: var(--text);
+}
+.flip-media .video-frame {
+  width: 100%;
+  height: clamp(160px, 30vh, 300px);
+  aspect-ratio: auto;
+}
+.flip-media .video-frame iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: var(--r-xs);
+}
+.flip-media.pod .podcast-episode {
+  margin: 0;
+}
+.flip-meta .ty {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-right: 8px;
+  vertical-align: 1px;
+}
+.flip-actions {
+  flex-wrap: wrap;
 }

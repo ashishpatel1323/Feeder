@@ -1,15 +1,13 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
-import { db, feedDisplayTitle, type Feed, type Item } from '../lib/db'
-import { readingMinutes, wordsOf, type Group } from '../lib/listquery'
+import { db, type Feed, type Item } from '../lib/db'
+import type { Group } from '../lib/listquery'
 import { updateSettings, type Grouping, type Settings, type ShowFilter, type Sorting } from '../lib/settings'
-import { proxiedUrl } from '../lib/api'
 import { useNetwork } from '../lib/offline'
-import { isWatched, positionLabel } from '../lib/videopos'
 import { Icon, IconButton } from './Icon'
-import { isShared, siteOf } from '../lib/share'
+import { isShared } from '../lib/share'
 import { articleVideoId } from '../lib/youtube'
-import { AddToPlaylistChip, useManualMembership } from './AddToPlaylist'
+import { useManualMembership } from './AddToPlaylist'
+import { ItemRow, usePlaylistContext } from './ItemRow'
 
 interface Props {
   title: string
@@ -163,31 +161,6 @@ function SortGroupSheet({ s, onClose }: { s: Settings; onClose: () => void }) {
   )
 }
 
-function relativeTime(ms: number): string {
-  const diff = Date.now() - ms
-  const min = Math.round(diff / 60000)
-  if (min < 1) return 'now'
-  if (min < 60) return `${min}m`
-  const h = Math.round(min / 60)
-  if (h < 24) return `${h}h`
-  const d = Math.round(h / 24)
-  if (d < 7) return `${d}d`
-  return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-}
-
-function Thumb({ src }: { src: string }) {
-  return (
-    <img
-      className="thumb"
-      src={src.startsWith('http://') ? proxiedUrl(src) : src}
-      alt=""
-      loading="lazy"
-      referrerPolicy="no-referrer"
-      onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
-    />
-  )
-}
-
 /** Right-click menu on an article, or on all selected articles: Mark read or unread, and Delete. */
 function RowMenu(p: { items: Item[]; x: number; y: number; onClose: () => void; onSetRead: (read: boolean) => void; onDelete: () => void }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -266,7 +239,6 @@ export function ArticleList(p: Props) {
   const longPressed = useRef(false)
   const s = p.settings
   const network = useNetwork()
-  const online = network && !s.offlineMode
   const inPlaylists = useManualMembership()
   const grouped = s.grouping !== 'none'
 
@@ -275,8 +247,8 @@ export function ArticleList(p: Props) {
   const kindFilter = p.onAddLink && savedKind !== 'all' ? (i: Item) => (savedKind === 'links' ? isShared(i) : !!articleVideoId(i)) : null
   const groups = kindFilter ? p.groups.map((g) => ({ ...g, items: g.items.filter(kindFilter) })).filter((g) => g.items.length) : p.groups
   const total = groups.reduce((n, g) => n + g.items.length, 0)
-  // Where YouTube videos were left, shown in place of the reading time
-  const videoPos = useLiveQuery(async () => new Map((await db.videoPos.toArray()).map((v) => [v.id, v])), [])
+  // Feed kinds, play positions and lengths for each row's type and length
+  const ctx = usePlaylistContext(p.feeds, 1)
   const countOf = (v: ShowFilter) => (v === 'unread' ? p.counts.unread : v === 'saved' ? p.counts.saved : v === 'downloaded' ? p.counts.downloaded : 0)
 
   const toggleGroup = (key: string) => {
@@ -493,79 +465,32 @@ export function ArticleList(p: Props) {
               ) : null}
               {collapsed
                 ? null
-                : g.items.map((item) => {
-                    const feed = p.feeds.get(item.feedUrl)
-                    const pos = videoPos?.get(item.id)
-                    return (
-                      <button
-                        key={item.id}
-                        className={`row${item.read ? ' read' : ''}${item.id === p.selectedId && !picked.size ? ' selected' : ''}${picked.has(item.id) ? ' picked' : ''}`}
-                        aria-pressed={picked.size ? picked.has(item.id) : undefined}
-                        onClick={(e) => clickRow(e, item)}
-                        onContextMenu={(e) => {
-                          e.preventDefault()
-                          // Right-click inside the selection acts on all of it; elsewhere, on that article only
-                          if (picked.has(item.id)) setMenu({ items: selected, x: e.clientX, y: e.clientY })
-                          else {
-                            if (picked.size) clearSelection()
-                            setMenu({ items: [item], x: e.clientX, y: e.clientY })
-                          }
-                        }}
-                      >
-                        <div className="row-main">
-                          <div className="row-title">{item.title || '(no title)'}</div>
-                          <div className="row-meta">
-                            {isShared(item) ? (
-                              <span className="row-feed shared" title="Added by sharing a link">
-                                {siteOf(item.link) || 'Shared link'}
-                              </span>
-                            ) : (
-                            <span
-                              className="row-feed"
-                              role="link"
-                              tabIndex={-1}
-                              title="Open this feed's page: stats and settings"
-                              onClick={(e) => {
-                                // While picking articles, a click anywhere on the row picks it
-                                if (picked.size || e.shiftKey || e.metaKey || e.ctrlKey) return
-                                e.stopPropagation()
-                                p.onOpenFeed(item.feedUrl)
-                              }}
-                            >
-                              {feedDisplayTitle(feed)}
-                            </span>
-                            )}
-                            <span>{relativeTime(item.sortTime)}</span>
-                            {pos ? (
-                              <span className="row-video" title="Where you left this video">
-                                {pos.d > 0 && !isWatched(pos) ? (
-                                  <span className="row-video-bar" aria-hidden="true">
-                                    <span style={{ width: `${Math.min(100, (pos.t / pos.d) * 100)}%` }} />
-                                  </span>
-                                ) : null}
-                                {positionLabel(pos)}
-                              </span>
-                            ) : (
-                              <span>{readingMinutes(wordsOf(item, feed))} min</span>
-                            )}
-                            {item.saved ? <Icon name="bookmarkFilled" size={14} title="Saved" /> : null}
-                            {item.offlineAt || item.offlineVideo ? (
-                              <span className={`row-offline${online ? '' : ' strong'}`} title={item.offlineVideo ? 'Video saved for offline watching' : 'Saved for offline reading'}>
-                                <Icon name="download" size={14} />
-                              </span>
-                            ) : null}
-                            <AddToPlaylistChip id={item.id} title={item.title} inPlaylist={inPlaylists.has(item.id)} />
-                          </div>
-                          {s.snippetLines > 0 && item.snippet ? (
-                            <div className="row-snippet" style={{ WebkitLineClamp: s.snippetLines }}>
-                              {item.snippet}
-                            </div>
-                          ) : null}
-                        </div>
-                        {s.showThumbnails && item.imageUrl ? <Thumb src={item.imageUrl} /> : null}
-                      </button>
-                    )
-                  })}
+                : g.items.map((item) => (
+                    <ItemRow
+                      key={item.id}
+                      item={item}
+                      feed={p.feeds.get(item.feedUrl)}
+                      ctx={ctx}
+                      selected={item.id === p.selectedId && !picked.size}
+                      picked={picked.has(item.id)}
+                      rowProps={{ 'aria-selected': picked.size ? picked.has(item.id) : undefined } as React.HTMLAttributes<HTMLDivElement>}
+                      onOpen={(e) => clickRow(e, item)}
+                      onOpenFeed={(url) => !picked.size && p.onOpenFeed(url)}
+                      onSetRead={(read) => setRead([item], read)}
+                      onDelete={() => remove([item])}
+                      inPlaylist={inPlaylists.has(item.id)}
+                      snippetLines={s.snippetLines}
+                      onContextMenu={(e) => {
+                        e.preventDefault()
+                        // Right-click inside the selection acts on all of it; elsewhere, on that article only
+                        if (picked.has(item.id)) setMenu({ items: selected, x: e.clientX, y: e.clientY })
+                        else {
+                          if (picked.size) clearSelection()
+                          setMenu({ items: [item], x: e.clientX, y: e.clientY })
+                        }
+                      }}
+                    />
+                  ))}
             </div>
           )
         })}

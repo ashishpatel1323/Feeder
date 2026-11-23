@@ -25,6 +25,8 @@ import {
 } from '../lib/downloads'
 import { articleVideoId } from '../lib/youtube'
 import { Icon, IconButton } from './Icon'
+import { deleteItemWithUndo, ItemRow, usePlaylistContext } from './ItemRow'
+import type { Toast } from '../lib/toast'
 
 interface Download {
   item: Item
@@ -44,8 +46,9 @@ export function DownloadsPage(p: {
   onBack: () => void
   onMenu: () => void
   onOpenArticle: (id: string) => void
-  toast: (msg: string) => void
+  toast: Toast
 }) {
+  const ctx = usePlaylistContext(p.feeds, 1)
   const jobs = useVideoJobs()
   const available = useVideoSavingAvailable()
   const [prefs, setPrefs] = useDownloadsPrefs()
@@ -247,60 +250,69 @@ export function DownloadsPage(p: {
                 <>
                   <h2 className="dl-section">Completed</h2>
                   <ol className="dl-list" aria-label="Playlist">
-                    {completed.map((d, i) => (
-                      <li
-                        key={d.item.id}
-                        className={`dl-row${d.item.id === playingId ? ' playing' : ''}${dragging === d.item.id ? ' dragging' : ''}`}
-                        draggable
-                        onDragStart={(e) => {
-                          e.dataTransfer.effectAllowed = 'move'
-                          e.dataTransfer.setData('text/plain', d.item.id)
-                          setDragging(d.item.id)
-                        }}
-                        onDragOver={(e) => {
-                          if (!dragging) return
-                          e.preventDefault()
-                          if (dragging !== d.item.id) move(dragging, { targetId: d.item.id })
-                        }}
-                        onDrop={(e) => e.preventDefault()}
-                        onDragEnd={() => setDragging(null)}
-                      >
-                        <span
-                          className="dl-handle"
-                          role="button"
-                          tabIndex={0}
-                          aria-label={`Move ${d.item.title}. Arrow keys move it up or down.`}
-                          title="Drag to change the order (or focus and use the arrow keys)"
-                          onKeyDown={(e) => {
-                            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                    {completed.map((d) => (
+                      <li key={d.item.id}>
+                        <ItemRow
+                          item={d.item}
+                          feed={p.feeds.get(d.item.feedUrl)}
+                          ctx={ctx}
+                          className={`dl-row${d.item.id === playingId ? ' playing' : ''}${dragging === d.item.id ? ' dragging' : ''}`}
+                          rowProps={{
+                            draggable: true,
+                            onDragStart: (e) => {
+                              e.dataTransfer.effectAllowed = 'move'
+                              e.dataTransfer.setData('text/plain', d.item.id)
+                              setDragging(d.item.id)
+                            },
+                            onDragOver: (e) => {
+                              if (!dragging) return
                               e.preventDefault()
-                              move(d.item.id, { by: e.key === 'ArrowUp' ? -1 : 1 })
-                            }
+                              if (dragging !== d.item.id) move(dragging, { targetId: d.item.id })
+                            },
+                            onDrop: (e) => e.preventDefault(),
+                            onDragEnd: () => setDragging(null),
                           }}
-                        >
-                          <Icon name="dragHandle" size={20} />
-                        </span>
-                        <button type="button" className="dl-main" onClick={() => setPlayingId(d.item.id)} title="Play from here">
-                          <Thumb url={d.item.imageUrl}>
-                            {d.item.id === playingId ? <span className="dl-thumb-overlay">Playing</span> : null}
-                            {durations[d.videoId] ? <span className="dl-duration">{formatDuration(durations[d.videoId])}</span> : null}
-                          </Thumb>
-                          <span className="dl-text">
-                            <span className="dl-title">
-                              <span className="dl-num">{i + 1}.</span> {d.item.title}
+                          leading={
+                            <span
+                              className="ir-lead dl-handle"
+                              role="button"
+                              tabIndex={0}
+                              aria-label={`Move ${d.item.title}. Arrow keys move it up or down.`}
+                              title="Drag to change the order (or focus and use the arrow keys)"
+                              onClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => {
+                                if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                                  e.preventDefault()
+                                  move(d.item.id, { by: e.key === 'ArrowUp' ? -1 : 1 })
+                                }
+                              }}
+                            >
+                              <Icon name="dragHandle" size={20} />
                             </span>
-                            <span className="dl-sub">{channelOf(d.item, p.feeds)}</span>
-                            <span className="dl-sub">{d.item.offlineVideo ? formatBytes(d.item.offlineVideo) : ''}</span>
-                          </span>
-                        </button>
-                        <IconButton
-                          icon="delete"
-                          label={`Delete ${d.item.title}`}
-                          title="Delete this download"
-                          onClick={() => {
+                          }
+                          thumbOverlay={d.item.id === playingId ? <span className="dl-thumb-overlay">Playing</span> : null}
+                          onOpen={() => p.onOpenArticle(d.item.id)}
+                          onPrimary={() => setPlayingId(d.item.id)}
+                          primaryLabel={d.item.id === playingId ? 'Playing' : 'Play'}
+                          primaryIcon="play"
+                          metaExtra={d.item.offlineVideo ? <span>{formatBytes(d.item.offlineVideo)}</span> : null}
+                          onDelete={() => {
                             if (d.item.id === playingId) playNext(1)
-                            void removeVideo(d.item.id, d.videoId)
+                            void deleteItemWithUndo(d.item, p.toast)
                           }}
+                          extras={
+                            <button
+                              type="button"
+                              className="ir-btn"
+                              onClick={() => {
+                                if (d.item.id === playingId) playNext(1)
+                                void removeVideo(d.item.id, d.videoId)
+                              }}
+                            >
+                              <Icon name="close" size={16} />
+                              Delete download
+                            </button>
+                          }
                         />
                       </li>
                     ))}

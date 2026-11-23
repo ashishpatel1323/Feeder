@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { Item } from '../lib/db'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { db, type Item } from '../lib/db'
+import { playQueue, useQueue } from '../lib/playqueue'
+import { RESUME_BACK, saveVideoPos } from '../lib/videopos'
 import { cueIndexAt, findMatches, transcriptPlainText, type TranscriptCue, type TranscriptMatch } from '../lib/transcriptFormats'
 import { deleteTranscript, loadTranscript, stopTranscribing, transcribe, useTranscript, WHISPER_MODEL_MB, type TranscriptState } from '../lib/transcripts'
 import { Icon } from './Icon'
@@ -21,57 +24,79 @@ function formatTime(ms: number): string {
 }
 
 /**
- * A podcast episode in the reader: the audio player, and its transcript as subtitles that follow
- * playback (CC button). Same behavior as the Android app's podcast player.
+ * A podcast episode in the reader and on a Flip page: plays in Feeder's own bottom player (the
+ * same one playlists use), so where you got to, the speed and the lock-screen controls are the
+ * same everywhere. The transcript follows playback (Transcript button).
  */
-export function PodcastEpisode({ item }: { item: Item }) {
-  const audioRef = useRef<HTMLAudioElement>(null)
+export function PodcastEpisode({ item, feedTitle = '', compact = false }: { item: Item; feedTitle?: string; compact?: boolean }) {
+  const q = useQueue()
+  const saved = useLiveQuery(() => db.videoPos.get(item.id), [item.id])
   const [showTranscript, setShowTranscript] = useState(false)
-  const [position, setPosition] = useState(0)
+  const current = q.ids[q.index] === item.id && q.kind !== null
+  const playing = current && (q.status === 'playing' || q.status === 'loading')
+  const position = current ? q.position : (saved?.t ?? 0)
+  const duration = (current && q.duration) || item.duration || saved?.d || 0
+  const started = position > 5 && (!duration || position < duration - 30)
 
-  useEffect(() => {
-    const audio = audioRef.current
-    if (!audio || !showTranscript) return
-    let frame = 0
-    const tick = () => setPosition(Math.round(audio.currentTime * 1000))
-    // timeupdate fires only about four times a second; this keeps lines changing on time
-    const id = window.setInterval(() => {
-      if (!audio.paused) {
-        cancelAnimationFrame(frame)
-        frame = requestAnimationFrame(tick)
-      }
-    }, 200)
-    audio.addEventListener('seeked', tick)
-    tick()
-    return () => {
-      window.clearInterval(id)
-      cancelAnimationFrame(frame)
-      audio.removeEventListener('seeked', tick)
-    }
-  }, [showTranscript])
-
+  const play = () => {
+    if (current) playQueue.toggle()
+    else playQueue.start([item.id], { name: feedTitle || 'Podcast' })
+  }
   const seek = (ms: number) => {
-    const audio = audioRef.current
-    if (!audio) return
-    audio.currentTime = ms / 1000
-    if (audio.paused) void audio.play().catch(() => {})
+    if (current && duration) return playQueue.seekToFraction(Math.min(1, ms / 1000 / duration))
+    // Not playing yet: remember the spot and start there (resume goes back a few seconds)
+    void saveVideoPos(item.id, ms / 1000 + RESUME_BACK, duration).then(() => playQueue.start([item.id], { name: feedTitle || 'Podcast' }))
   }
 
   return (
-    <section className="podcast-episode">
-      <div className="podcast-bar">
-        <audio ref={audioRef} controls preload="metadata" src={item.enclosureUrl ?? undefined} />
-        <button
-          type="button"
-          className={`icon-btn podcast-cc${showTranscript ? ' active' : ''}`}
-          aria-pressed={showTranscript}
-          title={showTranscript ? 'Hide transcript' : 'Show transcript'}
-          onClick={() => setShowTranscript((v) => !v)}
-        >
-          <Icon name="closedCaption" size={22} /> Transcript
+    <section className={`podcast-episode${compact ? ' compact' : ''}`}>
+      <div className="pod-card">
+        <button type="button" className="mf-btn primary pod-play" onClick={play}>
+          <Icon name={playing ? 'pause' : 'play'} size={20} />
+          <span>{playing ? 'Pause' : started ? 'Resume' : 'Play'}</span>
         </button>
+        <div className="pod-track">
+          <div
+            className="pod-bar"
+            role="slider"
+            aria-label="Position"
+            aria-valuemin={0}
+            aria-valuemax={Math.round(duration)}
+            aria-valuenow={Math.round(position)}
+            tabIndex={current ? 0 : -1}
+            onClick={(e) => {
+              if (!duration) return
+              const r = e.currentTarget.getBoundingClientRect()
+              seek(((e.clientX - r.left) / r.width) * duration * 1000)
+            }}
+          >
+            <i style={{ width: `${duration ? Math.min(100, (position / duration) * 100) : 0}%` }} />
+          </div>
+          <span className="pod-time">
+            {formatTime(position * 1000)}
+            {duration ? ` of ${formatTime(duration * 1000)}` : ''}
+          </span>
+        </div>
+        {current ? (
+          <>
+            <button type="button" className="mf-btn" onClick={() => playQueue.seekBy(-15)} title="Back 15 seconds">
+              <Icon name="replay" size={18} />
+              <span>15s</span>
+            </button>
+            <button type="button" className="mf-btn" onClick={() => playQueue.seekBy(30)} title="Forward 30 seconds">
+              <Icon name="forward" size={18} />
+              <span>30s</span>
+            </button>
+          </>
+        ) : null}
+        {compact ? null : (
+          <button type="button" className={`mf-btn${showTranscript ? ' on' : ''}`} aria-pressed={showTranscript} onClick={() => setShowTranscript((v) => !v)}>
+            <Icon name="closedCaption" size={18} />
+            <span>Transcript</span>
+          </button>
+        )}
       </div>
-      {showTranscript ? <TranscriptPanel item={item} positionMs={position} onSeek={seek} /> : null}
+      {showTranscript ? <TranscriptPanel item={item} positionMs={Math.round(position * 1000)} onSeek={seek} /> : null}
     </section>
   )
 }

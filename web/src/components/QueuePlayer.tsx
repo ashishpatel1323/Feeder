@@ -179,7 +179,7 @@ export function QueuePlayer(p: Props) {
                 return (
                   <li key={qid} className={i === q.index ? 'current' : i < q.index ? 'done' : ''}>
                     <button className="qp-q-main" onClick={() => playQueue.jump(i)} title="Play this now">
-                      <span className={`ty ${k}`}>{ITEM_KIND_LABELS[k]}</span>
+                      <span className={`ty k-${k}`}>{ITEM_KIND_LABELS[k]}</span>
                       <span className="qp-q-title">{it.title}</span>
                     </button>
                     {i !== q.index ? (
