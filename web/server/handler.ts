@@ -31,6 +31,9 @@ export const DEFAULT_SYNC_SERVER = 'https://feeder-sync.nononsenseapps.com'
 const SYNC_BASIC_AUTH = 'Basic ' + btoa('feeder_user:feeder_secret_1234')
 
 const USER_AGENT = 'Mozilla/5.0 (compatible; FeederWeb/0.1; +https://github.com/spacecowboy/Feeder)'
+/** YouTube's search page only lists channels (Discover) when the request looks like a browser. */
+const BROWSER_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+const wantsBrowserAgent = (u: URL) => /(^|\.)youtube\.com$/i.test(u.hostname) && u.pathname === '/results'
 
 const MAX_FETCH_BYTES = 15 * 1024 * 1024
 
@@ -101,7 +104,7 @@ async function proxyFetch(request: Request): Promise<Response> {
     upstream = await fetch(current.toString(), {
       redirect: 'manual',
       headers: {
-        'user-agent': USER_AGENT,
+        'user-agent': wantsBrowserAgent(current) ? BROWSER_USER_AGENT : USER_AGENT,
         accept:
           'application/rss+xml, application/atom+xml, application/feed+json, application/json, application/xml, text/xml, text/html;q=0.9, */*;q=0.8',
         'accept-language': request.headers.get('accept-language') ?? 'en',

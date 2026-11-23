@@ -36,6 +36,8 @@ interface Props {
   refreshing: string | null
   /** Manage feeds, where feeds and folders can be dragged into order. */
   onArrange: () => void
+  /** Discover: find new feeds, podcasts and YouTube channels. */
+  onDiscover: () => void
   onMenu: () => void
   toast: (m: string) => void
 }
@@ -208,8 +210,12 @@ export function HomePage(p: Props) {
   if (!p.feeds.length) {
     body = (
       <div className="home-empty">
-        <p>No feeds yet. Add a podcast, YouTube channel or site, or import OPML in Settings.</p>
-        <button type="button" className="mf-btn primary" onClick={p.onAddFeed}>
+        <p>No feeds yet. Discover podcasts, YouTube channels and sites, add one by its address, or import OPML in Settings.</p>
+        <button type="button" className="mf-btn primary" onClick={p.onDiscover}>
+          <Icon name="explore" size={18} />
+          <span>Discover</span>
+        </button>
+        <button type="button" className="mf-btn" onClick={p.onAddFeed}>
           <Icon name="add" size={18} />
           <span>Add feed</span>
         </button>
@@ -306,6 +312,10 @@ export function HomePage(p: Props) {
           <button type="button" className="mf-btn" onClick={p.onRefresh} disabled={!!p.refreshing}>
             <Icon name="refresh" size={18} />
             <span>{p.refreshing ? `Refreshing ${p.refreshing}` : 'Refresh all'}</span>
+          </button>
+          <button type="button" className="mf-btn" onClick={p.onDiscover}>
+            <Icon name="explore" size={18} />
+            <span>Discover</span>
           </button>
           <button type="button" className="mf-btn primary" onClick={p.onAddFeed}>
             <Icon name="add" size={18} />

@@ -20,6 +20,7 @@ import { ManageFeeds } from './components/ManageFeeds'
 import { FeedPage } from './components/FeedPage'
 import { HighlightsPage } from './components/Highlights'
 import { HomePage } from './components/Home'
+import { DiscoverPage } from './components/Discover'
 import { PlaylistsPage } from './components/Playlists'
 import { QueuePlayer } from './components/QueuePlayer'
 import { AddToPlaylistMenu } from './components/AddToPlaylist'
@@ -38,6 +39,9 @@ const isHighlightsHash = () => window.location.hash === HIGHLIGHTS_HASH
 /** Home: every feed as a tile. It is the start page, so an address with no page in it opens Home. */
 const HOME_HASH = '#/home'
 const isHomeHash = () => window.location.hash === HOME_HASH
+/** Discover: find new feeds, podcasts and YouTube channels. */
+const DISCOVER_HASH = '#/discover'
+const isDiscoverHash = () => window.location.hash === DISCOVER_HASH
 const DOWNLOADS_HASH = '#/downloads'
 const isDownloadsHash = () => window.location.hash === DOWNLOADS_HASH
 /** Playlists: #/playlists for all of them, #/playlist/<id> for one. */
@@ -117,6 +121,7 @@ export default function App() {
   const [highlightsPage, setHighlightsPage] = useState(isHighlightsHash)
   const [downloadsPage, setDownloadsPage] = useState(isDownloadsHash)
   const [homePage, setHomePage] = useState(() => isHomeHash() || !window.location.hash)
+  const [discoverPage, setDiscoverPage] = useState(isDiscoverHash)
   // Start on Home: give it its own address, so Back from the article list returns to it
   useEffect(() => {
     if (!window.location.hash) history.replaceState(null, '', window.location.pathname + window.location.search + HOME_HASH)
@@ -137,6 +142,7 @@ export default function App() {
       setDownloadsPage(isDownloadsHash())
       setFeedPage(feedFromHash())
       setHomePage(isHomeHash())
+      setDiscoverPage(isDiscoverHash())
       setPlaylistPage(playlistFromHash())
     }
     window.addEventListener('hashchange', onHash)
@@ -160,6 +166,7 @@ export default function App() {
       feedPageFromApp.current = false
     }
     if (on) setPlaylistPage(null)
+    if (on) setDiscoverPage(false)
   }, [])
   const showHighlights = useCallback((on: boolean) => {
     if (on !== isHighlightsHash()) {
@@ -175,6 +182,7 @@ export default function App() {
       feedPageFromApp.current = false
     }
     if (on) setPlaylistPage(null)
+    if (on) setDiscoverPage(false)
   }, [])
   const showDownloads = useCallback((on: boolean) => {
     if (on !== isDownloadsHash()) {
@@ -190,6 +198,7 @@ export default function App() {
       feedPageFromApp.current = false
     }
     if (on) setPlaylistPage(null)
+    if (on) setDiscoverPage(false)
   }, [])
   const showHome = useCallback((on: boolean) => {
     if (on !== isHomeHash()) {
@@ -205,6 +214,23 @@ export default function App() {
       feedPageFromApp.current = false
     }
     if (on) setPlaylistPage(null)
+    if (on) setDiscoverPage(false)
+  }, [])
+  const showDiscover = useCallback((on: boolean) => {
+    if (on !== isDiscoverHash()) {
+      if (on) window.location.hash = DISCOVER_HASH
+      else if (isDiscoverHash()) history.pushState(null, '', window.location.pathname + window.location.search)
+    }
+    setDiscoverPage(on)
+    if (on) {
+      setHomePage(false)
+      setManaging(false)
+      setHighlightsPage(false)
+      setDownloadsPage(false)
+      setFeedPage(null)
+      feedPageFromApp.current = false
+      setPlaylistPage(null)
+    }
   }, [])
   /** Opens Playlists ('' = all of them) or one playlist; null leaves it. */
   const showPlaylists = useCallback((id: string | null) => {
@@ -214,6 +240,7 @@ export default function App() {
     setPlaylistPage(id)
     if (id !== null) {
       setHomePage(false)
+      setDiscoverPage(false)
       setManaging(false)
       setHighlightsPage(false)
       setDownloadsPage(false)
@@ -232,6 +259,7 @@ export default function App() {
     window.location.hash = FEED_HASH + encodeURIComponent(url)
     setFeedPage(url)
     setManaging(false)
+    setDiscoverPage(false)
     setHighlightsPage(false)
     setPlaylistPage(null)
   }, [])
@@ -638,7 +666,7 @@ export default function App() {
     : 'Not syncing'
 
   return (
-    <div className={`app pane-${pane}${drawer ? ' drawer-open' : ''}${navCollapsed ? ' nav-collapsed' : ''}${managing || highlightsPage || feedPage || downloadsPage || homePage || onPlaylists ? ' page-feeds' : ''}${queue.kind ? ' has-queue' : ''}`}>
+    <div className={`app pane-${pane}${drawer ? ' drawer-open' : ''}${navCollapsed ? ' nav-collapsed' : ''}${managing || highlightsPage || feedPage || downloadsPage || homePage || discoverPage || onPlaylists ? ' page-feeds' : ''}${queue.kind ? ' has-queue' : ''}`}>
       <div className="drawer-scrim" onClick={() => setDrawer(false)} />
       <Sidebar
         feeds={feedList}
@@ -652,6 +680,7 @@ export default function App() {
           showHighlights(false)
           showDownloads(false)
           showHome(false)
+          showDiscover(false)
           showPlaylists(null)
           if (feedPage) leaveFeedPage()
         }}
@@ -661,7 +690,13 @@ export default function App() {
           if (feedPage) leaveFeedPage()
           showPlaylists(id)
         }}
-        showingHome={homePage && !managing && !highlightsPage && !downloadsPage && !feedPage && !onPlaylists}
+        showingDiscover={discoverPage && !feedPage}
+        onDiscover={() => {
+          setDrawer(false)
+          if (feedPage) leaveFeedPage()
+          showDiscover(true)
+        }}
+        showingHome={homePage && !discoverPage && !managing && !highlightsPage && !downloadsPage && !feedPage && !onPlaylists}
         onHome={() => {
           setDrawer(false)
           showPlaylists(null)
@@ -760,6 +795,8 @@ export default function App() {
           onMoveFeed={moveFeed}
           toast={toast}
         />
+      ) : discoverPage ? (
+        <DiscoverPage feeds={feedList} onOpenFeed={openFeedPage} onMenu={() => setDrawer(true)} toast={toast} />
       ) : homePage ? (
         <HomePage
           feeds={feedList}
@@ -775,6 +812,7 @@ export default function App() {
           onRefresh={fullRefresh}
           refreshing={refreshing}
           onArrange={() => showManage(true)}
+          onDiscover={() => showDiscover(true)}
           onMenu={() => setDrawer(true)}
           toast={toast}
         />
@@ -797,7 +835,7 @@ export default function App() {
         onAddLink={selection.kind === 'saved' ? addLink : undefined}
         />
       )}
-      {managing || highlightsPage || feedPage || downloadsPage || homePage || onPlaylists || flip ? null : openItem ? (
+      {managing || highlightsPage || feedPage || downloadsPage || homePage || discoverPage || onPlaylists || flip ? null : openItem ? (
         <Reader
           item={openItem}
           feed={feeds.get(openItem.feedUrl)}
@@ -858,6 +896,7 @@ export default function App() {
           showHighlights(false)
           showDownloads(false)
           showHome(false)
+          showDiscover(false)
           if (feedPage) leaveFeedPage()
           open(id, queue.ids)
         }}

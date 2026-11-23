@@ -1,0 +1,3547 @@
+{
+"source":"Topics from github.com/plenaryapp/awesome-rss-feeds (CC0), plus India business and startup feeds",
+"topics":[
+{
+"name":"India: Business",
+"group":"India",
+"feeds":[
+{
+"t":"Mint - News",
+"u":"https://www.livemint.com/rss/news"
+},
+{
+"t":"Mint - Opinion",
+"u":"https://www.livemint.com/rss/opinion"
+},
+{
+"t":"Mint - Markets",
+"u":"https://www.livemint.com/rss/markets"
+},
+{
+"t":"Mint - Money",
+"u":"https://www.livemint.com/rss/money"
+},
+{
+"t":"Mint - Companies",
+"u":"https://www.livemint.com/rss/companies"
+},
+{
+"t":"Mint - Technology",
+"u":"https://www.livemint.com/rss/technology"
+},
+{
+"t":"Mint - Politics",
+"u":"https://www.livemint.com/rss/politics"
+},
+{
+"t":"The Economic Times - Top stories",
+"u":"https://economictimes.indiatimes.com/rssfeedstopstories.cms"
+},
+{
+"t":"The Economic Times - Markets",
+"u":"https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms"
+},
+{
+"t":"Business Standard - Top stories",
+"u":"https://www.business-standard.com/rss/home_page_top_stories.rss"
+},
+{
+"t":"Moneycontrol - Latest news",
+"u":"https://www.moneycontrol.com/rss/latestnews.xml"
+},
+{
+"t":"The Hindu BusinessLine",
+"u":"https://www.thehindubusinessline.com/feeder/default.rss"
+}
+]
+},
+{
+"name":"India: News",
+"group":"India",
+"feeds":[
+{
+"t":"BBC News - India",
+"u":"http://feeds.bbci.co.uk/news/world/asia/india/rss.xml"
+},
+{
+"t":"India | The Guardian",
+"u":"https://www.theguardian.com/world/india/rss",
+"d":"Latest news and features from theguardian.com, the world's leading liberal voice"
+},
+{
+"t":"SEBI RSS Feed",
+"u":"https://www.sebi.gov.in/sebirss.xml"
+},
+{
+"t":"Times of India",
+"u":"https://timesofindia.indiatimes.com/rssfeedstopstories.cms",
+"d":"The Times of India: Breaking news, views, reviews, cricket from across India"
+},
+{
+"t":"The Hindu - Home",
+"u":"https://www.thehindu.com/feeder/default.rss",
+"d":"Default RSS Feed"
+},
+{
+"t":"NDTV News - Topstories",
+"u":"https://feeds.feedburner.com/ndtvnews-top-stories",
+"d":"NDTV.com provides the latest information from and in-depth coverage of India and the world. Find breaking news, India news, top stories, elections, politics, bu"
+},
+{
+"t":"India Today | Latest Stories",
+"u":"https://www.indiatoday.in/rss/home",
+"d":"India Today"
+},
+{
+"t":"Front Page | The Indian Express",
+"u":"http://indianexpress.com/print/front-page/feed/",
+"d":"Latest News, India News, Covid-19 News, Breaking News, Today's News Headlines Online"
+},
+{
+"t":"Top World News- News18.com",
+"u":"https://www.news18.com/rss/world.xml",
+"d":"Latest news from World Section"
+},
+{
+"t":"India News",
+"u":"https://www.dnaindia.com/feeds/india.xml",
+"d":"dnaindia.com delivers news and information on the latest top stories, sport, entertainment, business, technology, Mumbai, India, world and more."
+},
+{
+"t":"Firstpost India Latest News",
+"u":"https://www.firstpost.com/rss/india.xml",
+"d":"Firstpost provides Latest News in India, Live News India, India Breaking News, todays India news, Top headlines of India"
+},
+{
+"t":"Home Page",
+"u":"https://www.business-standard.com/rss/home_page_top_stories.rss",
+"d":"Business News: Get latest stock share market news, financial news, economy news, company news, politics news, India news, breaking news, Indian economy news at "
+},
+{
+"t":"Outlook India",
+"u":"https://www.outlookindia.com/rss/main/magazine"
+},
+{
+"t":"Free Press Journal",
+"u":"https://www.freepressjournal.in/stories.rss",
+"d":"Free Press Journal brings the Latest News & Top Breaking headlines on Politics and Current Affairs in India & around the World, Sports, Business, Bollywood"
+},
+{
+"t":"Deccan Chronicle - Latest India news | Breaking news | Hyderabad News | World news | Business news | Politics | Technology news",
+"u":"https://www.deccanchronicle.com/rss_feed/",
+"d":"Deccan Chronicle brings you the latest news, views, analysis and images from India and the world."
+},
+{
+"t":"Moneycontrol Latest News",
+"u":"http://www.moneycontrol.com/rss/latestnews.xml",
+"d":"Latest News from Moneycontrol.com"
+},
+{
+"t":"Economic Times",
+"u":"https://economictimes.indiatimes.com/rssfeedsdefault.cms",
+"d":"The Economic Times: Latest business, finance, markets, stocks, company news from India."
+},
+{
+"t":"News, Latest News, Today's News Headlines, Breaking News, LIVE News - Oneindia",
+"u":"https://www.oneindia.com/rss/news-fb.xml",
+"d":"Read all latest news headlines from India and around the world, get today's breaking news and live updates on politics, elections, business, sports, economy, cu"
+},
+{
+"t":"Scroll.in",
+"u":"http://feeds.feedburner.com/ScrollinArticles.rss",
+"d":"A digital daily of things that matter."
+},
+{
+"t":"The Financial Express",
+"u":"https://www.financialexpress.com/feed/",
+"d":"Business News: Business News India, Business News Today, Latest Finance News, Business News Live"
+},
+{
+"t":"Business Line - Home",
+"u":"https://www.thehindubusinessline.com/feeder/default.rss",
+"d":"Default RSS Feed"
+},
+{
+"t":"TechGenyz",
+"u":"http://feeds.feedburner.com/techgenyz",
+"d":"News on Mobile, Gaming, AR, VR, Apps and Future Tech"
+},
+{
+"t":"Top Stories News - Gujarat Samachar : World's Leading Gujarati Newspaper",
+"u":"https://www.gujaratsamachar.com/rss/top-stories"
+},
+{
+"t":"Marathi News: मराठी बातम्या, Latest News in Marathi, Breaking Marathi News, Marathi News Paper | Maharashtra Times",
+"u":"https://maharashtratimes.com/rssfeedsdefault.cms",
+"d":"Get latest Marathi news from Maharashtra, India and World. Maharashtra Times, a Marathi news paper provides news in Marathi, Marathi batmya, today's news headli"
+},
+{
+"t":"Loksattaदेश-विदेश – Loksatta",
+"u":"https://www.loksatta.com/desh-videsh/feed/",
+"d":"Marathi News"
+},
+{
+"t":"Latest News program News18 Lokmat",
+"u":"https://lokmat.news18.com/rss/program.xml",
+"d":"Latest news from program Section"
+},
+{
+"t":"OpIndia",
+"u":"https://feeds.feedburner.com/opindia",
+"d":"bringing the 'right' side of India"
+},
+{
+"t":"ThePrint",
+"u":"https://theprint.in/feed/",
+"d":"India’s digital platform for latest news and reports, insightful analyses, opinion on politics, policy, governance, economy, education, defence and culture."
+},
+{
+"t":"Swarajya",
+"u":"https://prod-qt-images.s3.amazonaws.com/production/swarajya/feed.xml"
+},
+{
+"t":"Latest And Breaking Hindi News Headlines, News In Hindi | अमर उजाला हिंदी न्यूज़ | - Amar Ujala",
+"u":"https://www.amarujala.com/rss/breaking-news.xml",
+"d":"Read breaking and latest breaking News in Hindi in India's No. 1 Leading Hindi Newspaper Amar Ujala covering breaking samachar in Hindi, election news, crime ne"
+},
+{
+"t":"Navbharat Times",
+"u":"https://navbharattimes.indiatimes.com/rssfeedsdefault.cms",
+"d":"NavBharat Times a Hindi news portal brings news in Hindi from India and international news headlines, top stories on business, politics, sports and entertainmen"
+},
+{
+"t":"Patrika : India's Leading Hindi News Portal",
+"u":"http://api.patrika.com/rss/india-news",
+"d":"Patrika - A Hindi news portal brings latest news, headlines in hindi from India, world, business, politics, sports and entertainment!"
+},
+{
+"t":"JansattaJansatta",
+"u":"https://www.jansatta.com/feed/",
+"d":"Hindi News, हिंदी समाचार, Live Hindi News, Latest India News, Hindi News Paper Today, Breaking News Headlines"
+},
+{
+"t":"Live Hindustan Rss feed",
+"u":"https://feed.livehindustan.com/rss/3127",
+"d":"www.livehindustan.com delivers news and information on the latest top stories, Videsh, Desh, Cricket, Entertainment, Business, Life Style, Editors Artical and o"
+},
+{
+"t":"देश | दैनिक भास्कर",
+"u":"https://www.bhaskar.com/rss-feed/1061/",
+"d":"News in Hindi(हिन्दी में समाचार), Hindi News(हिंदी समाचार): देश के सबसे विश्वसनीय अख़बार पर पढ़ें ताज़ा ख़बरें। पढ़ें देश, विदेश, बॉलीवुड, लाइफस्टाइल और राजनीती की"
+},
+{
+"t":"ઈન્ડિયા | દિવ્ય ભાસ્કર",
+"u":"https://www.divyabhaskar.co.in/rss-feed/1037/",
+"d":"Latest National News Samachar - Find India\\'s latest Samachar and News Headlines today at India\\'s No. 1 gujarati news site www.divyabhaskar.co.in."
+}
+]
+},
+{
+"name":"India: Startups & tech",
+"group":"India",
+"feeds":[
+{
+"t":"Inc42",
+"u":"https://inc42.com/feed/"
+},
+{
+"t":"YourStory",
+"u":"https://yourstory.com/feed"
+},
+{
+"t":"The Ken",
+"u":"https://the-ken.com/feed/"
+},
+{
+"t":"MediaNama",
+"u":"https://www.medianama.com/feed/"
+}
+]
+},
+{
+"name":"Android Development",
+"group":"Topics",
+"feeds":[
+{
+"t":"Android Developers",
+"u":"https://www.youtube.com/feeds/videos.xml?user=androiddevelopers"
+},
+{
+"t":"Android Developers - Medium",
+"u":"https://medium.com/feed/androiddevelopers",
+"d":"Articles on modern tools and resources to help you build experiences that people love, faster and easier, across every Android device. - Medium"
+},
+{
+"t":"Android Developers Backstage",
+"u":"http://feeds.feedburner.com/blogspot/androiddevelopersbackstage",
+"d":"Android Backstage, a podcast by and for Android developers. Hosted by developers from the Android engineering team, this show covers topics of interest to Andro"
+},
+{
+"t":"Android Developers Blog",
+"u":"http://feeds.feedburner.com/blogspot/hsDu",
+"d":"An Open Handset Alliance Project."
+},
+{
+"t":"Android in MindOrks on Medium",
+"u":"https://medium.com/feed/mindorks/tagged/android",
+"d":"Latest stories tagged with Android in MindOrks on Medium"
+},
+{
+"t":"Android in The Airbnb Tech Blog on Medium",
+"u":"https://medium.com/feed/airbnb-engineering/tagged/android",
+"d":"Latest stories tagged with Android in The Airbnb Tech Blog on Medium"
+},
+{
+"t":"Chris Keenan Codes",
+"u":"https://chrynan.codes/rss/",
+"d":"Software Development Blog"
+},
+{
+"t":"Company | The JetBrains Blog",
+"u":"https://blog.jetbrains.com/blog/feed",
+"d":"Developer Tools for Professionals and Teams"
+},
+{
+"t":"Dan Lew Codes",
+"u":"https://blog.danlew.net/rss/",
+"d":"Thoughts on life, the universe and the mystery of it all; but actually mostly just code."
+},
+{
+"t":"Developing Android Apps",
+"u":"https://reddit.com/r/androiddev.rss",
+"d":"News for Android developers with the who, what, where, when and how of the Android community. News / Articles / Talks / Tools / Open source!"
+},
+{
+"t":"Fragmented - AI Developer Podcast",
+"u":"https://feeds.simplecast.com/LpAGSLnY",
+"d":"Fragmented is an AI developer podcast for engineers who want to go beyond vibe coding and ship real software. We cover AI-assisted development the way working e"
+},
+{
+"t":"Handstand Sam",
+"u":"https://handstandsam.com/feed/",
+"d":"Sam Edwards - Handstands, Travel, Android & Web"
+},
+{
+"t":"Jake Wharton",
+"u":"https://jakewharton.com/atom.xml"
+},
+{
+"t":"Kotlin",
+"u":"https://www.youtube.com/feeds/videos.xml?playlist_id=PLQ176FUIyIUa6SChjajjVc-LMzxWiz6dy"
+},
+{
+"t":"OkKotlin",
+"u":"https://okkotlin.com/rss.xml",
+"d":"A premier blog on Kotlin."
+},
+{
+"t":"ProAndroidDev - Medium",
+"u":"https://proandroiddev.com/feed",
+"d":"The latest posts from Android Professionals and Google Developer Experts. - Medium"
+},
+{
+"t":"Public Object",
+"u":"https://publicobject.com/rss/",
+"d":"Jesse Wilson on programming."
+},
+{
+"t":"Saket Narayan",
+"u":"https://saket.me/feed/",
+"d":"A wild developer appears. He works at <a href=\"https://square.com/\">Square</a>. Find him on <a rel=\"me\" href=\"https://twitter.com/saketme\">Twitter</a> and <a re"
+},
+{
+"t":"The Android Arsenal",
+"u":"https://feeds.feedburner.com/Android_Arsenal",
+"d":"A categorized directory of libraries and tools for Android"
+},
+{
+"t":"Zac Sweers",
+"u":"https://www.zacsweers.dev/rss/",
+"d":"Musings on Kotlin, mobile, open source, and building good things."
+},
+{
+"t":"Zarah Dominguez",
+"u":"https://zarah.dev/feed.xml",
+"d":"An Android Love Affair"
+},
+{
+"t":"droidcon SF",
+"u":"https://www.youtube.com/feeds/videos.xml?channel_id=UCKubKoe1CBw_-n_GXetEQbg"
+},
+{
+"t":"zsmb.co",
+"u":"https://zsmb.co/index.xml",
+"d":"Recent content on zsmb.co"
+}
+]
+},
+{
+"name":"Android",
+"group":"Topics",
+"feeds":[
+{
+"t":"",
+"u":"https://www.cyanogenmods.org/feed",
+"d":"GCam APK | LineageOS | AI Mods"
+},
+{
+"t":"All About Android (Audio)",
+"u":"https://feeds.twit.tv/aaa.xml",
+"d":"All About Android delivers everything you want to know about Android each week--the biggest news, freshest hardware, best apps and geekiest how-tos--with Androi"
+},
+{
+"t":"Android",
+"u":"https://blog.google/products/android/rss"
+},
+{
+"t":"Android",
+"u":"https://www.reddit.com/r/android/.rss",
+"d":"Android news, reviews, tips, and discussions about rooting, tutorials, and apps. General discussion about devices is welcome. Please direct technical support, u"
+},
+{
+"t":"Android Authority",
+"u":"https://www.androidauthority.com/feed",
+"d":"Android News, Reviews, How To"
+},
+{
+"t":"Android Authority",
+"u":"https://www.youtube.com/feeds/videos.xml?user=AndroidAuthority"
+},
+{
+"t":"Android Authority Podcast",
+"u":"https://androidauthority.libsyn.com/rss",
+"d":"The Android Authority Podcast – discussing topics in Android every week. The Android Authority Podcast brings you all the top stories and features based on your"
+},
+{
+"t":"Android Central Podcast",
+"u":"http://feeds.feedburner.com/AndroidCentralPodcast",
+"d":"The Android and Google Podcast for Everyone. Hosted by Daniel Bader."
+},
+{
+"t":"Android Community",
+"u":"https://androidcommunity.com/feed/",
+"d":"Android News, Reviews, and Apps"
+},
+{
+"t":"Android Police",
+"u":"http://feeds.feedburner.com/AndroidPolice",
+"d":"All the latest mobile tech news, deals, reviews, guides, editorials, and more. Embracing the green bubble since 2009."
+},
+{
+"t":"Blind Android Users Podcast",
+"u":"https://anchor.fm/s/4495abac/podcast/rss",
+"d":"At Blind Android Users, we strive to make using Android as easy as possible for every blind person who's starting the Android journey.We bridge the dividing gap"
+},
+{
+"t":"Cult of Android",
+"u":"https://www.cultofandroid.com/feed",
+"d":"Breaking news for Android fans"
+},
+{
+"t":"Droid Life – Opinionated Android news.",
+"u":"https://www.droid-life.com/feed",
+"d":"Opinionated Android news."
+},
+{
+"t":"GSMArena.com - Latest articles",
+"u":"https://www.gsmarena.com/rss-news-reviews.php3",
+"d":"GSMArena.com is the ultimate resource for GSM handset information. This feed contains the latest articles (news and reviews) in chronological order."
+},
+{
+"t":"Latest from Android Central",
+"u":"http://feeds.androidcentral.com/androidcentral",
+"d":"All the latest content from the Android Central team"
+},
+{
+"t":"Phandroid",
+"u":"http://feeds2.feedburner.com/AndroidPhoneFans",
+"d":"Android Phone News, Rumors, Reviews, Apps, Forums & More!"
+},
+{
+"t":"TalkAndroid",
+"u":"http://feeds.feedburner.com/AndroidNewsGoogleAndroidForums",
+"d":"The latest in android news, rumours, and updates, including device news and apps!"
+}
+]
+},
+{
+"name":"Animal & Wildlife",
+"group":"Topics",
+"feeds":[
+{
+"t":"Active Wild",
+"u":"https://www.activewild.com/feed/",
+"d":"Animals, Science & Nature – Facts, News, Information & Pictures"
+},
+{
+"t":"Focusing on Wildlife",
+"u":"https://focusingonwildlife.com/news/feed/",
+"d":"Celebrating the biodiversity of Planet Earth"
+},
+{
+"t":"Love Nature",
+"u":"https://www.youtube.com/feeds/videos.xml?channel_id=UCRZPkuHwaoKwTP3CYPdVldg"
+},
+{
+"t":"Real Wild",
+"u":"https://www.youtube.com/feeds/videos.xml?channel_id=UCbq-4OJxnziD3awH-aTezeA"
+},
+{
+"t":"The Wildlife India",
+"u":"https://www.thewildlifeindia.com/feeds/posts/default"
+},
+{
+"t":"Wildlife Photography: Gear, Photos & Discussion",
+"u":"https://www.reddit.com/r/wildlifephotography/.rss",
+"d":"A subreddit for those interested in shooting wildlife...with a camera."
+},
+{
+"t":"Wildlife | The Guardian",
+"u":"https://www.theguardian.com/environment/wildlife/rss",
+"d":"Latest news and features from theguardian.com, the world's leading liberal voice"
+},
+{
+"t":"🔥 Nature Is Fucking Lit",
+"u":"https://www.reddit.com/r/NatureIsFuckingLit/.rss",
+"d":"We are here to appreciate the awesome majesty and incredibly cool aspects of nature. 🔥 Banner done by u/esoterix_luke"
+}
+]
+},
+{
+"name":"Apple",
+"group":"Topics",
+"feeds":[
+{
+"t":"9to5Mac",
+"u":"https://9to5mac.com/feed",
+"d":"Apple News & Mac Rumors Breaking All Day"
+},
+{
+"t":"Apple",
+"u":"https://www.youtube.com/feeds/videos.xml?user=Apple"
+},
+{
+"t":"Apple Newsroom",
+"u":"https://www.apple.com/newsroom/rss-feed.rss"
+},
+{
+"t":"AppleInsider News",
+"u":"https://appleinsider.com/rss/news/",
+"d":"AppleInsider News Feed"
+},
+{
+"t":"Cult of Mac",
+"u":"https://www.cultofmac.com/feed",
+"d":"Your source for the latest Apple news, rumors, analysis, reviews, how-tos and deals."
+},
+{
+"t":"Daring Fireball",
+"u":"https://daringfireball.net/feeds/main",
+"d":"By John Gruber"
+},
+{
+"t":"MacRumors",
+"u":"https://www.youtube.com/feeds/videos.xml?user=macrumors"
+},
+{
+"t":"MacRumors: Mac News and Rumors - Mac Blog",
+"u":"http://feeds.macrumors.com/MacRumors-Mac",
+"d":"Apple, iPhone, iPad, Mac News and Rumors"
+},
+{
+"t":"MacStories",
+"u":"https://www.macstories.net/feed",
+"d":"Apple news, app reviews, and stories by Federico Viticci and friends."
+},
+{
+"t":"Macworld",
+"u":"https://www.macworld.com/index.rss",
+"d":"Macworld is your best source for all things Apple. We give you the scoop on what's new, what's best and how to make the most out of the products you love."
+},
+{
+"t":"Marco.org",
+"u":"https://marco.org/rss",
+"d":"I’m Marco Arment, creator of Overcast, technology podcaster and writer, and coffee enthusiast."
+},
+{
+"t":"OS X Daily",
+"u":"http://feeds.feedburner.com/osxdaily",
+"d":"News, tips, software, reviews, and more for Mac OS X, iPhone, iPad"
+},
+{
+"t":"The Loop",
+"u":"https://www.loopinsight.com/feed",
+"d":"Making Sense of Technology"
+},
+{
+"t":"iMore - The #1 iPhone, iPad, and iPod touch blog",
+"u":"http://feeds.feedburner.com/TheiPhoneBlog",
+"d":"More news and rumors, more help and how-tos, more app and accessory reviews, more iPhone and iPad and iPod touch. More of everything you love. iMore."
+},
+{
+"t":"r/Apple: Unofficial Apple Community",
+"u":"https://www.reddit.com/r/apple/.rss",
+"d":"An unofficial community about Apple and all of its devices and software."
+},
+{
+"t":"r/iPhone",
+"u":"https://www.reddit.com/r/iphone/.rss",
+"d":"Reddit’s little corner for iPhone lovers (and some people who just mildly enjoy it…)"
+}
+]
+},
+{
+"name":"Architecture",
+"group":"Topics",
+"feeds":[
+{
+"t":"A Weekly Dose of Architecture Books",
+"u":"http://feeds.feedburner.com/archidose",
+"d":"This blog wrapped in early 2024, though it continues as a Substack newsletter with the same name: <a href=\"https://archidose.substack.com/\">archidose.substack.c"
+},
+{
+"t":"ArchDaily Global",
+"u":"http://feeds.feedburner.com/Archdaily",
+"d":"ArchDaily | Broadcasting Architecture Worldwide"
+},
+{
+"t":"Architectural Digest",
+"u":"https://www.architecturaldigest.com/feed/rss",
+"d":"The latest from www.architecturaldigest.com"
+},
+{
+"t":"Architectural Digest",
+"u":"https://www.youtube.com/feeds/videos.xml?user=ArchitecturalDigest"
+},
+{
+"t":"Architecture",
+"u":"https://www.reddit.com/r/architecture/.rss",
+"d":"A community for students, professionals, and lovers of architecture."
+},
+{
+"t":"Architecture news and projects | Dezeen",
+"u":"https://www.dezeen.com/architecture/feed/",
+"d":"architecture and design magazine"
+},
+{
+"t":"Design MilkArchitecture, Architectural Designs, and House Designs | Design Milk",
+"u":"https://design-milk.com/category/architecture/feed/",
+"d":"Dedicated to modern design"
+},
+{
+"t":"Journal",
+"u":"https://architizer.wpengine.com/feed/",
+"d":"Inspiration and Tools for Architects"
+},
+{
+"t":"Living Big In A Tiny House",
+"u":"https://www.youtube.com/feeds/videos.xml?user=livingbigtinyhouse"
+},
+{
+"t":"The Architect’s Newspaper",
+"u":"https://archpaper.com/feed",
+"d":"The most authoritative voice on architecture and design in the United States."
+},
+{
+"t":"architecture archives | designboom | architecture & design magazine",
+"u":"https://www.designboom.com/architecture/feed/",
+"d":"designboom magazine | your first source for architecture, design & art news"
+}
+]
+},
+{
+"name":"Beauty",
+"group":"Topics",
+"feeds":[
+{
+"t":"Beauty - ELLE",
+"u":"https://www.elle.com/rss/beauty.xml/",
+"d":"RSS feed for Beauty - ELLE"
+},
+{
+"t":"Fashionista Full",
+"u":"https://fashionista.com/.rss/excerpt/beauty"
+},
+{
+"t":"From Head To Toe",
+"u":"http://feeds.feedburner.com/frmheadtotoe",
+"d":"A beauty blog by Korean-American Jen Chae \"From Head To Toe\" @frmheadtotoe that showcases monolid and asian eyes makeup tutorials, fashion, hair, nails, swatche"
+},
+{
+"t":"Into The Gloss - Beauty Tips, Trends, And Product Reviews",
+"u":"https://feeds.feedburner.com/intothegloss/oqoU",
+"d":"The best in beauty tips, makeup tutorials, product reviews, and techniques from industry leaders worldwide. Into The Gloss is beauty, from the Inside."
+},
+{
+"t":"POPSUGAR Beauty",
+"u":"https://www.popsugar.com/beauty/feed",
+"d":"Top Beauty Stories"
+},
+{
+"t":"Refinery29",
+"u":"https://www.refinery29.com/beauty/rss.xml"
+},
+{
+"t":"The Beauty Look Book",
+"u":"https://thebeautylookbook.com/feed",
+"d":"Beauty Blog, Reviews + Makeup Looks"
+}
+]
+},
+{
+"name":"Books",
+"group":"Topics",
+"feeds":[
+{
+"t":"A year of reading the world",
+"u":"https://ayearofreadingtheworld.com/feed/",
+"d":"196 countries, countless stories..."
+},
+{
+"t":"Aestas Book Blog",
+"u":"https://aestasbookblog.com/feed/",
+"d":"Romance book reviews. Reviews of books that make my heart race, have a beautiful love story, and a happy ending."
+},
+{
+"t":"BOOK RIOT",
+"u":"https://bookriot.com/feed/",
+"d":"Book Recommendations and Reviews"
+},
+{
+"t":"Harry Potter and the Sacred Text",
+"u":"https://rss.acast.com/harrypottersacredtext",
+"d":"<p>It’s the English class you didn't know you missed and the meaningful conversations you didn't know you craved. Join Vanessa Zoltan and Matt Potts as they bri"
+},
+{
+"t":"Kirkus Reviews",
+"u":"https://www.kirkusreviews.com/feeds/rss/",
+"d":"Latest book reviews from Kirkus Reviews."
+},
+{
+"t":"NewInBooks",
+"u":"https://www.newinbooks.com/feed/",
+"d":"Answering the Age old question - What are you reading?"
+},
+{
+"t":"So many books, so little time",
+"u":"https://reddit.com/r/books/.rss",
+"d":"This is a moderated subreddit. It is our intent and purpose to foster and encourage in-depth discussion about all things related to books, authors, genres, or p"
+},
+{
+"t":"Wokeread",
+"u":"https://wokeread.home.blog/feed/",
+"d":"Books any time any day."
+}
+]
+},
+{
+"name":"Business & Economy",
+"group":"Topics",
+"feeds":[
+{
+"t":"All News",
+"u":"https://www.investing.com/rss/news.rss"
+},
+{
+"t":"Bloomberg Originals",
+"u":"https://www.youtube.com/feeds/videos.xml?user=Bloomberg"
+},
+{
+"t":"Breaking News on Seeking Alpha",
+"u":"https://seekingalpha.com/market_currents.xml",
+"d":"© seekingalpha.com. Use of this feed is limited to personal, non-commercial use and is governed by Seeking Alpha's Terms of Use (https://about.seekingalpha.com/"
+},
+{
+"t":"Business Insider",
+"u":"https://www.youtube.com/feeds/videos.xml?user=businessinsider"
+},
+{
+"t":"EconTalk",
+"u":"https://feeds.simplecast.com/wgl4xEgL",
+"d":"EconTalk: Conversations for the Curious is an award-winning weekly podcast hosted by Russ Roberts of Shalem College in Jerusalem and Stanford's Hoover Instituti"
+},
+{
+"t":"Economic Times",
+"u":"https://economictimes.indiatimes.com/rssfeedsdefault.cms",
+"d":"The Economic Times: Latest business, finance, markets, stocks, company news from India."
+},
+{
+"t":"Forbes - Business",
+"u":"https://www.forbes.com/business/feed/"
+},
+{
+"t":"Fortune | FORTUNE",
+"u":"https://fortune.com/feed",
+"d":"Fortune 500 Daily & Breaking Business News"
+},
+{
+"t":"HBR IdeaCast",
+"u":"http://feeds.harvardbusiness.org/harvardbusiness/ideacast",
+"d":"A weekly podcast featuring the leading thinkers in business and management."
+},
+{
+"t":"How I Built This with Guy Raz",
+"u":"https://feeds.npr.org/510313/podcast.xml",
+"d":"<p>Guy Raz interviews the world’s best-known entrepreneurs to learn how they built their iconic brands. In each episode, founders reveal deep, intimate moments "
+},
+{
+"t":"Planet Money",
+"u":"https://feeds.npr.org/510289/podcast.xml",
+"d":"Wanna see a trick? Give us any topic and we can tie it back to the economy. At <em>Planet Money</em>, we explore the forces that shape our lives and bring you a"
+},
+{
+"t":"Startup Stories - Mixergy",
+"u":"https://feeds.feedburner.com/Mixergy-main-podcast",
+"d":"Business tips for startups by proven entrepreneurs"
+},
+{
+"t":"The Blog of Author Tim Ferriss",
+"u":"https://tim.blog/feed/",
+"d":"Tim Ferriss is the author of five #1 New York Times bestsellers and host of The Tim Ferriss Show podcast."
+},
+{
+"t":"The Duct Tape Marketing Podcast",
+"u":"https://ducttape.libsyn.com/rss",
+"d":"Insightful interviews with authors, experts, entrepreneurs, and thought leaders who share valuable marketing tips, growth strategies, and resources. Hosted by J"
+},
+{
+"t":"The Growth Show",
+"u":"http://thegrowthshow.hubspot.libsynpro.com/",
+"d":"Starting a business has never been easier. But finding success in one has never been harder. Each episode explores the inspiring stories behind how people grow "
+},
+{
+"t":"US Top News and Analysis",
+"u":"https://www.cnbc.com/id/100003114/device/rss/rss.html",
+"d":"CNBC is the world leader in business news and real-time financial market coverage. Find fast, actionable information."
+},
+{
+"t":"Yahoo Finance",
+"u":"https://finance.yahoo.com/news/rssindex",
+"d":"At Yahoo Finance, you get free stock quotes, up-to-date news, portfolio management resources, international market data, social interaction and mortgage rates t"
+}
+]
+},
+{
+"name":"Cars",
+"group":"Topics",
+"feeds":[
+{
+"t":"Autocar RSS Feed",
+"u":"https://www.autocar.co.uk/rss",
+"d":"Welcome to nirvana for car enthusiasts. You have just entered the online home of the world's oldest car magazine, and the only place on the internet where you c"
+},
+{
+"t":"BMWBLOG",
+"u":"https://feeds.feedburner.com/BmwBlog",
+"d":"Latest BMW News, Reviews and New Models"
+},
+{
+"t":"BikeEXIF",
+"u":"https://www.bikeexif.com/feed",
+"d":"Latest updates from BikeEXIF"
+},
+{
+"t":"Car Body Design",
+"u":"https://www.carbodydesign.com/feed/",
+"d":"Car Design Resources, News and Tutorials"
+},
+{
+"t":"Carscoops",
+"u":"https://www.carscoops.com/feed/",
+"d":"Breaking Car News, Scoops & Reviews"
+},
+{
+"t":"Formula 1",
+"u":"https://www.reddit.com/r/formula1/.rss",
+"d":"Welcome to r/formula1, the largest independent online Formula 1 community!"
+},
+{
+"t":"Jalopnik - Obsessed with the culture of cars",
+"u":"https://jalopnik.com/rss",
+"d":"From cars to motorcycles, Jalopnik is your go-to site covering everything with an engine—including automotive news, buying guides, and expert commentary from ou"
+},
+{
+"t":"Latest Content - Car and Driver",
+"u":"https://www.caranddriver.com/rss/all.xml/",
+"d":"RSS feed for Latest Content - Car and Driver"
+},
+{
+"t":"Speedhunters",
+"u":"http://feeds.feedburner.com/speedhunters",
+"d":"Global Car Culture Since 2008"
+},
+{
+"t":"The best vintage and classic cars for sale online | Bring a Trailer",
+"u":"https://bringatrailer.com/feed/",
+"d":"Barn finds, rally cars, and needles in the haystack."
+},
+{
+"t":"TheTruthAboutCars",
+"u":"https://www.thetruthaboutcars.com/feed/",
+"d":"TheTruthAboutCars RSS feed"
+}
+]
+},
+{
+"name":"Chess",
+"group":"Topics",
+"feeds":[
+{
+"t":"Better Chess",
+"u":"https://betterchess.net/feed/",
+"d":"A chess blog dedicated to help players improve their play and to promote the great game of chess."
+},
+{
+"t":"Chess News",
+"u":"https://en.chessbase.com/feed"
+},
+{
+"t":"Chess Talk",
+"u":"https://www.youtube.com/feeds/videos.xml?channel_id=UC6HDXr-sNPnWLF_Q-y3KduA"
+},
+{
+"t":"Chess | The Guardian",
+"u":"https://www.theguardian.com/sport/chess/rss",
+"d":"Latest news and features from theguardian.com, the world's leading liberal voice"
+},
+{
+"t":"Chess.com",
+"u":"https://www.youtube.com/feeds/videos.xml?user=wwwChesscom"
+},
+{
+"t":"Chess.com News",
+"u":"https://www.chess.com/rss/news",
+"d":"The latest news from Chess.com."
+},
+{
+"t":"ChessBase India",
+"u":"https://www.youtube.com/feeds/videos.xml?channel_id=UCIsEhwBMPkRHsEgqYAPQHsA"
+},
+{
+"t":"Chessable Blog",
+"u":"https://www.chessable.com/blog/feed/",
+"d":"Chessable uses science to make learning chess better and in this blog we share that journey"
+},
+{
+"t":"For the budding patzer",
+"u":"https://www.reddit.com/r/chessbeginners/.rss",
+"d":"A place for new chess players to hang out, ask questions, discover tactics, get advice from others and learn more about the game: This is the r/chessbeginners s"
+},
+{
+"t":"Lichess's Blog",
+"u":"https://lichess.org/blog.atom"
+},
+{
+"t":"Perpetual Chess Podcast",
+"u":"https://feeds.megaphone.fm/BLU4811105299",
+"d":"Perpetual Chess features weekly conversations with the chess world's best players, trainers and accomplished amateurs about their careers, current projects, bes"
+},
+{
+"t":"The Week in Chess",
+"u":"https://theweekinchess.com/twic-rss-feed",
+"d":"Chess News from throughout the World"
+},
+{
+"t":"agadmator's Chess Channel",
+"u":"https://www.youtube.com/feeds/videos.xml?channel_id=UCL5YbN5WLFD8dLIegT5QAbA"
+},
+{
+"t":"chess24",
+"u":"https://www.youtube.com/feeds/videos.xml?user=chess24media"
+},
+{
+"t":"r/Chess",
+"u":"https://www.reddit.com/r/chess/.rss",
+"d":"All about the game of chess, including discussions on professional tournaments, game analysis and theory. If you are new to the game, check out /r/chessbeginner"
+},
+{
+"t":"thechesswebsite",
+"u":"https://www.youtube.com/feeds/videos.xml?user=thechesswebsite"
+}
+]
+},
+{
+"name":"Cricket",
+"group":"Topics",
+"feeds":[
+{
+"t":"BBC Sport",
+"u":"http://feeds.bbci.co.uk/sport/cricket/rss.xml",
+"d":"BBC Sport - Cricket"
+},
+{
+"t":"Can't Bowl Can't Throw Cricket Show",
+"u":"http://feeds.feedburner.com/cantbowlcantthrow",
+"d":"The third season of the Can't Bowl Can't Throw Cricket Show, in which we talk about cricket on a podcast. In a third season."
+},
+{
+"t":"Cricbuzz",
+"u":"https://www.youtube.com/feeds/videos.xml?channel_id=UCSRQXk5yErn4e14vN76upOw"
+},
+{
+"t":"Cricket",
+"u":"https://www.reddit.com/r/Cricket/.rss",
+"d":"News, banter and occasional serious discussion on the great game."
+},
+{
+"t":"Cricket News Today, Latest Cricket Updates, Cricket Live Score, Upcoming Matches | Times of India",
+"u":"https://timesofindia.indiatimes.com/rssfeeds/54829575.cms",
+"d":"Latest and Breaking Cricket News: Check live cricket scores, schedule, results, scorecard, upcoming matches list and ball by ball commentary along with player s"
+},
+{
+"t":"Cricket News: Stories, Features, Interviews, Opinion, Reports | Wisden",
+"u":"https://www.wisden.com/feed",
+"d":"The independent voice of cricket"
+},
+{
+"t":"Cricket news from ESPN Cricinfo.com",
+"u":"http://www.espncricinfo.com/rss/content/story/feeds/0.xml",
+"d":"Visit Cricinfo.com for up-to-the-minute cricket news, breaking cricket news, live cricket commentary, ball-by-ball commentary, cricket video, cricket audio and "
+},
+{
+"t":"Cricket | The Guardian",
+"u":"https://www.theguardian.com/sport/cricket/rss",
+"d":"Latest news and features from theguardian.com, the world's leading liberal voice"
+},
+{
+"t":"Cricket | The Indian Express",
+"u":"https://indianexpress.com/section/sports/cricket/feed/",
+"d":"Latest News Today, Breaking News, India News, Top Headlines"
+},
+{
+"t":"Cricket – The Roar",
+"u":"https://www.theroar.com.au/cricket/feed/",
+"d":"Australia's Biggest Sporting Debate"
+},
+{
+"t":"England & Wales Cricket Board",
+"u":"https://www.youtube.com/feeds/videos.xml?user=ecbcricket"
+},
+{
+"t":"NDTV News Search Records Found 1000",
+"u":"http://feeds.feedburner.com/ndtvsports-cricket",
+"d":"NDTV.com provides the latest information from and in-depth coverage of India and the world. Find breaking news, India news, top stories, elections, politics, bu"
+},
+{
+"t":"Pakistan Cricket",
+"u":"https://www.youtube.com/feeds/videos.xml?channel_id=UCiWrjBhlICf_L_RK5y6Vrxw"
+},
+{
+"t":"Sri Lanka Cricket",
+"u":"https://www.youtube.com/feeds/videos.xml?user=TheOfficialSLC"
+},
+{
+"t":"Stumped",
+"u":"https://podcasts.files.bbci.co.uk/p02gsrmh.rss",
+"d":"<p>The weekly cricket show from BBC Sport in association with ABC and Akashvani.</p>"
+},
+{
+"t":"Switch Hit Podcast",
+"u":"https://feeds.megaphone.fm/ESP9247246951",
+"d":"Lively debate and discussion about the game on and off the field with a focus on English cricket. Featuring ESPNcricinfo's writers and reporters."
+},
+{
+"t":"Tailenders",
+"u":"https://podcasts.files.bbci.co.uk/p02pcb4w.rss",
+"d":"<p>Greg James, Jimmy Anderson and Felix White take an alternative (and sometimes musical) look at cricket...</p>"
+},
+{
+"t":"Test Match Special",
+"u":"https://podcasts.files.bbci.co.uk/p02nrsl2.rss",
+"d":"<p>The Test Match Special team bring you the very best cricket reaction, insight &amp; analysis.</p><p>Plus the No Balls podcast with Kate Cross and Alex Hartle"
+},
+{
+"t":"cricket.com.au",
+"u":"https://www.youtube.com/feeds/videos.xml?user=cricketaustraliatv"
+}
+]
+},
+{
+"name":"Cryptocurrency",
+"group":"Topics",
+"feeds":[
+{
+"t":"Bitcoin & Crypto Trading: Ledger Cast",
+"u":"https://feeds.simplecast.com/j5Cx9jps",
+"d":"Ledger Cast covers the cryptocurrency industry (Bitcoin, Ethereum, and alt coins), including technical and trading analysis, fundamentals, and anything else cry"
+},
+{
+"t":"Bitcoin - The Currency of the Internet",
+"u":"https://www.reddit.com/r/Bitcoin/.rss",
+"d":"Bitcoin is the currency of the Internet: a distributed, worldwide, decentralized digital money. Unlike traditional currencies such as dollars, bitcoins are issu"
+},
+{
+"t":"Bitcoin Audible",
+"u":"https://bitcoinaudible.com/feed/",
+"d":"The Best in Bitcoin, Ai, & Development - Made Audible"
+},
+{
+"t":"Bitcoin News",
+"u":"https://news.bitcoin.com/feed/",
+"d":"Daily Bitcoin News"
+},
+{
+"t":"BuyUcoin Talks - Medium",
+"u":"https://medium.com/feed/buyucoin-talks",
+"d":"BuyUcoin (https://www.buyucoin.com/) provides a simple and secure online platform for trading cryptocurrencies and blockchain-based digital assets. Users can pr"
+},
+{
+"t":"Cointelegraph.com News",
+"u":"https://cointelegraph.com/rss",
+"d":"Cointelegraph covers fintech, blockchain and Bitcoin bringing you the latest crypto news and analyses on the future of money."
+},
+{
+"t":"CryptoCurrency – Finance Magnates | Financial and business news",
+"u":"https://www.financemagnates.com/cryptocurrency/feed/"
+},
+{
+"t":"CryptoNinjas",
+"u":"https://www.cryptoninjas.net/feed/",
+"d":"Bitcoin, Cryptocurrency and Blockchain Asset Source"
+},
+{
+"t":"CryptoPotato",
+"u":"https://cryptopotato.com/feed/"
+},
+{
+"t":"Cryptocurrency News & Discussion",
+"u":"https://www.reddit.com/r/CryptoCurrency/.rss",
+"d":"The leading community for cryptocurrency news, discussion, and analysis."
+},
+{
+"t":"DailyCoin",
+"u":"https://dailycoin.com/feed/",
+"d":"Cryptocurrency News"
+},
+{
+"t":"Epicenter - Learn about Crypto, Blockchain, Ethereum, Bitcoin and Distributed Technologies",
+"u":"https://feeds.simplecast.com/lKmQDG9R",
+"d":"Epicenter brings you in-depth conversations about the technical, economic and social implications of cryptocurrencies and blockchain technologies. Every week, w"
+},
+{
+"t":"Ethereum",
+"u":"https://www.reddit.com/r/ethereum/.rss",
+"d":"Next-generation platform for decentralised applications. Dive in at ethereum.org"
+},
+{
+"t":"Ethereum Foundation Blog",
+"u":"https://blog.ethereum.org/feed.xml"
+},
+{
+"t":"INCRYPTED",
+"u":"https://incrypted.net/feed/",
+"d":"Все о Блокчейн и Криптовалютах"
+},
+{
+"t":"Interviews",
+"u":"https://feed.podbean.com/nuggetsnews/feed.xml",
+"d":"#Investing #Finance #Markets"
+},
+{
+"t":"Kraken Blog",
+"u":"https://blog.kraken.com/feed/"
+},
+{
+"t":"News - Cryptonews",
+"u":"https://cryptonews.com/news/feed"
+},
+{
+"t":"NewsBTC",
+"u":"https://www.newsbtc.com/feed/",
+"d":"Bitcoin & Cryptocurrency News Today"
+},
+{
+"t":"Stephan Livera Podcast",
+"u":"https://anchor.fm/s/7d083a4/podcast/rss",
+"d":"Join Stephan as he interviews the sharpest economic and technical minds in Bitcoin &amp; Austrian Economics to help you understand how money is changing and evo"
+},
+{
+"t":"The Bad Crypto Podcast",
+"u":"https://badcryptopodcast.com/feed/",
+"d":"The World's Top Bitcoin Podcast covering Blockchain, Cryptocurrency, Ethereum, ICOs, Altcoins, Fintech and Digital Money. Hosted by Internet pioneer Joel Comm a"
+},
+{
+"t":"The Bitcoin Knowledge Podcast",
+"u":"https://www.bitcoin.kn/feed/podcast/",
+"d":"Interviews with top people in Bitcoin, blockchain and fintech including Adam Back, Caitlin Long, Saifedean Ammous, Paul Chou, Jesse Powell and many more."
+},
+{
+"t":"The Bitcoin Podcast",
+"u":"https://feeds.simplecast.com/xCQr3ykc",
+"d":"The Bitcoin Podcast is a show that discusses Bitcoin and Crypto topics in a laid back nature. From deep and technical topics, to laid back and philosophical top"
+},
+{
+"t":"The Market's Compass Technical View",
+"u":"https://themarketscompass.substack.com/feed",
+"d":"Using Technical Analysis to Navigate the Waters of the Global Financial Markets"
+},
+{
+"t":"Today in Web 3",
+"u":"https://feeds.soundcloud.com/users/soundcloud:users:844321453/sounds.rss",
+"d":"Coming Soon by Matthew Diemer"
+},
+{
+"t":"ZebPay",
+"u":"https://zebpay.com/feed/",
+"d":"Buy Bitcoin and Cryptocurrency at India’s Leading Exchange"
+},
+{
+"t":"cryptocurrency | TechCrunch",
+"u":"https://techcrunch.com/tag/cryptocurrency/feed",
+"d":"Startup and Technology News"
+}
+]
+},
+{
+"name":"Cyber security",
+"group":"Topics",
+"feeds":[
+{
+"t":"Blackhat Library: Hacking techniques and research",
+"u":"https://www.reddit.com/r/blackhat/.rss",
+"d":"Focused on the ongoing discussion and documentation of vulnerabilities and exploitation techniques. Please read the rules before posting here."
+},
+{
+"t":"CyberWire Daily",
+"u":"https://feeds.megaphone.fm/cyberwire-daily-podcast",
+"d":"The daily cybersecurity news and analysis industry leaders depend on. Published each weekday, the program also includes interviews with a wide spectrum of exper"
+},
+{
+"t":"Darknet Diaries",
+"u":"https://feeds.megaphone.fm/darknetdiaries",
+"d":"<p>Explore true stories of the dark side of the Internet with host Jack Rhysider as he takes you on a journey through the chilling world of hacking, data breach"
+},
+{
+"t":"Darknet – Hacking Tools, Hacker News & Cyber Security",
+"u":"http://feeds.feedburner.com/darknethackers",
+"d":"Darknet is your best source for the latest hacking tools, hacker news, cyber security best practices, ethical hacking & pen-testing."
+},
+{
+"t":"Google Online Security Blog",
+"u":"http://googleonlinesecurity.blogspot.com/atom.xml",
+"d":"The latest news and insights from Google on security and safety on the Internet."
+},
+{
+"t":"Hacking Humans",
+"u":"https://feeds.megaphone.fm/hacking-humans",
+"d":"Deception, influence, and social engineering in the world of cyber crime."
+},
+{
+"t":"ISF Podcast",
+"u":"https://audioboom.com/channels/4991893.rss",
+"d":"<h1>The ISF Podcast brings you cutting-edge conversation, tailored to CISOs, CTOs, CROs, and other global security pros. In every episode of the ISF Podcast, Ch"
+},
+{
+"t":"Krebs on Security",
+"u":"http://krebsonsecurity.com/feed/",
+"d":"In-depth security news and investigation"
+},
+{
+"t":"Latest news",
+"u":"https://www.zdnet.com/topic/security/rss.xml",
+"d":"Most recent news"
+},
+{
+"t":"Malicious Life",
+"u":"https://malicious.life/feed/podcast/",
+"d":"<p>Malicious Life by Cybereason tells the unknown stories of the history of cybersecurity, with comments and reflections by real hackers, security experts, jour"
+},
+{
+"t":"Risky Business",
+"u":"https://risky.biz/feeds/risky-business",
+"d":"Risky Business is a weekly information security podcast featuring news and in-depth interviews with industry luminaries. Launched in February 2007, Risky Busine"
+},
+{
+"t":"Schneier on Security",
+"u":"http://www.schneier.com/blog/index.rdf"
+},
+{
+"t":"Security Affairs",
+"u":"http://securityaffairs.co/wordpress/feed",
+"d":"Read, think, share … Security is everyone's responsibility"
+},
+{
+"t":"Smashing Security",
+"u":"http://www.smashingsecurity.com/rss",
+"d":"<p>Stories from the world of hacking, cybersecurity, and rogue AI.</p><p>Smashing Security isn’t your typical tech podcast. Hosted by cybersecurity keynote spea"
+},
+{
+"t":"Technical Information Security Content & Discussion",
+"u":"https://www.reddit.com/r/netsec/.rss",
+"d":"/r/netsec is a community-curated aggregator of technical information security content. Our mission is to extract signal from the noise — to provide value to sec"
+},
+{
+"t":"The Hacker News",
+"u":"http://thehackernews.com/feeds/posts/default",
+"d":"Most trusted, widely-read independent cybersecurity news source for everyone; supported by hackers and IT professionals — Send TIPs to admin@thehackernews.com"
+},
+{
+"t":"The Privacy, Security, & OSINT Show",
+"u":"http://feeds.soundcloud.com/users/soundcloud:users:261098918/sounds.rss",
+"d":"Show status update: https://inteltechniques.com/blog/2023/11/20/my-irish-exit/"
+},
+{
+"t":"Threatpost",
+"u":"http://threatpost.com/feed",
+"d":"The First Stop For Security News"
+},
+{
+"t":"cybersecurity",
+"u":"https://www.reddit.com/r/cybersecurity/.rss",
+"d":"This subreddit is for discussing cybersecurity topics, research, and emergent threats/findings."
+},
+{
+"t":"cybersecurity | TechCrunch",
+"u":"https://techcrunch.com/tag/cybersecurity/feed/",
+"d":"Startup and Technology News"
+},
+{
+"t":"www.theregister.com - Articles",
+"u":"http://www.theregister.co.uk/security/headlines.atom",
+"d":"Articles from www.theregister.com"
+}
+]
+},
+{
+"name":"DIY",
+"group":"Topics",
+"feeds":[
+{
+"t":"A Beautiful Mess",
+"u":"https://abeautifulmess.com/feed",
+"d":"Crafts, Home Décor, Recipes"
+},
+{
+"t":"Blog – Hackaday",
+"u":"https://hackaday.com/blog/feed/",
+"d":"Fresh hacks every day"
+},
+{
+"t":"Centsational Style",
+"u":"https://centsationalstyle.com/feed/",
+"d":"Design, Decorating & DIY"
+},
+{
+"t":"How-To Geek",
+"u":"https://www.howtogeek.com/feed/",
+"d":"We explain technology. Learn more with our articles, reviews, tips, and the best answers to your most pressing tech questions."
+},
+{
+"t":"IKEA Hackers",
+"u":"https://www.ikeahackers.net/feed",
+"d":"Clever ideas and hacks for your IKEA Furniture"
+},
+{
+"t":"MakeUseOf",
+"u":"https://www.makeuseof.com/feed/",
+"d":"MUO is your guide to modern tech. Learn how to make use of the tech and gadgets around you, and discover cool stuff on the internet."
+},
+{
+"t":"Oh Happy Day!",
+"u":"http://ohhappyday.com/feed/",
+"d":"Oh Happy Day is a party and lifestyle blog based in San Francisco. We love to throw parties and make things!"
+},
+{
+"t":"WonderHowTo",
+"u":"https://www.wonderhowto.com/rss.xml",
+"d":"Wonder How To is your guide to free how to videos on the Web. Search, Browse and Discover the best how to videos across the web using the largest how to video i"
+}
+]
+},
+{
+"name":"Environment",
+"group":"Topics",
+"feeds":[
+{
+"t":"\"Human Nature\" Blog Feed",
+"u":"http://feeds.feedburner.com/ConservationInternationalBlog",
+"d":"RSS feed for news, views and features from the front lines of conservation"
+},
+{
+"t":"Bionic Planet: Reversing Climate Change by Restoring Nature",
+"u":"https://bionicplanet.libsyn.com/rss",
+"d":"We've entered a new epoch: the Anthropocene, and nothing is as it was. Not the trees, not the seas – not the forests, farms, or fields – and not the global econ"
+},
+{
+"t":"Conservation International",
+"u":"https://www.youtube.com/feeds/videos.xml?channel_id=UCam5sCp6mzGBcn8ZBB2RBJg"
+},
+{
+"t":"Environment",
+"u":"https://www.reddit.com/r/environment/.rss",
+"d":"Current news, information and issues related to the environment."
+},
+{
+"t":"Environment + Energy – The Conversation",
+"u":"https://theconversation.com/au/environment/articles.atom"
+},
+{
+"t":"Environment News, Earth News, Global Warming, Wild Life, Carbon Trading, Climate Business, Climate Change & Pollution News",
+"u":"https://timesofindia.indiatimes.com/rssfeeds/2647163.cms",
+"d":"World news on global warming, climate change, wildlife, pollution, carbon business and climate politics. News from Indian environment including wildlife like ti"
+},
+{
+"t":"Environment | The Guardian",
+"u":"https://www.theguardian.com/us/environment/rss",
+"d":"Latest environmental news, opinion and analysis from the Guardian."
+},
+{
+"t":"Good Good Good",
+"u":"https://www.goodgoodgood.co/articles/rss.xml",
+"d":"At Good Good Good we help you feel more hopeful and do more good."
+},
+{
+"t":"NPR Topics: Environment",
+"u":"https://feeds.npr.org/1025/rss.xml",
+"d":"Breaking news on the environment, climate change, pollution, and endangered species. Also featuring Climate Connections, a special series on climate change co-p"
+},
+{
+"t":"NYT > Climate and Environment",
+"u":"https://rss.nytimes.com/services/xml/rss/nyt/Climate.xml"
+},
+{
+"t":"Prakati India",
+"u":"https://www.prakati.in/feed/",
+"d":"Eco Friendly Natural Organic Sustainable Living"
+},
+{
+"t":"Vox",
+"u":"https://www.vox.com/rss/energy-and-environment/index.xml",
+"d":"Our world has too much noise and too little context. Vox helps you understand what matters."
+}
+]
+},
+{
+"name":"Fashion",
+"group":"Topics",
+"feeds":[
+{
+"t":"",
+"u":"https://www.fashionbeans.com/rss-feed/?category=fashion",
+"d":"Men's Fashion Tips and Men's Style Guide - Updated Daily"
+},
+{
+"t":"Fashion - ELLE",
+"u":"https://www.elle.com/rss/fashion.xml/",
+"d":"RSS feed for Fashion - ELLE"
+},
+{
+"t":"Fashion | The Guardian",
+"u":"https://www.theguardian.com/fashion/rss",
+"d":"The latest fashion news, advice and comment from the Guardian"
+},
+{
+"t":"Fashionista Full",
+"u":"https://fashionista.com/.rss/excerpt/"
+},
+{
+"t":"Latest from Who What Wear",
+"u":"https://www.whowhatwear.com/rss",
+"d":"All the latest content from the Who What Wear team"
+},
+{
+"t":"NYT > Style",
+"u":"https://rss.nytimes.com/services/xml/rss/nyt/FashionandStyle.xml"
+},
+{
+"t":"POPSUGAR Fashion",
+"u":"https://www.popsugar.com/fashion/feed",
+"d":"Top Fashion Stories"
+},
+{
+"t":"Refinery29",
+"u":"https://www.refinery29.com/fashion/rss.xml"
+}
+]
+},
+{
+"name":"Food",
+"group":"Topics",
+"feeds":[
+{
+"t":"Binging with Babish",
+"u":"https://www.youtube.com/feeds/videos.xml?user=bgfilms"
+},
+{
+"t":"Bon Appétit",
+"u":"https://www.youtube.com/feeds/videos.xml?user=BonAppetitDotCom"
+},
+{
+"t":"Budget Bytes",
+"u":"http://budgetbytes.blogspot.com/feeds/posts/default",
+"d":"Delicious Recipes Designed for Small Budgets"
+},
+{
+"t":"Chocolate & Zucchini",
+"u":"https://cnz.to/feed/",
+"d":"Simple Recipes from my Paris Kitchen"
+},
+{
+"t":"David Lebovitz",
+"u":"https://www.davidlebovitz.com/feed/",
+"d":"Baking and cooking recipes for everyone"
+},
+{
+"t":"Dinner: A Love Story",
+"u":"http://www.dinneralovestory.com/feed/",
+"d":"It All Begins At the Family Table"
+},
+{
+"t":"Food52",
+"u":"http://feeds.feedburner.com/food52-TheAandMBlog",
+"d":"Eat thoughtfully, live joyfully."
+},
+{
+"t":"Green Kitchen Stories",
+"u":"https://greenkitchenstories.com/feed/",
+"d":"Healthy Vegetarian Recipes."
+},
+{
+"t":"How Sweet Eats",
+"u":"https://www.howsweeteats.com/feed/",
+"d":"For people who, like, totally love food."
+},
+{
+"t":"Kitchn | Inspiring cooks, nourishing homes",
+"u":"https://www.thekitchn.com/main.rss",
+"d":"Inspiring cooks, nourishing homes"
+},
+{
+"t":"Laura in the Kitchen",
+"u":"https://www.youtube.com/feeds/videos.xml?user=LauraVitalesKitchen"
+},
+{
+"t":"Love and Lemons",
+"u":"http://www.loveandlemons.com/feed/",
+"d":"Healthy, whole food, vegan and vegetarian recipes"
+},
+{
+"t":"Love and Olive Oil",
+"u":"https://www.loveandoliveoil.com/feed",
+"d":"Eat to Live. Cook to Love."
+},
+{
+"t":"NYT > Food",
+"u":"https://rss.nytimes.com/services/xml/rss/nyt/DiningandWine.xml"
+},
+{
+"t":"Serious Eats",
+"u":"https://www.youtube.com/feeds/videos.xml?user=SeriousEats"
+},
+{
+"t":"Serious Eats: Recipes",
+"u":"http://feeds.feedburner.com/seriouseats/recipes",
+"d":"Our Favorite Recipes, Curated and Collected"
+},
+{
+"t":"Shutterbean",
+"u":"http://www.shutterbean.com/feed/",
+"d":"food, photography & creative inspiration"
+},
+{
+"t":"Sprouted Kitchen",
+"u":"https://www.sproutedkitchen.com/home?format=rss"
+},
+{
+"t":"smitten kitchen",
+"u":"http://feeds.feedburner.com/smittenkitchen",
+"d":"Fearless cooking from a tiny NYC kitchen."
+}
+]
+},
+{
+"name":"Football",
+"group":"Topics",
+"feeds":[
+{
+"t":"BBC Sport",
+"u":"https://feeds.bbci.co.uk/sport/football/rss.xml",
+"d":"BBC Sport - Football"
+},
+{
+"t":"CNN.com - RSS Channel - Sport - Football",
+"u":"http://rss.cnn.com/rss/edition_football.rss",
+"d":"CNN.com delivers up-to-the-minute news and information on the latest top stories, weather, entertainment, politics and more."
+},
+{
+"t":"EFL Championship",
+"u":"https://www.reddit.com/r/Championship/.rss?format=xml",
+"d":"Home of the EFL Championship on Reddit"
+},
+{
+"t":"Football - The People's Sport",
+"u":"https://www.reddit.com/r/football/.rss?format=xml",
+"d":"Home of Football. Official Sponsors of Redditch United. News, Rumours, Analysis, gossip and much more."
+},
+{
+"t":"Football News, Football Scores, Premier League, La Liga, ISL | The Hindu",
+"u":"https://www.thehindu.com/sport/football/feeder/default.rss",
+"d":"Get Football News, Updates, Fixtures, Commentary &amp;amp; Live Scores From Top Leagues Like The Premier League, La Liga, ISL &amp;amp; Bundesliga At The Hindu"
+},
+{
+"t":"Football | The Guardian",
+"u":"https://www.theguardian.com/football/rss",
+"d":"Latest Football news, comment and analysis from the Guardian, the world's leading liberal voice"
+},
+{
+"t":"NYT > Sports > Soccer",
+"u":"https://rss.nytimes.com/services/xml/rss/nyt/Soccer.xml"
+},
+{
+"t":"Soccer News",
+"u":"https://www.soccernews.com/feed",
+"d":"The Latest Soccer News from around the globe."
+}
+]
+},
+{
+"name":"Funny",
+"group":"Topics",
+"feeds":[
+{
+"t":"Cracked: All Posts",
+"u":"http://feeds.feedburner.com/CrackedRSS",
+"d":"Every post that goes up on Cracked.com"
+},
+{
+"t":"Explosm.net",
+"u":"http://feeds.feedburner.com/Explosm",
+"d":"Flash Animations, Daily Comics and more!"
+},
+{
+"t":"FAIL Blog",
+"u":"http://feeds.feedburner.com/failblog",
+"d":"The internet has generated a huge amount of laughs from cats and FAILS. And we all out of cats."
+},
+{
+"t":"I Can Has Cheezburger?",
+"u":"http://feeds.feedburner.com/icanhascheezburger",
+"d":"World's largest collection of cat memes and other animals"
+},
+{
+"t":"PHD Comics",
+"u":"http://phdcomics.com/gradfeed.php",
+"d":"Providing global up-to-the-minute procrastination!"
+},
+{
+"t":"Penny Arcade",
+"u":"https://www.penny-arcade.com/feed",
+"d":"Penny Arcade comics and news."
+},
+{
+"t":"PostSecret",
+"u":"https://postsecret.com/feed/?alt=rss",
+"d":"Discover true secrets that have never been shared. Explore the surprising stories behind the secrets."
+},
+{
+"t":"Saturday Morning Breakfast Cereal",
+"u":"https://www.smbc-comics.com/comic/rss",
+"d":"Latest Saturday Morning Breakfast Cereal comics and news"
+},
+{
+"t":"The Bloggess",
+"u":"https://thebloggess.com/feed/",
+"d":"Like Mother Teresa, only better."
+},
+{
+"t":"The Daily WTF",
+"u":"http://syndication.thedailywtf.com/TheDailyWtf",
+"d":"Curious Perversions in Information Technology"
+},
+{
+"t":"The Oatmeal - Comics by Matthew Inman",
+"u":"http://feeds.feedburner.com/oatmealfeed",
+"d":"I make comics about science, cats, social media, and sometimes goats."
+},
+{
+"t":"The Onion",
+"u":"https://www.theonion.com/rss",
+"d":"America’s Finest News Source"
+},
+{
+"t":"xkcd.com",
+"u":"https://xkcd.com/rss.xml",
+"d":"xkcd.com: A webcomic of romance and math humor."
+}
+]
+},
+{
+"name":"Gaming",
+"group":"Topics",
+"feeds":[
+{
+"t":"Eurogamer.net Latest Articles Feed",
+"u":"https://www.eurogamer.net/?format=rss",
+"d":"This is a feed of the latest articles from Eurogamer.net."
+},
+{
+"t":"GameSpot - All Content",
+"u":"https://www.gamespot.com/feeds/mashup/",
+"d":"GameSpot's Everything Feed! All the latest from GameSpot"
+},
+{
+"t":"IGN Articles",
+"u":"http://feeds.ign.com/ign/all",
+"d":"This feed contains the latest 20 articles from IGN"
+},
+{
+"t":"Indie Games Plus",
+"u":"https://indiegamesplus.com/feed",
+"d":"Creative, Personal, Passionate Digital Experiences"
+},
+{
+"t":"Kotaku",
+"u":"https://kotaku.com/rss",
+"d":"Gaming Reviews, News, Tips and More."
+},
+{
+"t":"Makeup and Beauty Blog | Makeup Reviews, Swatches and How-To Makeup",
+"u":"https://www.makeupandbeautyblog.com/feed/",
+"d":"A beauty blog blooming with fresh makeup reviews, swatches and beauty tips from your friendly neighborhood beauty addict"
+},
+{
+"t":"PlayStation.Blog",
+"u":"http://feeds.feedburner.com/psblog",
+"d":"Official PlayStation Blog for news and video updates on PlayStation, PS5, PS4, PS VR, PlayStation Plus and more."
+},
+{
+"t":"Polygon.com",
+"u":"https://www.polygon.com/rss/index.xml",
+"d":"Your source for the latest in video games, sci-fi, fantasy, tabletop games, anime, horror, books, and comics."
+},
+{
+"t":"Rock, Paper, Shotgun",
+"u":"http://feeds.feedburner.com/RockPaperShotgun"
+},
+{
+"t":"Steam RSS News Feed",
+"u":"https://store.steampowered.com/feeds/news.xml",
+"d":"All Steam news, all the time!"
+},
+{
+"t":"The Ancient Gaming Noob",
+"u":"http://feeds.feedburner.com/TheAncientGamingNoob",
+"d":"Veni, Vidi, Scripsi"
+},
+{
+"t":"The Escapist",
+"u":"https://www.escapistmagazine.com/v2/feed/",
+"d":"Everything fun"
+},
+{
+"t":"TouchArcade - iPhone, iPad, Android Games Forum",
+"u":"https://toucharcade.com/community/forums/-/index.rss",
+"d":"iPhone and iPad Games and News"
+},
+{
+"t":"r/gaming",
+"u":"https://www.reddit.com/r/gaming.rss",
+"d":"The Number One Gaming forum on the Internet."
+}
+]
+},
+{
+"name":"History",
+"group":"Topics",
+"feeds":[
+{
+"t":"30 for 30 Podcasts",
+"u":"https://feeds.megaphone.fm/ESP5765452710",
+"d":"Original audio documentaries from the makers of the acclaimed 30 for 30 film series, featuring stories from the world of sports and beyond. 30 for 30 offers cap"
+},
+{
+"t":"Dan Carlin's Hardcore History",
+"u":"https://feeds.feedburner.com/dancarlin/history?format=xml",
+"d":"In \"Hardcore History\" journalist and broadcaster Dan Carlin takes his \"Martian\", unorthodox way of thinking and applies it to the past. Was Alexander the Great "
+},
+{
+"t":"History in 28-minutes",
+"u":"https://www.historyisnowmagazine.com/blog?format=RSS",
+"d":"We create a variety of exclusive modern international and American history content! We create free history audio podcasts as part of History in 28-minutes, a ma"
+},
+{
+"t":"HistoryNet",
+"u":"http://www.historynet.com/feed",
+"d":"The most comprehensive and authoritative history site on the Internet."
+},
+{
+"t":"Throughline",
+"u":"https://feeds.npr.org/510333/podcast.xml",
+"d":"<em>Throughline</em> is a time machine. Each episode, we travel beyond the headlines to answer the question, \"How did we get here?\" We use sound and stories to "
+},
+{
+"t":"You Must Remember This",
+"u":"https://feeds.megaphone.fm/YMRT7068253588",
+"d":"You Must Remember This is a storytelling podcast exploring the secret and/or forgotten histories of Hollywood’s first century. It’s the brainchild and passion p"
+},
+{
+"t":"the memory palace",
+"u":"http://feeds.thememorypalace.us/thememorypalace",
+"d":"<p>the memory palace</p>"
+}
+]
+},
+{
+"name":"Interior design",
+"group":"Topics",
+"feeds":[
+{
+"t":"BLOG - decor8",
+"u":"https://www.decor8blog.com/blog?format=rss"
+},
+{
+"t":"Core77",
+"u":"http://feeds.feedburner.com/core77/blog",
+"d":"Launched in 1995, Core77 serves a devoted global audience of design professionals, corporations, students, enthusiasts and fans."
+},
+{
+"t":"Design MilkInterior Design Ideas for Your Modern Home | Design Milk",
+"u":"https://design-milk.com/category/interior-design/feed/",
+"d":"Dedicated to modern design"
+},
+{
+"t":"Fubiz Media",
+"u":"http://feeds.feedburner.com/fubiz",
+"d":"The latest creative news from Fubiz about art, design and pop-culture."
+},
+{
+"t":"In My Own Style",
+"u":"https://inmyownstyle.com/feed",
+"d":"Top Budget DIY Home Decorating Blog and Creative Lifestyle Ideas"
+},
+{
+"t":"Interior Design",
+"u":"https://www.interiordesign.net/rss/",
+"d":"The leading authority for the Architecture & Design community"
+},
+{
+"t":"Interior Design (Interior Architecture)",
+"u":"https://www.reddit.com/r/InteriorDesign/.rss",
+"d":"Interior Design is the art and science of understanding people's behavior to create functional spaces within a building. It is a multi-faceted profession in whi"
+},
+{
+"t":"Interior Design Ideas",
+"u":"http://www.home-designing.com/feed",
+"d":"Inspirational Interior Design Ideas"
+},
+{
+"t":"Interior design | Dezeen",
+"u":"https://www.dezeen.com/interiors/feed/",
+"d":"architecture and design magazine"
+},
+{
+"t":"Latest from Ideal Home in News",
+"u":"https://www.idealhome.co.uk/feed",
+"d":"All the latest news content from the Ideal Home team"
+},
+{
+"t":"Liz Marie Blog",
+"u":"https://www.lizmarieblog.com/feed/"
+},
+{
+"t":"The Inspired Room",
+"u":"https://theinspiredroom.net/feed/",
+"d":"Voted Readers' Favorite Top Decorating Blog Better Homes and Gardens, Decorating Ideas, How to Organize, How to Decorate, HomeBody"
+},
+{
+"t":"Thrifty Decor Chick | Thrifty DIY, Decor and Organizing",
+"u":"http://feeds.feedburner.com/blogspot/ZBcZ",
+"d":"Thrifty decorating blog with easy DIY, decor, entertaining and organizing ideas. Make your home beautiful for less."
+},
+{
+"t":"Trendir",
+"u":"https://www.trendir.com/feed/",
+"d":"The Latest Trends in Modern House Design and Decorating"
+},
+{
+"t":"Yanko Design",
+"u":"http://feeds.feedburner.com/yankodesign",
+"d":"Modern Industrial Design News"
+},
+{
+"t":"Yatzer | Live Beautifully. Explore Endlessly.",
+"u":"https://www.yatzer.com/rss.xml",
+"d":"Since 2006, Yatzer has explored the many ways design shapes our lives,curating soulful interiors, visionary creatives, and immersive destinations — celebrating "
+},
+{
+"t":"Young House Love",
+"u":"https://www.younghouselove.com/feed/",
+"d":"Home Decorating & DIY Tutorials"
+},
+{
+"t":"decoist",
+"u":"https://www.decoist.com/feed/",
+"d":"Obsessed with the cult of beauty"
+},
+{
+"t":"design archives | designboom | architecture & design magazine",
+"u":"https://www.designboom.com/design/feed",
+"d":"designboom magazine | your first source for architecture, design & art news"
+}
+]
+},
+{
+"name":"Memes",
+"group":"Topics",
+"feeds":[
+{
+"t":"/r/Memes the original since 2008",
+"u":"https://www.reddit.com/r/memes/.rss",
+"d":"Memes! A way of describing cultural information being shared. An element of a culture or system of behavior that may be considered to be passed from one individ"
+},
+{
+"t":"A sub for History Memes",
+"u":"https://www.reddit.com/r/historymemes/.rss",
+"d":"A place for history memes about events occurring over 20 years ago."
+},
+{
+"t":"Advice Animals",
+"u":"https://www.reddit.com/r/AdviceAnimals/.rss",
+"d":"Reddit's Gold Mine"
+},
+{
+"t":"Indian Meme Templates",
+"u":"https://indianmemetemplates.com/feed/",
+"d":"Download Meme Templates, Indian Funny Photos, Movie Dialogues"
+},
+{
+"t":"Indian Memes",
+"u":"https://www.reddit.com/r/IndianMeyMeys/.rss",
+"d":"Only the most normiest of the memes are allowed. tags : India , Indian Memes , Normie."
+},
+{
+"t":"Internet for the Spirit",
+"u":"https://www.reddit.com/r/wholesomememes/.rss",
+"d":"Welcome to the wholesome side of the internet! This community is for those searching for a way to capture virtue on the internet."
+},
+{
+"t":"Know Your Meme Newsfeed",
+"u":"https://knowyourmeme.com/newsfeed.rss",
+"d":"New items added to the News Feed"
+},
+{
+"t":"Memebase",
+"u":"https://memebase.cheezburger.com/rss",
+"d":"Funny memes that \"GET IT\" and want you to too. Get the latest funniest memes and keep up what is going on in the meme-o-sphere."
+},
+{
+"t":"PrequelMemes - Memes of the Star Wars Prequels",
+"u":"https://www.reddit.com/r/PrequelMemes/.rss",
+"d":"Memes of the Star Wars Prequels."
+},
+{
+"t":"Rabbit Ramblings",
+"u":"http://feeds.feedburner.com/blogspot/GlZMR"
+},
+{
+"t":"YuckSauce",
+"u":"https://yucksauce.com/feed/",
+"d":"Curated Dumpster Fire: Meme Maker"
+},
+{
+"t":"dankmemes",
+"u":"https://www.reddit.com/r/dankmemes/.rss",
+"d":"*le dank"
+},
+{
+"t":"r/IndianDankMemes - India's Largest Meme Subreddit",
+"u":"https://www.reddit.com/r/IndianDankMemes/.rss",
+"d":"Meme Banao, Chutiya Nahi."
+},
+{
+"t":"selfies of the soul",
+"u":"https://www.reddit.com/r/me_irl/.rss",
+"d":"selfies of the soul | human posters only, bots go home | be excellent to each other"
+},
+{
+"t":"when things get too real for meirl",
+"u":"https://www.reddit.com/r/2meirl4meirl/.rss",
+"d":"For relatable posts that are too real for /r/meirl or /r/me_irl. Meaning jokes/posts about mental health issues and self deprecating humour."
+},
+{
+"t":"😎HAHA DAE MINIONS!!!😎",
+"u":"https://www.reddit.com/r/terriblefacebookmemes/.rss",
+"d":"Community for all those terrible memes your uncle posts on facebook"
+}
+]
+},
+{
+"name":"Movies",
+"group":"Topics",
+"feeds":[
+{
+"t":"/Film",
+"u":"https://feeds2.feedburner.com/slashfilm",
+"d":"Movie News and Reviews This feed is for non commercial use. Content Copyright Slashfilm.com."
+},
+{
+"t":"Ain't It Cool News Feed",
+"u":"https://www.aintitcool.com/node/feed/",
+"d":"The best in movie, TV, DVD and comic book news."
+},
+{
+"t":"ComingSoon.net – Movie Trailers, TV & Streaming News, and More",
+"u":"https://www.comingsoon.net/feed",
+"d":"ComingSoon.net features the latest movie trailers and news, TV updates, video game reviews, anime releases, and more."
+},
+{
+"t":"Deadline",
+"u":"https://deadline.com/feed/",
+"d":"Hollywood Entertainment Breaking News"
+},
+{
+"t":"FirstShowing.net",
+"u":"https://www.firstshowing.net/feed/",
+"d":"Connecting Hollywood with its Audience"
+},
+{
+"t":"IndieWire",
+"u":"https://www.indiewire.com/feed",
+"d":"The Voice of Creative Independence"
+},
+{
+"t":"Movie News and Discussion",
+"u":"https://reddit.com/r/movies/.rss",
+"d":"/r/movies is the world's largest online film community, with over 37,000,000 members. Come on in and talk about movies with us!"
+},
+{
+"t":"Movies",
+"u":"https://www.bleedingcool.com/movies/feed/",
+"d":"Comics, Movies, TV, Games"
+},
+{
+"t":"Variety",
+"u":"https://variety.com/feed/",
+"d":"Entertainment news, film reviews, awards, film festivals, box office, entertainment industry conferences"
+}
+]
+},
+{
+"name":"Music",
+"group":"Topics",
+"feeds":[
+{
+"t":"Consequence",
+"u":"http://consequenceofsound.net/feed",
+"d":"Music, Film, TV and Pop Culture News for the Mainstream and Underground"
+},
+{
+"t":"Metal Injection",
+"u":"http://feeds.feedburner.com/metalinjection",
+"d":"Heavy metal news, metal music videos, tour dates, live footage, exclusive documentaries, funny clips and more."
+},
+{
+"t":"Music Business Worldwide",
+"u":"https://www.musicbusinessworldwide.com/feed/",
+"d":"News, jobs and analysis for the global music industry"
+},
+{
+"t":"RSS: News",
+"u":"http://pitchfork.com/rss/news",
+"d":"News content RSS feed"
+},
+{
+"t":"Song Exploder",
+"u":"http://feed.songexploder.net/songexploder",
+"d":"<p>Song Exploder is a podcast where musicians take apart their songs, and piece by piece, tell the story of how they were made. Each episode features an artist "
+}
+]
+},
+{
+"name":"Nature",
+"group":"Topics",
+"feeds":[
+{
+"t":"BBC Earth",
+"u":"https://www.youtube.com/feeds/videos.xml?channel_id=UCwmZiChSryoWQCZMIQezgTg"
+},
+{
+"t":"BBC Earth Podcast",
+"u":"https://rss.acast.com/bbcearthpodcast",
+"d":"<p>Each week the BBC Earth podcast brings you entertainment, humour, an abundance of amazing animal stories and unbelievable unheard sounds. Explore the world o"
+},
+{
+"t":"BLOG POSTS – Mark Avery",
+"u":"https://markavery.info/blog/feed/",
+"d":"Standing up for Nature"
+},
+{
+"t":"Blog | Nature | PBS",
+"u":"https://www.pbs.org/wnet/nature/blog/feed/",
+"d":"The premiere natural history program on television."
+},
+{
+"t":"EarthPorn: Amazing images of light and landscape",
+"u":"https://www.reddit.com/r/EarthPorn/.rss",
+"d":"The internet's largest community of landscape photographers and Earth lovers."
+},
+{
+"t":"Explore Oceans",
+"u":"https://www.youtube.com/feeds/videos.xml?channel_id=UCSyg9cb3Iq-NtlbxqNB9wGw"
+},
+{
+"t":"National Geographic",
+"u":"https://www.youtube.com/feeds/videos.xml?channel_id=UCpVm7bg6pXKo1Pr6k5kxG9A"
+},
+{
+"t":"Nature",
+"u":"http://feeds.nature.com/nature/rss/current?x=1",
+"d":"Nature is the foremost international weekly scientific journal in the world and is the flagship journal for Nature Portfolio. It publishes the finest peer-revie"
+},
+{
+"t":"Nature",
+"u":"https://www.reddit.com/r/nature/.rss",
+"d":"* Share your fascinating links about nature * Discuss endangered parts of nature * Contribute news about the wonders of nature * Meet other nature enthusiasts *"
+},
+{
+"t":"Nature Gifs",
+"u":"https://www.reddit.com/r/NatureGifs/.rss"
+},
+{
+"t":"Nature on PBS",
+"u":"https://www.youtube.com/feeds/videos.xml?channel_id=UCcBp_9YPyma4c3HTadmRJ3Q"
+},
+{
+"t":"Reflections of the Natural World",
+"u":"https://reflectionsofthenaturalworld.com/feed/",
+"d":"Travel with me as I explore the wild things and wild places of our planet. - Jim Gain"
+},
+{
+"t":"Stories Archives - Nature Canada",
+"u":"https://naturecanada.ca/category/news/blog/feed/",
+"d":"Your voice for nature!"
+},
+{
+"t":"nature video",
+"u":"https://www.youtube.com/feeds/videos.xml?channel_id=UC7c8mE90qCtu11z47U0KErg"
+}
+]
+},
+{
+"name":"News",
+"group":"Topics",
+"feeds":[
+{
+"t":"BBC News",
+"u":"http://feeds.bbci.co.uk/news/world/rss.xml",
+"d":"BBC News - World"
+},
+{
+"t":"CNN.com - RSS Channel - World",
+"u":"http://rss.cnn.com/rss/edition_world.rss",
+"d":"CNN.com delivers up-to-the-minute news and information on the latest top stories, weather, entertainment, politics and more."
+},
+{
+"t":"International: Top News And Analysis",
+"u":"https://www.cnbc.com/id/100727362/device/rss/rss.html",
+"d":"CNBC International is the world leader for news on business, technology, China, trade, oil prices, the Middle East and markets."
+},
+{
+"t":"NDTV News Search Records Found 1000",
+"u":"http://feeds.feedburner.com/ndtvnews-world-news",
+"d":"NDTV.com provides the latest information from and in-depth coverage of India and the world. Find breaking news, India news, top stories, elections, politics, bu"
+},
+{
+"t":"NYT > World News",
+"u":"https://rss.nytimes.com/services/xml/rss/nyt/World.xml"
+},
+{
+"t":"Top stories - Google News",
+"u":"https://news.google.com/rss",
+"d":"Google News"
+},
+{
+"t":"World",
+"u":"http://feeds.washingtonpost.com/rss/world",
+"d":"The Washington Post World section provides information and analysis of breaking world news stories. In addition to our world news and video, Post World News off"
+},
+{
+"t":"World News",
+"u":"https://www.reddit.com/r/worldnews/.rss",
+"d":"A place for major news from around the world, excluding US-internal news."
+},
+{
+"t":"World News, Today World News, Latest International News, World Breaking News, Trending News of World - Times of India",
+"u":"https://timesofindia.indiatimes.com/rssfeeds/296589292.cms",
+"d":"World News Today: Read the latest world news headlines, Current International breaking news world wide. In depth analysis and top news headlines world wide."
+},
+{
+"t":"World news | The Guardian",
+"u":"https://www.theguardian.com/world/rss",
+"d":"Latest World news news, comment and analysis from the Guardian, the world's leading liberal voice"
+}
+]
+},
+{
+"name":"Personal finance",
+"group":"Topics",
+"feeds":[
+{
+"t":"Afford Anything®",
+"u":"https://affordanything.com/feed/",
+"d":"You Can Afford Anything ... Just Not Everything™. What's It Gonna Be?"
+},
+{
+"t":"Afford Anything®",
+"u":"https://feeds.feedburner.com/AffordAnythingFeed",
+"d":"You Can Afford Anything ... Just Not Everything™. What's It Gonna Be?"
+},
+{
+"t":"Budgets Are Sexy",
+"u":"https://feeds2.feedburner.com/budgetsaresexy",
+"d":"Money | Minimalism | Mohawks"
+},
+{
+"t":"Financial Samurai",
+"u":"https://www.financialsamurai.com/feed/",
+"d":"Slicing Through Money's Mysteries"
+},
+{
+"t":"Frugalwoods",
+"u":"https://feeds.feedburner.com/Frugalwoods",
+"d":"Financial independence and simple living"
+},
+{
+"t":"Good Financial Cents®",
+"u":"https://www.goodfinancialcents.com/feed/"
+},
+{
+"t":"Invest Like the Best with Patrick O'Shaughnessy",
+"u":"http://investlikethebest.libsyn.com/rss",
+"d":"Conversations with the best investors and business leaders in the world. We explore their ideas, methods, and stories to help you better invest your time and mo"
+},
+{
+"t":"Learn To Trade The Market",
+"u":"https://www.learntotradethemarket.com/feed",
+"d":"Learn Price Action Trading with Nial Fuller"
+},
+{
+"t":"Listen Money Matters - Free your inner financial badass. All the stuff you should know about personal finance.",
+"u":"https://feeds.megaphone.fm/listen-money-matters",
+"d":"Honest and uncensored - this is not your father’s boring finance show. This show brings much needed ACTIONABLE advice to a people who hate being lectured about "
+},
+{
+"t":"Making Sense Of Cents",
+"u":"https://www.makingsenseofcents.com/feed",
+"d":"Learn how to make extra money, how to save money, how to start a blog, and more."
+},
+{
+"t":"Millennial Money",
+"u":"https://millennialmoney.com/feed/",
+"d":"Next Level Personal Finance"
+},
+{
+"t":"Money Crashers",
+"u":"https://www.moneycrashers.com/feed/",
+"d":"Turn the Tables on Money"
+},
+{
+"t":"Money For the Rest of Us",
+"u":"https://rss.art19.com/money-for-the-rest-of-us",
+"d":"<p>A personal finance and investing podcast on money, how it works, how to invest it and how to live without worrying about it. J. David Stein is a former Chief"
+},
+{
+"t":"Money Saving Mom®",
+"u":"https://moneysavingmom.com/feed/",
+"d":"Saving Families Money Since 2007"
+},
+{
+"t":"Money Under 30",
+"u":"https://www.moneyunder30.com/feed"
+},
+{
+"t":"MoneyNing",
+"u":"http://feeds.feedburner.com/MoneyNing",
+"d":"Sharing insights since 2007 on carefully saving money, investing, frugal living, coupons, promo codes because the little things matter in achieving financial fr"
+},
+{
+"t":"MyWifeQuitHerJob.com",
+"u":"https://mywifequitherjob.com/feed/",
+"d":"Starting An Online Store So Your Spouse Can Quit And Stay At Home With The Kids"
+},
+{
+"t":"Nerd's Eye View | Kitces.com",
+"u":"http://feeds.feedblitz.com/kitcesnerdseyeview&x=1",
+"d":"Commentary from Michael Kitces on Financial Planning News & Strategies"
+},
+{
+"t":"NerdWallet",
+"u":"https://www.nerdwallet.com/blog/feed/",
+"d":"NerdWallet is a free tool to find you the best credit cards, cd rates, savings, checking accounts, scholarships, healthcare and airlines. Start here to maximize"
+},
+{
+"t":"Oblivious Investor",
+"u":"https://obliviousinvestor.com/feed/",
+"d":"Low-Maintenance Investing with Index Funds and ETFs"
+},
+{
+"t":"Personal Finance",
+"u":"https://reddit.com/r/personalfinance/.rss",
+"d":"Learn about budgeting, saving, getting out of debt, credit, investing, and retirement planning. Join our community, read the PF Wiki, and get on top of your fin"
+},
+{
+"t":"SavingAdvice.com Blog",
+"u":"https://www.savingadvice.com/feed/",
+"d":"SavingAdvice.com is a trusted personal finance community with expert articles on saving money, budgeting, debt reduction, and investing — plus active forums and"
+},
+{
+"t":"Side Hustle Nation",
+"u":"https://www.sidehustlenation.com/feed",
+"d":"Amplify your earning power"
+},
+{
+"t":"So Money with Farnoosh Torabi",
+"u":"https://feeds.megaphone.fm/somoney",
+"d":"*** Named a Best Podcast By The New York Times, Time Magazine, Real Simple and MSNBC *** Host Farnoosh Torabi is an award-winning financial strategist, TV host "
+},
+{
+"t":"The Clark Howard Podcast",
+"u":"https://feeds.megaphone.fm/clarkhoward",
+"d":"Save more and spend less is more than just a motto for money expert Clark Howard; it’s a way of life. Clark and his crew — Team Clark — are on a mission to empo"
+},
+{
+"t":"The College Investor",
+"u":"https://thecollegeinvestor.com/feed/",
+"d":"Navigating Money And Education"
+},
+{
+"t":"The Ramsey Show",
+"u":"https://daveramsey.libsyn.com/rss",
+"d":"The Ramsey Show believes you can build wealth and take control of your life—no matter what stupid mistakes you've made with money. Join as Dave Ramsey and his t"
+},
+{
+"t":"The Stacking Benjamins Show",
+"u":"https://feeds.megaphone.fm/stacking-benjamins",
+"d":"<p>Named Best Personal Finance Podcast by Bankrate.com and Kiplinger — and the only podcast the Plutus Awards retired from competition after winning twice — The"
+},
+{
+"t":"Well Kept Wallet",
+"u":"https://wellkeptwallet.com/feed/",
+"d":"Helping you save money, make money and pay off debt."
+},
+{
+"t":"Wise Bread",
+"u":"http://feeds.killeraces.com/wisebread",
+"d":"Living large on a small budget"
+}
+]
+},
+{
+"name":"Photography",
+"group":"Topics",
+"feeds":[
+{
+"t":"500px",
+"u":"https://iso.500px.com/feed/"
+},
+{
+"t":"Digital Photography School",
+"u":"https://feeds.feedburner.com/DigitalPhotographySchool",
+"d":"Digital Photography Tips and Tutorials"
+},
+{
+"t":"Light Stalking",
+"u":"https://www.lightstalking.com/feed/",
+"d":"Illuminating Your Passion"
+},
+{
+"t":"One Big Photo",
+"u":"http://feeds.feedburner.com/OneBigPhoto",
+"d":"a Picture is Worth a Thousand Words | Submit Your Photo | World's Best Photography"
+},
+{
+"t":"PetaPixel",
+"u":"https://petapixel.com/feed/",
+"d":"Photography and Camera News, Reviews, and Inspiration"
+},
+{
+"t":"Strobist",
+"u":"http://feeds.feedburner.com/blogspot/WOBq",
+"d":"Learn How to Light."
+},
+{
+"t":"Stuck in Customs",
+"u":"https://stuckincustoms.com/feed/",
+"d":"Trey Ratcliff's Travel Photography blog with daily inspiration to motivate you!"
+},
+{
+"t":"The Boston Globe",
+"u":"https://www.bostonglobe.com/rss/bigpicture",
+"d":"The Boston Globe News Feed"
+}
+]
+},
+{
+"name":"Programming",
+"group":"Topics",
+"feeds":[
+{
+"t":"Better Programming - Medium",
+"u":"https://medium.com/feed/better-programming",
+"d":"Advice for programmers. - Medium"
+},
+{
+"t":"CodeNewbie",
+"u":"http://feeds.codenewbie.org/cnpodcast.xml",
+"d":"The CodeNewbie podcast was born from CodeNewbie, an organization which fosters a supportive, international community of people learning to code. Each season, ho"
+},
+{
+"t":"Coding Horror",
+"u":"https://feeds.feedburner.com/codinghorror",
+"d":"programming and human factors"
+},
+{
+"t":"Developer Tea",
+"u":"https://feeds.simplecast.com/dLRotFGk",
+"d":"Developer Tea exists to help driven developers connect to their ultimate purpose and excel at their work so that they can positively impact the people they infl"
+},
+{
+"t":"Engineering at Meta",
+"u":"https://engineering.fb.com/feed/",
+"d":"Engineering at Meta Blog"
+},
+{
+"t":"Engineering at Slack",
+"u":"https://slack.engineering/feed",
+"d":"Hear directly from Slack's engineers about what we build, why and how we build it, and how you can use it."
+},
+{
+"t":"Etsy Engineering | Code as Craft",
+"u":"https://codeascraft.com/feed/atom/",
+"d":"The engineers who make Etsy make our living with a craft we love: software. This is where we'll write about our craft and our collective experience building and"
+},
+{
+"t":"FLOSS Weekly (Audio)",
+"u":"https://feeds.twit.tv/floss.xml",
+"d":"We're not talking dentistry here; FLOSS is all about Free Libre Open Source Software. Join host Doc Searls and his rotating panel of co-hosts as they talk with "
+},
+{
+"t":"GitLab",
+"u":"https://about.gitlab.com/atom.xml",
+"d":"GitLab Blog RSS feed"
+},
+{
+"t":"Google Developers Blog",
+"u":"http://feeds.feedburner.com/GDBcode",
+"d":"Updates on changes and additions to the Google Developers Blog."
+},
+{
+"t":"Google TechTalks",
+"u":"https://www.youtube.com/feeds/videos.xml?user=GoogleTechTalks"
+},
+{
+"t":"HackerNoon.com - Medium",
+"u":"https://medium.com/feed/hackernoon",
+"d":"Elijah McClain, George Floyd, Eric Garner, Breonna Taylor, Ahmaud Arbery, Michael Brown, Oscar Grant, Atatiana Jefferson, Tamir Rice, Bettie Jones, Botham Jean "
+},
+{
+"t":"Hanselminutes with Scott Hanselman",
+"u":"https://feeds.simplecast.com/gvtxUiIf",
+"d":"Hanselminutes is Fresh Air for Developers. A weekly commute-time podcast that promotes fresh technology and fresh voices. Talk and Tech for Developers, Life-lon"
+},
+{
+"t":"InfoQ",
+"u":"https://feed.infoq.com",
+"d":"InfoQ feed"
+},
+{
+"t":"Java, SQL and jOOQ.",
+"u":"https://blog.jooq.org/feed",
+"d":"Best Practices and Lessons Learned from Writing Awesome Java and SQL Code. Get some hands-on insight on what's behind developing jOOQ."
+},
+{
+"t":"Joel on Software",
+"u":"https://www.joelonsoftware.com/feed/"
+},
+{
+"t":"Martin Fowler",
+"u":"https://martinfowler.com/feed.atom",
+"d":"Master feed of news and updates from martinfowler.com"
+},
+{
+"t":"Overflow - Buffer Resources",
+"u":"https://buffer.com/resources/overflow/rss/",
+"d":"In-depth ideas and guides to social media & online marketing strategy, published by the team at Buffer"
+},
+{
+"t":"Podcast Archives - Software Engineering Daily",
+"u":"https://softwareengineeringdaily.com/category/podcast/feed"
+},
+{
+"t":"Programming Archives - The Crazy Programmer",
+"u":"https://www.thecrazyprogrammer.com/category/programming/feed",
+"d":"Programming, Design and Development"
+},
+{
+"t":"Programming Throwdown",
+"u":"http://feeds.feedburner.com/ProgrammingThrowdown",
+"d":"Programming Throwdown educates Computer Scientists and Software Engineers on a cavalcade of programming and tech topics. Every show will cover a new programming"
+},
+{
+"t":"Robert Heaton | Blog",
+"u":"https://robertheaton.com/feed.xml",
+"d":"Software engineer. One-track lover down a two-way lane"
+},
+{
+"t":"Scott Hanselman's Blog",
+"u":"http://feeds.hanselman.com/ScottHanselman",
+"d":"Scott Hanselman on Programming, User Experience, The Zen of Computers and Life in General"
+},
+{
+"t":"Scripting News",
+"u":"http://scripting.com/rss.xml",
+"d":"Dave Winer, OG blogger, podcaster, developed first apps in many categories. Old enough to know better. It's even worse than it appears."
+},
+{
+"t":"Software Defined Talk",
+"u":"https://feeds.fireside.fm/sdt/rss",
+"d":"Get ready for a weekly dose of all things Enterprise Software and Cloud Computing! Join us as we dive into topics including Kubernetes, DevOps, Serverless, Secu"
+},
+{
+"t":"Software Engineering Radio - The Podcast for Professional Software Developers",
+"u":"http://feeds.feedburner.com/se-radio",
+"d":"Software Engineering Radio is a podcast targeted at the professional software developer. The goal is to be a lasting educational resource, not a newscast. Every"
+},
+{
+"t":"SoundCloud Backstage Blog",
+"u":"https://developers.soundcloud.com/blog/blog.rss",
+"d":"SoundCloud's developer blog."
+},
+{
+"t":"Spotify Engineering",
+"u":"https://labs.spotify.com/feed/",
+"d":"Spotify’s official technology blog"
+},
+{
+"t":"Stack Abuse",
+"u":"https://stackabuse.com/rss/",
+"d":"Learn Python, Java, JavaScript/Node, Machine Learning, and Web Development through articles, code examples, and tutorials for developers of all skill levels."
+},
+{
+"t":"Stack Overflow Blog",
+"u":"https://stackoverflow.blog/feed/",
+"d":"Essays, opinions, and advice on the act of computer programming from Stack Overflow."
+},
+{
+"t":"The 6 Figure Developer",
+"u":"http://6figuredev.com/feed/rss/",
+"d":"Helping others reach their potential"
+},
+{
+"t":"The Airbnb Tech Blog - Medium",
+"u":"https://medium.com/feed/airbnb-engineering",
+"d":"Creative engineers and data scientists building a world where you can belong anywhere. http://airbnb.io - Medium"
+},
+{
+"t":"The Cynical Developer",
+"u":"https://cynicaldeveloper.com/feed/podcast",
+"d":"A UK based Technology and Software Developer Podcast that helps you to improve your development knowledge and career, through explaining the latest and greatest"
+},
+{
+"t":"The GitHub Blog",
+"u":"https://github.blog/feed/",
+"d":"Updates, ideas, and inspiration from GitHub to help developers build and design software."
+},
+{
+"t":"The JetBrains Blog",
+"u":"https://blog.jetbrains.com/feed",
+"d":"Developer Tools for Professionals and Teams"
+},
+{
+"t":"The PIT Show: Reflections and Interviews in the Tech World",
+"u":"https://feeds.transistor.fm/productivity-in-tech-podcast",
+"d":"This is the show where I sit down with people in the tech space and talk about what they are doing and how they get it all done."
+},
+{
+"t":"The Stack Overflow Podcast",
+"u":"https://feeds.simplecast.com/XA_851k3",
+"d":"<p>For well over a decade, the Stack Overflow Podcast has been exploring what it means to be a developer and how the art and practice of software engineering is"
+},
+{
+"t":"The Women in Tech Show: A Technical Podcast",
+"u":"https://thewomenintechshow.com/category/podcast/feed/",
+"d":"A podcast about what we work on, not what it feels like to be a woman in tech. Hosted by Edaena Salinas, Software Engineer at Microsoft. Website: wit.fm"
+},
+{
+"t":"overreacted — A blog by Dan Abramov",
+"u":"https://overreacted.io/rss.xml",
+"d":"A blog by Dan Abramov"
+},
+{
+"t":"programming",
+"u":"https://www.reddit.com/r/programming/.rss",
+"d":"Computer Programming"
+}
+]
+},
+{
+"name":"Science",
+"group":"Topics",
+"feeds":[
+{
+"t":"60-Second Science",
+"u":"http://rss.sciam.com/sciam/60secsciencepodcast",
+"d":"Tune in every weekday for quick reports and commentaries on the world of science—it'll just take a minute"
+},
+{
+"t":"BBC News",
+"u":"http://feeds.bbci.co.uk/news/science_and_environment/rss.xml",
+"d":"BBC News - Science & Environment"
+},
+{
+"t":"Discovery",
+"u":"https://podcasts.files.bbci.co.uk/p002w557.rss",
+"d":"<p>Explorations in the world of science.</p>"
+},
+{
+"t":"FlowingData",
+"u":"https://flowingdata.com/feed",
+"d":"Strength in Numbers"
+},
+{
+"t":"Gastropod",
+"u":"https://www.omnycontent.com/d/playlist/aaea4e69-af51-495e-afc9-a9760146922b/2a195077-f014-41d2-8313-ab190186b4c2/277bcd5c-0a05-4c14-8ba6-ab190186b4d5/podcast.rss",
+"d":"Food with a side of science and history. Every other week, co-hosts Cynthia Graber and Nicola Twilley serve up a brand new episode exploring the hidden history "
+},
+{
+"t":"Hidden Brain",
+"u":"https://feeds.npr.org/510308/podcast.xml",
+"d":"Why do I feel stuck? How can I become more creative? What can I do to improve my relationships? If you’ve ever asked yourself these questions, you’re not alone."
+},
+{
+"t":"Invisibilia",
+"u":"https://feeds.npr.org/510307/podcast.xml",
+"d":"Unseeable forces control human behavior and shape our ideas, beliefs, and assumptions. Invisibilia—Latin for invisible things—fuses narrative storytelling with "
+},
+{
+"t":"Latest Science News -- ScienceDaily",
+"u":"https://www.sciencedaily.com/rss/all.xml"
+},
+{
+"t":"NYT > Science",
+"u":"https://rss.nytimes.com/services/xml/rss/nyt/Science.xml"
+},
+{
+"t":"Nature",
+"u":"https://www.nature.com/nature.rss",
+"d":"Nature is the foremost international weekly scientific journal in the world and is the flagship journal for Nature Portfolio. It publishes the finest peer-revie"
+},
+{
+"t":"Phys.org - latest science and technology news stories",
+"u":"https://phys.org/rss-feed/",
+"d":"Phys.org internet news portal provides the latest news on science including: Physics, Nanotechnology, Life Sciences, Space Science, Earth Science, Environment, "
+},
+{
+"t":"Popular Science",
+"u":"https://www.popsci.com/arcio/rss/",
+"d":"Awe-inspiring science reporting, technology news, and DIY projects. Skunks to space robots, primates to climates. That&#039;s Popular Science, 150 years strong."
+},
+{
+"t":"Probably Science",
+"u":"https://probablyscience.libsyn.com/rss",
+"d":"Professional comedians with so-so STEM pedigrees take you through this week in science. Incompetently. Featuring hosts Matt Kirshen, Andy Wood (and sometimes Je"
+},
+{
+"t":"Radiolab",
+"u":"http://feeds.wnyc.org/radiolab",
+"d":"Radiolab is on a curiosity bender. We ask deep questions and use investigative journalism to get the answers. A given episode might whirl you through science, l"
+},
+{
+"t":"Reddit Science",
+"u":"https://reddit.com/r/science/.rss",
+"d":"This community is a place to share and discuss new scientific research. Read about the latest advances in astronomy, biology, medicine, physics, social science,"
+},
+{
+"t":"Sawbones: A Marital Tour of Misguided Medicine",
+"u":"https://feeds.simplecast.com/y1LF_sn2",
+"d":"Join Dr. Sydnee McElroy and her husband Justin McElroy for a tour of all the dumb, bad, gross, weird and wrong ways we've tried to fix people."
+},
+{
+"t":"Science",
+"u":"https://gizmodo.com/tag/science/rss",
+"d":"The Future Is Here"
+},
+{
+"t":"Science Latest",
+"u":"https://www.wired.com/feed/category/science/latest/rss",
+"d":"Channel Description"
+},
+{
+"t":"Scientific American Content: Global",
+"u":"http://rss.sciam.com/ScientificAmerican-Global",
+"d":"Scientific American is the essential guide to the most awe-inspiring advances in science and technology, explaining how they change our understanding of the wor"
+},
+{
+"t":"Shirtloads of Science",
+"u":"https://shirtloadsofscience.libsyn.com/rss",
+"d":"Dr Karl's a curious optimist – a great combination for a science lover. Join him and his guests for weird facts, amazing conversation and remember, it's never t"
+},
+{
+"t":"TED Talks Daily",
+"u":"https://pa.tedcdn.com/feeds/talks.rss",
+"d":"Want TED Talks on the go? Everyday, this feed brings you our latest talks in audio format. Hear thought-provoking ideas on every subject imaginable – from Artif"
+},
+{
+"t":"The Infinite Monkey Cage",
+"u":"https://podcasts.files.bbci.co.uk/b00snr0w.rss",
+"d":"<p>Professor Brian Cox and Robin Ince host a witty, irreverent look at the world through scientists’ eyes. Joined by a panel of scientists, experts and celebrit"
+},
+{
+"t":"This Week in Science – The Kickass Science Podcast",
+"u":"http://www.twis.org/feed/",
+"d":"The kickass science and technology radio show that delivers an irreverent look at the week in science and technology."
+}
+]
+},
+{
+"name":"Space",
+"group":"Topics",
+"feeds":[
+{
+"t":"/r/space: news, articles and discussion",
+"u":"https://www.reddit.com/r/space/.rss?format=xml",
+"d":"Share & discuss informative content on: * Astrophysics * Cosmology * Space Exploration * Planetary Science * Astrobiology"
+},
+{
+"t":"Latest from Space.com",
+"u":"https://www.space.com/feeds/all",
+"d":"All the latest content from the Space.com team"
+},
+{
+"t":"NASA",
+"u":"https://www.nasa.gov/rss/dyn/breaking_news.rss",
+"d":"Official National Aeronautics and Space Administration Website"
+},
+{
+"t":"New Scientist - Space",
+"u":"https://www.newscientist.com/subject/space/feed/"
+},
+{
+"t":"Space | The Guardian",
+"u":"https://www.theguardian.com/science/space/rss",
+"d":"Latest news and features from theguardian.com, the world's leading liberal voice"
+},
+{
+"t":"SpaceX",
+"u":"https://www.youtube.com/feeds/videos.xml?user=spacexchannel"
+}
+]
+},
+{
+"name":"Sports",
+"group":"Topics",
+"feeds":[
+{
+"t":"",
+"u":"https://sports.yahoo.com/rss/",
+"d":"Yahoo! Sports - Comprehensive news, scores, standings, fantasy games, rumors, and more"
+},
+{
+"t":"BBC Sport",
+"u":"http://feeds.bbci.co.uk/sport/rss.xml",
+"d":"BBC Sport - Sport Front Page"
+},
+{
+"t":"CNN.com - RSS Channel - Sport",
+"u":"http://rss.cnn.com/rss/edition_sport.rss",
+"d":"CNN.com delivers up-to-the-minute news and information on the latest top stories, weather, entertainment, politics and more."
+},
+{
+"t":"NYT > Sports",
+"u":"https://rss.nytimes.com/services/xml/rss/nyt/Sports.xml"
+},
+{
+"t":"Reddit Sports",
+"u":"https://www.reddit.com/r/sports.rss",
+"d":"Sports News and Highlights from the NFL, NBA, NHL, MLB, MLS, NCAA, F1, and other leagues around the world."
+},
+{
+"t":"Sport | The Guardian",
+"u":"https://www.theguardian.com/uk/sport/rss",
+"d":"Latest Sport news, comment and analysis from the Guardian, the world's leading liberal voice"
+},
+{
+"t":"Sports News - Latest Sports and Football News | Sky News",
+"u":"http://feeds.skynews.com/feeds/rss/sports.xml",
+"d":"The best sports coverage from around the world, covering: Football, Cricket, Golf, Rugby, WWE, Boxing, Tennis and much more."
+},
+{
+"t":"Sports News: Cricket Live Scorecard, Latest Cricket News, Football, NBA, NFL, WWE, NHL, MLB News & More",
+"u":"https://timesofindia.indiatimes.com/rssfeeds/4719148.cms",
+"d":"Get the latest sports news, live cricket scores and in-depth coverage of Cricket, Football, NBA, NFL, WWE, F1, Tennis, and more on The Times of India. Stay upda"
+},
+{
+"t":"Sports | The Indian Express",
+"u":"https://indianexpress.com/section/sports/feed/",
+"d":"Latest News Today, Breaking News, India News, Top Headlines"
+},
+{
+"t":"Sportskeeda",
+"u":"https://www.sportskeeda.com/feed",
+"d":"Latest Sports News & Live Updates"
+},
+{
+"t":"www.espn.com - TOP",
+"u":"https://www.espn.com/espn/rss/news",
+"d":"Latest TOP news from www.espn.com"
+}
+]
+},
+{
+"name":"Startups",
+"group":"Topics",
+"feeds":[
+{
+"t":"AVC",
+"u":"https://avc.com/feed/",
+"d":"Musings of a VC in NYC"
+},
+{
+"t":"Blog on Feld Thoughts",
+"u":"https://feld.com/archives/tag/blog/feed",
+"d":"Recent content in Blog on Feld Thoughts"
+},
+{
+"t":"Entrepreneur – Latest",
+"u":"http://feeds.feedburner.com/entrepreneur/latest",
+"d":"The latest small business tips and advice from Entrepreneur"
+},
+{
+"t":"Feld Thoughts",
+"u":"https://feld.com/feed",
+"d":"Recent content on Feld Thoughts"
+},
+{
+"t":"GaryVee",
+"u":"https://www.youtube.com/feeds/videos.xml?user=GaryVaynerchuk"
+},
+{
+"t":"Hacker News: Front Page",
+"u":"https://hnrss.org/frontpage",
+"d":"Hacker News RSS"
+},
+{
+"t":"Inc.com",
+"u":"https://www.inc.com/rss/",
+"d":"Inc.com, the daily resource for entrepreneurs."
+},
+{
+"t":"Marie Forleo",
+"u":"https://www.youtube.com/feeds/videos.xml?user=marieforleo"
+},
+{
+"t":"Masters of Scale",
+"u":"https://rss.art19.com/masters-of-scale",
+"d":"<p>On Masters of Scale, iconic business leaders share lessons and strategies that have helped them grow the world's most fascinating companies. Founders, CEOs, "
+},
+{
+"t":"Paul Graham: Essays",
+"u":"http://www.aaronsw.com/2002/feeds/pgessays.rss",
+"d":"Scraped feed provided by aaronsw.com"
+},
+{
+"t":"Product Hunt — The best new products, every day",
+"u":"https://www.producthunt.com/feed"
+},
+{
+"t":"Small Business Trends",
+"u":"https://feeds2.feedburner.com/SmallBusinessTrends",
+"d":"Founded in 2003, Small Business Trends is an award-winning online publication for small business owners, entrepreneurs and the people who interact with them. It"
+},
+{
+"t":"Smart Passive Income",
+"u":"http://feeds.feedburner.com/smartpassiveincome",
+"d":"Become the entrepreneur you want to be"
+},
+{
+"t":"Steve Blank",
+"u":"https://steveblank.com/feed/",
+"d":"Innovation and Entrepreneurship"
+},
+{
+"t":"The Intercom Blog",
+"u":"https://www.intercom.com/blog/feed",
+"d":"Articles and Podcasts on Customer Service, AI and Automation, Product, and more"
+},
+{
+"t":"The Startup Junkies Podcast",
+"u":"https://startupjunkie.libsyn.com/rss",
+"d":"The Startup Junkies podcast is hosted by Jeff Amerine and his team at Startup Junkie Consulting. We’ll cover topics ranging from getting started, planning, grow"
+},
+{
+"t":"The Tim Ferriss Show",
+"u":"https://rss.art19.com/tim-ferriss-show",
+"d":"Tim Ferriss is a self-experimenter and bestselling author, best known for The 4-Hour Workweek, which has been translated into 40+ languages. Newsweek calls him "
+},
+{
+"t":"VentureBeat",
+"u":"https://feeds.feedburner.com/venturebeat/SZYF",
+"d":"Transformative tech coverage that matters"
+}
+]
+},
+{
+"name":"Tech",
+"group":"Topics",
+"feeds":[
+{
+"t":"Accidental Tech Podcast",
+"u":"https://atp.fm/rss",
+"d":"Three nerds discussing tech, Apple, programming, and loosely related matters."
+},
+{
+"t":"Analog(ue)",
+"u":"https://www.relay.fm/analogue/feed",
+"d":"So many podcasts are about our digital devices. Analog(ue) is a show about how these devices make us feel and how they change our lives for the better, but also"
+},
+{
+"t":"Ars Technica - All content",
+"u":"http://feeds.arstechnica.com/arstechnica/index",
+"d":"All Ars Technica stories"
+},
+{
+"t":"CNET",
+"u":"https://www.cnet.com/rss/news/",
+"d":"CNET news editors and reporters provide top technology news, with investigative reporting and in-depth coverage of tech issues and events."
+},
+{
+"t":"CNET",
+"u":"https://www.youtube.com/feeds/videos.xml?user=CNETTV"
+},
+{
+"t":"Clockwise",
+"u":"https://www.relay.fm/clockwise/feed",
+"d":"Clockwise is a rapid-fire discussion of current technology issues hosted by Dan Moren and Mikah Sargent and featuring two special guests each week. Four people,"
+},
+{
+"t":"Crunch Hype",
+"u":"http://feeds.feedburner.com/TechCrunch",
+"d":"Tech Crunch is a free Digital Marketing Site. The main goal of this site is to provide quality tutorials, tips, courses, tools and other resources that allows a"
+},
+{
+"t":"Engadget - Technology News & Expert Reviews",
+"u":"https://www.engadget.com/rss.xml",
+"d":"Breaking news from the worlds of technology and entertainment, and expert reviews of the latest consumer tech products."
+},
+{
+"t":"Gizmodo",
+"u":"https://gizmodo.com/rss",
+"d":"The Future Is Here"
+},
+{
+"t":"Hacker News",
+"u":"https://news.ycombinator.com/rss",
+"d":"Links for the intellectually curious, ranked by readers."
+},
+{
+"t":"Lifehacker",
+"u":"https://lifehacker.com/rss",
+"d":"Do everything better."
+},
+{
+"t":"Linus Tech Tips",
+"u":"https://www.youtube.com/feeds/videos.xml?user=LinusTechTips"
+},
+{
+"t":"Marques Brownlee",
+"u":"https://www.youtube.com/feeds/videos.xml?user=marquesbrownlee"
+},
+{
+"t":"Mashable",
+"u":"http://feeds.mashable.com/Mashable",
+"d":"Mashable is a leading source for news, information & resources for the Connected Generation. Mashable reports on the importance of digital innovation and how it"
+},
+{
+"t":"NYT > Technology",
+"u":"https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml"
+},
+{
+"t":"ReadWrite",
+"u":"https://readwrite.com/feed/",
+"d":"Crypto, Gaming & Emerging Tech News"
+},
+{
+"t":"Reply All",
+"u":"https://feeds.megaphone.fm/replyall",
+"d":"\"'A podcast about the internet' that is actually an unfailingly original exploration of modern life and how to survive it.\" - The Guardian. Hosted by Alex Goldm"
+},
+{
+"t":"Rocket",
+"u":"https://www.relay.fm/rocket/feed",
+"d":"Countdown to excitement! Every week Christina Warren, Brianna Wu and Simone de Rochefort had accelerated geek conversation. Tech, comics, movies, games and book"
+},
+{
+"t":"Slashdot",
+"u":"http://rss.slashdot.org/Slashdot/slashdotMain",
+"d":"News for nerds, stuff that matters"
+},
+{
+"t":"Stratechery by Ben Thompson",
+"u":"http://stratechery.com/feed/",
+"d":"On the business, strategy, and impact of technology."
+},
+{
+"t":"The Keyword",
+"u":"https://www.blog.google/rss/"
+},
+{
+"t":"The Next Web",
+"u":"https://thenextweb.com/feed/",
+"d":"Original and proudly opinionated perspectives for Generation T"
+},
+{
+"t":"The Verge",
+"u":"https://www.theverge.com/rss/index.xml",
+"d":"The Verge is about technology and how it makes us feel. Founded in 2011, we offer our audience everything from breaking news to reviews to award-winning feature"
+},
+{
+"t":"The Verge",
+"u":"https://www.youtube.com/feeds/videos.xml?user=TheVerge"
+},
+{
+"t":"The Vergecast",
+"u":"https://feeds.megaphone.fm/vergecast",
+"d":"The Vergecast is the flagship podcast from The Verge about small gadgets, Big Tech, and everything in between. Every Friday, hosts Nilay Patel and David Pierce "
+},
+{
+"t":"This Week in Tech (Audio)",
+"u":"https://feeds.twit.tv/twit.xml",
+"d":"This Week in Tech is the top-ranked flagship tech podcast from TWiT.tv. Every Sunday, Leo Laporte and a roundtable of insiders explore the week's hottest tech n"
+},
+{
+"t":"Unbox Therapy",
+"u":"https://www.youtube.com/feeds/videos.xml?user=unboxtherapy"
+},
+{
+"t":"www.theregister.com - Articles",
+"u":"https://www.theregister.com/headlines.rss",
+"d":"Articles from www.theregister.com"
+}
+]
+},
+{
+"name":"Television",
+"group":"Topics",
+"feeds":[
+{
+"t":"TV",
+"u":"https://www.bleedingcool.com/tv/feed/",
+"d":"Comics, Movies, TV, Games"
+},
+{
+"t":"TV Fanatic",
+"u":"https://www.tvfanatic.com/rss.xml",
+"d":"Your Home for TV Show Reviews, Opinions, Spoilers, and News!"
+},
+{
+"t":"TVLine - All TV. No Interference. TV News & Spoilers by TVLine",
+"u":"https://tvline.com/feed/",
+"d":"Stay up to date with the latest TV news, previews, spoilers, casting updates, interviews, and more from TVLine. Your go-to source for all things TV."
+},
+{
+"t":"the TV addict",
+"u":"http://feeds.feedburner.com/thetvaddict/AXob",
+"d":"TV News, Previews, Spoilers and Reviews"
+},
+{
+"t":"📺Television News and Discussion",
+"u":"https://reddit.com/r/television/.rss",
+"d":"Subreddit for content primarily about and related to scripted television programming"
+}
+]
+},
+{
+"name":"Tennis",
+"group":"Topics",
+"feeds":[
+{
+"t":"BBC Sport",
+"u":"http://feeds.bbci.co.uk/sport/tennis/rss.xml",
+"d":"BBC Sport - Tennis"
+},
+{
+"t":"CNN.com - RSS Channel - Sport - Tennis",
+"u":"http://rss.cnn.com/rss/edition_tennis.rss",
+"d":"CNN.com delivers up-to-the-minute news and information on the latest top stories, weather, entertainment, politics and more."
+},
+{
+"t":"Essential Tennis Podcast - Instruction, Lessons, Tips",
+"u":"https://feed.podbean.com/essentialtennis/feed.xml",
+"d":"Improve your tennis with the Essential Tennis Podcast, the very first podcast dedicated to tennis lessons and instruction! Tennis professional Ian Westermann an"
+},
+{
+"t":"NYT > Sports > Tennis",
+"u":"https://rss.nytimes.com/services/xml/rss/nyt/Tennis.xml"
+},
+{
+"t":"Perfect Tennis",
+"u":"https://www.perfect-tennis.com/feed/",
+"d":"Tennis Blog"
+},
+{
+"t":"Tennis News & Discussion",
+"u":"https://www.reddit.com/r/tennis/.rss",
+"d":"Professional tennis discussion. Feel free to visit our sister sub for more information on technique, r/10s."
+},
+{
+"t":"Tennis News, Updates, Tennis Scores, ATP, WTA, Grand Slams | The Hindu",
+"u":"https://www.thehindu.com/sport/tennis/feeder/default.rss",
+"d":"Find Tennis Results, Commentary, Highlights, Live Scores, Latest News From The ATP Tour, WTA Tour &amp;amp; All The Grand Slams At The Hindu"
+},
+{
+"t":"Tennis | The Guardian",
+"u":"https://www.theguardian.com/sport/tennis/rss",
+"d":"Latest news and features from theguardian.com, the world's leading liberal voice"
+},
+{
+"t":"Tennis | The Indian Express",
+"u":"https://indianexpress.com/section/sports/tennis/feed/",
+"d":"Latest News Today, Breaking News, India News, Top Headlines"
+},
+{
+"t":"www.espn.com - TENNIS",
+"u":"https://www.espn.com/espn/rss/tennis/news",
+"d":"Latest TENNIS news from www.espn.com"
+}
+]
+},
+{
+"name":"Travel",
+"group":"Topics",
+"feeds":[
+{
+"t":"Adventure.com",
+"u":"http://adventure.com/feed/"
+},
+{
+"t":"Atlas Obscura - Latest Articles and Places",
+"u":"https://www.atlasobscura.com/feeds/latest",
+"d":"New wonders and curiosities added to the Atlas."
+},
+{
+"t":"CNN.com - RSS Channel - App Travel Section",
+"u":"http://rss.cnn.com/rss/cnn_travel.rss",
+"d":"CNN.com delivers up-to-the-minute news and information on the latest top stories, weather, entertainment, politics and more."
+},
+{
+"t":"Everything Everywhere",
+"u":"http://feeds2.feedburner.com/EverythingEverywhere/",
+"d":"Learn Something New Every Day!"
+},
+{
+"t":"Live Life Travel",
+"u":"https://www.livelifetravel.world/feed/",
+"d":"Your travel partner for life"
+},
+{
+"t":"Million Mile Secrets",
+"u":"http://feeds.feedburner.com/MillionMileSecrets"
+},
+{
+"t":"NYT > Travel",
+"u":"https://rss.nytimes.com/services/xml/rss/nyt/Travel.xml"
+},
+{
+"t":"TFIL (Traveling to EVERY COUNTRY in A-Z Order)",
+"u":"https://www.youtube.com/feeds/videos.xml?user=ECastee"
+},
+{
+"t":"The Points Guy Articles",
+"u":"http://feeds.feedburner.com/thepointsguy",
+"d":"The Points Guy Articles Feed"
+},
+{
+"t":"Travel Blog -",
+"u":"https://www.nomadicmatt.com/travel-blog/feed/",
+"d":"Travel Better, Cheaper, Longer"
+},
+{
+"t":"Travel Dudes",
+"u":"https://www.traveldudes.com/feed/",
+"d":"For Travelers, By Travelers!"
+},
+{
+"t":"Travel | The Guardian",
+"u":"https://www.theguardian.com/uk/travel/rss",
+"d":"Latest travel news and reviews on UK and world holidays, travel guides to global destinations, city breaks, hotels and restaurant information from the Guardian,"
+}
+]
+},
+{
+"name":"UI - UX",
+"group":"Topics",
+"feeds":[
+{
+"t":"Articles on Smashing Magazine — For Web Designers And Developers",
+"u":"https://www.smashingmagazine.com/feed",
+"d":"Recent content in Articles on Smashing Magazine — For Web Designers And Developers"
+},
+{
+"t":"Boxes and Arrows",
+"u":"http://boxesandarrows.com/rss/",
+"d":"The design behind the design"
+},
+{
+"t":"JUST™ Creative",
+"u":"https://feeds.feedburner.com/JustCreativeDesignBlog",
+"d":"Logo Designer, Graphic Designer, Graphic Design Portfolio, Logo Design, Logo, Graphic, Design, Graphic Design, Brand Strategy, Branding"
+},
+{
+"t":"NN/g latest articles and announcements",
+"u":"https://www.nngroup.com/feed/rss/",
+"d":"The latest articles and announcements from Nielsen Norman Group"
+},
+{
+"t":"UX Collective - Medium",
+"u":"https://uxdesign.cc/feed",
+"d":"We believe designers are thinkers as much as they are makers. https://linktr.ee/uxc - Medium"
+},
+{
+"t":"UX Movement",
+"u":"https://uxmovement.com/feed/"
+},
+{
+"t":"Usability Geek",
+"u":"https://usabilitygeek.com/feed/",
+"d":"Usability & User Experience (UX) Blog"
+},
+{
+"t":"User Experience",
+"u":"https://www.reddit.com/r/userexperience/.rss",
+"d":"A community where professionals, enthusiasts, and individuals interested in the field of user experience can share knowledge, ask questions, and engage in discu"
+}
+]
+},
+{
+"name":"Web Development",
+"group":"Topics",
+"feeds":[
+{
+"t":"A List Apart: The Full Feed",
+"u":"https://alistapart.com/main/feed/",
+"d":"Articles for people who make web sites."
+},
+{
+"t":"CSS-Tricks",
+"u":"https://css-tricks.com/feed/",
+"d":"Tips, Tricks, and Techniques on using Cascading Style Sheets."
+},
+{
+"t":"Code Wall",
+"u":"https://www.codewall.co.uk/feed/"
+},
+{
+"t":"David Walsh Blog",
+"u":"https://davidwalsh.name/feed",
+"d":"A blog featuring tutorials about JavaScript, HTML5, AJAX, PHP, CSS, WordPress, and everything else development."
+},
+{
+"t":"Sink In - Tech Learnings",
+"u":"https://gosink.in/rss/",
+"d":"Sink In - Tech Learnings (Shah Code Exporters - FZCO)"
+}
+]
+},
+{
+"name":"iOS Development",
+"group":"Topics",
+"feeds":[
+{
+"t":"Alberto De Bortoli",
+"u":"https://albertodebortoli.com/rss/",
+"d":"Principal Software Engineer @ Just Eat Takeaway, London."
+},
+{
+"t":"Augmented Code",
+"u":"https://augmentedcode.io/feed/",
+"d":"Performant, sleek and elegant."
+},
+{
+"t":"Benoit Pasquier",
+"u":"https://benoitpasquier.com/index.xml",
+"d":"Recent content on Benoit Pasquier"
+},
+{
+"t":"Bruno Rocha",
+"u":"https://swiftrocks.com/rss.xml",
+"d":"SwiftRocks is Bruno Rocha's blog about Swift / iOS and the software engineering industry."
+},
+{
+"t":"Latest News - Apple Developer",
+"u":"https://developer.apple.com/news/rss/news.rss"
+},
+{
+"t":"Mobile A11y",
+"u":"https://mobilea11y.com/index.xml",
+"d":"Recent content on Mobile A11y"
+},
+{
+"t":"Ole Begemann",
+"u":"https://oleb.net/blog/atom.xml"
+},
+{
+"t":"Swift by Sundell",
+"u":"https://www.swiftbysundell.com/feed.rss",
+"d":"Weekly Swift articles, podcasts and tips by John Sundell"
+},
+{
+"t":"Swift by Sundell",
+"u":"https://swiftbysundell.com/feed.rss",
+"d":"Weekly Swift articles, podcasts and tips by John Sundell"
+},
+{
+"t":"The Atomic Birdhouse",
+"u":"https://atomicbird.com/index.xml",
+"d":"Recent content on The Atomic Birdhouse"
+},
+{
+"t":"The One And Only Blog Of Joe Fabisevich",
+"u":"https://www.fabisevi.ch/feed.xml",
+"d":"The personal website of the one and only Joe Fabisevich, and indie developer building Red Panda Club Inc. Formerly an iOS developer working on civic integrity, "
+},
+{
+"t":"Under the Radar",
+"u":"https://www.relay.fm/radar/feed",
+"d":"From development and design to marketing and support, Under the Radar was all about independent app development. It was rarely longer than 30 minutes. Hosted by"
+},
+{
+"t":"Use Your Loaf - iOS Development News & Tips",
+"u":"https://useyourloaf.com/blog/rss.xml",
+"d":"Recent content on Use Your Loaf - iOS Development News & Tips"
+},
+{
+"t":"inessential.com",
+"u":"https://inessential.com/xml/rss.xml",
+"d":"Brent Simmons's weblog."
+},
+{
+"t":"tyler.io",
+"u":"https://tyler.io/feed/",
+"d":"mostly nonsense"
+}
+]
+},
+{
+"name":"Australia",
+"group":"Countries",
+"feeds":[
+{
+"t":"Latest News and News Headlines | Daily Telegraph",
+"u":"https://www.dailytelegraph.com.au/news/breaking-news/rss",
+"d":"We're for Sydney"
+},
+{
+"t":"Sydney Morning Herald - Latest News",
+"u":"https://www.smh.com.au/rss/feed.xml",
+"d":"The top News headlines from The Sydney Morning Herald. For all the news, visit https://www.smh.com.au"
+},
+{
+"t":"Latest News and News Headlines | Herald Sun",
+"u":"https://www.heraldsun.com.au/news/breaking-news/rss",
+"d":"Breaking News from Melbourne and Victoria | Herald Sun"
+},
+{
+"t":"ABC News",
+"u":"https://www.abc.net.au/news/feed/1948/rss.xml"
+},
+{
+"t":"The Age - Latest News",
+"u":"https://www.theage.com.au/rss/feed.xml",
+"d":"The top News headlines from The Age. For all the news, visit https://www.theage.com.au/"
+},
+{
+"t":"The Courier Mail",
+"u":"https://www.couriermail.com.au/rss",
+"d":"Breaking News Headlines for Brisbane and Queensland | Courier Mail"
+},
+{
+"t":"PerthNow",
+"u":"https://www.perthnow.com.au/news/feed",
+"d":"PerthNow news"
+},
+{
+"t":"The Canberra Times - Local News",
+"u":"https://www.canberratimes.com.au/rss.xml",
+"d":"Latest Canberra news, sport, football and business news from The Canberra Times."
+},
+{
+"t":"Brisbane Times - Latest News",
+"u":"https://www.brisbanetimes.com.au/rss/feed.xml",
+"d":"The top News headlines from The Brisbane Times. For all the news, visit https://www.brisbanetimes.com.au/"
+},
+{
+"t":"Independent Australia",
+"u":"http://feeds.feedburner.com/IndependentAustralia",
+"d":"Independent Australia News"
+},
+{
+"t":"Business News - Latest Headlines",
+"u":"https://www.businessnews.com.au/rssfeed/latest.rss",
+"d":"Latest news headlines from Business News."
+},
+{
+"t":"InDaily",
+"u":"https://indaily.com.au/feed/"
+},
+{
+"t":"The Mercury",
+"u":"https://www.themercury.com.au/rss",
+"d":"Latest Hobart and Tasmania News | The Mercury"
+},
+{
+"t":"Crikey",
+"u":"https://feeds.feedburner.com/com/rCTl",
+"d":"On politics, media, business, the environment and life"
+},
+{
+"t":"KUSA - News",
+"u":"http://rssfeeds.9news.com/kusa/home&x=1",
+"d":"KUSA Rss Feed"
+},
+{
+"t":"Michael West",
+"u":"https://www.michaelwest.com.au/feed/",
+"d":"Investigative Journalism"
+}
+]
+},
+{
+"name":"Canada",
+"group":"Countries",
+"feeds":[
+{
+"t":"CBC | Top Stories News",
+"u":"https://www.cbc.ca/cmlink/rss-topstories",
+"d":"FOR PERSONAL USE ONLY"
+},
+{
+"t":"CTVNews.ca - Top Stories - Public RSS",
+"u":"https://www.ctvnews.ca/rss/ctvnews-ca-top-stories-public-rss-1.822009",
+"d":"Latest news from CTVNews.ca"
+},
+{
+"t":"",
+"u":"https://globalnews.ca/feed/"
+},
+{
+"t":"Financial Post",
+"u":"https://business.financialpost.com/feed/",
+"d":"Canada Business News | Financial Updates & Information"
+},
+{
+"t":"National Post",
+"u":"https://nationalpost.com/feed/",
+"d":"Canadian News, World News and Breaking Headlines"
+},
+{
+"t":"Ottawa Citizen",
+"u":"https://ottawacitizen.com/feed/",
+"d":"Ottawa Latest News, Breaking Headlines & Sports"
+},
+{
+"t":"The Province",
+"u":"https://theprovince.com/feed/",
+"d":"Vancouver, BC News, Sports & Breaking Headlines"
+},
+{
+"t":"LaPresse.ca - Actualités",
+"u":"https://www.lapresse.ca/actualites/rss"
+},
+{
+"t":"Toronto Star",
+"u":"https://www.thestar.com/content/thestar/feed.RSSManagerServlet.articles.topstories.rss",
+"d":"TOPSTORIES"
+},
+{
+"t":"Toronto Sun - RSS Feed",
+"u":"https://torontosun.com/category/news/feed"
+}
+]
+},
+{
+"name":"United Kingdom",
+"group":"Countries",
+"feeds":[
+{
+"t":"BBC News - Home",
+"u":"http://feeds.bbci.co.uk/news/rss.xml"
+},
+{
+"t":"World news | The Guardian",
+"u":"https://www.theguardian.com/world/rss",
+"d":"Latest World news news, comment and analysis from the Guardian, the world's leading liberal voice"
+},
+{
+"t":"Home | Mail Online",
+"u":"https://www.dailymail.co.uk/home/index.rss",
+"d":"MailOnline - get the latest breaking news, showbiz & celebrity photos, sport news & rumours, viral videos and top stories from MailOnline, Daily Mail and Mail o"
+},
+{
+"t":"The Independent",
+"u":"http://www.independent.co.uk/news/uk/rss",
+"d":"Visit now for the latest news direct from The Independent and updated throughout the day"
+},
+{
+"t":"Daily Express :: News Feed",
+"u":"http://feeds.feedburner.com/daily-express-news-showbiz",
+"d":"Simply The Best 7 Days A Week"
+}
+]
+},
+{
+"name":"United States",
+"group":"Countries",
+"feeds":[
+{
+"t":"World News - Breaking News, Top Stories",
+"u":"https://www.huffpost.com/section/world-news/feed",
+"d":"Catch up on the latest World News news, photos, videos, and opinion."
+},
+{
+"t":"NYT > Top Stories",
+"u":"https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml"
+},
+{
+"t":"FOX News",
+"u":"http://feeds.foxnews.com/foxnews/latest",
+"d":"FOXNews.com - Breaking news and video. Latest Current News: U.S., World, Entertainment, Health, Business, Technology, Politics, Sports."
+},
+{
+"t":"World",
+"u":"http://feeds.washingtonpost.com/rss/world",
+"d":"The Washington Post World section provides information and analysis of breaking world news stories. In addition to our world news and video, Post World News off"
+},
+{
+"t":"WSJ.com: World News",
+"u":"https://feeds.a.dj.com/rss/RSSWorldNews.xml",
+"d":"World News"
+},
+{
+"t":"World & Nation",
+"u":"https://www.latimes.com/world-nation/rss2.0.xml",
+"d":"Nation and World articles from the Los Angeles Times."
+},
+{
+"t":"CNN.com - RSS Channel - App International Edition",
+"u":"http://rss.cnn.com/rss/edition.rss",
+"d":"CNN.com delivers up-to-the-minute news and information on the latest top stories, weather, entertainment, politics and more."
+},
+{
+"t":"Yahoo News - Latest News & Headlines",
+"u":"https://news.yahoo.com/rss/mostviewed",
+"d":"The latest news and headlines from Yahoo! News. Get breaking news stories and in-depth coverage with videos and photos."
+},
+{
+"t":"US Top News and Analysis",
+"u":"https://www.cnbc.com/id/100003114/device/rss/rss.html",
+"d":"CNBC is the world leader in business news and real-time financial market coverage. Find fast, actionable information."
+},
+{
+"t":"Playbook",
+"u":"https://rss.politico.com/playbook.xml",
+"d":"The unofficial guide to official Washington."
+}
+]
+}
+]
+}
