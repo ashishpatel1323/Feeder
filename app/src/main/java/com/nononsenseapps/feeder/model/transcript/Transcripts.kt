@@ -197,6 +197,12 @@ class Transcripts(
         }
     }
 
+    /** The whole transcript as text, headed by the episode's title, for copying. */
+    suspend fun plainText(itemId: Long): String {
+        val title = withContext(Dispatchers.IO) { dao.loadFeedItem(itemId)?.plainTitle }
+        return current(itemId).cues.toPlainText(title)
+    }
+
     /** Forgets the transcript (a phone-made one can then be made again). */
     fun delete(itemId: Long) {
         if (_generatingId.value == itemId) stopGenerating()

@@ -94,3 +94,35 @@ describe('speech to text helpers', () => {
     expect(cut).toBeLessThanOrEqual(21_600)
   })
 })
+
+describe('transcript search', () => {
+  it('finds every match, ignoring case and accents', async () => {
+    const { findMatches } = await import('../transcriptFormats')
+    const cues = [
+      { startMs: 0, endMs: 1, text: 'Café au lait, cafe noir' },
+      { startMs: 1, endMs: 2, text: 'No coffee here' },
+      { startMs: 2, endMs: 3, text: 'CAFE again' },
+    ]
+    expect(findMatches(cues, 'cafe')).toEqual([
+      { cue: 0, start: 0, end: 4 },
+      { cue: 0, start: 14, end: 18 },
+      { cue: 2, start: 0, end: 4 },
+    ])
+    expect(findMatches(cues, '  ')).toEqual([])
+  })
+})
+
+describe('copy transcript', () => {
+  it('writes times, and speakers when they change', async () => {
+    const { transcriptPlainText } = await import('../transcriptFormats')
+    const text = transcriptPlainText(
+      [
+        { startMs: 0, endMs: 1, text: 'Hi.', speaker: 'Ann' },
+        { startMs: 2000, endMs: 3, text: 'Welcome.', speaker: 'Ann' },
+        { startMs: 3_725_000, endMs: 4, text: 'Thanks.', speaker: 'Bo' },
+      ],
+      'Episode 1',
+    )
+    expect(text).toBe('Episode 1\n\nAnn:\n[0:00] Hi.\n[0:02] Welcome.\n\nBo:\n[1:02:05] Thanks.\n')
+  })
+})

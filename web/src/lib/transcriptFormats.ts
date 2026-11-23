@@ -188,3 +188,54 @@ export function bestTranscriptLink(links: TranscriptLink[]): TranscriptLink | nu
   }
   return links.filter(isTimedLink).sort((a, b) => score(a) - score(b))[0] ?? null
 }
+
+/** One place the search text appears: in cue `cue`, characters `start` to `end` of its text. */
+export interface TranscriptMatch {
+  cue: number
+  start: number
+  end: number
+}
+
+/** Every place `query` appears in the transcript, ignoring case and accents. */
+export function findMatches(cues: TranscriptCue[], query: string): TranscriptMatch[] {
+  const fold = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
+  const q = fold(query.trim())
+  if (!q) return []
+  const matches: TranscriptMatch[] = []
+  cues.forEach((cue, i) => {
+    // Folding only drops accent marks, so positions are mapped back through the original text
+    const original = cue.text
+    const map: number[] = []
+    let folded = ''
+    for (let j = 0; j < original.length; j++) {
+      const f = fold(original[j])
+      for (let k = 0; k < f.length; k++) map.push(j)
+      folded += f
+    }
+    for (let at = folded.indexOf(q); at >= 0; at = folded.indexOf(q, at + q.length)) {
+      matches.push({ cue: i, start: map[at], end: map[at + q.length - 1] + 1 })
+    }
+  })
+  return matches
+}
+
+function clock(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000))
+  const mm = Math.floor(s / 60) % 60
+  const ss = String(s % 60).padStart(2, '0')
+  return s >= 3600 ? `${Math.floor(s / 3600)}:${String(mm).padStart(2, '0')}:${ss}` : `${mm}:${ss}`
+}
+
+/** The whole transcript as plain text for the clipboard: a time on each line, speakers when they change. */
+export function transcriptPlainText(cues: TranscriptCue[], title?: string | null): string {
+  const lines: string[] = []
+  if (title) lines.push(title, '')
+  cues.forEach((cue, i) => {
+    if (cue.speaker && cue.speaker !== cues[i - 1]?.speaker) {
+      if (lines.length && lines[lines.length - 1] !== '') lines.push('')
+      lines.push(`${cue.speaker}:`)
+    }
+    lines.push(`[${clock(cue.startMs)}] ${cue.text}`)
+  })
+  return lines.join('\n') + '\n'
+}

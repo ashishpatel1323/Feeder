@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Item } from '../lib/db'
-import { cueIndexAt, type TranscriptCue } from '../lib/transcriptFormats'
+import { cueIndexAt, findMatches, transcriptPlainText, type TranscriptCue, type TranscriptMatch } from '../lib/transcriptFormats'
 import { deleteTranscript, loadTranscript, stopTranscribing, transcribe, useTranscript, WHISPER_MODEL_MB, type TranscriptState } from '../lib/transcripts'
 import { Icon } from './Icon'
 
@@ -78,15 +78,135 @@ export function PodcastEpisode({ item }: { item: Item }) {
 
 function TranscriptPanel({ item, positionMs, onSeek }: { item: Item; positionMs: number; onSeek: (ms: number) => void }) {
   const state = useTranscript(item.id)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const [active, setActive] = useState(0)
+  const matches = useMemo(() => (searchOpen ? findMatches(state.cues, query) : []), [searchOpen, state.cues, query])
   useEffect(() => {
     void loadTranscript(item)
   }, [item])
+  // A new search starts at the first match from where the episode is now
+  useEffect(() => {
+    const now = cueIndexAt(state.cues, positionMs)
+    const next = matches.findIndex((m) => m.cue >= now)
+    setActive(next >= 0 ? next : 0)
+  }, [query])
+  const [copied, setCopied] = useState(false)
+  const copyAll = async () => {
+    const text = transcriptPlainText(state.cues, item.title)
+    let ok = false
+    try {
+      await navigator.clipboard.writeText(text)
+      ok = true
+    } catch {
+      // Some browsers and embedded views refuse the async clipboard: the older copy command still works there
+      const area = document.createElement('textarea')
+      area.value = text
+      area.setAttribute('readonly', '')
+      area.style.position = 'fixed'
+      area.style.opacity = '0'
+      document.body.appendChild(area)
+      area.select()
+      ok = document.execCommand('copy')
+      area.remove()
+    }
+    if (ok) {
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2000)
+    }
+  }
+  const step = (by: number) => matches.length && setActive((a) => (a + by + matches.length) % matches.length)
+  const close = () => {
+    setSearchOpen(false)
+    setQuery('')
+  }
   return (
     <div className="transcript">
-      <TranscriptStatusRow item={item} state={state} />
-      {state.cues.length ? <TranscriptLines cues={state.cues} positionMs={positionMs} onSeek={onSeek} /> : null}
+      <div className="transcript-head">
+        <div className="transcript-head-status">
+          <TranscriptStatusRow item={item} state={state} />
+        </div>
+        {state.cues.length && !searchOpen ? (
+          <>
+            <button type="button" className="icon-btn transcript-search-btn" title="Search the transcript" aria-label="Search the transcript" onClick={() => setSearchOpen(true)}>
+              <Icon name="search" size={20} />
+            </button>
+            <button
+              type="button"
+              className="icon-btn transcript-search-btn"
+              title={copied ? 'Copied' : 'Copy the whole transcript'}
+              aria-label="Copy the whole transcript"
+              onClick={() => void copyAll()}
+            >
+              <Icon name={copied ? 'check' : 'copy'} size={20} />
+            </button>
+          </>
+        ) : null}
+      </div>
+      {searchOpen ? (
+        <div className="transcript-search" role="search">
+          <Icon name="search" size={18} />
+          <input
+            autoFocus
+            type="search"
+            placeholder="Search the transcript"
+            aria-label="Search the transcript"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                step(e.shiftKey ? -1 : 1)
+              } else if (e.key === 'Escape') {
+                e.stopPropagation()
+                close()
+              }
+              // Typing here must not trigger the reader's keyboard shortcuts
+              e.stopPropagation()
+            }}
+          />
+          <span className="transcript-search-count">{query.trim() ? (matches.length ? `${active + 1} of ${matches.length}` : 'No matches') : ''}</span>
+          <button type="button" className="icon-btn" title="Previous match (Shift+Enter)" aria-label="Previous match" disabled={!matches.length} onClick={() => step(-1)}>
+            <Icon name="arrowUp" size={20} />
+          </button>
+          <button type="button" className="icon-btn" title="Next match (Enter)" aria-label="Next match" disabled={!matches.length} onClick={() => step(1)}>
+            <Icon name="arrowDown" size={20} />
+          </button>
+          <button type="button" className="icon-btn" title="Close search" aria-label="Close search" onClick={close}>
+            <Icon name="close" size={20} />
+          </button>
+        </div>
+      ) : null}
+      {state.cues.length ? (
+        <TranscriptLines
+          cues={state.cues}
+          positionMs={positionMs}
+          onSeek={onSeek}
+          matches={matches}
+          activeMatch={matches.length ? active : -1}
+          searching={searchOpen && !!query.trim()}
+        />
+      ) : null}
     </div>
   )
+}
+
+/** The cue's text with the search matches marked; the selected one stands out. */
+function markedText(text: string, matches: TranscriptMatch[], active: TranscriptMatch | null): ReactNode {
+  if (!matches.length) return text
+  const parts: ReactNode[] = []
+  let at = 0
+  matches.forEach((m, i) => {
+    if (m.start > at) parts.push(text.slice(at, m.start))
+    parts.push(
+      <mark key={i} className={m === active ? 'active' : undefined}>
+        {text.slice(m.start, m.end)}
+      </mark>,
+    )
+    at = m.end
+  })
+  if (at < text.length) parts.push(text.slice(at))
+  return parts
 }
 
 function TranscriptStatusRow({ item, state }: { item: Item; state: TranscriptState }) {
@@ -167,12 +287,43 @@ const PAUSE_GRACE_MS = 2000
 /** After scrolling by hand, the list stops following playback for this long. */
 const FOLLOW_AGAIN_MS = 5000
 
-function TranscriptLines({ cues, positionMs, onSeek }: { cues: TranscriptCue[]; positionMs: number; onSeek: (ms: number) => void }) {
+function TranscriptLines({
+  cues,
+  positionMs,
+  onSeek,
+  matches,
+  activeMatch,
+  searching,
+}: {
+  cues: TranscriptCue[]
+  positionMs: number
+  onSeek: (ms: number) => void
+  matches: TranscriptMatch[]
+  activeMatch: number
+  searching: boolean
+}) {
   const listRef = useRef<HTMLOListElement>(null)
   const current = cueIndexAt(cues, positionMs)
   const [handScrolledAt, setHandScrolledAt] = useState(0)
-  const following = Date.now() - handScrolledAt > FOLLOW_AGAIN_MS
+  // While searching, the list stays on the results instead of following playback
+  const following = !searching && Date.now() - handScrolledAt > FOLLOW_AGAIN_MS
   const autoScrolling = useRef(false)
+  const byCue = useMemo(() => {
+    const map = new Map<number, TranscriptMatch[]>()
+    for (const m of matches) map.set(m.cue, [...(map.get(m.cue) ?? []), m])
+    return map
+  }, [matches])
+  const selected = activeMatch >= 0 ? matches[activeMatch] : null
+
+  useEffect(() => {
+    const list = listRef.current
+    if (!list || !selected) return
+    const line = list.children[selected.cue] as HTMLElement | undefined
+    if (!line) return
+    const top = line.offsetTop - list.offsetTop - list.clientHeight / 3
+    // Far jumps go straight there; a long smooth scroll only delays the result
+    list.scrollTo({ top, behavior: Math.abs(top - list.scrollTop) > 2000 ? 'instant' : 'smooth' })
+  }, [selected])
 
   useEffect(() => {
     const list = listRef.current
@@ -200,13 +351,13 @@ function TranscriptLines({ cues, positionMs, onSeek }: { cues: TranscriptCue[]; 
               <button type="button" onClick={() => onSeek(cue.startMs)}>
                 {showSpeaker ? <span className="transcript-speaker">{cue.speaker}</span> : null}
                 <span className="transcript-time">{formatTime(cue.startMs)}</span>
-                <span className="transcript-text">{cue.text}</span>
+                <span className="transcript-text">{markedText(cue.text, byCue.get(i) ?? [], selected)}</span>
               </button>
             </li>
           )
         })}
       </ol>
-      {!following && current >= 0 ? (
+      {!following && !searching && current >= 0 ? (
         <button type="button" className="read-pill transcript-follow" onClick={() => setHandScrolledAt(0)}>
           <Icon name="myLocation" size={16} /> Follow playback
         </button>

@@ -5465,7 +5465,6 @@ label.check.inline {
   padding: 4px 6px 10px;
   max-height: 340px;
   overflow-y: auto;
-  scroll-behavior: smooth;
 }
 .transcript-lines button {
   display: grid;
@@ -5509,4 +5508,50 @@ label.check.inline {
   position: absolute;
   right: 12px;
   bottom: 12px;
+}
+.transcript-head {
+  display: flex;
+  align-items: flex-start;
+}
+.transcript-head-status {
+  flex: 1;
+  min-width: 0;
+}
+.transcript-search-btn {
+  margin: 4px 6px 0 0;
+}
+.transcript-search {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 10px 6px;
+  padding: 2px 4px 2px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-2);
+}
+.transcript-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  padding: 6px 4px;
+}
+.transcript-search-count {
+  font-size: 12px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.transcript-text mark {
+  background: var(--hl-tap);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+.transcript-text mark.active {
+  outline: 2px solid var(--accent);
 }

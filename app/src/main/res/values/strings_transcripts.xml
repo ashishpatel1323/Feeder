@@ -23,4 +23,12 @@
   <string name="transcript_notification_channel">Podcast transcripts</string>
   <string name="transcript_notification_title">Making a podcast transcript</string>
   <string name="transcript_notification_progress">%1$d%% done</string>
+  <string name="transcript_search">Search the transcript</string>
+  <string name="transcript_search_count">%1$d of %2$d</string>
+  <string name="transcript_search_none">No matches</string>
+  <string name="transcript_search_previous">Previous match</string>
+  <string name="transcript_search_next">Next match</string>
+  <string name="transcript_search_close">Close search</string>
+  <string name="transcript_copy">Copy the whole transcript</string>
+  <string name="transcript_copied">Transcript copied</string>
 </resources>
