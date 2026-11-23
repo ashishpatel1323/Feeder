@@ -17,6 +17,7 @@
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
   <uses-permission android:name="android.permission.WAKE_LOCK" />
   <!-- For background jobs -->
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -224,6 +225,12 @@
         <action android:name="androidx.media3.session.MediaSessionService" />
       </intent-filter>
     </service>
+
+    <!-- Podcast transcripts made on the phone (speech to text takes minutes) -->
+    <service
+      android:name=".model.transcript.TranscriptionService"
+      android:exported="false"
+      android:foregroundServiceType="dataSync" />
 
     <service
       android:name=".background.FeederJobService"

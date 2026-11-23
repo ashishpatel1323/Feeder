@@ -8,6 +8,7 @@ import com.nononsenseapps.feeder.model.offline.DownloadsPlaylist
 import com.nononsenseapps.feeder.model.offline.OfflineDownloader
 import com.nononsenseapps.feeder.model.offline.OfflineFiles
 import com.nononsenseapps.feeder.model.offline.OfflineVideos
+import com.nononsenseapps.feeder.model.transcript.Transcripts
 import com.nononsenseapps.feeder.sync.SyncRestClient
 import com.nononsenseapps.feeder.sync2.Sync2Client
 import com.nononsenseapps.jsonfeed.Feed
@@ -52,4 +53,5 @@ val networkModule =
                 com.nononsenseapps.feeder.ui.compose.playlists
                     .AddToPlaylistRequests()
             }
+        bind<Transcripts>() with singleton { Transcripts(di) }
     }

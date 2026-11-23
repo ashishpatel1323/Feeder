@@ -27,7 +27,11 @@ class PodcastPlayerStateHolder(
     private var mediaPlayer: MediaPlayer? = null
     private var progressJob: Job? = null
 
-    fun playLink(link: String) {
+    /** Plays [link]; [itemId] is the article it belongs to (for its transcript). */
+    fun playLink(
+        link: String,
+        itemId: Long? = null,
+    ) {
         if (link.isBlank()) {
             return
         }
@@ -36,6 +40,7 @@ class PodcastPlayerStateHolder(
         _playerState.value =
             PodcastPlayerState(
                 audioUrl = link,
+                itemId = itemId,
                 isVisible = true,
                 isLoading = true,
             )
@@ -184,7 +189,8 @@ class PodcastPlayerStateHolder(
                             durationMillis = player.duration.coerceAtLeast(0),
                         )
                     }
-                    delay(500)
+                    // Often enough for transcript lines to change on time
+                    delay(250)
                 }
             }
     }
@@ -211,6 +217,7 @@ class PodcastPlayerStateHolder(
 @Immutable
 data class PodcastPlayerState(
     val audioUrl: String = "",
+    val itemId: Long? = null,
     val isVisible: Boolean = false,
     val isLoading: Boolean = false,
     val isBuffering: Boolean = false,
