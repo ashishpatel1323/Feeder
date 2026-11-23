@@ -156,6 +156,7 @@ import com.nononsenseapps.feeder.ui.compose.navigation.ArticleDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.DownloadsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.EditFeedDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.FeedDestination
+import com.nononsenseapps.feeder.ui.compose.navigation.HomeDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.SearchFeedDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.SettingsDestination
 import com.nononsenseapps.feeder.ui.compose.pullrefresh.PullRefreshIndicator
@@ -350,6 +351,7 @@ fun FeedScreen(
         navDrawerListState = navDrawerListStateToUse,
         downloadsCount = downloadsCount + downloadJobs.size,
         onDownloadsClick = { DownloadsDestination.navigate(navController) },
+        onHomeClick = { HomeDestination.navigate(navController) },
     ) {
         FeedScreen(
             viewState = viewState,

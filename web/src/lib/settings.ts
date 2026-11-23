@@ -1,3 +1,4 @@
+import type { HomeGroup, HomeSize, HomeSort } from './home'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, setKv } from './db'
 
@@ -36,6 +37,10 @@ export interface Settings {
   summaryModel: string
   /** Offline mode: use only what is saved here, no network (offline.ts), even with internet. */
   offlineMode: boolean
+  /** Home page (feed tiles): how tiles are grouped, sorted and sized. */
+  homeGroup: HomeGroup
+  homeSort: HomeSort
+  homeSize: HomeSize
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -62,6 +67,9 @@ export const DEFAULT_SETTINGS: Settings = {
   summaryApiKey: '',
   summaryModel: 'llama3.2',
   offlineMode: false,
+  homeGroup: 'folders',
+  homeSort: 'latest',
+  homeSize: 'm',
 }
 
 const KEY = 'settings'

@@ -33,6 +33,7 @@ import com.nononsenseapps.feeder.ui.compose.editfeed.EditFeedScreen
 import com.nononsenseapps.feeder.ui.compose.editfeed.EditFeedScreenViewModel
 import com.nononsenseapps.feeder.ui.compose.feed.FeedScreen
 import com.nononsenseapps.feeder.ui.compose.feedarticle.ArticleScreen
+import com.nononsenseapps.feeder.ui.compose.home.HomeScreen
 import com.nononsenseapps.feeder.ui.compose.searchfeed.SearchFeedScreen
 import com.nononsenseapps.feeder.ui.compose.settings.SettingsScreen
 import com.nononsenseapps.feeder.ui.compose.settings.TextSettingsScreen
@@ -219,6 +220,38 @@ data object DownloadsDestination : NavigationDestination(
         DownloadsScreen(
             onNavigateUp = { navController.popBackStack() },
             viewModel = backStackEntry.diAwareViewModel(),
+        )
+    }
+}
+
+/** Home: every feed as a tile, with type and folder filters. The start screen. */
+data object HomeDestination : NavigationDestination(
+    path = "home",
+    navArguments = emptyList(),
+    deepLinks = emptyList(),
+) {
+    fun navigate(navController: NavController) {
+        navController.navigate(path) {
+            popUpTo(navController.graph.id) {
+                inclusive = true
+            }
+            launchSingleTop = true
+        }
+    }
+
+    @Composable
+    override fun RegisterScreen(
+        navController: NavController,
+        backStackEntry: NavBackStackEntry,
+        navDrawerListState: LazyListState,
+        mainActivityViewModel: MainActivityViewModel,
+    ) {
+        HomeScreen(
+            viewModel = backStackEntry.diAwareViewModel(),
+            onOpenFeed = { id -> FeedDestination.navigate(navController, feedId = id, keepBackStack = true) },
+            onOpenFolderArticles = { tag -> FeedDestination.navigate(navController, tag = tag, keepBackStack = true) },
+            onOpenArticles = { FeedDestination.navigate(navController, feedId = ID_ALL_FEEDS, keepBackStack = true) },
+            onAddFeed = { SearchFeedDestination.navigate(navController) },
         )
     }
 }
@@ -416,6 +449,8 @@ data object FeedDestination : NavigationDestination(
         navController: NavController,
         feedId: Long = ID_UNSET,
         tag: String = "",
+        /** From Home: keep Home under the list, so Back returns to it. */
+        keepBackStack: Boolean = false,
     ) {
         val params =
             queryParams {
@@ -426,6 +461,11 @@ data object FeedDestination : NavigationDestination(
             }
 
         logDebug(LOG_TAG, "Navigate to $path$params. Current: ${navController.currentDestination?.route}")
+
+        if (keepBackStack) {
+            navController.navigate("$path$params") { launchSingleTop = true }
+            return
+        }
 
         navController.navigate("$path$params") {
             // Pop up to the start destination of the graph to

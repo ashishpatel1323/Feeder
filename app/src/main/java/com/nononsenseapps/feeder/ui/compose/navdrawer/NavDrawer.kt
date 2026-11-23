@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DownloadForOffline
 import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.UnfoldLess
 import androidx.compose.material.icons.filled.UnfoldMore
@@ -92,6 +93,8 @@ fun ScreenWithNavDrawer(
     onCollapseAllTags: () -> Unit = {},
     downloadsCount: Int = 0,
     onDownloadsClick: (() -> Unit)? = null,
+    homeCount: Int = 0,
+    onHomeClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -130,6 +133,16 @@ fun ScreenWithNavDrawer(
                     onExpandAllTags = onExpandAllTags,
                     onCollapseAllTags = onCollapseAllTags,
                     downloadsCount = downloadsCount,
+                    homeCount = homeCount,
+                    onHomeClick =
+                        onHomeClick?.let { onClick ->
+                            {
+                                coroutineScope.launch {
+                                    drawerState.close()
+                                }
+                                onClick()
+                            }
+                        },
                     onDownloadsClick =
                         onDownloadsClick?.let { onClick ->
                             {
@@ -159,6 +172,8 @@ fun ListOfFeedsAndTags(
     onCollapseAllTags: () -> Unit = {},
     downloadsCount: Int = 0,
     onDownloadsClick: (() -> Unit)? = null,
+    homeCount: Int = 0,
+    onHomeClick: (() -> Unit)? = null,
 ) {
     LazyColumn(
         state = state,
@@ -209,6 +224,20 @@ fun ListOfFeedsAndTags(
                     }
 
                     ContentType.AllFeeds -> {
+                        if (onHomeClick != null) {
+                            Feed(
+                                title = stringResource(id = R.string.home),
+                                unreadCount = homeCount,
+                                onItemClick = onHomeClick,
+                                image = {
+                                    Icon(
+                                        Icons.Default.Home,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(24.dp),
+                                    )
+                                },
+                            )
+                        }
                         AllFeeds(
                             unreadCount = item.unreadCount,
                             title = stringResource(id = R.string.all_feeds),

@@ -35,6 +35,7 @@ import com.nononsenseapps.feeder.ui.compose.navigation.ArticleDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.DownloadsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.EditFeedDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.FeedDestination
+import com.nononsenseapps.feeder.ui.compose.navigation.HomeDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.SearchFeedDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.SettingsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.SyncScreenDestination
@@ -193,7 +194,8 @@ class MainActivity : DIAwareComponentActivity() {
         val navController = rememberNavController()
         val navDrawerListState = rememberLazyListState()
 
-        NavHost(navController, startDestination = FeedDestination.route) {
+        NavHost(navController, startDestination = HomeDestination.route) {
+            HomeDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
             FeedDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
             ArticleDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
             // Feed editing

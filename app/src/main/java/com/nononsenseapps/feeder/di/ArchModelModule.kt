@@ -102,4 +102,5 @@ val archModelModule =
         bindWithComposableViewModelScope<NavigationDeepLinkViewModel>()
         bindWithComposableViewModelScope<TextSettingsViewModel>()
         bindWithComposableViewModelScope<DownloadsViewModel>()
+        bindWithComposableViewModelScope<com.nononsenseapps.feeder.ui.compose.home.HomeViewModel>()
     }

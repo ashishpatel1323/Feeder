@@ -1,6 +1,6 @@
 /** Fetching feeds and storing their articles. */
 import { proxyFetch } from './api'
-import { db, getKv, itemId, newFeed, type Feed, type Item } from './db'
+import { db, getKv, itemId, newFeed, setKv, type Feed, type Item } from './db'
 import { countWords, findFeedLinks, htmlToText, parseFeed, type ParsedArticle, type ParsedFeed } from './feedparse'
 import { makeFilter } from './filterrules'
 import { getSyncState, knownStateFor } from './sync2'
@@ -112,6 +112,8 @@ async function fetchOne(feed: Feed, prefetched?: ParsedFeed): Promise<number> {
       // Title only filled in when empty, so a refresh doesn't count as an edit to sync
       ...(feed.title ? {} : { title: parsed.title }),
       siteUrl: parsed.siteUrl,
+      // The feed's own artwork (podcast cover, channel logo) for Home's tiles, when it has none yet
+      ...(feed.imageUrl || !parsed.iconUrl ? {} : { imageUrl: absoluteIcon(feed.url, parsed.iconUrl) }),
       lastFetched: now,
       lastError: null,
     })
@@ -142,6 +144,8 @@ export async function refreshFeeds(urls?: string[], onProgress?: (p: RefreshProg
     }
   }
   await Promise.all(Array.from({ length: Math.min(6, queue.length) }, worker))
+  // In the background: a refresh shouldn't wait on channel pages
+  void fillYouTubeIcons().catch(() => undefined)
   return added
 }
 
@@ -223,4 +227,52 @@ export async function exportOpml(): Promise<string> {
     else body += `    <outline title="${esc(tag)}" text="${esc(tag)}">\n${list.map((f) => `      ${line(f)}\n`).join('')}    </outline>\n`
   }
   return `<?xml version="1.0" encoding="UTF-8"?>\n<opml version="1.1">\n  <head><title>Feeder</title></head>\n  <body>\n${body}  </body>\n</opml>\n`
+}
+
+const ICON_TRIED_KEY = 'iconTried'
+
+/** The channel id of a YouTube channel feed (feeds/videos.xml?channel_id=…), else null. */
+export function youtubeChannelId(feedUrl: string): string | null {
+  try {
+    const u = new URL(feedUrl)
+    if (!/(^|\.)youtube\.com$/.test(u.hostname)) return null
+    return u.searchParams.get('channel_id')
+  } catch {
+    return null
+  }
+}
+
+/** The og:image (channel avatar) on a YouTube channel page. */
+export function ogImage(html: string): string | null {
+  const m = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
+  return m ? m[1].replace(/&amp;/g, '&') : null
+}
+
+/**
+ * YouTube channel feeds carry no artwork, so Home's tile takes the avatar from the channel page.
+ * Tried at most once a day per channel that still has no picture.
+ */
+export async function fillYouTubeIcons(): Promise<void> {
+  const tried = await getKv<Record<string, number>>(ICON_TRIED_KEY, {})
+  const now = Date.now()
+  const todo = (await db.feeds.toArray()).filter((f) => !f.imageUrl && youtubeChannelId(f.url) && now - (tried[f.url] ?? 0) > 86_400_000)
+  if (!todo.length) return
+  for (const f of todo) {
+    tried[f.url] = now
+    try {
+      const icon = ogImage((await proxyFetch(`https://www.youtube.com/channel/${youtubeChannelId(f.url)}`)).text)
+      if (icon) await db.feeds.update(f.url, { imageUrl: icon })
+    } catch {
+      // No picture this time; the generated tile stays
+    }
+  }
+  await setKv(ICON_TRIED_KEY, tried)
+}
+
+function absoluteIcon(feedUrl: string, icon: string): string | null {
+  try {
+    return new URL(icon, feedUrl).href
+  } catch {
+    return null
+  }
 }

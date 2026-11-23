@@ -466,6 +466,19 @@ class RssLocalSync(
                         }
                     }
 
+                    // YouTube channel feeds have no artwork, and the site lookup above finds only
+                    // YouTube's own icon: take the channel's avatar for Home's tile instead
+                    val channelId = youtubeChannelId(feedSql.url)
+                    if (channelId != null && feedSql.imageUrl.let { it == null || it.host.endsWith("youtube.com") }) {
+                        try {
+                            youtubeChannelAvatar(okHttpClient, channelId)?.let { avatar ->
+                                sloppyLinkToStrictURLNoThrows(avatar).let { feedSql.imageUrl = it }
+                            }
+                        } catch (e: Throwable) {
+                            logDebug(LOG_TAG, "No channel avatar for ${feedSql.url}", e)
+                        }
+                    }
+
                     // Update feed last so lastsync is only set after all items have been handled
                     // for the rare case that the job is cancelled prematurely
                     feedSql.title = feed.title ?: feedSql.title
@@ -654,3 +667,45 @@ internal val Response.retryAfterSeconds: Long?
             // Fallback to 1 hour if response is incorrect
             retryAfter.toLongOrNull() ?: 3600L
         }
+
+/** The channel id of a YouTube channel feed (feeds/videos.xml?channel_id=…), else null. */
+internal fun youtubeChannelId(feedUrl: URL): String? {
+    if (feedUrl.host != "youtube.com" && !feedUrl.host.endsWith(".youtube.com")) return null
+    return feedUrl.query
+        ?.split('&')
+        ?.firstOrNull { it.startsWith("channel_id=") }
+        ?.removePrefix("channel_id=")
+        ?.takeIf { it.isNotBlank() }
+}
+
+private val OG_IMAGE_REGEX = Regex("""<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
+
+/**
+ * The avatar (og:image) on a YouTube channel page. The page head is far bigger than the usual
+ * og:image lookup reads, so this reads up to 2 MB of it.
+ */
+internal suspend fun youtubeChannelAvatar(
+    client: OkHttpClient,
+    channelId: String,
+): String? =
+    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val request =
+            okhttp3.Request
+                .Builder()
+                .url("https://www.youtube.com/channel/$channelId")
+                .header("Accept", "text/html")
+                // Skips the cookie consent page some regions get first
+                .header("Cookie", "CONSENT=YES+1")
+                .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return@withContext null
+            val source = response.body.source()
+            source.request(2_000_000)
+            val html = source.buffer.snapshot().utf8()
+            OG_IMAGE_REGEX
+                .find(html)
+                ?.groupValues
+                ?.get(1)
+                ?.replace("&amp;", "&")
+        }
+    }

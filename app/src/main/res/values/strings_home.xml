@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="home">Home</string>
+  <string name="home_type_all">All</string>
+  <string name="home_podcasts">Podcasts</string>
+  <string name="home_youtube">YouTube</string>
+  <string name="home_text">Text</string>
+  <string name="home_has_unread">Has unread</string>
+  <string name="home_no_folder">No folder</string>
+  <string name="home_group">Group</string>
+  <string name="home_group_folders">Folders</string>
+  <string name="home_group_none">None</string>
+  <string name="home_group_type">Type</string>
+  <string name="home_sort_latest">Latest</string>
+  <string name="home_sort_az">A–Z</string>
+  <string name="home_sort_unread">Unread</string>
+  <string name="home_articles">Articles</string>
+  <string name="home_refresh">Refresh</string>
+  <string name="home_show_articles">Show articles</string>
+  <string name="home_feeds_count">%1$d feeds</string>
+  <string name="home_folders_summary">%1$d folders · %2$d feeds</string>
+  <string name="home_in_folder">%1$d feeds in %2$s</string>
+  <string name="home_no_feeds">No feeds yet. Add a podcast, YouTube channel or site.</string>
+  <string name="home_no_match">No feeds match these filters.</string>
+  <string name="home_clear_filters">Clear filters</string>
+  <string name="home_feed_tile">%1$s, %2$d unread</string>
+  <string name="home_folder_tile">Folder %1$s, %2$d feeds, %3$d unread</string>
+</resources>

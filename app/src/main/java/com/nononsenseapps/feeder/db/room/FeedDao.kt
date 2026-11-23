@@ -91,6 +91,29 @@ interface FeedDao {
     )
     fun getAllFeeds(): List<Feed>
 
+    /** Every feed for the Home screen's tiles, with counts from its articles. */
+    @Query(
+        """
+        SELECT
+            f.id AS id,
+            COALESCE(NULLIF(f.custom_title, ''), f.title) AS display_title,
+            f.url AS url,
+            f.tag AS tag,
+            f.image_url AS image_url,
+            COALESCE(SUM(CASE WHEN i.id IS NOT NULL AND i.read_time IS NULL THEN 1 ELSE 0 END), 0) AS unread,
+            COALESCE(MAX(i.primary_sort_time), 0) AS latest,
+            COUNT(i.id) AS total,
+            COALESCE(SUM(CASE WHEN i.enclosure_type LIKE 'audio/%'
+                OR (i.enclosure_link IS NOT NULL AND (i.enclosure_link LIKE '%.mp3%' OR i.enclosure_link LIKE '%.m4a%' OR i.enclosure_link LIKE '%.aac%' OR i.enclosure_link LIKE '%.ogg%' OR i.enclosure_link LIKE '%.opus%'))
+                THEN 1 ELSE 0 END), 0) AS audio_items,
+            COALESCE(SUM(CASE WHEN i.link LIKE '%youtube.com/watch%' OR i.link LIKE '%youtu.be/%' OR i.link LIKE '%youtube.com/shorts/%' THEN 1 ELSE 0 END), 0) AS video_items
+        FROM feeds f
+        LEFT JOIN feed_items i ON i.feed_id = f.id AND i.block_time IS NULL
+        GROUP BY f.id
+        """,
+    )
+    fun loadHomeFeeds(): Flow<List<HomeFeedRow>>
+
     @Query(
         """
        SELECT * FROM feeds
