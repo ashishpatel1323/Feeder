@@ -218,3 +218,24 @@ export function findMatches(cues: TranscriptCue[], query: string): TranscriptMat
   })
   return matches
 }
+
+function clock(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000))
+  const mm = Math.floor(s / 60) % 60
+  const ss = String(s % 60).padStart(2, '0')
+  return s >= 3600 ? `${Math.floor(s / 3600)}:${String(mm).padStart(2, '0')}:${ss}` : `${mm}:${ss}`
+}
+
+/** The whole transcript as plain text for the clipboard: a time on each line, speakers when they change. */
+export function transcriptPlainText(cues: TranscriptCue[], title?: string | null): string {
+  const lines: string[] = []
+  if (title) lines.push(title, '')
+  cues.forEach((cue, i) => {
+    if (cue.speaker && cue.speaker !== cues[i - 1]?.speaker) {
+      if (lines.length && lines[lines.length - 1] !== '') lines.push('')
+      lines.push(`${cue.speaker}:`)
+    }
+    lines.push(`[${clock(cue.startMs)}] ${cue.text}`)
+  })
+  return lines.join('\n') + '\n'
+}

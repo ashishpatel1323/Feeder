@@ -111,3 +111,18 @@ describe('transcript search', () => {
     expect(findMatches(cues, '  ')).toEqual([])
   })
 })
+
+describe('copy transcript', () => {
+  it('writes times, and speakers when they change', async () => {
+    const { transcriptPlainText } = await import('../transcriptFormats')
+    const text = transcriptPlainText(
+      [
+        { startMs: 0, endMs: 1, text: 'Hi.', speaker: 'Ann' },
+        { startMs: 2000, endMs: 3, text: 'Welcome.', speaker: 'Ann' },
+        { startMs: 3_725_000, endMs: 4, text: 'Thanks.', speaker: 'Bo' },
+      ],
+      'Episode 1',
+    )
+    expect(text).toBe('Episode 1\n\nAnn:\n[0:00] Hi.\n[0:02] Welcome.\n\nBo:\n[1:02:05] Thanks.\n')
+  })
+})

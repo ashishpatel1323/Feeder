@@ -66,6 +66,29 @@ fun List<TranscriptCue>.findMatches(query: String): List<TranscriptMatch> {
     return matches
 }
 
+/** The whole transcript as plain text for the clipboard: a time on each line, speakers when they change. */
+fun List<TranscriptCue>.toPlainText(title: String? = null): String {
+    val cues = this
+    return buildString {
+        if (!title.isNullOrBlank()) append(title).append("\n\n")
+        cues.forEachIndexed { i, cue ->
+            if (cue.speaker != null && cue.speaker != cues.getOrNull(i - 1)?.speaker) {
+                if (isNotEmpty() && !endsWith("\n\n")) append('\n')
+                append(cue.speaker).append(":\n")
+            }
+            append('[').append(clock(cue.startMs)).append("] ").append(cue.text).append('\n')
+        }
+    }
+}
+
+private fun clock(ms: Long): String {
+    val total = (ms / 1000).coerceAtLeast(0)
+    val h = total / 3600
+    val m = (total % 3600) / 60
+    val s = total % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
+}
+
 private val COMBINING_MARKS = Regex("\\p{M}+")
 
 private fun foldForSearch(text: String): String =

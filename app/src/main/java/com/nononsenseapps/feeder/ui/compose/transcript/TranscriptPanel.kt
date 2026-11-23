@@ -1,5 +1,11 @@
 package com.nononsenseapps.feeder.ui.compose.transcript
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.os.Build
+import android.widget.Toast
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -92,6 +98,10 @@ fun TranscriptPanel(
     LaunchedEffect(itemId) { transcripts.load(itemId) }
     val state by remember(itemId) { transcripts.state(itemId) }.collectAsState(transcripts.current(itemId))
 
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val copyLabel = stringResource(R.string.transcript)
+    val copiedMessage = stringResource(R.string.transcript_copied)
     var searchOpen by rememberSaveable(itemId) { mutableStateOf(false) }
     var query by rememberSaveable(itemId) { mutableStateOf("") }
     var active by remember(itemId) { mutableIntStateOf(0) }
@@ -120,6 +130,21 @@ fun TranscriptPanel(
             if (state.cues.isNotEmpty() && !searchOpen) {
                 IconButton(onClick = { searchOpen = true }) {
                     Icon(Icons.Default.Search, contentDescription = stringResource(R.string.transcript_search))
+                }
+                IconButton(
+                    onClick = {
+                        scope.launch {
+                            val text = transcripts.plainText(itemId)
+                            val clipboard = context.getSystemService(ClipboardManager::class.java)
+                            clipboard?.setPrimaryClip(ClipData.newPlainText(copyLabel, text))
+                            // Android 13 and newer confirm copies on their own
+                            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                                Toast.makeText(context, copiedMessage, Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                ) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.transcript_copy))
                 }
             }
         }

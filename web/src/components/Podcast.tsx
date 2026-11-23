@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Item } from '../lib/db'
-import { cueIndexAt, findMatches, type TranscriptCue, type TranscriptMatch } from '../lib/transcriptFormats'
+import { cueIndexAt, findMatches, transcriptPlainText, type TranscriptCue, type TranscriptMatch } from '../lib/transcriptFormats'
 import { deleteTranscript, loadTranscript, stopTranscribing, transcribe, useTranscript, WHISPER_MODEL_MB, type TranscriptState } from '../lib/transcripts'
 import { Icon } from './Icon'
 
@@ -91,6 +91,30 @@ function TranscriptPanel({ item, positionMs, onSeek }: { item: Item; positionMs:
     const next = matches.findIndex((m) => m.cue >= now)
     setActive(next >= 0 ? next : 0)
   }, [query])
+  const [copied, setCopied] = useState(false)
+  const copyAll = async () => {
+    const text = transcriptPlainText(state.cues, item.title)
+    let ok = false
+    try {
+      await navigator.clipboard.writeText(text)
+      ok = true
+    } catch {
+      // Some browsers and embedded views refuse the async clipboard: the older copy command still works there
+      const area = document.createElement('textarea')
+      area.value = text
+      area.setAttribute('readonly', '')
+      area.style.position = 'fixed'
+      area.style.opacity = '0'
+      document.body.appendChild(area)
+      area.select()
+      ok = document.execCommand('copy')
+      area.remove()
+    }
+    if (ok) {
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2000)
+    }
+  }
   const step = (by: number) => matches.length && setActive((a) => (a + by + matches.length) % matches.length)
   const close = () => {
     setSearchOpen(false)
@@ -103,9 +127,20 @@ function TranscriptPanel({ item, positionMs, onSeek }: { item: Item; positionMs:
           <TranscriptStatusRow item={item} state={state} />
         </div>
         {state.cues.length && !searchOpen ? (
-          <button type="button" className="icon-btn transcript-search-btn" title="Search the transcript" aria-label="Search the transcript" onClick={() => setSearchOpen(true)}>
-            <Icon name="search" size={20} />
-          </button>
+          <>
+            <button type="button" className="icon-btn transcript-search-btn" title="Search the transcript" aria-label="Search the transcript" onClick={() => setSearchOpen(true)}>
+              <Icon name="search" size={20} />
+            </button>
+            <button
+              type="button"
+              className="icon-btn transcript-search-btn"
+              title={copied ? 'Copied' : 'Copy the whole transcript'}
+              aria-label="Copy the whole transcript"
+              onClick={() => void copyAll()}
+            >
+              <Icon name={copied ? 'check' : 'copy'} size={20} />
+            </button>
+          </>
         ) : null}
       </div>
       {searchOpen ? (

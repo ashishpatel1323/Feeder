@@ -81,6 +81,17 @@ class TranscriptFormatsTest {
     }
 
     @Test
+    fun copiesAsPlainText() {
+        val text =
+            listOf(
+                TranscriptCue(0, 1, "Hi.", "Ann"),
+                TranscriptCue(2000, 3, "Welcome.", "Ann"),
+                TranscriptCue(3_725_000, 4, "Thanks.", "Bo"),
+            ).toPlainText("Episode 1")
+        assertEquals("Episode 1\n\nAnn:\n[0:00] Hi.\n[0:02] Welcome.\n\nBo:\n[1:02:05] Thanks.\n", text)
+    }
+
+    @Test
     fun findsCueAtPosition() {
         val cues = listOf(TranscriptCue(1000, 2000, "a"), TranscriptCue(2000, 3000, "b"), TranscriptCue(5000, 6000, "c"))
         assertEquals(-1, cues.indexAt(500))
