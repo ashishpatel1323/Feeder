@@ -13,6 +13,7 @@ import { readAloud, type ReadAloudState } from '../lib/readaloud'
 import { updateSettings, type Settings } from '../lib/settings'
 import { applyFastReading } from '../lib/fastReading'
 import { AUTO_SCROLL_SPEEDS, useAutoScroll } from '../lib/autoscroll'
+import { openAddToPlaylist } from './AddToPlaylist'
 import { Icon, IconButton } from './Icon'
 import { Player } from './Player'
 import { articleVideoId, iinaUrl, isMac, youtubeVideoId, youtubeWatchUrl } from '../lib/youtube'
@@ -411,6 +412,10 @@ export function Reader(p: Props) {
         <IconButton icon="prev" label="Previous article (K)" text="Prev" kbd="K" onClick={p.onPrev} disabled={!p.hasPrev} />
         <IconButton icon="next" label="Next article (J)" text="Next" kbd="J" onClick={p.onNext} disabled={!p.hasNext} />
         <span className="spacer" />
+        <button type="button" className="hl-chip" onClick={(e) => openAddToPlaylist([item.id], item.title, e.currentTarget)} title="Add to a playlist, or play next">
+          <Icon name="playlistAdd" size={18} />
+          <span>Playlist</span>
+        </button>
         {/* Like the Android app, these hide while the player is open: it has the same controls */}
         {playing ? null : (
           <>

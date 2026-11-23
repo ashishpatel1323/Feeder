@@ -20,6 +20,10 @@ import { ManageFeeds } from './components/ManageFeeds'
 import { FeedPage } from './components/FeedPage'
 import { HighlightsPage } from './components/Highlights'
 import { HomePage } from './components/Home'
+import { PlaylistsPage } from './components/Playlists'
+import { QueuePlayer } from './components/QueuePlayer'
+import { AddToPlaylistMenu } from './components/AddToPlaylist'
+import { playQueue, useQueue } from './lib/playqueue'
 import { combinedSubject, ShareDialog, type ShareSubject } from './components/ShareDialog'
 import { articlePicture, deleteHighlight } from './lib/highlights'
 import type { Highlight } from './lib/db'
@@ -36,6 +40,19 @@ const HOME_HASH = '#/home'
 const isHomeHash = () => window.location.hash === HOME_HASH
 const DOWNLOADS_HASH = '#/downloads'
 const isDownloadsHash = () => window.location.hash === DOWNLOADS_HASH
+/** Playlists: #/playlists for all of them, #/playlist/<id> for one. */
+const PLAYLISTS_HASH = '#/playlists'
+const PLAYLIST_HASH = '#/playlist/'
+const playlistFromHash = (): string | null => {
+  const h = window.location.hash
+  if (h === PLAYLISTS_HASH) return ''
+  if (!h.startsWith(PLAYLIST_HASH)) return null
+  try {
+    return decodeURIComponent(h.slice(PLAYLIST_HASH.length))
+  } catch {
+    return ''
+  }
+}
 /** One feed's own page (stats and settings), opened by clicking a feed name: #/feed/<encoded url>. */
 const FEED_HASH = '#/feed/'
 const feedFromHash = (): string | null => {
@@ -105,6 +122,9 @@ export default function App() {
     if (!window.location.hash) history.replaceState(null, '', window.location.pathname + window.location.search + HOME_HASH)
   }, [])
   const [feedPage, setFeedPage] = useState<string | null>(feedFromHash)
+  /** null = not on Playlists; '' = all playlists; else one playlist's id. */
+  const [playlistPage, setPlaylistPage] = useState<string | null>(playlistFromHash)
+  const queue = useQueue()
   // Whether the feed page was opened from inside the app, so its Back button can go back there
   const feedPageFromApp = useRef(false)
   const [focusHighlight, setFocusHighlight] = useState<string | null>(null)
@@ -117,6 +137,7 @@ export default function App() {
       setDownloadsPage(isDownloadsHash())
       setFeedPage(feedFromHash())
       setHomePage(isHomeHash())
+      setPlaylistPage(playlistFromHash())
     }
     window.addEventListener('hashchange', onHash)
     window.addEventListener('popstate', onHash)
@@ -138,6 +159,7 @@ export default function App() {
       setFeedPage(null)
       feedPageFromApp.current = false
     }
+    if (on) setPlaylistPage(null)
   }, [])
   const showHighlights = useCallback((on: boolean) => {
     if (on !== isHighlightsHash()) {
@@ -152,6 +174,7 @@ export default function App() {
       setFeedPage(null)
       feedPageFromApp.current = false
     }
+    if (on) setPlaylistPage(null)
   }, [])
   const showDownloads = useCallback((on: boolean) => {
     if (on !== isDownloadsHash()) {
@@ -166,6 +189,7 @@ export default function App() {
       setFeedPage(null)
       feedPageFromApp.current = false
     }
+    if (on) setPlaylistPage(null)
   }, [])
   const showHome = useCallback((on: boolean) => {
     if (on !== isHomeHash()) {
@@ -174,6 +198,22 @@ export default function App() {
     }
     setHomePage(on)
     if (on) {
+      setManaging(false)
+      setHighlightsPage(false)
+      setDownloadsPage(false)
+      setFeedPage(null)
+      feedPageFromApp.current = false
+    }
+    if (on) setPlaylistPage(null)
+  }, [])
+  /** Opens Playlists ('' = all of them) or one playlist; null leaves it. */
+  const showPlaylists = useCallback((id: string | null) => {
+    const want = id === null ? null : id ? PLAYLIST_HASH + encodeURIComponent(id) : PLAYLISTS_HASH
+    if (want && window.location.hash !== want) window.location.hash = want
+    else if (!want && playlistFromHash() !== null) history.pushState(null, '', window.location.pathname + window.location.search)
+    setPlaylistPage(id)
+    if (id !== null) {
+      setHomePage(false)
       setManaging(false)
       setHighlightsPage(false)
       setDownloadsPage(false)
@@ -193,6 +233,7 @@ export default function App() {
     setFeedPage(url)
     setManaging(false)
     setHighlightsPage(false)
+    setPlaylistPage(null)
   }, [])
   /** Leaves the feed page for the article list. */
   const leaveFeedPage = useCallback(() => {
@@ -279,12 +320,20 @@ export default function App() {
 
   useEffect(() => {
     readAloud.onError = toast
+    playQueue.onMessage = toast
   }, [toast])
 
   // Read aloud: auto-continue and media keys
   useEffect(() => {
     // Flip mode turns its own pages when reading ends
     if (flip) return
+    // A playlist is playing: it decides what comes next, also for the media keys
+    if (queue.kind) {
+      readAloud.onFinished = (finishedId) => void playQueue.articleFinished(finishedId)
+      readAloud.onMediaNext = () => void playQueue.next()
+      readAloud.onMediaPrevious = () => playQueue.prev()
+      return
+    }
     readAloud.onFinished = (finishedId) => {
       if (!settings.readAloudAutoContinue) return
       const i = snapshot.indexOf(finishedId)
@@ -307,7 +356,7 @@ export default function App() {
           open(prevId)
         }
       : null
-  }, [snapshot, settings.readAloudAutoContinue, open, nextId, prevId, flip])
+  }, [snapshot, settings.readAloudAutoContinue, open, nextId, prevId, flip, queue.kind])
 
   // Sync and refresh
   const fullRefresh = useCallback(async () => {
@@ -388,6 +437,10 @@ export default function App() {
       if (dialog || e.ctrlKey || e.metaKey || e.altKey || /INPUT|TEXTAREA|SELECT/.test(t.tagName)) return
       // Any other modal (e.g. the Sort & group sheet) owns the keyboard while open
       if (document.querySelector('[aria-modal="true"]') || t.closest?.('[aria-modal="true"]')) return
+      if (playlistPage !== null) {
+        if (e.key === 'Escape' && playlistPage) showPlaylists('')
+        return
+      }
       if (homePage && !managing && !highlightsPage && !feedPage && !downloadsPage) return
       if (managing || highlightsPage || feedPage || downloadsPage) {
         if (e.key === 'Escape') {
@@ -449,7 +502,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [dialog, visibleOrder, openId, nextId, prevId, goNext, goPrev, open, openItem, pane, toggleNav, managing, showManage, highlightsPage, showHighlights, downloadsPage, showDownloads, feedPage, closeFeedPage, startFlip, homePage])
+  }, [dialog, visibleOrder, openId, nextId, prevId, goNext, goPrev, open, openItem, pane, toggleNav, managing, showManage, highlightsPage, showHighlights, downloadsPage, showDownloads, feedPage, closeFeedPage, startFlip, homePage, playlistPage, showPlaylists])
 
   const markAllRead = async () => {
     const ids = groups.flatMap((g) => g.items).filter((i) => !i.read).map((i) => i.id)
@@ -575,6 +628,7 @@ export default function App() {
     open(h.itemId, visibleOrder.includes(h.itemId) ? visibleOrder : [h.itemId])
   }
 
+  const onPlaylists = playlistPage !== null
   const syncLabel = syncState
     ? syncState.lastError
       ? 'Sync problem, see Settings'
@@ -584,7 +638,7 @@ export default function App() {
     : 'Not syncing'
 
   return (
-    <div className={`app pane-${pane}${drawer ? ' drawer-open' : ''}${navCollapsed ? ' nav-collapsed' : ''}${managing || highlightsPage || feedPage || downloadsPage || homePage ? ' page-feeds' : ''}`}>
+    <div className={`app pane-${pane}${drawer ? ' drawer-open' : ''}${navCollapsed ? ' nav-collapsed' : ''}${managing || highlightsPage || feedPage || downloadsPage || homePage || onPlaylists ? ' page-feeds' : ''}${queue.kind ? ' has-queue' : ''}`}>
       <div className="drawer-scrim" onClick={() => setDrawer(false)} />
       <Sidebar
         feeds={feedList}
@@ -598,11 +652,19 @@ export default function App() {
           showHighlights(false)
           showDownloads(false)
           showHome(false)
+          showPlaylists(null)
           if (feedPage) leaveFeedPage()
         }}
-        showingHome={homePage && !managing && !highlightsPage && !downloadsPage && !feedPage}
+        showingPlaylist={playlistPage}
+        onPlaylists={(id) => {
+          setDrawer(false)
+          if (feedPage) leaveFeedPage()
+          showPlaylists(id)
+        }}
+        showingHome={homePage && !managing && !highlightsPage && !downloadsPage && !feedPage && !onPlaylists}
         onHome={() => {
           setDrawer(false)
+          showPlaylists(null)
           if (feedPage) leaveFeedPage()
           showHome(true)
         }}
@@ -632,7 +694,24 @@ export default function App() {
         collapsed={navCollapsed}
         onToggleCollapsed={toggleNav}
       />
-      {downloadsPage ? (
+      {onPlaylists ? (
+        <PlaylistsPage
+          playlistId={playlistPage || null}
+          items={items}
+          feeds={feeds}
+          readRate={settings.readAloudRate}
+          onRoute={(id) => showPlaylists(id ?? '')}
+          onOpenArticle={(id, order) => {
+            const it = items.find((i) => i.id === id)
+            if (it?.link && opensInBrowser(feeds.get(it.feedUrl))) return void window.open(it.link, '_blank', 'noopener')
+            showPlaylists(null)
+            open(id, order)
+          }}
+          onMenu={() => setDrawer(true)}
+          onBack={() => showPlaylists(null)}
+          toast={toast}
+        />
+      ) : downloadsPage ? (
         <DownloadsPage
           items={items}
           feeds={feeds}
@@ -718,7 +797,7 @@ export default function App() {
         onAddLink={selection.kind === 'saved' ? addLink : undefined}
         />
       )}
-      {managing || highlightsPage || feedPage || downloadsPage || homePage || flip ? null : openItem ? (
+      {managing || highlightsPage || feedPage || downloadsPage || homePage || onPlaylists || flip ? null : openItem ? (
         <Reader
           item={openItem}
           feed={feeds.get(openItem.feedUrl)}
@@ -768,6 +847,22 @@ export default function App() {
           toast={toast}
         />
       ) : null}
+      <QueuePlayer
+        items={items}
+        feeds={feeds}
+        readRate={settings.readAloudRate}
+        onReadRate={(r) => void updateSettings({ readAloudRate: r })}
+        onOpenArticle={(id) => {
+          showPlaylists(null)
+          showManage(false)
+          showHighlights(false)
+          showDownloads(false)
+          showHome(false)
+          if (feedPage) leaveFeedPage()
+          open(id, queue.ids)
+        }}
+      />
+      <AddToPlaylistMenu toast={toast} />
       {toastMsg ? (
         <div className="toast" role="status">
           {toastMsg.msg}

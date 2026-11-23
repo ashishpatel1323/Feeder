@@ -66,6 +66,7 @@ async function fetchOne(feed: Feed, prefetched?: ParsedFeed): Promise<number> {
           author: a.author,
           wordCount: words,
           enclosureUrl: a.enclosureUrl,
+          duration: a.duration ?? old.duration ?? null,
           sortTime: a.published ?? fallback,
         })
       } else {
@@ -89,6 +90,7 @@ async function fetchOne(feed: Feed, prefetched?: ParsedFeed): Promise<number> {
           readSynced: 1,
           saved: k?.saved ? 1 : 0,
           enclosureUrl: a.enclosureUrl,
+          duration: a.duration,
         })
         added++
       }

@@ -43,6 +43,8 @@ export interface Item {
   readSynced: number
   saved: number
   enclosureUrl?: string | null
+  /** Audio/video length in seconds from the feed (itunes:duration), when it gives one. */
+  duration?: number | null
   fullHtml?: string | null
   fullWordCount?: number
   ogChecked?: number

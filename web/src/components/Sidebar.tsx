@@ -5,6 +5,7 @@ import type { Selection } from '../lib/listquery'
 import { Icon, IconButton } from './Icon'
 import { proxiedUrl } from '../lib/api'
 import { useVideoJobs, useVideoSavingAvailable } from '../lib/offline'
+import { usePlaylists } from './Playlists'
 import { collapseAllFolders, loadClosedFolders, saveClosedFolders, toggleFolder } from '../lib/folders'
 
 interface Props {
@@ -29,6 +30,9 @@ interface Props {
   onHome: () => void
   showingDownloads: boolean
   onDownloads: () => void
+  /** null = not on Playlists, '' = all playlists, else the open playlist's id. */
+  showingPlaylist: string | null
+  onPlaylists: (id: string) => void
   onRefresh: () => void
   onSettings: () => void
   refreshing: string | null
@@ -112,7 +116,8 @@ export function Sidebar(p: Props) {
 
   const folderNames = tags.map(([t]) => t).filter(Boolean)
 
-  const isSel = (s: Selection) => !p.showingHome && !p.managing && !p.showingHighlights && !p.showingDownloads && JSON.stringify(s) === JSON.stringify(p.selection)
+  const playlists = usePlaylists()
+  const isSel = (s: Selection) => !p.showingHome && !p.managing && !p.showingHighlights && !p.showingDownloads && p.showingPlaylist === null && JSON.stringify(s) === JSON.stringify(p.selection)
 
   const feedRow = (f: Feed, i: number, folder: Feed[]) => (
     <li
@@ -195,6 +200,14 @@ export function Sidebar(p: Props) {
         >
           <Icon name="highlight" size={20} />
         </button>
+        <button
+          className={`rail-btn${p.showingPlaylist !== null ? ' selected' : ''}`}
+          title="Playlists"
+          aria-label="Playlists"
+          onClick={() => p.onPlaylists('')}
+        >
+          <Icon name="queue" size={20} />
+        </button>
         {showDownloads ? (
           <button
             className={`rail-btn${p.showingDownloads ? ' selected' : ''}`}
@@ -260,6 +273,28 @@ export function Sidebar(p: Props) {
             </button>
           </li>
         ) : null}
+        <li>
+          <button className={`nav-row${p.showingPlaylist === '' ? ' selected' : ''}`} onClick={() => p.onPlaylists('')}>
+            <Icon name="queue" size={20} />
+            <span className="nav-title">Playlists</span>
+            {playlists.length ? <span className="count muted">{playlists.length}</span> : null}
+          </button>
+          {playlists.length ? (
+            <ul className="nav-list nested">
+              {playlists.map((pl) => (
+                <li key={pl.id}>
+                  <button className={`nav-row pl-nav${p.showingPlaylist === pl.id ? ' selected' : ''}`} onClick={() => p.onPlaylists(pl.id)}>
+                    <span className="pl-nav-dot" style={{ background: pl.color }} aria-hidden="true">
+                      {pl.icon}
+                    </span>
+                    <span className="nav-title">{pl.name}</span>
+                    {pl.smart ? <Icon name="bolt" size={14} title="Smart playlist" /> : <span className="count muted">{pl.itemIds.length}</span>}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </li>
       </ul>
       {folderNames.length ? (
         <div className="folder-tools">
