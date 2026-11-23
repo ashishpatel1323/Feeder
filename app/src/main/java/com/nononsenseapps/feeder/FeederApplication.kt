@@ -72,6 +72,7 @@ class FeederApplication :
     DIAware,
     SingletonImageLoader.Factory {
     private val applicationCoroutineScope = ApplicationCoroutineScope()
+
     // Lazy: its init reads SharedPreferences, which needs the base context attached first
     private val ttsStateHolder by lazy { TTSStateHolder(this, applicationCoroutineScope) }
     private val podcastPlayerStateHolder = PodcastPlayerStateHolder(this, applicationCoroutineScope)
@@ -229,6 +230,10 @@ class FeederApplication :
         super.onCreate()
         @Suppress("DEPRECATION")
         staticFilesDir = filesDir
+        // Episodes played in the article screen or a list keep their place like playlist ones
+        podcastPlayerStateHolder.positionSink = { itemId, seconds, length ->
+            di.direct.instance<com.nononsenseapps.feeder.model.playlists.PlaylistStore>().savePosition(itemId, seconds, length)
+        }
     }
 
     override fun onTerminate() {

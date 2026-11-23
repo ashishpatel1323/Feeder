@@ -26,17 +26,31 @@ class PodcastPlayerStateHolder(
 
     private var mediaPlayer: MediaPlayer? = null
     private var progressJob: Job? = null
+    private var startAtMillis: Int = 0
 
-    /** Plays [link]; [itemId] is the article it belongs to (for its transcript). */
+    /**
+     * Gets (item id, seconds played, length in seconds) now and then while an episode plays, and
+     * when it pauses, stops or ends: the same positions playlists keep, so every list shows where
+     * an episode was left.
+     */
+    var positionSink: ((Long, Long, Long) -> Unit)? = null
+
+    /**
+     * Plays [link]; [itemId] is the article it belongs to (for its transcript and its saved
+     * position). Starts [startAtSeconds] in (Resume).
+     */
     fun playLink(
         link: String,
         itemId: Long? = null,
+        startAtSeconds: Long = 0L,
     ) {
         if (link.isBlank()) {
             return
         }
 
+        reportPosition()
         releaseCurrentPlayer()
+        startAtMillis = (startAtSeconds * 1000).toInt().coerceAtLeast(0)
         _playerState.value =
             PodcastPlayerState(
                 audioUrl = link,
@@ -57,11 +71,13 @@ class PodcastPlayerStateHolder(
 
     fun pause() {
         mediaPlayer?.pause()
+        reportPosition()
         stopProgressUpdates()
         _playerState.update { it.copy(isPlaying = false) }
     }
 
     fun stop() {
+        reportPosition()
         releaseCurrentPlayer()
         _playerState.value = PodcastPlayerState()
     }
@@ -106,6 +122,7 @@ class PodcastPlayerStateHolder(
                             .build(),
                     )
                     setOnPreparedListener { player ->
+                        if (startAtMillis > 0 && startAtMillis < player.duration) player.seekTo(startAtMillis)
                         player.start()
                         _playerState.update {
                             it.copy(
@@ -121,6 +138,10 @@ class PodcastPlayerStateHolder(
                     }
                     setOnCompletionListener { player ->
                         stopProgressUpdates()
+                        _playerState.value.itemId?.let { id ->
+                            val len = player.duration.coerceAtLeast(0) / 1000L
+                            positionSink?.invoke(id, len, len)
+                        }
                         _playerState.update {
                             it.copy(
                                 isPlaying = false,
@@ -181,6 +202,7 @@ class PodcastPlayerStateHolder(
         progressJob?.cancel()
         progressJob =
             coroutineScope.launch {
+                var ticks = 0
                 while (isActive) {
                     val player = mediaPlayer ?: break
                     _playerState.update {
@@ -191,8 +213,20 @@ class PodcastPlayerStateHolder(
                     }
                     // Often enough for transcript lines to change on time
                     delay(250)
+                    if (++ticks % 20 == 0) reportPosition()
                 }
             }
+    }
+
+    /** Hands where the episode is to [positionSink]. */
+    private fun reportPosition() {
+        val id = _playerState.value.itemId ?: return
+        val player = mediaPlayer ?: return
+        runCatching {
+            val pos = player.currentPosition.coerceAtLeast(0) / 1000L
+            val len = player.duration.coerceAtLeast(0) / 1000L
+            if (pos > 0) positionSink?.invoke(id, pos, len)
+        }
     }
 
     private fun stopProgressUpdates() {
