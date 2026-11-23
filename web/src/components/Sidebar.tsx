@@ -25,6 +25,8 @@ interface Props {
   highlightCount: number
   showingHighlights: boolean
   onHighlights: () => void
+  showingHome: boolean
+  onHome: () => void
   showingDownloads: boolean
   onDownloads: () => void
   onRefresh: () => void
@@ -110,7 +112,7 @@ export function Sidebar(p: Props) {
 
   const folderNames = tags.map(([t]) => t).filter(Boolean)
 
-  const isSel = (s: Selection) => !p.managing && !p.showingHighlights && !p.showingDownloads && JSON.stringify(s) === JSON.stringify(p.selection)
+  const isSel = (s: Selection) => !p.showingHome && !p.managing && !p.showingHighlights && !p.showingDownloads && JSON.stringify(s) === JSON.stringify(p.selection)
 
   const feedRow = (f: Feed, i: number, folder: Feed[]) => (
     <li
@@ -166,6 +168,9 @@ export function Sidebar(p: Props) {
     <nav className="sidebar">
       <div className="sidebar-rail" aria-label="Feeds (collapsed)">
         <IconButton icon="panelOpen" label="Show feeds" title="Show feeds ( [ )" onClick={p.onToggleCollapsed} />
+        <button className={`rail-btn${p.showingHome ? ' selected' : ''}`} title="Home: all your feeds as tiles" aria-label="Home" onClick={p.onHome}>
+          <Icon name="home" size={20} />
+        </button>
         <button
           className={`rail-btn${isSel({ kind: 'all' }) ? ' selected' : ''}`}
           title={`All articles${totalUnread ? ` (${totalUnread} unread)` : ''}`}
@@ -218,6 +223,13 @@ export function Sidebar(p: Props) {
       </div>
       {p.refreshing ? <div className="sidebar-status">Refreshing {p.refreshing}</div> : null}
       <ul className="nav-list">
+        <li>
+          <button className={`nav-row${p.showingHome ? ' selected' : ''}`} onClick={p.onHome}>
+            <Icon name="home" size={20} />
+            <span className="nav-title">Home</span>
+            <span className="count muted">{p.feeds.length}</span>
+          </button>
+        </li>
         <li>
           <button className={`nav-row${isSel({ kind: 'all' }) ? ' selected' : ''}`} onClick={() => p.onSelect({ kind: 'all' })}>
             <Icon name="article" size={20} />

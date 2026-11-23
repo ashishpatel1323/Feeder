@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
-import { feedDisplayTitle, OPEN_WITH_BROWSER, OPEN_WITH_READER, opensInBrowser, updateFeed, type Feed, type Item } from '../lib/db'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { feedDisplayTitle, getKv, setKv, OPEN_WITH_BROWSER, OPEN_WITH_READER, opensInBrowser, updateFeed, type Feed, type Item } from '../lib/db'
+import { detectKind, FEED_KINDS, FEED_KINDS_KEY, KIND_LABELS, type FeedKind } from '../lib/home'
 import { computeFeedStats, noStats, timeAgo } from '../lib/feedstats'
 import { syncNow } from '../lib/sync2'
 import { DeleteFeedDialog, deleteFeedEverywhere, EditFeedForm } from './Dialogs'
@@ -24,6 +26,8 @@ interface Props {
 export function FeedPage(p: Props) {
   const f = p.feed
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const kinds = useLiveQuery(() => getKv<Record<string, FeedKind>>(FEED_KINDS_KEY, {}), []) ?? {}
+  const guessed = useMemo(() => detectKind({ url: p.url }, p.items.filter((i) => i.feedUrl === p.url)), [p.items, p.url])
   const stats = useMemo(() => computeFeedStats(p.items.filter((i) => i.feedUrl === p.url)).get(p.url) ?? noStats(), [p.items, p.url])
 
   if (!f) {
@@ -49,6 +53,12 @@ export function FeedPage(p: Props) {
     await deleteFeedEverywhere(f.url)
     p.toast('Feed deleted')
     p.onBack()
+  }
+  const setKind = async (v: string) => {
+    const next = { ...(await getKv<Record<string, FeedKind>>(FEED_KINDS_KEY, {})) }
+    if (v) next[f.url] = v as FeedKind
+    else delete next[f.url]
+    await setKv(FEED_KINDS_KEY, next)
   }
   const setOpenWith = async (v: string) => {
     if (await updateFeed(f.url, { openArticlesWith: v })) syncNow().catch(() => undefined)
@@ -97,6 +107,17 @@ export function FeedPage(p: Props) {
               <option value="">Default</option>
               <option value={OPEN_WITH_READER}>Reader</option>
               <option value={OPEN_WITH_BROWSER}>Browser tab</option>
+            </select>
+          </label>
+          <label className="fp-row">
+            <span>Type on Home</span>
+            <select className="mf-select" value={kinds[f.url] ?? ''} onChange={(e) => void setKind(e.target.value)} title="Which type filter on Home this feed belongs to">
+              <option value="">Automatic ({KIND_LABELS[guessed]})</option>
+              {FEED_KINDS.map((k) => (
+                <option key={k} value={k}>
+                  {KIND_LABELS[k]}
+                </option>
+              ))}
             </select>
           </label>
           <EditFeedForm key={f.url} url={f.url} inline onDone={() => undefined} onDeleted={p.onBack} toast={p.toast} />

@@ -234,7 +234,7 @@ function parseXml(text: string, feedUrl: string, alternateId: boolean): ParsedFe
     return {
       title: htmlToText(child(root, 'title')?.textContent ?? ''),
       siteUrl: linkOf(root),
-      iconUrl: childText(root, 'icon') ?? childText(root, 'logo'),
+      iconUrl: childText(root, 'logo') ?? childText(root, 'icon'),
       articles: finish(feedUrl, raw, alternateId),
     }
   }
@@ -262,11 +262,13 @@ function parseXml(text: string, feedUrl: string, alternateId: boolean): ParsedFe
       enclosureType: enclosure?.getAttribute('type') ?? null,
     }
   })
-  const image = child(channel, 'image') ?? child(root, 'image')
+  // <image><url>…</url></image>, or the podcast cover in <itunes:image href="…"/>
+  const images = [...children(channel, 'image'), ...children(root, 'image')]
+  const iconUrl = images.map((im) => childText(im, 'url') || im.getAttribute('href')?.trim() || null).find(Boolean) ?? null
   return {
     title: htmlToText(child(channel, 'title')?.textContent ?? ''),
     siteUrl: childText(channel, 'link'),
-    iconUrl: image ? childText(image, 'url') : null,
+    iconUrl,
     articles: finish(feedUrl, raw, alternateId),
   }
 }
