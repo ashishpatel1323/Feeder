@@ -4,11 +4,17 @@ import { summarize } from '../lib/extras'
 import { htmlToText } from '../lib/feedparse'
 import { timeAgo } from '../lib/feedstats'
 import { countWords, paragraphsOf, takeWords, WheelFlipper } from '../lib/flip'
-import { readingMinutes, wordsOf } from '../lib/listquery'
 import { readAloud, type ReadAloudState } from '../lib/readaloud'
 import { syncNow } from '../lib/sync2'
 import type { Toast } from '../lib/toast'
 import { Icon } from './Icon'
+import { openAddToPlaylist } from './AddToPlaylist'
+import { PodcastEpisode } from './Podcast'
+import { YouTubeFrame } from './YouTubeFrame'
+import { articleVideoId } from '../lib/youtube'
+import { playQueue, useQueue } from '../lib/playqueue'
+import { itemFacts } from '../lib/itemview'
+import { TypeBadge, usePlaylistContext } from './ItemRow'
 
 /**
  * Flip mode for desktop: one article per page, turned like a magazine page. The page sits in the
@@ -63,6 +69,11 @@ export function FlipMode(p: Props) {
   const idx = Math.max(0, curId ? queue.indexOf(curId) : 0)
   const item = queue.length ? byId.get(queue[idx]) : undefined
   const feed = item ? p.feeds.get(item.feedUrl) : undefined
+  const ctx = usePlaylistContext(p.feeds, p.rate)
+  const facts = item ? itemFacts(item, ctx) : null
+  const kind = facts?.kind ?? 'article'
+  const videoId = item && kind === 'youtube' ? articleVideoId(item) : null
+  const q = useQueue()
 
   const [speak, setSpeak] = useState(() => loadFlag(SPEAK_KEY, true))
   const [autoTurn, setAutoTurn] = useState(() => loadFlag(AUTO_TURN_KEY, true))
@@ -82,8 +93,10 @@ export function FlipMode(p: Props) {
       if (!queue.length || target === idx || target < 0 || target >= queue.length) return false
       const leaving = byId.get(queue[idx])
       markRead(leaving)
+      // An episode started on this page stops when the page turns, like read aloud does
+      if (leaving && playQueue.currentId === leaving.id) playQueue.stop()
       if (target > idx && pageRef.current) {
-        setLeaf({ html: pageRef.current.innerHTML, key: Date.now() })
+        setLeaf({ html: pageRef.current.innerHTML.replace(/<iframe[\s\S]*?<\/iframe>/g, ''), key: Date.now() })
         setTurnBack(0)
       } else {
         setLeaf(null)
@@ -137,9 +150,13 @@ export function FlipMode(p: Props) {
     readAloud.title = item.title
     readAloud.artist = feedDisplayTitle(feed)
     readAloud.attach(body, item.id)
-    if (!speak) return
+    if (!speak || kind === 'youtube') return
     const id = item.id
-    const t = window.setTimeout(() => readAloud.state.itemId === id && readAloud.play(0), TURN_MS + 80)
+    const t = window.setTimeout(() => {
+      // An episode plays itself; an article's page is read aloud
+      if (kind === 'podcast') playQueue.start([id], { name: 'Flip mode' })
+      else if (readAloud.state.itemId === id) readAloud.play(0)
+    }, TURN_MS + 80)
     return () => clearTimeout(t)
   }, [shown, item?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -154,6 +171,18 @@ export function FlipMode(p: Props) {
       readAloud.onFinished = null
     }
   }, [autoTurn, p])
+
+  // An episode played to its end turns the page too (Stop or Pause don't)
+  const lastPlaying = useRef<string | null>(null)
+  useEffect(() => {
+    const now = q.ids[q.index] ?? null
+    const was = lastPlaying.current
+    lastPlaying.current = now
+    if (!was || was === now || was !== item?.id || !autoTurn) return
+    void db.items.get(was).then((it) => {
+      if (it?.read && nextRef.current) nextRef.current()
+    })
+  }, [q.ids, q.index]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     readAloud.setRate(p.rate)
@@ -202,6 +231,25 @@ export function FlipMode(p: Props) {
   const toggleSave = useCallback(() => {
     if (item) void db.items.update(item.id, { saved: item.saved ? 0 : 1, readSynced: 0 })
   }, [item])
+
+  const toggleRead = useCallback(() => {
+    if (item) void db.items.update(item.id, { read: item.read ? 0 : 1, readTime: item.read ? null : Date.now(), readSynced: 0 })
+  }, [item])
+
+  const share = useCallback(async () => {
+    const url = item?.link ?? ''
+    if (!url) return
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: item?.title, url })
+      } catch {
+        // cancelled
+      }
+    } else {
+      await navigator.clipboard.writeText(url).catch(() => undefined)
+      p.toast('Link copied')
+    }
+  }, [item, p])
 
   const remove = useCallback(async () => {
     if (!item) return
@@ -280,6 +328,9 @@ export function FlipMode(p: Props) {
         case 'o':
           openFull()
           break
+        case 'm':
+          toggleRead()
+          break
         case 'r':
           toggleSpeak()
           break
@@ -302,7 +353,7 @@ export function FlipMode(p: Props) {
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [next, prev, doSummary, toggleSave, openFull, toggleSpeak, remove, onExit, ra.status])
+  }, [next, prev, doSummary, toggleSave, toggleRead, openFull, toggleSpeak, remove, onExit, ra.status])
 
   // Mouse wheel and trackpad: one page per gesture, over the page area only
   const flipper = useMemo(() => new WheelFlipper(), [])
@@ -329,7 +380,6 @@ export function FlipMode(p: Props) {
   }, [curId])
 
   const progress = queue.length ? (idx + 1) / queue.length : 0
-  const minutes = item ? readingMinutes(wordsOf(item, feed)) : 0
   const loading = summaryState?.id === item?.id && summaryState?.status === 'loading'
   const summaryError = summaryState?.id === item?.id && summaryState?.status === 'error' ? summaryState.msg : null
   const sentenceProgress = ra.itemId === item?.id && ra.sentences ? Math.min(1, (ra.status === 'idle' ? 0 : ra.sentence + 1) / ra.sentences) : 0
@@ -338,10 +388,29 @@ export function FlipMode(p: Props) {
     <>
       <div className="flip-src">{feedDisplayTitle(feed)}</div>
       <div className="flip-meta">
-        {[item.author, timeAgo(item.sortTime), `${minutes} min read`].filter(Boolean).join(' · ')}
+        {facts ? <TypeBadge kind={facts.kind} label={facts.kindLabel} /> : null}
+        {[item.author, timeAgo(item.sortTime), facts?.lengthText].filter(Boolean).join(' · ')}
       </div>
       <h1 className="flip-title">{item.title || 'Untitled'}</h1>
-      {item.imageUrl ? <img className="flip-img" src={item.imageUrl} alt="" referrerPolicy="no-referrer" /> : null}
+      {videoId ? (
+        <div className="flip-media">
+          <YouTubeFrame
+            key={`${item.id}|${videoId}`}
+            itemId={item.id}
+            videoId={videoId}
+            title={item.title || 'YouTube video'}
+            onEnded={() => {
+              if (autoTurn) nextRef.current()
+            }}
+          />
+        </div>
+      ) : kind === 'podcast' ? (
+        <div className="flip-media pod">
+          <PodcastEpisode key={item.id} item={item} feedTitle={feedDisplayTitle(feed)} compact />
+        </div>
+      ) : item.imageUrl ? (
+        <img className="flip-img" src={item.imageUrl} alt="" referrerPolicy="no-referrer" />
+      ) : null}
     </>
   ) : null
 
@@ -369,7 +438,10 @@ export function FlipMode(p: Props) {
           return (
             <button key={id} className={`flip-next${i === idx ? ' now' : ''}${it.read && i !== idx ? ' done' : ''}`} onClick={() => go(i)}>
               <small>
-                {feedDisplayTitle(p.feeds.get(it.feedUrl))}
+                {(() => {
+                  const f = itemFacts(it, ctx)
+                  return `${f.kindLabel} · ${feedDisplayTitle(p.feeds.get(it.feedUrl))}${f.lengthText ? ` · ${f.lengthText}` : ''}`
+                })()}
                 {i === idx ? ' · now' : ''}
               </small>
               {it.title || 'Untitled'}
@@ -386,17 +458,26 @@ export function FlipMode(p: Props) {
             <article className={`flip-page${turnBack ? ' turn-in' : ''}`} key={turnBack ? `b${turnBack}` : 'page'}>
               <div ref={pageRef} className="flip-page-inner">
                 {pageInner}
-                <div className={`flip-body${item.imageUrl ? ' with-img' : ''}`} ref={bodyRef} />
+                <div className={`flip-body${item.imageUrl || kind !== 'article' ? ' with-img' : ''}`} ref={bodyRef} />
               </div>
               <div className="flip-actions">
+                <button className={`flip-btn${item.saved ? ' on' : ''}`} onClick={toggleSave} title="Save (B)" aria-pressed={!!item.saved}>
+                  <Icon name={item.saved ? 'bookmarkFilled' : 'bookmark'} size={18} /> {item.saved ? 'Saved' : 'Save'}
+                </button>
+                <button className="flip-btn" onClick={(e) => openAddToPlaylist([item.id], item.title, e.currentTarget)} title="Add to a playlist, or play next">
+                  <Icon name="playlistAdd" size={18} /> Playlist
+                </button>
+                <button className="flip-btn" onClick={toggleRead} title="Mark read (M)">
+                  <Icon name={item.read ? 'unread' : 'read'} size={18} /> {facts?.readLabel ?? 'Mark read'}
+                </button>
                 <button className="flip-btn pri" onClick={doSummary} disabled={loading || !!item.summary} title="Summarize (S)">
                   <Icon name="summarize" size={18} /> {loading ? 'Summarizing…' : item.summary ? 'Summarized' : 'Summarize'}
                 </button>
-                <button className="flip-btn" onClick={openFull} title="Read full article (O)">
-                  <Icon name="article" size={18} /> Read full article
+                <button className="flip-btn" onClick={share} title="Share the link">
+                  <Icon name="share" size={18} /> Share
                 </button>
-                <button className={`flip-btn${item.saved ? ' on' : ''}`} onClick={toggleSave} title="Save (B)" aria-pressed={!!item.saved}>
-                  <Icon name="bookmark" size={18} /> {item.saved ? 'Saved' : 'Save'}
+                <button className="flip-btn" onClick={openFull} title="Open in the reader (O)">
+                  <Icon name="article" size={18} /> {kind === 'article' ? 'Read full article' : 'Open in reader'}
                 </button>
                 <span className="flip-spacer" />
                 <button className="flip-btn del" onClick={remove} title="Delete on all devices (Delete)">

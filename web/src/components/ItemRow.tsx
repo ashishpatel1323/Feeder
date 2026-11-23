@@ -29,12 +29,18 @@ export function usePlaylistContext(feeds: Map<string, Feed>, rate: number): Play
   )
 }
 
+/** Type, length and button words for one item, outside a list (reader, Flip). */
+export function useItemFacts(item: Item, feeds: Map<string, Feed> | Feed | undefined): ItemFacts {
+  const map = useMemo(() => (feeds instanceof Map ? feeds : new Map(feeds ? [[feeds.url, feeds]] : [])), [feeds])
+  return itemFacts(item, usePlaylistContext(map, 1))
+}
+
 export const KIND_ICONS: Record<ItemKind, IconName> = { article: 'article', podcast: 'headphones', youtube: 'play' }
 
 /** "Article", "Podcast" or "Video", with its icon. */
 export function TypeBadge({ kind, label }: { kind: ItemKind; label: string }) {
   return (
-    <span className={`ty ${kind}`}>
+    <span className={`ty k-${kind}`}>
       <Icon name={KIND_ICONS[kind]} size={12} />
       {label}
     </span>
@@ -58,7 +64,7 @@ export function ItemThumb({ item, facts, overlay }: { item: Item; facts: ItemFac
   const [broken, setBroken] = useState(false)
   const src = item.imageUrl && !broken ? (item.imageUrl.startsWith('http://') ? proxiedUrl(item.imageUrl) : item.imageUrl) : null
   return (
-    <span className={`ir-thumb ${facts.kind}`} aria-hidden="true">
+    <span className={`ir-thumb k-${facts.kind}`} aria-hidden="true">
       {src ? <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(true)} /> : <Icon name={KIND_ICONS[facts.kind]} size={26} />}
       {overlay}
       {facts.badge ? <span className="ir-len">{facts.badge}</span> : null}

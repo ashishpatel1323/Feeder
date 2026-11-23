@@ -51,7 +51,9 @@ function loadApi(): Promise<YTNamespace> {
  * YouTube's own player for one article's video. Remembers where it was left (per article,
  * synced) and starts there next time, a few seconds back. Give it key={itemId}.
  */
-export function YouTubeFrame({ itemId, videoId, title }: { itemId: string; videoId: string; title: string }) {
+export function YouTubeFrame({ itemId, videoId, title, onEnded }: { itemId: string; videoId: string; title: string; onEnded?: () => void }) {
+  const endedRef = useRef(onEnded)
+  endedRef.current = onEnded
   // The start position goes in the embed URL, so wait for it before showing the player
   const [start, setStart] = useState<number | null>(null)
   const frame = useRef<HTMLIFrameElement>(null)
@@ -117,6 +119,7 @@ export function YouTubeFrame({ itemId, videoId, title }: { itemId: string; video
                 // keep the last position seen
               }
               stop()
+              if (e.data === ENDED) endedRef.current?.()
             },
           },
         })
