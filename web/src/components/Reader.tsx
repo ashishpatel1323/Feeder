@@ -431,7 +431,7 @@ export function Reader(p: Props) {
           title={railOpen ? 'Hide highlights' : 'Show highlights in this article'}
           aria-pressed={railOpen}
         >
-          <Icon name="highlight" size={18} /> {highlights?.length ?? 0}
+          <Icon name="highlight" size={18} /> <span><span className="narrow-label">Highlights </span>{highlights?.length ?? 0}</span>
         </button>
         <IconButton icon="article" label={fullMode ? 'Show feed text' : 'Full text'} text="Full text" active={fullMode} onClick={() => setFullMode(!fullMode)} />
         {item.link ? (

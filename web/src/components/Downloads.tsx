@@ -163,7 +163,6 @@ export function DownloadsPage(p: {
               <span>Delete all</span>
             </button>
           ) : null}
-          <IconButton icon="close" label="Close downloads" onClick={p.onBack} />
         </div>
 
         {!completed.length && !incomplete.length ? (

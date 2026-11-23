@@ -187,3 +187,24 @@ companion object {
 - Do **not** skip database migrations. See the hard rule above.
 - Do **not** add network calls or remote dependencies to core functionality — Feeder is designed to work fully offline.
 - Do **not** make the Play flavor meaningfully different from the free flavor beyond what already exists.
+
+---
+
+## Design system (web and Android)
+
+Every UI change follows the shared tokens so the two apps look like one product. Full rules and
+checks: `.claude/skills/feeder-design/SKILL.md`.
+
+- **Web tokens** live at the top of `:root` in `web/src/styles.css` (`--fs-*`, `--r-*`, `--sp-*`,
+  `--control-h`, `--chip-h`, colours). Never write a raw px font size, radius or hex colour in a new rule.
+- **Shared web components** are in the "design system" block at the end of `styles.css`: buttons
+  (`.mf-btn`, `.mf-btn.primary`), chips (`.chip`/`.home-chip`, `.on`), segmented buttons
+  (`.segmented > .seg`, `.home-seg`), page headers (`.mf-head h1`). Reuse them; don't invent a new
+  per-feature button class.
+- **Android** uses `MaterialTheme.typography` roles (never `fontSize = N.sp`) and
+  `ui/compose/theme/FeederTokens.kt` for spacing and corner sizes.
+- **Every action is visible and labeled** (icon + text) on every screen size. No overflow menus,
+  except the player's ⋮. On phones, wrap rows instead of hiding labels.
+- Section labels are sentence case, never ALL CAPS. Selected chips/segments use the soft accent
+  (`--accent-soft` / `secondaryContainer`). Dark mode must follow the theme everywhere, including
+  the paper reading card (Flip mode is the only always-dark screen).

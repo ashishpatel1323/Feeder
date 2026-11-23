@@ -219,7 +219,7 @@ private fun LabeledAction(
                 .padding(horizontal = 8.dp, vertical = 4.dp),
     ) {
         Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
-        Text(label, fontSize = 11.sp, maxLines = 1)
+        Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
     }
 }
 
@@ -356,7 +356,7 @@ private fun <T> Segmented(
                 shape = SegmentedButtonDefaults.itemShape(index, options.size),
                 icon = {},
             ) {
-                Text(label(option), fontSize = 13.sp, maxLines = 1)
+                Text(label(option), style = MaterialTheme.typography.bodyMedium, maxLines = 1)
             }
         }
     }
