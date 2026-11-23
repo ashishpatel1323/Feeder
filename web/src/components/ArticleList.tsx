@@ -9,6 +9,7 @@ import { isWatched, positionLabel } from '../lib/videopos'
 import { Icon, IconButton } from './Icon'
 import { isShared, siteOf } from '../lib/share'
 import { articleVideoId } from '../lib/youtube'
+import { AddToPlaylistChip, useManualMembership } from './AddToPlaylist'
 
 interface Props {
   title: string
@@ -266,6 +267,7 @@ export function ArticleList(p: Props) {
   const s = p.settings
   const network = useNetwork()
   const online = network && !s.offlineMode
+  const inPlaylists = useManualMembership()
   const grouped = s.grouping !== 'none'
 
   const [sheet, setSheet] = useState(false)
@@ -552,6 +554,7 @@ export function ArticleList(p: Props) {
                                 <Icon name="download" size={14} />
                               </span>
                             ) : null}
+                            <AddToPlaylistChip id={item.id} title={item.title} inPlaylist={inPlaylists.has(item.id)} />
                           </div>
                           {s.snippetLines > 0 && item.snippet ? (
                             <div className="row-snippet" style={{ WebkitLineClamp: s.snippetLines }}>

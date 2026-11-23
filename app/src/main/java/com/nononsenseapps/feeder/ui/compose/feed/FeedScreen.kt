@@ -81,6 +81,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
@@ -157,8 +158,11 @@ import com.nononsenseapps.feeder.ui.compose.navigation.DownloadsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.EditFeedDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.FeedDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.HomeDestination
+import com.nononsenseapps.feeder.ui.compose.navigation.PlaylistsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.SearchFeedDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.SettingsDestination
+import com.nononsenseapps.feeder.ui.compose.playlists.LocalAddToPlaylist
+import com.nononsenseapps.feeder.ui.compose.playlists.rememberAddToPlaylist
 import com.nononsenseapps.feeder.ui.compose.pullrefresh.PullRefreshIndicator
 import com.nononsenseapps.feeder.ui.compose.pullrefresh.pullRefresh
 import com.nononsenseapps.feeder.ui.compose.pullrefresh.rememberPullRefreshState
@@ -335,277 +339,281 @@ fun FeedScreen(
         value = withContext(Dispatchers.IO) { offlineVideos.savedIds().size }
     }
 
-    ScreenWithNavDrawer(
-        feedsAndTags = pagedNavDrawerItems,
-        onToggleTagExpansion = { tag ->
-            viewModel.toggleTagExpansion(tag)
-        },
-        showFolderControls = hasTags,
-        onExpandAllTags = viewModel::expandAllTags,
-        onCollapseAllTags = viewModel::collapseAllTags,
-        onDrawerItemSelect = { feedId, tag ->
-            FeedDestination.navigate(navController, feedId = feedId, tag = tag)
-        },
-        focusRequester = focusNavDrawer,
-        drawerState = drawerState,
-        navDrawerListState = navDrawerListStateToUse,
-        downloadsCount = downloadsCount + downloadJobs.size,
-        onDownloadsClick = { DownloadsDestination.navigate(navController) },
-        onHomeClick = { HomeDestination.navigate(navController) },
-    ) {
-        FeedScreen(
-            viewState = viewState,
-            onRefreshVisible = {
-                viewModel.requestImmediateSyncOfCurrentFeedOrTag()
+    val addToPlaylist = rememberAddToPlaylist()
+    CompositionLocalProvider(LocalAddToPlaylist provides addToPlaylist) {
+        ScreenWithNavDrawer(
+            feedsAndTags = pagedNavDrawerItems,
+            onToggleTagExpansion = { tag ->
+                viewModel.toggleTagExpansion(tag)
             },
-            onRefreshAll = {
-                viewModel.requestImmediateSyncOfAll()
-                coroutineScope.launch {
-                    if (feedListState.firstVisibleItemIndex != 0) {
-                        feedListState.animateScrollToItem(0)
-                    }
-                    if (feedGridState.firstVisibleItemIndex != 0) {
-                        feedGridState.animateScrollToItem(0)
-                    }
-                }
+            showFolderControls = hasTags,
+            onExpandAllTags = viewModel::expandAllTags,
+            onCollapseAllTags = viewModel::collapseAllTags,
+            onDrawerItemSelect = { feedId, tag ->
+                FeedDestination.navigate(navController, feedId = feedId, tag = tag)
             },
-            onMarkAllAsRead = {
-                viewModel.markAllAsRead()
-            },
-            onShowToolbarMenu = { visible ->
-                viewModel.setToolbarMenuVisible(visible)
-            },
-            ttsOnPlay = viewModel::ttsPlay,
-            ttsOnPause = viewModel::ttsPause,
-            ttsOnStop = viewModel::ttsStop,
-            ttsOnSkipNext = viewModel::ttsSkipNext,
-            ttsOnSelectLanguage = viewModel::ttsOnSelectLanguage,
-            readAloudProgress = readAloudProgress,
-            ttsOnSeekTo = viewModel::ttsSeekTo,
-            ttsOnSetSpeed = viewModel::ttsSetSpeed,
-            ttsOnGoToSpokenText = {
-                viewModel.ttsFocusSpokenText()?.let { ArticleDestination.navigate(navController, it) }
-            },
-            readAloudNeighbors = readAloudNeighbors,
-            readAloudAutoContinue = readAloudAutoContinue,
-            ttsOnSkipArticle = viewModel::ttsSkipArticle,
-            ttsOnSetAutoContinue = viewModel::ttsSetAutoContinue,
-            ttsDiagnostics = viewModel::ttsDiagnostics,
-            podcastOnPlay = viewModel::podcastPlay,
-            podcastOnPause = viewModel::podcastPause,
-            podcastOnStop = viewModel::podcastStop,
-            podcastOnSeekBack = { viewModel.podcastSeekBy(-10_000) },
-            podcastOnSeekForward = { viewModel.podcastSeekBy(10_000) },
-            podcastOnSeekTo = viewModel::podcastSeekTo,
-            onAddFeed = { SearchFeedDestination.navigate(navController) },
-            onEditFeed = { feedId ->
-                EditFeedDestination.navigate(navController, feedId)
-            },
-            onShowEditDialog = {
-                viewModel.setShowEditDialog(true)
-            },
-            onDismissEditDialog = {
-                viewModel.setShowEditDialog(false)
-            },
-            onDeleteFeeds = { feedIds ->
-                viewModel.deleteFeeds(feedIds.toList())
-            },
-            onRenameTag = { oldTag, newTag ->
-                viewModel.renameTag(oldTag, newTag)
-            },
-            onShowDeleteDialog = {
-                viewModel.setShowDeleteDialog(true)
-            },
-            onDismissDeleteDialog = {
-                viewModel.setShowDeleteDialog(false)
-            },
-            onShowRenameTagDialog = {
-                viewModel.setShowRenameTagDialog(true)
-            },
-            onDismissRenameTagDialog = {
-                viewModel.setShowRenameTagDialog(false)
-            },
-            onSettings = {
-                SettingsDestination.navigate(navController)
-            },
-            onImport = {
-                try {
-                    opmlImporter.launch(
-                        arrayOf(
-                            // All valid for OPML files
-                            "text/xml",
-                            "text/x-opml",
-                            "application/xml",
-                            // This is the mimetype the file actually gets when exported
-                            "application/json",
-                            "application/octet-stream",
-                            // But just in case a file isn't named right etc, accept all
-                            "*/*",
-                        ),
-                    )
-                } catch (_: Exception) {
-                    // ActivityNotFoundException in particular
-                    coroutineScope.launch {
-                        toastMaker.makeToast(R.string.failed_to_import_OPML)
-                    }
-                }
-            },
-            onExportOPML = {
-                try {
-                    opmlExporter.launch("feeder-export-${LocalDate.now()}-${LocalTime.now().toSecondOfDay()}.opml")
-                } catch (_: Exception) {
-                    // ActivityNotFoundException in particular
-                    coroutineScope.launch {
-                        toastMaker.makeToast(R.string.failed_to_export_OPML)
-                    }
-                }
-            },
-            onImportSavedArticles = {
-                try {
-                    savedArticleImporter.launch(
-                        arrayOf(
-                            "text/plain",
-                            // This is the mimetype the file may get from older exports
-                            "application/octet-stream",
-                            // But just in case a file isn't named right etc, accept all
-                            "*/*",
-                        ),
-                    )
-                } catch (_: Exception) {
-                    // ActivityNotFoundException in particular
-                    coroutineScope.launch {
-                        toastMaker.makeToast(R.string.failed_to_import_saved_articles)
-                    }
-                }
-            },
-            onExportSavedArticles = {
-                try {
-                    savedArticleExporter.launch(
-                        "feeder-saved-articles-${LocalDate.now()}-${
-                            LocalTime.now().toSecondOfDay()
-                        }.json",
-                    )
-                } catch (_: Exception) {
-                    // ActivityNotFoundException in particular
-                    coroutineScope.launch {
-                        toastMaker.makeToast(R.string.failed_to_export_saved_articles)
-                    }
-                }
-            },
+            focusRequester = focusNavDrawer,
             drawerState = drawerState,
-            markAsUnread = { itemId, unread ->
-                if (unread) {
-                    viewModel.markAsUnread(itemId)
-                } else {
-                    viewModel.markAsRead(itemId)
-                }
-            },
-            markAsReadOnSwipe = { itemId, unread, saved ->
-                when {
-                    viewState.filter.onlyUnread -> {
-                        // Get rid of it
-                        viewModel.markAsReadOnSwipe(itemId)
+            navDrawerListState = navDrawerListStateToUse,
+            downloadsCount = downloadsCount + downloadJobs.size,
+            onDownloadsClick = { DownloadsDestination.navigate(navController) },
+            onPlaylistsClick = { PlaylistsDestination.navigate(navController) },
+            onHomeClick = { HomeDestination.navigate(navController) },
+        ) {
+            FeedScreen(
+                viewState = viewState,
+                onRefreshVisible = {
+                    viewModel.requestImmediateSyncOfCurrentFeedOrTag()
+                },
+                onRefreshAll = {
+                    viewModel.requestImmediateSyncOfAll()
+                    coroutineScope.launch {
+                        if (feedListState.firstVisibleItemIndex != 0) {
+                            feedListState.animateScrollToItem(0)
+                        }
+                        if (feedGridState.firstVisibleItemIndex != 0) {
+                            feedGridState.animateScrollToItem(0)
+                        }
                     }
-
-                    viewState.filter.onlyUnreadAndSaved && !saved -> {
-                        // Get rid of it
-                        viewModel.markAsReadOnSwipe(itemId)
+                },
+                onMarkAllAsRead = {
+                    viewModel.markAllAsRead()
+                },
+                onShowToolbarMenu = { visible ->
+                    viewModel.setToolbarMenuVisible(visible)
+                },
+                ttsOnPlay = viewModel::ttsPlay,
+                ttsOnPause = viewModel::ttsPause,
+                ttsOnStop = viewModel::ttsStop,
+                ttsOnSkipNext = viewModel::ttsSkipNext,
+                ttsOnSelectLanguage = viewModel::ttsOnSelectLanguage,
+                readAloudProgress = readAloudProgress,
+                ttsOnSeekTo = viewModel::ttsSeekTo,
+                ttsOnSetSpeed = viewModel::ttsSetSpeed,
+                ttsOnGoToSpokenText = {
+                    viewModel.ttsFocusSpokenText()?.let { ArticleDestination.navigate(navController, it) }
+                },
+                readAloudNeighbors = readAloudNeighbors,
+                readAloudAutoContinue = readAloudAutoContinue,
+                ttsOnSkipArticle = viewModel::ttsSkipArticle,
+                ttsOnSetAutoContinue = viewModel::ttsSetAutoContinue,
+                ttsDiagnostics = viewModel::ttsDiagnostics,
+                podcastOnPlay = viewModel::podcastPlay,
+                podcastOnPause = viewModel::podcastPause,
+                podcastOnStop = viewModel::podcastStop,
+                podcastOnSeekBack = { viewModel.podcastSeekBy(-10_000) },
+                podcastOnSeekForward = { viewModel.podcastSeekBy(10_000) },
+                podcastOnSeekTo = viewModel::podcastSeekTo,
+                onAddFeed = { SearchFeedDestination.navigate(navController) },
+                onEditFeed = { feedId ->
+                    EditFeedDestination.navigate(navController, feedId)
+                },
+                onShowEditDialog = {
+                    viewModel.setShowEditDialog(true)
+                },
+                onDismissEditDialog = {
+                    viewModel.setShowEditDialog(false)
+                },
+                onDeleteFeeds = { feedIds ->
+                    viewModel.deleteFeeds(feedIds.toList())
+                },
+                onRenameTag = { oldTag, newTag ->
+                    viewModel.renameTag(oldTag, newTag)
+                },
+                onShowDeleteDialog = {
+                    viewModel.setShowDeleteDialog(true)
+                },
+                onDismissDeleteDialog = {
+                    viewModel.setShowDeleteDialog(false)
+                },
+                onShowRenameTagDialog = {
+                    viewModel.setShowRenameTagDialog(true)
+                },
+                onDismissRenameTagDialog = {
+                    viewModel.setShowRenameTagDialog(false)
+                },
+                onSettings = {
+                    SettingsDestination.navigate(navController)
+                },
+                onImport = {
+                    try {
+                        opmlImporter.launch(
+                            arrayOf(
+                                // All valid for OPML files
+                                "text/xml",
+                                "text/x-opml",
+                                "application/xml",
+                                // This is the mimetype the file actually gets when exported
+                                "application/json",
+                                "application/octet-stream",
+                                // But just in case a file isn't named right etc, accept all
+                                "*/*",
+                            ),
+                        )
+                    } catch (_: Exception) {
+                        // ActivityNotFoundException in particular
+                        coroutineScope.launch {
+                            toastMaker.makeToast(R.string.failed_to_import_OPML)
+                        }
                     }
-
-                    unread -> {
+                },
+                onExportOPML = {
+                    try {
+                        opmlExporter.launch("feeder-export-${LocalDate.now()}-${LocalTime.now().toSecondOfDay()}.opml")
+                    } catch (_: Exception) {
+                        // ActivityNotFoundException in particular
+                        coroutineScope.launch {
+                            toastMaker.makeToast(R.string.failed_to_export_OPML)
+                        }
+                    }
+                },
+                onImportSavedArticles = {
+                    try {
+                        savedArticleImporter.launch(
+                            arrayOf(
+                                "text/plain",
+                                // This is the mimetype the file may get from older exports
+                                "application/octet-stream",
+                                // But just in case a file isn't named right etc, accept all
+                                "*/*",
+                            ),
+                        )
+                    } catch (_: Exception) {
+                        // ActivityNotFoundException in particular
+                        coroutineScope.launch {
+                            toastMaker.makeToast(R.string.failed_to_import_saved_articles)
+                        }
+                    }
+                },
+                onExportSavedArticles = {
+                    try {
+                        savedArticleExporter.launch(
+                            "feeder-saved-articles-${LocalDate.now()}-${
+                                LocalTime.now().toSecondOfDay()
+                            }.json",
+                        )
+                    } catch (_: Exception) {
+                        // ActivityNotFoundException in particular
+                        coroutineScope.launch {
+                            toastMaker.makeToast(R.string.failed_to_export_saved_articles)
+                        }
+                    }
+                },
+                drawerState = drawerState,
+                markAsUnread = { itemId, unread ->
+                    if (unread) {
                         viewModel.markAsUnread(itemId)
-                    }
-
-                    else -> {
+                    } else {
                         viewModel.markAsRead(itemId)
                     }
-                }
-            },
-            markBeforeAsRead = { cursor ->
-                viewModel.markBeforeAsRead(cursor)
-            },
-            markAfterAsRead = { cursor ->
-                viewModel.markAfterAsRead(cursor)
-            },
-            onOpenFeedItem = { itemId ->
-                viewModel.openArticle(
-                    itemId = itemId,
-                    openInBrowser = { articleLink ->
-                        activityLauncher.openLinkInBrowser(articleLink)
-                    },
-                    openInCustomTab = { articleLink ->
-                        activityLauncher.openLinkInCustomTab(articleLink, toolbarColor)
-                    },
-                    navigateToArticle = {
-                        ArticleDestination.navigate(navController, itemId)
-                    },
-                )
-            },
-            onOpenFeedItemInReader = { itemId ->
-                viewModel.openArticleInReader(
-                    itemId = itemId,
-                    navigateToArticle = {
-                        ArticleDestination.navigate(navController, itemId)
-                    },
-                )
-            },
-            onOpenFeedItemInCustomTab = { itemId ->
-                viewModel.openArticleInCustomTab(
-                    itemId = itemId,
-                    openInCustomTab = { articleLink ->
-                        activityLauncher.openLinkInCustomTab(articleLink, toolbarColor)
-                    },
-                    onNoArticleLink = {
-                        coroutineScope.launch {
-                            toastMaker.makeToast(R.string.no_article_link_custom_tab)
+                },
+                markAsReadOnSwipe = { itemId, unread, saved ->
+                    when {
+                        viewState.filter.onlyUnread -> {
+                            // Get rid of it
+                            viewModel.markAsReadOnSwipe(itemId)
                         }
-                    },
-                )
-            },
-            onOpenFeedItemInBrowser = { itemId ->
-                viewModel.openArticleInBrowser(
-                    itemId = itemId,
-                    openInBrowser = { articleLink ->
-                        activityLauncher.openLinkInBrowser(articleLink)
-                    },
-                    onNoArticleLink = {
-                        coroutineScope.launch {
-                            toastMaker.makeToast(R.string.no_article_link_browser)
+
+                        viewState.filter.onlyUnreadAndSaved && !saved -> {
+                            // Get rid of it
+                            viewModel.markAsReadOnSwipe(itemId)
                         }
-                    },
-                )
-            },
-            onSetBookmark = { itemId, value ->
-                viewModel.setBookmarked(itemId, value)
-            },
-            filterCallback = viewModel.filterCallback,
-            onSetFeedListGrouping = viewModel::setFeedListGrouping,
-            onSetSorting = viewModel::setCurrentSorting,
-            onMarkGroupAsRead = { groupKey -> viewModel.markGroupAsRead(groupKey) },
-            onShowSearchBar = viewModel::setSearchBarVisible,
-            searchCallback = viewModel::searchCallback,
-            feedListState = feedListState,
-            feedGridState = feedGridState,
-            pagedFeedItems = pagedFeedItems,
-            translatedFeedCards = translatedFeedCards,
-            onTranslateFeedCard = viewModel::translateFeedCardIfNeeded,
-            snackbarHostState = snackbarHostState,
-            onDeleteItem = { itemId -> deleteWithUndo(listOf(itemId)) },
-            selection =
-                FeedSelection(
-                    ids = selectedIds,
-                    onToggle = { id -> selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id },
-                    onClear = { selectedIds = emptySet() },
-                    onMarkRead = { read ->
-                        viewModel.setReadState(selectedIds, read)
-                        selectedIds = emptySet()
-                    },
-                    onDelete = {
-                        deleteWithUndo(selectedIds.toList())
-                        selectedIds = emptySet()
-                    },
-                ),
-        )
+
+                        unread -> {
+                            viewModel.markAsUnread(itemId)
+                        }
+
+                        else -> {
+                            viewModel.markAsRead(itemId)
+                        }
+                    }
+                },
+                markBeforeAsRead = { cursor ->
+                    viewModel.markBeforeAsRead(cursor)
+                },
+                markAfterAsRead = { cursor ->
+                    viewModel.markAfterAsRead(cursor)
+                },
+                onOpenFeedItem = { itemId ->
+                    viewModel.openArticle(
+                        itemId = itemId,
+                        openInBrowser = { articleLink ->
+                            activityLauncher.openLinkInBrowser(articleLink)
+                        },
+                        openInCustomTab = { articleLink ->
+                            activityLauncher.openLinkInCustomTab(articleLink, toolbarColor)
+                        },
+                        navigateToArticle = {
+                            ArticleDestination.navigate(navController, itemId)
+                        },
+                    )
+                },
+                onOpenFeedItemInReader = { itemId ->
+                    viewModel.openArticleInReader(
+                        itemId = itemId,
+                        navigateToArticle = {
+                            ArticleDestination.navigate(navController, itemId)
+                        },
+                    )
+                },
+                onOpenFeedItemInCustomTab = { itemId ->
+                    viewModel.openArticleInCustomTab(
+                        itemId = itemId,
+                        openInCustomTab = { articleLink ->
+                            activityLauncher.openLinkInCustomTab(articleLink, toolbarColor)
+                        },
+                        onNoArticleLink = {
+                            coroutineScope.launch {
+                                toastMaker.makeToast(R.string.no_article_link_custom_tab)
+                            }
+                        },
+                    )
+                },
+                onOpenFeedItemInBrowser = { itemId ->
+                    viewModel.openArticleInBrowser(
+                        itemId = itemId,
+                        openInBrowser = { articleLink ->
+                            activityLauncher.openLinkInBrowser(articleLink)
+                        },
+                        onNoArticleLink = {
+                            coroutineScope.launch {
+                                toastMaker.makeToast(R.string.no_article_link_browser)
+                            }
+                        },
+                    )
+                },
+                onSetBookmark = { itemId, value ->
+                    viewModel.setBookmarked(itemId, value)
+                },
+                filterCallback = viewModel.filterCallback,
+                onSetFeedListGrouping = viewModel::setFeedListGrouping,
+                onSetSorting = viewModel::setCurrentSorting,
+                onMarkGroupAsRead = { groupKey -> viewModel.markGroupAsRead(groupKey) },
+                onShowSearchBar = viewModel::setSearchBarVisible,
+                searchCallback = viewModel::searchCallback,
+                feedListState = feedListState,
+                feedGridState = feedGridState,
+                pagedFeedItems = pagedFeedItems,
+                translatedFeedCards = translatedFeedCards,
+                onTranslateFeedCard = viewModel::translateFeedCardIfNeeded,
+                snackbarHostState = snackbarHostState,
+                onDeleteItem = { itemId -> deleteWithUndo(listOf(itemId)) },
+                selection =
+                    FeedSelection(
+                        ids = selectedIds,
+                        onToggle = { id -> selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id },
+                        onClear = { selectedIds = emptySet() },
+                        onMarkRead = { read ->
+                            viewModel.setReadState(selectedIds, read)
+                            selectedIds = emptySet()
+                        },
+                        onDelete = {
+                            deleteWithUndo(selectedIds.toList())
+                            selectedIds = emptySet()
+                        },
+                    ),
+            )
+        }
     }
 }
 

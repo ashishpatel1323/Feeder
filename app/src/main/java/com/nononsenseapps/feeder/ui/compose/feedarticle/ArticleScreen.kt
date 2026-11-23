@@ -768,6 +768,9 @@ fun ArticleContent(
         value = withContext(Dispatchers.IO) { offlineVideos.savedFiles(viewState.articleId) != null }
     }
     val youtubeId = viewState.youtubeId?.takeUnless { hasSavedVideo || offlineMode }
+    val addToPlaylist =
+        com.nononsenseapps.feeder.ui.compose.playlists
+            .rememberAddToPlaylist()
 
     ReaderView(
         screenType = screenType,
@@ -796,6 +799,7 @@ fun ArticleContent(
         isUnread = viewState.isUnread,
         onMarkAsUnread = onMarkAsUnread,
         onDelete = onDelete,
+        onAddToPlaylist = { addToPlaylist(viewState.articleId, viewState.articleTitle) },
         authorDate =
             when {
                 viewState.author == null && viewState.pubDate != null ->

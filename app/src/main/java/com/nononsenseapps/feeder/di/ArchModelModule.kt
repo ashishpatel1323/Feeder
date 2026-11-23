@@ -103,4 +103,5 @@ val archModelModule =
         bindWithComposableViewModelScope<TextSettingsViewModel>()
         bindWithComposableViewModelScope<DownloadsViewModel>()
         bindWithComposableViewModelScope<com.nononsenseapps.feeder.ui.compose.home.HomeViewModel>()
+        bindWithComposableViewModelScope<com.nononsenseapps.feeder.ui.compose.playlists.PlaylistsViewModel>()
     }

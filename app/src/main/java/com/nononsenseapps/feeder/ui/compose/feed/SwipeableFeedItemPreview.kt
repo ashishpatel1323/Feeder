@@ -11,6 +11,8 @@ import androidx.compose.foundation.gestures.DraggableAnchors
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.anchoredDraggable
 import androidx.compose.foundation.gestures.animateTo
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -46,6 +48,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -108,6 +114,12 @@ fun SwipeableFeedItemPreview(
     onToggleSelect: (() -> Unit)? = null,
 ) {
     val coroutineScope = rememberCoroutineScope()
+    // The swipe layer sits above the row, so the Playlist button can't take taps itself: a tap
+    // that lands on it (window coordinates) opens Add to playlist instead of the article
+    val playlistChipBounds = remember { PlaylistChipBounds() }
+    val addToPlaylist = com.nononsenseapps.feeder.ui.compose.playlists.LocalAddToPlaylist.current
+    var rowOrigin by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    var lastDown by remember { mutableStateOf<androidx.compose.ui.geometry.Offset?>(null) }
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val anchoredDraggableState = remember { AnchoredDraggableState(FeedItemSwipeState.CENTER) }
     val onSwipeCallback by rememberUpdatedState(newValue = onSwipe)
@@ -206,7 +218,12 @@ fun SwipeableFeedItemPreview(
                             FeedItemStyle.COMPACT, FeedItemStyle.SUPER_COMPACT -> RectangleShape
                             else -> MaterialTheme.shapes.medium
                         },
-                ).combinedClickable(
+                ).onGloballyPositioned { rowOrigin = it.positionInWindow() }
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        lastDown = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial).position
+                    }
+                }.combinedClickable(
                     onLongClick = {
                         if (selectionMode && onToggleSelect != null) {
                             onToggleSelect()
@@ -215,8 +232,12 @@ fun SwipeableFeedItemPreview(
                         }
                     },
                     onClick = {
+                        val tap = lastDown?.let { rowOrigin + it }
+                        val onChip = tap != null && playlistChipBounds.bounds?.contains(tap) == true
                         if (selectionMode && onToggleSelect != null) {
                             onToggleSelect()
+                        } else if (onChip && addToPlaylist != null) {
+                            addToPlaylist(item.id, item.title)
                         } else {
                             onItemClick()
                         }
@@ -328,7 +349,10 @@ fun SwipeableFeedItemPreview(
 
         val compactLandscape = isCompactLandscape()
 
-        CompositionLocalProvider(LocalFeedItemSelect provides if (selectionMode) null else onToggleSelect) {
+        CompositionLocalProvider(
+            LocalFeedItemSelect provides if (selectionMode) null else onToggleSelect,
+            LocalPlaylistChipBounds provides playlistChipBounds,
+        ) {
             when (feedItemStyle) {
                 FeedItemStyle.CARD -> {
                     FeedItemCard(
@@ -537,6 +561,13 @@ fun SwipeableFeedItemPreview(
         }
     }
 }
+
+/** Where the row's Playlist button is on screen, so a tap there can be told from a tap on the row. */
+class PlaylistChipBounds {
+    var bounds: androidx.compose.ui.geometry.Rect? = null
+}
+
+val LocalPlaylistChipBounds = compositionLocalOf<PlaylistChipBounds?> { null }
 
 /** Set by [SwipeableFeedItemPreview] so the long-press menu can offer "Select". */
 val LocalFeedItemSelect = compositionLocalOf<(() -> Unit)?> { null }

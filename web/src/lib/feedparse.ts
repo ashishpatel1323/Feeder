@@ -18,6 +18,8 @@ export interface ParsedArticle {
   published: number | null
   tags: string[]
   enclosureUrl: string | null
+  /** Length of the audio or video in seconds (itunes:duration and the like), null when not given. */
+  duration?: number | null
 }
 
 export interface ParsedFeed {
@@ -149,6 +151,37 @@ interface RawItem {
   tags: string[]
   enclosureUrl: string | null
   enclosureType: string | null
+  duration?: number | null
+}
+
+/** "3600", "61:05" or "1:01:05" (itunes:duration) → seconds; null when it isn't a length. */
+export function parseDuration(text: string | null | undefined): number | null {
+  const t = (text ?? '').trim()
+  if (!t) return null
+  if (/^\d+(\.\d+)?$/.test(t)) {
+    const n = Math.round(Number(t))
+    return n > 0 ? n : null
+  }
+  if (!/^\d+(:\d{1,2}){1,2}(\.\d+)?$/.test(t)) return null
+  const n = t.split(':').reduce((acc, part) => acc * 60 + Number(part), 0)
+  return n > 0 ? Math.round(n) : null
+}
+
+/** itunes:duration, or the duration attribute of media:content (also inside media:group). */
+function durationOf(el: Element): number | null {
+  const it = parseDuration(childText(el, 'duration'))
+  if (it) return it
+  for (const c of Array.from(el.children)) {
+    if (c.localName === 'content' && c.getAttribute('duration')) {
+      const d = parseDuration(c.getAttribute('duration'))
+      if (d) return d
+    }
+    if (c.localName === 'group') {
+      const d = durationOf(c)
+      if (d) return d
+    }
+  }
+  return null
 }
 
 function finish(feedUrl: string, raw: RawItem[], alternateId: boolean): ParsedArticle[] {
@@ -183,6 +216,7 @@ function finish(feedUrl: string, raw: RawItem[], alternateId: boolean): ParsedAr
         published: p.r.published,
         tags: p.r.tags,
         enclosureUrl: p.r.enclosureUrl,
+        duration: p.r.duration ?? null,
       }
     })
 }
@@ -229,6 +263,7 @@ function parseXml(text: string, feedUrl: string, alternateId: boolean): ParsedFe
           .filter(Boolean),
         enclosureUrl: enclosure?.getAttribute('href') ?? null,
         enclosureType: enclosure?.getAttribute('type') ?? null,
+        duration: durationOf(e),
       }
     })
     return {
@@ -260,6 +295,7 @@ function parseXml(text: string, feedUrl: string, alternateId: boolean): ParsedFe
         .filter(Boolean),
       enclosureUrl: enclosure?.getAttribute('url') ?? null,
       enclosureType: enclosure?.getAttribute('type') ?? null,
+      duration: durationOf(i),
     }
   })
   // <image><url>…</url></image>, or the podcast cover in <itunes:image href="…"/>
@@ -288,7 +324,7 @@ interface JsonFeedItem {
   author?: { name?: string }
   authors?: { name?: string }[]
   tags?: string[]
-  attachments?: { url?: string; mime_type?: string }[]
+  attachments?: { url?: string; mime_type?: string; duration_in_seconds?: number }[]
 }
 
 function parseJson(text: string, feedUrl: string, alternateId: boolean): ParsedFeed {
@@ -313,6 +349,7 @@ function parseJson(text: string, feedUrl: string, alternateId: boolean): ParsedF
     tags: i.tags ?? [],
     enclosureUrl: i.attachments?.[0]?.url ?? null,
     enclosureType: i.attachments?.[0]?.mime_type ?? null,
+    duration: parseDuration(String(i.attachments?.[0]?.duration_in_seconds ?? '')),
   }))
   return {
     title: data.title ?? '',

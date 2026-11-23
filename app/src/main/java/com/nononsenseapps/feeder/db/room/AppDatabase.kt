@@ -56,7 +56,7 @@ private const val LOG_TAG = "FEEDER_APPDB"
     views = [
         FeedsWithItemsForNavDrawer::class,
     ],
-    version = 43,
+    version = 44,
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -146,6 +146,7 @@ fun getAllMigrations(di: DI) =
         MIGRATION_40_41,
         MIGRATION_41_42,
         MigrationFrom42To43,
+        MigrationFrom43To44,
     )
 
 /*
@@ -282,6 +283,18 @@ object MIGRATION_41_42 : Migration(41, 42) {
 }
 
 /** Offline reading: when an article was downloaded for offline reading. */
+
+// Podcast episode lengths, for playlist length rules
+object MigrationFrom43To44 : Migration(43, 44) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            ALTER TABLE feed_items ADD COLUMN enclosure_duration INTEGER
+            """.trimIndent(),
+        )
+    }
+}
+
 object MigrationFrom42To43 : Migration(42, 43) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL(

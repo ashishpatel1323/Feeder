@@ -143,6 +143,15 @@ class ReadAloudQueue(
             }
     }
 
+    /**
+     * The text to read aloud for [article]: the full text when it can be had (not for YouTube
+     * pages, which have none), else the feed text. Null when there is nothing to read.
+     */
+    suspend fun speechTextFor(article: Article): String? {
+        val fullText = if (article.youtubeId == null) loadSpeechText(article, fullText = true) else null
+        return fullText ?: loadSpeechText(article, fullText = false)
+    }
+
     /** The same text the article screen shows and reads, so highlights match when it is opened. */
     private suspend fun loadSpeechText(
         article: Article,

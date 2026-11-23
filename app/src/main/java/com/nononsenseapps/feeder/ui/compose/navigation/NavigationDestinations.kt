@@ -34,6 +34,7 @@ import com.nononsenseapps.feeder.ui.compose.editfeed.EditFeedScreenViewModel
 import com.nononsenseapps.feeder.ui.compose.feed.FeedScreen
 import com.nononsenseapps.feeder.ui.compose.feedarticle.ArticleScreen
 import com.nononsenseapps.feeder.ui.compose.home.HomeScreen
+import com.nononsenseapps.feeder.ui.compose.playlists.PlaylistsScreen
 import com.nononsenseapps.feeder.ui.compose.searchfeed.SearchFeedScreen
 import com.nononsenseapps.feeder.ui.compose.settings.SettingsScreen
 import com.nononsenseapps.feeder.ui.compose.settings.TextSettingsScreen
@@ -224,6 +225,39 @@ data object DownloadsDestination : NavigationDestination(
     }
 }
 
+/** Playlists to listen to (smart and hand-made), with the Now playing bar and car mode. */
+data object PlaylistsDestination : NavigationDestination(
+    path = "playlists",
+    navArguments = emptyList(),
+    // The playlist notification opens Playlists
+    deepLinks =
+        listOf(
+            navDeepLink {
+                uriPattern = "$DEEP_LINK_BASE_URI/playlists"
+            },
+        ),
+) {
+    fun navigate(navController: NavController) {
+        navController.navigate(path) {
+            launchSingleTop = true
+        }
+    }
+
+    @Composable
+    override fun RegisterScreen(
+        navController: NavController,
+        backStackEntry: NavBackStackEntry,
+        navDrawerListState: LazyListState,
+        mainActivityViewModel: MainActivityViewModel,
+    ) {
+        PlaylistsScreen(
+            viewModel = backStackEntry.diAwareViewModel(),
+            onNavigateUp = { navController.popBackStack() },
+            onOpenArticle = { id -> ArticleDestination.navigate(navController, itemId = id) },
+        )
+    }
+}
+
 /** Home: every feed as a tile, with type and folder filters. The start screen. */
 data object HomeDestination : NavigationDestination(
     path = "home",
@@ -252,6 +286,7 @@ data object HomeDestination : NavigationDestination(
             onOpenFolderArticles = { tag -> FeedDestination.navigate(navController, tag = tag, keepBackStack = true) },
             onOpenArticles = { FeedDestination.navigate(navController, feedId = ID_ALL_FEEDS, keepBackStack = true) },
             onAddFeed = { SearchFeedDestination.navigate(navController) },
+            onOpenPlaylists = { PlaylistsDestination.navigate(navController) },
         )
     }
 }

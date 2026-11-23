@@ -1,0 +1,956 @@
+package com.nononsenseapps.feeder.ui.compose.playlists
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Article
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.Headphones
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil3.compose.AsyncImage
+import com.nononsenseapps.feeder.R
+import com.nononsenseapps.feeder.db.room.PlaylistCandidate
+import com.nononsenseapps.feeder.model.playlists.ItemKind
+import com.nononsenseapps.feeder.model.playlists.PLAYLIST_COLORS
+import com.nononsenseapps.feeder.model.playlists.PLAYLIST_ICONS
+import com.nononsenseapps.feeder.model.playlists.PlayStatus
+import com.nononsenseapps.feeder.model.playlists.Playlist
+import com.nononsenseapps.feeder.model.playlists.PlaylistSort
+import com.nononsenseapps.feeder.model.playlists.QueueState
+import com.nononsenseapps.feeder.model.playlists.SmartRules
+import com.nononsenseapps.feeder.model.playlists.describe
+import com.nononsenseapps.feeder.model.playlists.formatTotal
+import com.nononsenseapps.feeder.model.playlists.isDownloaded
+import com.nononsenseapps.feeder.model.playlists.items
+import com.nononsenseapps.feeder.model.playlists.kind
+import com.nononsenseapps.feeder.model.playlists.label
+import com.nononsenseapps.feeder.model.playlists.matches
+import com.nononsenseapps.feeder.model.playlists.seconds
+import com.nononsenseapps.feeder.model.playlists.totalSeconds
+import com.nononsenseapps.feeder.model.playlists.withinLabel
+import com.nononsenseapps.feeder.ui.compose.theme.SensibleTopAppBar
+import kotlinx.coroutines.launch
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PlaylistsScreen(
+    viewModel: PlaylistsViewModel,
+    onNavigateUp: () -> Unit,
+    onOpenArticle: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val state by viewModel.viewState.collectAsStateWithLifecycle()
+    val queue by viewModel.queue.collectAsStateWithLifecycle()
+    val openId by viewModel.openId.collectAsStateWithLifecycle()
+    val open = openId?.let { id -> state.playlists.firstOrNull { it.id == id } }
+    var editing by remember { mutableStateOf<Playlist?>(null) }
+    var confirmDelete by remember { mutableStateOf<Playlist?>(null) }
+    var carMode by remember { mutableStateOf(false) }
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(viewModel) {
+        viewModel.messages.collect { m ->
+            scope.launch {
+                val r = snackbar.showSnackbar(m.text, actionLabel = m.actionLabel, duration = if (m.actionLabel != null) SnackbarDuration.Long else SnackbarDuration.Short)
+                if (r == SnackbarResult.ActionPerformed) m.action?.invoke()
+            }
+        }
+    }
+
+    BackHandler(enabled = open != null) { viewModel.open(null) }
+
+    Scaffold(
+        modifier = modifier.windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal)),
+        contentWindowInsets = WindowInsets.statusBars,
+        snackbarHost = { SnackbarHost(snackbar) },
+        topBar = {
+            SensibleTopAppBar(
+                title = open?.name ?: stringResource(R.string.playlists),
+                navigationIcon = {
+                    IconButton(onClick = { if (open != null) viewModel.open(null) else onNavigateUp() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.go_back))
+                    }
+                },
+                actions = {
+                    if (open == null) {
+                        LabeledAction(Icons.Default.Bolt, stringResource(R.string.playlist_new_smart).substringBefore(' ') + " smart") { editing = viewModel.newPlaylistDraft(true) }
+                        LabeledAction(Icons.Default.Add, stringResource(R.string.playlist_new)) { editing = viewModel.newPlaylistDraft(false) }
+                    } else {
+                        LabeledAction(Icons.Default.Edit, stringResource(if (open.smart) R.string.playlist_edit_rules else R.string.playlist_rename)) { editing = open }
+                        LabeledAction(Icons.Default.Delete, stringResource(R.string.playlist_delete)) { confirmDelete = open }
+                    }
+                },
+            )
+        },
+        bottomBar = {
+            if (queue.active) {
+                NowPlayingBar(queue, viewModel, onExpand = { carMode = true })
+            }
+        },
+    ) { padding ->
+        Box(Modifier.padding(padding).fillMaxSize()) {
+            if (open == null) {
+                PlaylistIndex(state, queue, onOpen = viewModel::open, onPlay = { viewModel.play(it) })
+            } else {
+                PlaylistDetail(open, state, queue, viewModel, onEdit = { editing = open }, onOpenArticle = onOpenArticle, onMessage = { text ->
+                    scope.launch { snackbar.showSnackbar(text) }
+                })
+            }
+        }
+    }
+
+    editing?.let { draft ->
+        PlaylistEditor(
+            initial = draft,
+            isNew = state.playlists.none { it.id == draft.id },
+            state = state,
+            onDismiss = { editing = null },
+            onSave = { pl, isNew ->
+                viewModel.save(pl)
+                editing = null
+                if (isNew) viewModel.open(pl.id)
+            },
+        )
+    }
+    confirmDelete?.let { pl ->
+        AlertDialog(
+            onDismissRequest = { confirmDelete = null },
+            text = { Text(stringResource(R.string.playlist_delete_confirm, pl.name)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    val before = state.playlists
+                    viewModel.delete(pl.id)
+                    confirmDelete = null
+                    scope.launch {
+                        if (snackbar.showSnackbar("Deleted ${pl.name}", actionLabel = "Undo") == SnackbarResult.ActionPerformed) viewModel.restore(before)
+                    }
+                }) { Text(stringResource(R.string.playlist_delete)) }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text(stringResource(R.string.playlist_cancel)) } },
+        )
+    }
+    if (carMode && queue.active) {
+        CarMode(queue, state, viewModel, onClose = { carMode = false })
+    }
+}
+
+@Composable
+private fun LabeledAction(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier =
+            Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(onClick = onClick)
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
+        Text(label, fontSize = 11.sp, maxLines = 1)
+    }
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text.uppercase(),
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 6.dp),
+    )
+}
+
+@Composable
+private fun PlaylistIndex(
+    state: PlaylistsViewState,
+    queue: QueueState,
+    onOpen: (String) -> Unit,
+    onPlay: (Playlist) -> Unit,
+) {
+    LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+        item {
+            Text(
+                stringResource(R.string.playlists_intro),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+            SectionLabel(stringResource(R.string.playlists_smart_section))
+        }
+        val smart = state.playlists.filter { it.smart }
+        smart.forEach { pl -> item(key = pl.id) { PlaylistRow(pl, state, queue, onOpen, onPlay) } }
+        item { SectionLabel(stringResource(R.string.playlists_manual_section)) }
+        val manual = state.playlists.filter { !it.smart }
+        if (manual.isEmpty()) {
+            item {
+                Text(
+                    stringResource(R.string.playlists_manual_empty),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
+        }
+        manual.forEach { pl -> item(key = pl.id) { PlaylistRow(pl, state, queue, onOpen, onPlay) } }
+    }
+}
+
+@Composable
+private fun PlaylistRow(
+    pl: Playlist,
+    state: PlaylistsViewState,
+    queue: QueueState,
+    onOpen: (String) -> Unit,
+    onPlay: (Playlist) -> Unit,
+) {
+    val items = remember(pl, state) { pl.items(state.candidates, state.ctx, state.byId) }
+    val total = remember(items, state.ctx) { items.totalSeconds(state.ctx).first }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable { onOpen(pl.id) }
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+    ) {
+        PlaylistTile(pl.icon, pl.color, 48)
+        Column(Modifier.weight(1f)) {
+            Text(pl.name, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val meta =
+                buildString {
+                    append(stringResource(if (pl.smart) R.string.playlist_smart else R.string.playlist_manual))
+                    append(" · ${items.size} items")
+                    if (total > 0) append(" · ${formatTotal(total)}")
+                    if (queue.playlistId == pl.id && queue.active) append(" · playing")
+                }
+            Text(meta, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        FilledTonalButton(onClick = { onPlay(pl) }, enabled = items.isNotEmpty(), contentPadding = PaddingValues(horizontal = 14.dp)) {
+            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(4.dp))
+            Text(stringResource(R.string.playlist_play))
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PlaylistDetail(
+    pl: Playlist,
+    state: PlaylistsViewState,
+    queue: QueueState,
+    viewModel: PlaylistsViewModel,
+    onEdit: () -> Unit,
+    onOpenArticle: (Long) -> Unit,
+    onMessage: (String) -> Unit,
+) {
+    val items = remember(pl, state) { pl.items(state.candidates, state.ctx, state.byId) }
+    val (total, unknown) = remember(items, state.ctx) { items.totalSeconds(state.ctx) }
+    val toDownload = items.filter { it.kind != ItemKind.ARTICLE && !it.isDownloaded(state.ctx) }
+    val feedTitles = remember(state.feeds) { state.feeds.toMap() }
+    val playingId = if (queue.playlistId == pl.id) queue.currentId else null
+    val addToPlaylist = rememberAddToPlaylist()
+
+    LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+        item {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                PlaylistTile(pl.icon, pl.color, 56)
+                Column {
+                    Text(
+                        stringResource(if (pl.smart) R.string.playlist_smart else R.string.playlist_manual).uppercase(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        buildString {
+                            append("${items.size} items")
+                            if (total > 0) append(" · ${formatTotal(total)}")
+                            if (unknown > 0) append(" · $unknown of unknown length")
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.padding(horizontal = 16.dp),
+            ) {
+                Button(onClick = { viewModel.play(pl) }, enabled = items.isNotEmpty()) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null)
+                    Spacer(Modifier.width(4.dp))
+                    Text(stringResource(R.string.playlist_play_all), fontWeight = FontWeight.Bold)
+                }
+                OutlinedButton(onClick = { viewModel.play(pl, shuffle = true) }, enabled = items.size > 1) {
+                    Icon(Icons.Default.Shuffle, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(stringResource(R.string.playlist_shuffle))
+                }
+                if (toDownload.isNotEmpty()) {
+                    OutlinedButton(onClick = {
+                        val n = viewModel.downloadAll(toDownload)
+                        onMessage("Downloading $n items")
+                    }) {
+                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(stringResource(R.string.playlist_download, toDownload.size))
+                    }
+                }
+            }
+            if (pl.smart) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                ) {
+                    pl.rules.describe { feedTitles[it] ?: "?" }.forEach { text ->
+                        FilterChip(selected = false, onClick = onEdit, label = { Text(text, fontSize = 13.sp) })
+                    }
+                    FilterChip(selected = false, onClick = onEdit, label = { Text("+ " + stringResource(R.string.playlist_add_rule), color = MaterialTheme.colorScheme.primary) })
+                }
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth()) {
+                    PlaylistSort.entries.forEachIndexed { i, s ->
+                        SegmentedButton(
+                            selected = pl.sort == s,
+                            onClick = { viewModel.save(pl.copy(sort = s)) },
+                            shape = SegmentedButtonDefaults.itemShape(i, PlaylistSort.entries.size),
+                            icon = {},
+                        ) { Text(s.label, fontSize = 12.sp, maxLines = 1) }
+                    }
+                }
+            } else {
+                Text(
+                    stringResource(R.string.playlist_manual_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            HorizontalDivider()
+        }
+        if (items.isEmpty()) {
+            item {
+                Text(
+                    stringResource(if (pl.smart) R.string.playlist_empty_smart else R.string.playlist_empty_manual),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                )
+            }
+        }
+        itemsIndexed(items, key = { _, it -> it.id }) { index, it ->
+            ItemRow(
+                item = it,
+                state = state,
+                playing = it.id == playingId,
+                onOpen = { onOpenArticle(it.id) },
+                onPlay = { viewModel.play(pl, start = index) },
+                onAdd = { addToPlaylist(it.id, it.title) },
+                manual =
+                    if (pl.smart) {
+                        null
+                    } else {
+                        ManualActions(
+                            canUp = index > 0,
+                            canDown = index < items.size - 1,
+                            onUp = { viewModel.move(pl.id, it.id, index - 1) },
+                            onDown = { viewModel.move(pl.id, it.id, index + 1) },
+                            onRemove = { viewModel.remove(pl.id, it.id) },
+                        )
+                    },
+            )
+        }
+    }
+}
+
+private data class ManualActions(
+    val canUp: Boolean,
+    val canDown: Boolean,
+    val onUp: () -> Unit,
+    val onDown: () -> Unit,
+    val onRemove: () -> Unit,
+)
+
+@Composable
+fun KindTag(kind: ItemKind) {
+    val (bg, fg) =
+        when (kind) {
+            ItemKind.PODCAST -> Color(0xFF3B2D55) to Color(0xFFD9C4FF)
+            ItemKind.YOUTUBE -> Color(0xFF4D2323) to Color(0xFFFFB3B3)
+            ItemKind.ARTICLE -> Color(0xFF20384D) to Color(0xFFB8DCFF)
+        }
+    Text(
+        kind.label,
+        fontSize = 10.5.sp,
+        fontWeight = FontWeight.Bold,
+        color = fg,
+        modifier =
+            Modifier
+                .background(bg, RoundedCornerShape(4.dp))
+                .padding(horizontal = 5.dp, vertical = 1.dp),
+    )
+}
+
+@Composable
+private fun Thumb(
+    item: PlaylistCandidate,
+    size: Int,
+) {
+    val url = item.image?.url ?: item.feedImage
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier =
+            Modifier
+                .size(size.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Icon(
+            if (item.kind == ItemKind.ARTICLE) Icons.AutoMirrored.Filled.Article else Icons.Default.Headphones,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (url != null) {
+            AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        }
+    }
+}
+
+@Composable
+private fun ItemRow(
+    item: PlaylistCandidate,
+    state: PlaylistsViewState,
+    playing: Boolean,
+    onOpen: () -> Unit,
+    onPlay: () -> Unit,
+    onAdd: () -> Unit,
+    manual: ManualActions?,
+) {
+    val secs = item.seconds(state.ctx)
+    Surface(color = if (playing) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent) {
+        Column(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(horizontal = 16.dp, vertical = 10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Thumb(item, 52)
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        item.title.ifBlank { "(no title)" },
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 15.sp,
+                        color = if (item.read) MaterialTheme.colorScheme.onSurfaceVariant else Color.Unspecified,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 3.dp)) {
+                        KindTag(item.kind)
+                        Text(
+                            buildString {
+                                append(item.feedTitle)
+                                if (secs != null) append(" · ${formatTotal(secs)}${if (item.kind == ItemKind.ARTICLE) " read aloud" else ""}")
+                                if (item.kind == ItemKind.YOUTUBE && !item.isDownloaded(state.ctx)) append(" · needs download")
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(start = 64.dp, top = 4.dp),
+            ) {
+                OutlinedButton(onClick = onPlay, contentPadding = PaddingValues(horizontal = 12.dp), modifier = Modifier.height(32.dp)) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(2.dp))
+                    Text(stringResource(R.string.playlist_play), fontSize = 13.sp)
+                }
+                AddToPlaylistChip(onClick = onAdd)
+                if (manual != null) {
+                    Spacer(Modifier.weight(1f))
+                    IconButton(onClick = manual.onUp, enabled = manual.canUp) { Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Move up") }
+                    IconButton(onClick = manual.onDown, enabled = manual.canDown) { Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Move down") }
+                    IconButton(onClick = manual.onRemove) { Icon(Icons.Default.Close, contentDescription = "Take out of this playlist") }
+                }
+            }
+        }
+    }
+}
+
+private fun QueueState.fraction(): Float = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
+
+private fun clock(ms: Long): String {
+    val s = (ms / 1000).coerceAtLeast(0)
+    val h = s / 3600
+    val m = (s % 3600) / 60
+    val sec = s % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, sec) else "%d:%02d".format(m, sec)
+}
+
+private val AUDIO_SPEEDS = listOf(0.8f, 1f, 1.1f, 1.25f, 1.5f, 1.75f, 2f, 2.5f, 3f)
+
+private fun nextSpeed(current: Float): Float = AUDIO_SPEEDS.firstOrNull { it > current + 0.01f } ?: AUDIO_SPEEDS.first()
+
+private fun speedLabel(speed: Float): String = "${"%.2f".format(speed).trimEnd('0').trimEnd('.')}×"
+
+@Composable
+fun NowPlayingBar(
+    queue: QueueState,
+    viewModel: PlaylistsViewModel,
+    onExpand: () -> Unit,
+) {
+    Surface(tonalElevation = 6.dp, shadowElevation = 8.dp) {
+        Column(Modifier.navigationBarsPadding()) {
+            LinearProgressIndicator(progress = { queue.fraction() }, modifier = Modifier.fillMaxWidth().height(3.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxWidth().clickable(onClick = onExpand).padding(horizontal = 12.dp, vertical = 8.dp),
+            ) {
+                Box(Modifier.size(44.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
+                    Icon(if (queue.kind == ItemKind.ARTICLE) Icons.AutoMirrored.Filled.Article else Icons.Default.Headphones, contentDescription = null)
+                    queue.artwork?.let { AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(queue.title, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 14.sp)
+                    Text(
+                        "${queue.kind?.label ?: ""} · ${queue.name} · ${queue.index + 1} of ${queue.ids.size}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                IconButton(onClick = viewModel::toggle) {
+                    Icon(if (queue.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = if (queue.isPlaying) "Pause" else "Play", modifier = Modifier.size(30.dp))
+                }
+                IconButton(onClick = viewModel::next, enabled = queue.hasNext) {
+                    Icon(Icons.Default.SkipNext, contentDescription = stringResource(R.string.queue_next))
+                }
+                IconButton(onClick = onExpand) {
+                    Icon(Icons.Default.DirectionsCar, contentDescription = stringResource(R.string.queue_car_mode))
+                }
+            }
+        }
+    }
+}
+
+/** Car mode: big buttons, few words, and what comes next. */
+@Composable
+private fun CarMode(
+    queue: QueueState,
+    state: PlaylistsViewState,
+    viewModel: PlaylistsViewModel,
+    onClose: () -> Unit,
+) {
+    val isArticle = queue.kind == ItemKind.ARTICLE
+    var showQueue by remember { mutableStateOf(false) }
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
+                        .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "${queue.name} · ${queue.index + 1} of ${queue.ids.size}",
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    OutlinedButton(onClick = onClose) {
+                        Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(stringResource(R.string.queue_exit_car_mode))
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(110.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
+                        Icon(if (isArticle) Icons.AutoMirrored.Filled.Article else Icons.Default.Headphones, contentDescription = null, modifier = Modifier.size(48.dp))
+                        queue.artwork?.let { AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
+                    }
+                    Column {
+                        Text(
+                            (if (isArticle) "Article · read aloud" else queue.kind?.label ?: "").uppercase(),
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                        )
+                        Text(queue.title, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 26.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                        Text(queue.feedTitle, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
+                    }
+                }
+                Column {
+                    LinearProgressIndicator(progress = { queue.fraction() }, modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)))
+                    Row(Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                        Text(clock(queue.positionMs), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                        if (queue.durationMs > 0) Text("−" + clock(queue.durationMs - queue.positionMs), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    BigButton(Icons.Default.SkipPrevious, stringResource(R.string.queue_previous), 64) { viewModel.previous() }
+                    BigButton(Icons.Default.Replay10, if (isArticle) stringResource(R.string.queue_back) else "10 s", 64) { viewModel.seekBy(-10_000) }
+                    BigButton(if (queue.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, null, 96, primary = true) { viewModel.toggle() }
+                    BigButton(Icons.Default.Forward10, if (isArticle) stringResource(R.string.queue_ahead) else "10 s", 64) { viewModel.seekBy(10_000) }
+                    BigButton(Icons.Default.SkipNext, stringResource(R.string.queue_next), 64, enabled = queue.hasNext) { viewModel.next() }
+                }
+                val nextTitle = queue.ids.getOrNull(queue.index + 1)?.let { state.byId[it]?.title }
+                Text(
+                    nextTitle?.let { stringResource(R.string.queue_next_up, it) } ?: stringResource(R.string.queue_last_item),
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                    val speed = if (isArticle) state.ctx.speed else queue.audioSpeed
+                    OutlinedButton(onClick = { viewModel.setSpeed(nextSpeed(speed), isArticle) }, modifier = Modifier.weight(1f).height(52.dp)) {
+                        Text("${stringResource(R.string.queue_speed)} ${speedLabel(speed)}", fontSize = 16.sp)
+                    }
+                    OutlinedButton(onClick = { showQueue = !showQueue }, modifier = Modifier.weight(1f).height(52.dp)) {
+                        Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.queue_up_next), fontSize = 16.sp)
+                    }
+                    OutlinedButton(onClick = {
+                        viewModel.stop()
+                        onClose()
+                    }, modifier = Modifier.height(52.dp)) { Text(stringResource(R.string.queue_stop), fontSize = 16.sp) }
+                }
+                if (showQueue) {
+                    LazyColumn(Modifier.weight(1f)) {
+                        itemsIndexed(queue.ids) { i, id ->
+                            val it = state.byId[id] ?: return@itemsIndexed
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (i == queue.index) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+                                        .clickable { viewModel.jump(i) }
+                                        .padding(horizontal = 8.dp, vertical = 10.dp),
+                            ) {
+                                KindTag(it.kind)
+                                Text(it.title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                if (i != queue.index) {
+                                    IconButton(onClick = { viewModel.removeFromQueue(i) }, modifier = Modifier.size(32.dp)) {
+                                        Icon(Icons.Default.Close, contentDescription = "Take out of the queue", modifier = Modifier.size(18.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BigButton(
+    icon: ImageVector,
+    label: String?,
+    size: Int,
+    primary: Boolean = false,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier =
+                Modifier
+                    .size(size.dp)
+                    .clip(CircleShape)
+                    .background(if (primary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                    .clickable(enabled = enabled, onClick = onClick),
+        ) {
+            Icon(
+                icon,
+                contentDescription = label ?: "Play or pause",
+                tint =
+                    when {
+                        primary -> MaterialTheme.colorScheme.onPrimary
+                        enabled -> MaterialTheme.colorScheme.onSurface
+                        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                    },
+                modifier = Modifier.size((size * 0.5).dp),
+            )
+        }
+        if (label != null) Text(label, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+    }
+}
+
+/** Create or change a playlist: name and look, and for smart ones the rules, with a live count. */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun PlaylistEditor(
+    initial: Playlist,
+    isNew: Boolean,
+    state: PlaylistsViewState,
+    onDismiss: () -> Unit,
+    onSave: (Playlist, Boolean) -> Unit,
+) {
+    var pl by remember(initial.id) { mutableStateOf(initial) }
+    var showFeeds by remember { mutableStateOf(initial.rules.feedIds.isNotEmpty()) }
+    val r = pl.rules
+
+    fun rules(fn: (SmartRules) -> SmartRules) {
+        pl = pl.copy(rules = fn(pl.rules))
+    }
+    val matching = remember(pl.rules, state) { if (pl.smart) state.candidates.count { it.matches(pl.rules, state.ctx) } else pl.itemIds.size }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp)
+                    .navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                when {
+                    isNew && pl.smart -> stringResource(R.string.playlist_new_smart)
+                    isNew -> stringResource(R.string.playlist_new)
+                    pl.smart -> stringResource(R.string.playlist_edit_rules)
+                    else -> stringResource(R.string.playlist_rename)
+                },
+                style = MaterialTheme.typography.titleLarge,
+            )
+            if (pl.smart) Text(stringResource(R.string.playlist_rules_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PlaylistTile(pl.icon, pl.color, 44)
+                OutlinedTextField(
+                    value = pl.name,
+                    onValueChange = { pl = pl.copy(name = it) },
+                    label = { Text(stringResource(R.string.playlist_name)) },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Field(stringResource(R.string.playlist_look)) {
+                PLAYLIST_ICONS.forEach { ic ->
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier =
+                            Modifier
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .border(if (pl.icon == ic) 2.dp else 1.dp, if (pl.icon == ic) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
+                                .clickable { pl = pl.copy(icon = ic) },
+                    ) { Text(ic, fontSize = 18.sp) }
+                }
+                PLAYLIST_COLORS.forEach { c ->
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(Color(c))
+                                .border(if (pl.color == c) 3.dp else 0.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
+                                .clickable { pl = pl.copy(color = c) },
+                    )
+                }
+            }
+            if (pl.smart) {
+                Field(stringResource(R.string.playlist_rule_feeds)) {
+                    Chip(stringResource(R.string.playlist_rule_all), r.folders.isEmpty() && r.feedIds.isEmpty()) { rules { it.copy(folders = emptyList(), feedIds = emptyList()) } }
+                    state.folders.forEach { f -> Chip(f, f in r.folders) { rules { it.copy(folders = it.folders.toggle(f)) } } }
+                    Chip(if (r.feedIds.isEmpty()) "Pick feeds…" else "${r.feedIds.size} feeds picked", showFeeds || r.feedIds.isNotEmpty()) { showFeeds = !showFeeds }
+                }
+                if (showFeeds) {
+                    Column {
+                        state.feeds.forEach { (id, title) ->
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { rules { it.copy(feedIds = it.feedIds.toggle(id)) } }) {
+                                Checkbox(checked = id in r.feedIds, onCheckedChange = null, modifier = Modifier.padding(8.dp))
+                                Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                    }
+                }
+                Field(stringResource(R.string.playlist_rule_type)) {
+                    ItemKind.entries.forEach { k -> Chip(if (k == ItemKind.ARTICLE) "Article (read aloud)" else k.label, k in r.kinds) { rules { it.copy(kinds = it.kinds.toggle(k)) } } }
+                }
+                Field(stringResource(R.string.playlist_rule_status)) {
+                    PlayStatus.entries.forEach { s -> Chip(s.label, s in r.statuses) { rules { it.copy(statuses = it.statuses.toggle(s)) } } }
+                    Chip(stringResource(R.string.playlist_rule_saved), r.savedOnly) { rules { it.copy(savedOnly = !it.savedOnly) } }
+                    Chip(stringResource(R.string.playlist_rule_downloaded), r.downloadedOnly) { rules { it.copy(downloadedOnly = !it.downloadedOnly) } }
+                }
+                Field(stringResource(R.string.playlist_rule_published)) {
+                    listOf(1, 2, 7, 14, 30, null).forEach { d -> Chip(withinLabel(d), r.withinDays == d) { rules { it.copy(withinDays = d) } } }
+                }
+                Field(stringResource(R.string.playlist_rule_length)) {
+                    listOf<Triple<String, Int?, Int?>>(
+                        Triple("Any length", null, null),
+                        Triple("Under 10 min", null, 10),
+                        Triple("Under 20 min", null, 20),
+                        Triple("Under 40 min", null, 40),
+                        Triple("Under 1 hour", null, 60),
+                        Triple("Over 20 min", 20, null),
+                        Triple("Over 1 hour", 60, null),
+                    ).forEach { (label, min, max) -> Chip(label, r.minMinutes == min && r.maxMinutes == max) { rules { it.copy(minMinutes = min, maxMinutes = max) } } }
+                }
+                Text(stringResource(R.string.playlist_rule_length_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+                OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.playlist_cancel)) }
+                Button(
+                    onClick = { onSave(pl.copy(name = pl.name.trim().ifBlank { if (pl.smart) "Smart playlist" else "My playlist" }), isNew) },
+                    modifier = Modifier.weight(2f),
+                ) { Text(stringResource(R.string.playlist_save) + if (pl.smart) " · $matching items" else "") }
+            }
+        }
+    }
+}
+
+private fun <T> List<T>.toggle(v: T): List<T> = if (v in this) this - v else this + v
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun Field(
+    label: String,
+    content: @Composable () -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .padding(12.dp),
+    ) {
+        Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(6.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { content() }
+    }
+}
+
+@Composable
+private fun Chip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    FilterChip(selected = selected, onClick = onClick, label = { Text(label) })
+}

@@ -36,10 +36,12 @@ import com.nononsenseapps.feeder.ui.compose.navigation.DownloadsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.EditFeedDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.FeedDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.HomeDestination
+import com.nononsenseapps.feeder.ui.compose.navigation.PlaylistsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.SearchFeedDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.SettingsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.SyncScreenDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.TextSettingsDestination
+import com.nononsenseapps.feeder.ui.compose.playlists.AddToPlaylistHost
 import com.nononsenseapps.feeder.ui.compose.utils.withAllProviders
 import com.nononsenseapps.feeder.util.isLanLocalAddress
 import com.nononsenseapps.feeder.util.resolvesToLanLocalAddress
@@ -209,7 +211,10 @@ class MainActivity : DIAwareComponentActivity() {
             // Add Fonts
             TextSettingsDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
             DownloadsDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
+            PlaylistsDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
         }
+        // "Playlist" on any article, episode or video opens this sheet
+        AddToPlaylistHost()
 
         DisposableEffect(navController) {
             val listener =
