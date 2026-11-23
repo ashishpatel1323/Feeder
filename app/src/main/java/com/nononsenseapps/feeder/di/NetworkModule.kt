@@ -37,4 +37,19 @@ val networkModule =
         bind<OfflineVideos>() with singleton { OfflineVideos(di) }
         bind<DownloadsPlaylist>() with singleton { DownloadsPlaylist(instance()) }
         bind<DownloadsPlayback>() with singleton { DownloadsPlayback(di) }
+        bind<com.nononsenseapps.feeder.model.playlists.PlaylistStore>() with
+            singleton {
+                com.nononsenseapps.feeder.model.playlists
+                    .PlaylistStore(instance())
+            }
+        bind<com.nononsenseapps.feeder.model.playlists.PlaylistPlayer>() with
+            singleton {
+                com.nononsenseapps.feeder.model.playlists
+                    .PlaylistPlayer(di)
+            }
+        bind<com.nononsenseapps.feeder.ui.compose.playlists.AddToPlaylistRequests>() with
+            singleton {
+                com.nononsenseapps.feeder.ui.compose.playlists
+                    .AddToPlaylistRequests()
+            }
     }

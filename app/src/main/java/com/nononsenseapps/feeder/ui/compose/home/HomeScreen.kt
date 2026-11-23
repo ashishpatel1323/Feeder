@@ -34,6 +34,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Headphones
@@ -85,6 +86,7 @@ fun HomeScreen(
     onOpenArticles: () -> Unit,
     onAddFeed: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenPlaylists: () -> Unit = {},
 ) {
     val state by viewModel.viewState.collectAsStateWithLifecycle()
     val folder = state.openFolder
@@ -110,6 +112,7 @@ fun HomeScreen(
                     } else {
                         LabeledAction(Icons.AutoMirrored.Filled.List, stringResource(R.string.home_articles), onOpenArticles)
                     }
+                    LabeledAction(Icons.AutoMirrored.Filled.QueueMusic, stringResource(R.string.playlists), onOpenPlaylists)
                     LabeledAction(Icons.Default.Refresh, stringResource(R.string.home_refresh), viewModel::refreshAll)
                 },
             )

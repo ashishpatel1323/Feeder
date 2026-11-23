@@ -30,6 +30,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.ContentAlpha
 import androidx.compose.material.LocalContentAlpha
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.outlined.BookmarkAdded
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Delete
@@ -111,6 +112,8 @@ fun ReaderView(
     contentImageUrls: Set<String>,
     modifier: Modifier = Modifier,
     onDelete: (() -> Unit)? = null,
+    // Add to playlist, or play next
+    onAddToPlaylist: (() -> Unit)? = null,
     articleScrollState: ScrollState = rememberScrollState(),
     // YouTube's player for a YouTube article, shown in place of the header image
     video: (@Composable () -> Unit)? = null,
@@ -289,6 +292,19 @@ fun ReaderView(
                                     label = {
                                         Text(stringResource(R.string.action_unread))
                                     },
+                                )
+                            }
+                            if (onAddToPlaylist != null) {
+                                SuggestionChip(
+                                    icon = {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.PlaylistAdd,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(FilterChipDefaults.IconSize),
+                                        )
+                                    },
+                                    onClick = onAddToPlaylist,
+                                    label = { Text(stringResource(R.string.playlist_add_button)) },
                                 )
                             }
                             if (onDelete != null) {

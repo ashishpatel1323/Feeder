@@ -42,6 +42,15 @@ class ReadAloudService : MediaSessionService() {
     // Previous / next article for the media controls, and auto-continue when an article ends
     private lateinit var queue: ReadAloudQueue
 
+    private fun navigate(next: Boolean) {
+        val navigator = holder.articleNavigator
+        when {
+            navigator == null -> queue.skip(next)
+            next -> navigator.next()
+            else -> navigator.previous()
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         queue = (application as FeederApplication).di.direct.instance()
@@ -89,14 +98,15 @@ class ReadAloudService : MediaSessionService() {
 
                 override fun seekForward() = seekTo(player.currentPosition + 10_000)
 
-                // Previous / next move to the neighbouring article in the list
-                override fun seekToNext() = queue.skip(next = true)
+                // Previous / next move to the neighbouring article in the list, or through a playlist
+                // (or flip mode) when one has taken over the navigator
+                override fun seekToNext() = navigate(next = true)
 
-                override fun seekToNextMediaItem() = queue.skip(next = true)
+                override fun seekToNextMediaItem() = navigate(next = true)
 
-                override fun seekToPrevious() = queue.skip(next = false)
+                override fun seekToPrevious() = navigate(next = false)
 
-                override fun seekToPreviousMediaItem() = queue.skip(next = false)
+                override fun seekToPreviousMediaItem() = navigate(next = false)
 
                 override fun hasNextMediaItem(): Boolean = true
 

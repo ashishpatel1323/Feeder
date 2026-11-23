@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.DownloadForOffline
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.Home
@@ -95,6 +96,7 @@ fun ScreenWithNavDrawer(
     onDownloadsClick: (() -> Unit)? = null,
     homeCount: Int = 0,
     onHomeClick: (() -> Unit)? = null,
+    onPlaylistsClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -152,6 +154,15 @@ fun ScreenWithNavDrawer(
                                 onClick()
                             }
                         },
+                    onPlaylistsClick =
+                        onPlaylistsClick?.let { onClick ->
+                            {
+                                coroutineScope.launch {
+                                    drawerState.close()
+                                }
+                                onClick()
+                            }
+                        },
                 )
             }
         },
@@ -174,6 +185,7 @@ fun ListOfFeedsAndTags(
     onDownloadsClick: (() -> Unit)? = null,
     homeCount: Int = 0,
     onHomeClick: (() -> Unit)? = null,
+    onPlaylistsClick: (() -> Unit)? = null,
 ) {
     LazyColumn(
         state = state,
@@ -263,6 +275,20 @@ fun ListOfFeedsAndTags(
                                 image = {
                                     Icon(
                                         Icons.Default.DownloadForOffline,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(24.dp),
+                                    )
+                                },
+                            )
+                        }
+                        if (onPlaylistsClick != null) {
+                            Feed(
+                                title = stringResource(id = R.string.playlists),
+                                unreadCount = 0,
+                                onItemClick = onPlaylistsClick,
+                                image = {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.QueueMusic,
                                         contentDescription = null,
                                         modifier = Modifier.size(24.dp),
                                     )

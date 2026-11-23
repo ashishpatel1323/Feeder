@@ -25,6 +25,23 @@ import java.time.Instant
 
 @Dao
 interface FeedItemDao {
+    /** Every article, episode and video, for playlists (smart rules and hand-made lists). */
+    @Query(
+        """
+        SELECT i.id AS id, i.plain_title AS title, i.link AS link, i.enclosure_link AS enclosure_link,
+            i.enclosure_type AS enclosure_type, i.enclosure_duration AS enclosure_duration,
+            (i.read_time IS NOT NULL) AS is_read, i.bookmarked AS bookmarked, (i.offline_time IS NOT NULL) AS is_offline,
+            i.primary_sort_time AS sort_time, i.word_count AS word_count, i.word_count_full AS word_count_full,
+            i.image_url AS image_url, f.id AS feed_id, f.url AS feed_url, f.tag AS feed_tag,
+            COALESCE(NULLIF(f.custom_title, ''), f.title) AS feed_title, f.image_url AS feed_image,
+            f.fulltext_by_default AS full_text_by_default
+        FROM feed_items i
+        JOIN feeds f ON i.feed_id = f.id
+        WHERE i.block_time IS NULL
+        """,
+    )
+    fun loadPlaylistCandidates(): Flow<List<PlaylistCandidate>>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertFeedItem(item: FeedItem): Long
 

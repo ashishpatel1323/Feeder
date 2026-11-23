@@ -421,18 +421,28 @@ private fun FeederGoItem.asParsedArticle() =
         date_modified = updated,
         author = author?.asParsedAuthor(),
         tags = categories,
-        attachments = enclosures?.map { it.asParsedEnclosure() },
+        attachments = enclosures?.map { it.asParsedEnclosure(parseDurationSeconds(iTunesExt?.duration)) },
         hasFeedImage = thumbnail?.fromBody == false,
     )
 
-private fun GoEnclosure.asParsedEnclosure() =
+private fun GoEnclosure.asParsedEnclosure(durationSeconds: Long?) =
     ParsedEnclosure(
         url = url,
         title = null,
         mime_type = type,
         size_in_bytes = length?.toLongOrNull(),
-        duration_in_seconds = null,
+        duration_in_seconds = durationSeconds,
     )
+
+/** "3600", "61:05" or "1:01:05" (itunes:duration) in seconds; null when it isn't a length. */
+fun parseDurationSeconds(text: String?): Long? {
+    val t = text?.trim().orEmpty()
+    if (t.isEmpty()) return null
+    t.toDoubleOrNull()?.let { return it.toLong().takeIf { s -> s > 0 } }
+    if (!Regex("^\\d+(:\\d{1,2}){1,2}(\\.\\d+)?$").matches(t)) return null
+    val seconds = t.split(':').fold(0.0) { acc, part -> acc * 60 + (part.toDoubleOrNull() ?: return null) }
+    return seconds.toLong().takeIf { it > 0 }
+}
 
 private fun GoPerson.asParsedAuthor() =
     ParsedAuthor(

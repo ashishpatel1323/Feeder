@@ -30,6 +30,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
@@ -54,6 +56,8 @@ import com.nononsenseapps.feeder.ui.compose.components.safeSemantics
 import com.nononsenseapps.feeder.ui.compose.feedarticle.VideoPositionText
 import com.nononsenseapps.feeder.ui.compose.feedarticle.wordsToReadTimeSecs
 import com.nononsenseapps.feeder.ui.compose.minimumTouchSize
+import com.nononsenseapps.feeder.ui.compose.playlists.LocalAddToPlaylist
+import com.nononsenseapps.feeder.ui.compose.playlists.SmallPlaylistButton
 import com.nononsenseapps.feeder.ui.compose.text.WithBidiDeterminedLayoutDirection
 import com.nononsenseapps.feeder.ui.compose.theme.FeedListItemDateStyle
 import com.nononsenseapps.feeder.ui.compose.theme.FeedListItemFeedTitleStyle
@@ -241,6 +245,7 @@ fun RowScope.FeedItemText(
         Box {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
                 modifier =
                     Modifier
                         .fillMaxWidth(),
@@ -269,6 +274,13 @@ fun RowScope.FeedItemText(
                             modifier = Modifier,
                         )
                     }
+                }
+                LocalAddToPlaylist.current?.let { add ->
+                    val chip = LocalPlaylistChipBounds.current
+                    SmallPlaylistButton(
+                        onClick = { add(item.id, item.title) },
+                        modifier = Modifier.onGloballyPositioned { chip?.bounds = it.boundsInWindow() },
+                    )
                 }
             }
             DropdownMenu(

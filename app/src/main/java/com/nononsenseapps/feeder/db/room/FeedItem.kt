@@ -10,6 +10,7 @@ import com.nononsenseapps.feeder.db.COL_AUTHOR
 import com.nononsenseapps.feeder.db.COL_BLOCK_TIME
 import com.nononsenseapps.feeder.db.COL_BOOKMARKED
 import com.nononsenseapps.feeder.db.COL_ENCLOSURELINK
+import com.nononsenseapps.feeder.db.COL_ENCLOSURE_DURATION
 import com.nononsenseapps.feeder.db.COL_ENCLOSURE_TYPE
 import com.nononsenseapps.feeder.db.COL_FEEDID
 import com.nononsenseapps.feeder.db.COL_FIRSTSYNCEDTIME
@@ -140,6 +141,8 @@ data class FeedItem
             name = COL_OFFLINE_TIME,
             typeAffinity = ColumnInfo.INTEGER,
         ) var offlineTime: Instant? = null,
+        // Length of the podcast episode (itunes:duration) in seconds, null when the feed gives none
+        @ColumnInfo(name = COL_ENCLOSURE_DURATION) var enclosureDuration: Long? = null,
     ) : FeedItemForFetching,
         FeedItemCursor {
         constructor() : this(id = ID_UNSET)
@@ -184,6 +187,7 @@ data class FeedItem
             val firstEnclosure = entry.attachments?.firstOrNull()
             this.enclosureLink = firstEnclosure?.url
             this.enclosureType = firstEnclosure?.mime_type?.lowercase()
+            this.enclosureDuration = firstEnclosure?.duration_in_seconds?.takeIf { it > 0 } ?: this.enclosureDuration
 
             this.author = entry.author?.name ?: feed.author?.name
             this.link = entry.url
