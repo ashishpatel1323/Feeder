@@ -4495,3 +4495,135 @@ label.check.inline {
     gap: 10px;
   }
 }
+
+/* ---------------------------------------------------------------- podcast episode + transcript */
+
+.podcast-episode {
+  margin-bottom: 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.podcast-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+}
+.podcast-bar audio {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+}
+.podcast-cc {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  white-space: nowrap;
+}
+.podcast-cc.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.transcript {
+  border-top: 1px solid var(--border);
+}
+.transcript-status {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--text-2);
+}
+.transcript-status progress {
+  width: 100%;
+  height: 6px;
+  margin-top: 6px;
+  accent-color: var(--accent);
+}
+.transcript-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.transcript-source {
+  font-size: 13px;
+}
+.transcript-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  text-align: center;
+  color: var(--text-2);
+}
+.transcript-empty p {
+  margin: 0;
+}
+.transcript-note {
+  font-size: 13px;
+  color: var(--text-3);
+  max-width: 46ch;
+}
+.transcript-lines-wrap {
+  position: relative;
+}
+.transcript-lines {
+  list-style: none;
+  margin: 0;
+  padding: 4px 6px 10px;
+  max-height: 340px;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+.transcript-lines button {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  column-gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  font-size: 0.95em;
+  line-height: 1.45;
+  cursor: pointer;
+}
+.transcript-lines button:hover {
+  background: var(--surface-3);
+}
+.transcript-lines li.past button {
+  color: var(--text-2);
+}
+.transcript-lines li.now button {
+  background: var(--accent-soft);
+  font-weight: 500;
+}
+.transcript-speaker {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+}
+.transcript-time {
+  padding-top: 2px;
+  font-size: 12px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.transcript-follow {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+}
