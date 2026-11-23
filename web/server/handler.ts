@@ -135,6 +135,47 @@ async function proxyFetch(request: Request): Promise<Response> {
   return new Response(body, { status: upstream.status, headers })
 }
 
+const MAX_AUDIO_BYTES = 600 * 1024 * 1024
+
+/**
+ * /api/audio?url=...: a podcast episode's audio file, for making its transcript in the browser
+ * when the podcast's host doesn't allow cross-site reads. Only audio passes, served as audio
+ * (never something a browser would run).
+ */
+async function proxyAudio(request: Request): Promise<Response> {
+  const target = checkTarget(new URL(request.url).searchParams.get('url'))
+  if (typeof target === 'string') return json(400, { error: target })
+  let current = target
+  let upstream: Response | null = null
+  for (let hop = 0; hop < 8; hop++) {
+    upstream = await fetch(current.toString(), { redirect: 'manual', headers: { 'user-agent': USER_AGENT, accept: 'audio/*, */*;q=0.5' } })
+    const location = upstream.headers.get('location')
+    if (upstream.status >= 300 && upstream.status < 400 && location) {
+      const next = checkTarget(new URL(location, current).toString())
+      if (typeof next === 'string') return json(400, { error: next })
+      current = next
+      continue
+    }
+    break
+  }
+  if (!upstream) return json(502, { error: 'No response' })
+  if (!upstream.ok) return json(upstream.status, { error: `Upstream HTTP ${upstream.status}` })
+  const type = (upstream.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase()
+  if (!/^audio\/[\w.+-]+$/.test(type) && type !== 'application/octet-stream' && type !== 'binary/octet-stream') {
+    return json(415, { error: 'Not audio' })
+  }
+  const length = Number(upstream.headers.get('content-length') ?? '0')
+  if (length > MAX_AUDIO_BYTES) return json(413, { error: 'Too large' })
+  const headers = new Headers({
+    'content-type': type.startsWith('audio/') ? type : 'audio/mpeg',
+    'cache-control': 'private, max-age=3600',
+    'x-content-type-options': 'nosniff',
+    'content-security-policy': "sandbox; default-src 'none'",
+  })
+  if (length) headers.set('content-length', String(length))
+  return new Response(upstream.body ? upstream.body.pipeThrough(byteLimit(MAX_AUDIO_BYTES)) : null, { status: 200, headers })
+}
+
 /** Passes bytes through and fails the stream once more than `max` bytes went by. */
 export function byteLimit(max: number): TransformStream<Uint8Array, Uint8Array> {
   let seen = 0
@@ -219,6 +260,7 @@ export async function handle(request: Request, env: Env): Promise<Response> {
 
   try {
     if (path === 'fetch' && request.method === 'GET') return await proxyFetch(request)
+    if (path === 'audio' && request.method === 'GET') return await proxyAudio(request)
     if (path.startsWith('sync/')) return await proxySync(request, env, path.slice('sync/'.length))
   } catch (e) {
     return json(502, { error: e instanceof Error ? e.message : String(e) })
