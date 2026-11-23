@@ -35,6 +35,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.DragHandle
@@ -43,12 +44,14 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.outlined.ClosedCaption
 import androidx.compose.material.icons.outlined.DownloadForOffline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -63,6 +66,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -92,6 +96,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
@@ -101,6 +106,8 @@ import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.model.offline.VideoPhase
 import com.nononsenseapps.feeder.ui.compose.settings.formatBytes
 import com.nononsenseapps.feeder.ui.compose.theme.SensibleTopAppBar
+import com.nononsenseapps.feeder.ui.compose.transcript.TranscriptPanel
+import kotlinx.coroutines.delay
 
 /**
  * Downloads: every video saved on the phone. Unfinished downloads first (percent, Pause or
@@ -117,6 +124,7 @@ fun DownloadsScreen(
     val player by viewModel.player.collectAsStateWithLifecycle()
     var confirmDeleteAll by remember { mutableStateOf(false) }
     var fullscreen by rememberSaveable { mutableStateOf(false) }
+    var showTranscript by rememberSaveable { mutableStateOf(false) }
 
     // Without Background play, leaving the app pauses (the player keeps its place)
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.onAppHidden() }
@@ -157,15 +165,28 @@ fun DownloadsScreen(
                     audio = state.playingAudio,
                     onFullscreen = { fullscreen = true },
                     onClose = viewModel::closePlayer,
+                    showTranscript = showTranscript,
+                    onToggleTranscript = { showTranscript = !showTranscript },
                 )
             }
-            DownloadsTabs(
-                tab = state.tab,
-                videoCount = state.videos.size + state.incomplete.count { !it.job.audio },
-                audioCount = state.episodes.size + state.incomplete.count { it.job.audio },
-                onTab = viewModel::setTab,
-            )
-            DownloadsList(state, viewModel, modifier = Modifier.weight(1f))
+            val episodeId = state.playingId?.takeIf { current != null && state.playingAudio }
+            if (episodeId != null && showTranscript) {
+                // Subtitles for the playing episode take the place of the list
+                TranscriptPanel(
+                    itemId = episodeId,
+                    positionMs = rememberPlayerPosition(current!!),
+                    onSeek = { current.seekTo(it) },
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                DownloadsTabs(
+                    tab = state.tab,
+                    videoCount = state.videos.size + state.incomplete.count { !it.job.audio },
+                    audioCount = state.episodes.size + state.incomplete.count { it.job.audio },
+                    onTab = viewModel::setTab,
+                )
+                DownloadsList(state, viewModel, modifier = Modifier.weight(1f))
+            }
         }
     }
 
@@ -583,6 +604,8 @@ private fun InlinePlayer(
     audio: Boolean,
     onFullscreen: () -> Unit,
     onClose: () -> Unit,
+    showTranscript: Boolean,
+    onToggleTranscript: () -> Unit,
 ) {
     val onFullscreenNow by rememberUpdatedState(onFullscreen)
     Column {
@@ -642,6 +665,14 @@ private fun InlinePlayer(
                         playing.info.channel,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            if (audio && playing != null) {
+                IconToggleButton(checked = showTranscript, onCheckedChange = { onToggleTranscript() }) {
+                    Icon(
+                        if (showTranscript) Icons.Default.ClosedCaption else Icons.Outlined.ClosedCaption,
+                        contentDescription = stringResource(if (showTranscript) R.string.transcript_hide else R.string.transcript_show),
                     )
                 }
             }
@@ -770,4 +801,17 @@ internal fun formatDuration(ms: Long): String {
     } else {
         "%d:%02d".format(minutes, seconds)
     }
+}
+
+/** Where [player] is, in ms, updated a few times a second while it plays. */
+@Composable
+internal fun rememberPlayerPosition(player: Player): Long {
+    var position by remember(player) { mutableLongStateOf(player.currentPosition) }
+    LaunchedEffect(player) {
+        while (true) {
+            position = player.currentPosition
+            delay(200)
+        }
+    }
+    return position
 }
