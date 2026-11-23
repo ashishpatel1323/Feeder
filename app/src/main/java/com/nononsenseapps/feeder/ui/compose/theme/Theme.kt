@@ -52,7 +52,8 @@ private val lightColors =
         surfaceTint = md_theme_light_surfaceTint,
     )
 
-private val darkColors =
+/** The app's dark colours, also used by Flip mode (always dark) for the shared item view. */
+val FeederDarkColors =
     darkColorScheme(
         primary = md_theme_dark_primary,
         onPrimary = md_theme_dark_onPrimary,
@@ -280,7 +281,7 @@ private fun ThemeOptions.getColorScheme(
                 dynamicLightColorScheme(LocalContext.current)
             }
 
-            dark -> darkColors
+            dark -> FeederDarkColors
             else ->
                 if (this == ThemeOptions.E_INK) {
                     eInkColors

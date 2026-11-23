@@ -119,6 +119,8 @@ fun ReaderView(
     video: (@Composable () -> Unit)? = null,
     // Download episode, under a podcast's "Open enclosed media" link
     enclosureActions: (@Composable () -> Unit)? = null,
+    // The shared item header (type, feed, date, length, title and actions), replacing the built-in one
+    header: (@Composable () -> Unit)? = null,
     articleBody: @Composable (indexOffset: Int) -> Unit,
 ) {
     val dimens = LocalDimens.current
@@ -180,7 +182,9 @@ fun ReaderView(
                                     }
                                 },
                     ) {
-                        if (articleTitle.isNotBlank()) {
+                        if (header != null) {
+                            header()
+                        } else if (articleTitle.isNotBlank()) {
                             WithBidiDeterminedLayoutDirection(paragraph = articleTitle) {
                                 val interactionSource = remember { MutableInteractionSource() }
                                 Text(
@@ -198,169 +202,171 @@ fun ReaderView(
                                 )
                             }
                         }
-                        ProvideScaledText(
-                            style =
-                                MaterialTheme.typography.titleMedium.merge(
-                                    LinkTextStyle(),
-                                ),
-                        ) {
-                            WithBidiDeterminedLayoutDirection(paragraph = feedTitle) {
-                                Text(
-                                    text = feedTitle,
-                                    modifier =
-                                        Modifier
-                                            .width(dimens.maxReaderWidth)
-                                            .clearAndSetSemantics {
-                                                contentDescription = feedTitle
-                                            }.clickable {
-                                                onFeedTitleClick()
-                                            },
-                                )
+                        if (header == null) {
+                            ProvideScaledText(
+                                style =
+                                    MaterialTheme.typography.titleMedium.merge(
+                                        LinkTextStyle(),
+                                    ),
+                            ) {
+                                WithBidiDeterminedLayoutDirection(paragraph = feedTitle) {
+                                    Text(
+                                        text = feedTitle,
+                                        modifier =
+                                            Modifier
+                                                .width(dimens.maxReaderWidth)
+                                                .clearAndSetSemantics {
+                                                    contentDescription = feedTitle
+                                                }.clickable {
+                                                    onFeedTitleClick()
+                                                },
+                                    )
+                                }
                             }
-                        }
-                        if (authorDate != null) {
-                            ProvideScaledText(style = MaterialTheme.typography.titleMedium) {
-                                CompositionLocalProvider(LocalContentAlpha provides ContentAlpha.medium) {
-                                    WithBidiDeterminedLayoutDirection(paragraph = authorDate) {
-                                        val interactionSource = remember { MutableInteractionSource() }
-                                        Text(
-                                            text = authorDate,
-                                            modifier =
-                                                Modifier
-                                                    .width(dimens.maxReaderWidth)
-                                                    .indication(interactionSource, LocalIndication.current)
-                                                    .focusableInNonTouchMode(interactionSource = interactionSource),
-                                        )
+                            if (authorDate != null) {
+                                ProvideScaledText(style = MaterialTheme.typography.titleMedium) {
+                                    CompositionLocalProvider(LocalContentAlpha provides ContentAlpha.medium) {
+                                        WithBidiDeterminedLayoutDirection(paragraph = authorDate) {
+                                            val interactionSource = remember { MutableInteractionSource() }
+                                            Text(
+                                                text = authorDate,
+                                                modifier =
+                                                    Modifier
+                                                        .width(dimens.maxReaderWidth)
+                                                        .indication(interactionSource, LocalIndication.current)
+                                                        .focusableInNonTouchMode(interactionSource = interactionSource),
+                                            )
+                                        }
                                     }
                                 }
                             }
-                        }
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.width(dimens.maxReaderWidth),
-                        ) {
-                            FilterChip(
-                                selected = saved,
-                                leadingIcon =
-                                    {
-                                        // Filter chip only animates between null and non-null values by itself so animate manually
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.width(dimens.maxReaderWidth),
+                            ) {
+                                FilterChip(
+                                    selected = saved,
+                                    leadingIcon =
+                                        {
+                                            // Filter chip only animates between null and non-null values by itself so animate manually
+                                            AnimatedContent(
+                                                targetState = saved,
+                                                transitionSpec = { fadeIn() togetherWith fadeOut() },
+                                            ) { target ->
+                                                Icon(
+                                                    imageVector =
+                                                        if (target) {
+                                                            Icons.Outlined.BookmarkAdded
+                                                        } else {
+                                                            Icons.Outlined.BookmarkBorder
+                                                        },
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(FilterChipDefaults.IconSize),
+                                                )
+                                            }
+                                        },
+                                    onClick = onSaveClick,
+                                    label = {
                                         AnimatedContent(
                                             targetState = saved,
-                                            transitionSpec = { fadeIn() togetherWith fadeOut() },
                                         ) { target ->
-                                            Icon(
-                                                imageVector =
-                                                    if (target) {
-                                                        Icons.Outlined.BookmarkAdded
-                                                    } else {
-                                                        Icons.Outlined.BookmarkBorder
-                                                    },
-                                                contentDescription = null,
-                                                modifier = Modifier.size(FilterChipDefaults.IconSize),
+                                            Text(
+                                                if (target) {
+                                                    stringResource(R.string.action_saved)
+                                                } else {
+                                                    stringResource(R.string.action_save)
+                                                },
                                             )
                                         }
                                     },
-                                onClick = onSaveClick,
-                                label = {
-                                    AnimatedContent(
-                                        targetState = saved,
-                                    ) { target ->
-                                        Text(
-                                            if (target) {
-                                                stringResource(R.string.action_saved)
-                                            } else {
-                                                stringResource(R.string.action_save)
+                                )
+                                AnimatedVisibility(
+                                    visible = !isUnread,
+                                    exit = fadeOut(),
+                                ) {
+                                    SuggestionChip(
+                                        icon =
+                                            {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.VisibilityOff,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(FilterChipDefaults.IconSize),
+                                                )
                                             },
-                                        )
-                                    }
-                                },
-                            )
-                            AnimatedVisibility(
-                                visible = !isUnread,
-                                exit = fadeOut(),
-                            ) {
-                                SuggestionChip(
-                                    icon =
-                                        {
+                                        onClick = onMarkAsUnread,
+                                        label = {
+                                            Text(stringResource(R.string.action_unread))
+                                        },
+                                    )
+                                }
+                                if (onAddToPlaylist != null) {
+                                    SuggestionChip(
+                                        icon = {
                                             Icon(
-                                                imageVector = Icons.Outlined.VisibilityOff,
+                                                imageVector = Icons.AutoMirrored.Filled.PlaylistAdd,
                                                 contentDescription = null,
                                                 modifier = Modifier.size(FilterChipDefaults.IconSize),
                                             )
                                         },
-                                    onClick = onMarkAsUnread,
-                                    label = {
-                                        Text(stringResource(R.string.action_unread))
-                                    },
-                                )
-                            }
-                            if (onAddToPlaylist != null) {
-                                SuggestionChip(
-                                    icon = {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Filled.PlaylistAdd,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(FilterChipDefaults.IconSize),
-                                        )
-                                    },
-                                    onClick = onAddToPlaylist,
-                                    label = { Text(stringResource(R.string.playlist_add_button)) },
-                                )
-                            }
-                            if (onDelete != null) {
-                                SuggestionChip(
-                                    icon =
-                                        {
-                                            Icon(
-                                                imageVector = Icons.Outlined.Delete,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.error,
-                                                modifier = Modifier.size(FilterChipDefaults.IconSize),
-                                            )
-                                        },
-                                    onClick = onDelete,
-                                    label = {
-                                        Text(
-                                            stringResource(R.string.action_delete_article),
-                                            color = MaterialTheme.colorScheme.error,
-                                        )
-                                    },
-                                )
-                            }
-                        }
-                        if (readTimeSecs > 0) {
-                            ProvideScaledText(style = MaterialTheme.typography.titleMedium) {
-                                CompositionLocalProvider(LocalContentAlpha provides ContentAlpha.medium) {
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.width(dimens.maxReaderWidth),
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.Timelapse,
-                                            contentDescription = null,
-                                        )
-                                        val seconds = "%02d".format(readTimeSecs % 60)
-                                        val readTimeText =
-                                            pluralStringResource(
-                                                id = R.plurals.n_minutes,
-                                                count = readTimeSecs / 60,
-                                            ).format(
-                                                "${readTimeSecs / 60}:$seconds",
-                                            )
-                                        WithBidiDeterminedLayoutDirection(paragraph = readTimeText) {
-                                            val interactionSource =
-                                                remember { MutableInteractionSource() }
+                                        onClick = onAddToPlaylist,
+                                        label = { Text(stringResource(R.string.playlist_add_button)) },
+                                    )
+                                }
+                                if (onDelete != null) {
+                                    SuggestionChip(
+                                        icon =
+                                            {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.Delete,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.error,
+                                                    modifier = Modifier.size(FilterChipDefaults.IconSize),
+                                                )
+                                            },
+                                        onClick = onDelete,
+                                        label = {
                                             Text(
-                                                text = readTimeText,
-                                                modifier =
-                                                    Modifier
-                                                        .weight(1f)
-                                                        .indication(
-                                                            interactionSource,
-                                                            LocalIndication.current,
-                                                        ).focusableInNonTouchMode(interactionSource = interactionSource),
+                                                stringResource(R.string.action_delete_article),
+                                                color = MaterialTheme.colorScheme.error,
                                             )
+                                        },
+                                    )
+                                }
+                            }
+                            if (readTimeSecs > 0) {
+                                ProvideScaledText(style = MaterialTheme.typography.titleMedium) {
+                                    CompositionLocalProvider(LocalContentAlpha provides ContentAlpha.medium) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.width(dimens.maxReaderWidth),
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Timelapse,
+                                                contentDescription = null,
+                                            )
+                                            val seconds = "%02d".format(readTimeSecs % 60)
+                                            val readTimeText =
+                                                pluralStringResource(
+                                                    id = R.plurals.n_minutes,
+                                                    count = readTimeSecs / 60,
+                                                ).format(
+                                                    "${readTimeSecs / 60}:$seconds",
+                                                )
+                                            WithBidiDeterminedLayoutDirection(paragraph = readTimeText) {
+                                                val interactionSource =
+                                                    remember { MutableInteractionSource() }
+                                                Text(
+                                                    text = readTimeText,
+                                                    modifier =
+                                                        Modifier
+                                                            .weight(1f)
+                                                            .indication(
+                                                                interactionSource,
+                                                                LocalIndication.current,
+                                                            ).focusableInNonTouchMode(interactionSource = interactionSource),
+                                                )
+                                            }
                                         }
                                     }
                                 }

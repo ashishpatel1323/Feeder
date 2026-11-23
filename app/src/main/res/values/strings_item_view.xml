@@ -30,4 +30,6 @@
     <string name="item_now_playing">Now playing</string>
     <string name="item_untitled">(no title)</string>
     <string name="item_downloaded">Downloaded</string>
+    <string name="seek_back_10_seconds_short">Back 10 s</string>
+    <string name="seek_forward_30_seconds_short">Forward 30 s</string>
 </resources>

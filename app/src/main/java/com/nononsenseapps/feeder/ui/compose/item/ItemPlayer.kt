@@ -51,6 +51,8 @@ class ItemPlayer(
 
     fun seekBy(millis: Int) = holder.seekBy(millis)
 
+    fun seekTo(millis: Int) = holder.seekTo(millis)
+
     fun stop() = holder.stop()
 }
 
