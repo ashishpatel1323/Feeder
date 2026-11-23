@@ -393,7 +393,7 @@ export function FlipMode(p: Props) {
       </div>
       <h1 className="flip-title">{item.title || 'Untitled'}</h1>
       {videoId ? (
-        <div className="flip-media">
+        <div className="flip-media tokens-light">
           <YouTubeFrame
             key={`${item.id}|${videoId}`}
             itemId={item.id}
@@ -405,7 +405,7 @@ export function FlipMode(p: Props) {
           />
         </div>
       ) : kind === 'podcast' ? (
-        <div className="flip-media pod">
+        <div className="flip-media pod tokens-light">
           <PodcastEpisode key={item.id} item={item} feedTitle={feedDisplayTitle(feed)} compact />
         </div>
       ) : item.imageUrl ? (

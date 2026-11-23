@@ -377,17 +377,17 @@ function PlaylistDetail(p: {
                   extras={
                     !pl.smart ? (
                       <>
-                        <button type="button" className="ir-btn" onClick={() => move(it.id, index - 1)} disabled={index === 0}>
+                        <button type="button" className="mf-btn ir-btn" onClick={() => move(it.id, index - 1)} disabled={index === 0}>
                           <Icon name="collapse" size={16} />
                           Move up
                         </button>
-                        <button type="button" className="ir-btn" onClick={() => move(it.id, index + 1)} disabled={index === its.length - 1}>
+                        <button type="button" className="mf-btn ir-btn" onClick={() => move(it.id, index + 1)} disabled={index === its.length - 1}>
                           <Icon name="expand" size={16} />
                           Move down
                         </button>
                         <button
                           type="button"
-                          className="ir-btn"
+                          className="mf-btn ir-btn"
                           onClick={() => {
                             void removeFromPlaylist(pl.id, [it.id])
                             p.toast('Taken out of the playlist', { label: 'Undo', run: () => void savePlaylist(pl) })

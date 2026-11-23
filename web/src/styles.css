@@ -93,6 +93,21 @@
   --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
   color-scheme: dark;
 }
+/* Always-light surfaces (the paper page in Flip mode): the light palette whatever the theme */
+.tokens-light {
+  --surface: #ffffff;
+  --surface-2: #eef4ee;
+  --surface-3: #e1ebe2;
+  --text: #191c1a;
+  --text-2: #4f5a52;
+  --text-3: #5c6760;
+  --border: #d6ddd7;
+  --accent: #1f6f4a;
+  --accent-ink: #ffffff;
+  --accent-soft: #cdeedb;
+  --danger: #b3261e;
+  color: var(--text);
+}
 
 * {
   box-sizing: border-box;
@@ -6149,6 +6164,10 @@ input:focus-visible {
 .ir-btn svg {
   flex: none;
 }
+.mf-btn.on {
+  background: var(--accent-soft);
+  border-color: transparent;
+}
 .list-pane .row.ir.read {
   opacity: 1;
 }
@@ -6250,42 +6269,6 @@ input:focus-visible {
   gap: 6px;
   cursor: default;
 }
-.ir-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 30px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--surface);
-  color: var(--text);
-  font-family: var(--font-ui);
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.ir-btn:hover {
-  background: var(--surface-2);
-}
-.ir-btn:disabled {
-  background: var(--disabled-bg);
-  color: var(--disabled-ink);
-  border-color: transparent;
-  cursor: default;
-}
-.ir-btn.pri {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-.ir-btn.on {
-  background: var(--accent-soft);
-  border-color: transparent;
-}
-.ir-btn.del {
-  color: var(--danger);
-}
 .row.ir.playing {
   background: var(--accent-soft);
 }
@@ -6331,10 +6314,6 @@ input:focus-visible {
   color: var(--text-2);
   font-variant-numeric: tabular-nums;
 }
-.mf-btn.on {
-  background: var(--accent-soft);
-  border-color: transparent;
-}
 .article-meta .ty {
   display: inline-flex;
   align-items: center;
@@ -6346,18 +6325,6 @@ input:focus-visible {
 .flip-media {
   flex: none;
   margin-bottom: 14px;
-  /* The Flip page is always light paper: keep the light tokens for the player inside it */
-  --surface: #ffffff;
-  --surface-2: #eef4ee;
-  --surface-3: #e1ebe2;
-  --text: #191c1a;
-  --text-2: #4f5a52;
-  --text-3: #5c6760;
-  --border: #d6ddd7;
-  --accent: #1f6f4a;
-  --accent-ink: #ffffff;
-  --accent-soft: #cdeedb;
-  color: var(--text);
 }
 .flip-media .video-frame {
   width: 100%;
