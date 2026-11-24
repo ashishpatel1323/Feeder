@@ -46,6 +46,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.CloudQueue
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ImportExport
@@ -965,6 +967,22 @@ fun FeedScreen(
                                 },
                                 text = {
                                     Text(stringResource(id = R.string.mark_all_as_read))
+                                },
+                            )
+                            // Offline mode moved here from the filter line; a chip shows while it is on
+                            DropdownMenuItem(
+                                onClick = {
+                                    filterCallback.setOfflineMode(!viewState.offlineMode)
+                                    onShowToolbarMenu(false)
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        if (viewState.offlineMode) Icons.Default.CloudQueue else Icons.Default.CloudOff,
+                                        contentDescription = null,
+                                    )
+                                },
+                                text = {
+                                    Text(stringResource(if (viewState.offlineMode) R.string.go_online else R.string.go_offline))
                                 },
                             )
                             HorizontalDivider()

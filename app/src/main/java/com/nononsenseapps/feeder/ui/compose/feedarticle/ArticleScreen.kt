@@ -8,7 +8,6 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.ScrollState
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -19,7 +18,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -31,29 +29,17 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Article
-import androidx.compose.material.icons.filled.FormatBold
-import androidx.compose.material.icons.filled.Headphones
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Translate
-import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
@@ -71,22 +57,15 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nononsenseapps.feeder.R
@@ -106,9 +85,6 @@ import com.nononsenseapps.feeder.ui.MainActivityViewModel
 import com.nononsenseapps.feeder.ui.ScrollDirection
 import com.nononsenseapps.feeder.ui.compose.components.TranslationProgressContent
 import com.nononsenseapps.feeder.ui.compose.html.ColumnArticleContent
-import com.nononsenseapps.feeder.ui.compose.item.ItemActionButton
-import com.nononsenseapps.feeder.ui.compose.item.ItemContentActionRow
-import com.nononsenseapps.feeder.ui.compose.item.ItemContentActions
 import com.nononsenseapps.feeder.ui.compose.item.ItemHeader
 import com.nononsenseapps.feeder.ui.compose.item.PodcastMediaBlock
 import com.nononsenseapps.feeder.ui.compose.item.rememberItemProgress
@@ -168,6 +144,7 @@ fun ArticleScreen(
     val readAloudAutoContinue by viewModel.readAloudAutoContinue.collectAsStateWithLifecycle()
     val fastReading by viewModel.fastReading.collectAsStateWithLifecycle()
     val wordMode by viewModel.wordMode.collectAsStateWithLifecycle()
+    val showingFullText by viewModel.showingFullText.collectAsStateWithLifecycle()
 
     // Previous / next and auto-continue in read aloud open the article being read
     val currentOnSwipeToArticle by rememberUpdatedState(onSwipeToArticle)
@@ -323,6 +300,8 @@ fun ArticleScreen(
         fastReading = fastReading,
         onToggleFastReading = { viewModel.setFastReading(!fastReading) },
         onToggleRead = viewModel::toggleRead,
+        showingFullText = showingFullText,
+        onRetryFullText = viewModel::retryFullText,
     )
 }
 
@@ -391,6 +370,8 @@ fun ArticleScreen(
     fastReading: Boolean = false,
     onToggleFastReading: () -> Unit = {},
     onToggleRead: () -> Unit = onMarkAsUnread,
+    showingFullText: Boolean = false,
+    onRetryFullText: () -> Unit = {},
 ) {
     val itemKindHere = itemKind(viewState.articleLink, viewState.enclosure.link.ifBlank { null }, viewState.enclosure.type)
 
@@ -405,8 +386,39 @@ fun ArticleScreen(
         derivedStateOf { articleScrollState.value > headerHeightPx }
     }
     val showCollapsedBar = scrolledPastHeader && !showOriginalPage && !readingAloud
-    // The original page has no chips under the title, so its top bar always holds Save, Unread and Delete
-    val showArticleActionsInBar = showCollapsedBar || (showOriginalPage && !readingAloud)
+    // Material 3: Save and Share sit in the top bar, everything else in its ⋮ menu, and Listen is
+    // the one floating action. The bar is pinned, so these stay reachable while reading.
+    val addToPlaylist =
+        com.nononsenseapps.feeder.ui.compose.playlists
+            .rememberAddToPlaylist()
+    var showTranscript by rememberSaveable(viewState.articleId) { mutableStateOf(false) }
+    val isArticle = itemKindHere == ItemKind.ARTICLE
+    val hasLink = !viewState.articleLink.isNullOrBlank()
+    val menuActions =
+        ArticleMenuActions(
+            kind = itemKindHere,
+            read = !viewState.isUnread,
+            onToggleRead = onToggleRead,
+            onPlaylist = { addToPlaylist(viewState.articleId, viewState.articleTitle) },
+            transcriptShown = showTranscript,
+            onToggleTranscript = if (itemKindHere == ItemKind.PODCAST) ({ showTranscript = !showTranscript }) else null,
+            fullText = showingFullText,
+            onToggleFullText = if (isArticle) onToggleFullText else null,
+            webPage = showOriginalPage,
+            onToggleWebPage = if (isArticle && hasLink) onToggleOriginalPage else null,
+            onOpenInBrowser = if (hasLink) onOpenInCustomTab else null,
+            onSummarize = if (viewState.showSummarize) onSummarize else null,
+            translated = viewState.isShowingTranslated,
+            onTranslate = if (viewState.showTranslate) onTranslate else null,
+            fastReading = fastReading,
+            onToggleFastReading = if (isArticle) onToggleFastReading else null,
+            onSpeedRead = if (isArticle) onSpeedRead else null,
+            onDelete = onDelete,
+        )
+    // Listen is a full label at the top and while scrolling back up, an icon while reading down
+    val listenExpanded by remember {
+        derivedStateOf { articleScrollState.value == 0 || !articleScrollState.lastScrolledForward }
+    }
 
     val bottomBarVisibleState = remember { MutableTransitionState(viewState.isBottomBarVisible) }
     LaunchedEffect(viewState.isBottomBarVisible) {
@@ -442,51 +454,15 @@ fun ArticleScreen(
                             )
                         }
                     },
-                )
-                // Once the header (with its action row) is out of sight, the same labeled actions
-                // sit under the top bar, wrapping instead of hiding labels
-                if (showArticleActionsInBar || readingAloud) {
-                    Surface(color = MaterialTheme.colorScheme.surface) {
-                        ItemContentActionRow(
-                            actions =
-                                ItemContentActions(
-                                    kind = itemKindHere,
-                                    saved = viewState.isBookmarked,
-                                    read = !viewState.isUnread,
-                                    onToggleSave = onToggleBookmark,
-                                    onToggleRead = onToggleRead,
-                                    onSummarize = if (viewState.showSummarize) onSummarize else null,
-                                    onShare = onShare,
-                                    onOriginal = if (viewState.articleLink.isNullOrBlank()) null else onOpenInCustomTab,
-                                    onDelete = onDelete,
-                                ),
-                            trailing = {
-                                if (readingAloud && itemKindHere == ItemKind.ARTICLE) {
-                                    ItemActionButton(Icons.AutoMirrored.Filled.Article, stringResource(R.string.full_text_short), onToggleFullText)
-                                    if (!viewState.articleLink.isNullOrBlank()) {
-                                        ItemActionButton(
-                                            Icons.Default.Language,
-                                            stringResource(if (showOriginalPage) R.string.show_reader_view else R.string.original_page_short),
-                                            onToggleOriginalPage,
-                                            selected = showOriginalPage,
-                                        )
-                                    }
-                                }
-                                if (viewState.showTranslate) {
-                                    ItemActionButton(
-                                        Icons.Default.Translate,
-                                        stringResource(if (viewState.isShowingTranslated) R.string.action_original else R.string.action_translate),
-                                        onTranslate,
-                                    )
-                                }
-                            },
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = FeederTokens.Space.lg, vertical = FeederTokens.Space.xs),
+                    actions = {
+                        ArticleTopBarActions(
+                            saved = viewState.isBookmarked,
+                            onToggleSave = onToggleBookmark,
+                            onShare = onShare,
+                            menu = menuActions,
                         )
-                    }
-                }
+                    },
+                )
                 if (showCollapsedBar) {
                     LinearProgressIndicator(
                         progress = {
@@ -532,43 +508,27 @@ fun ArticleScreen(
                     onSkipWords = onSkipWords,
                     onJumpToWord = onJumpToWord,
                 )
-            } else {
-                Column {
-                    // The action bar below takes the navigation bar inset, so the player must not add it again
-                    Box(
-                        modifier =
-                            if (itemKindHere == ItemKind.ARTICLE) Modifier.consumeWindowInsets(WindowInsets.navigationBars) else Modifier,
-                    ) {
-                        if (viewState.podcastPlayerState.isVisible) {
-                            HideablePodcastPlayer(
-                                visibleState = bottomBarVisibleState,
-                                viewState = viewState.podcastPlayerState,
-                                onPlay = podcastOnPlay,
-                                onPause = podcastOnPause,
-                                onStop = podcastOnStop,
-                                onSeekBack = podcastOnSeekBack,
-                                onSeekForward = podcastOnSeekForward,
-                                onSeekTo = podcastOnSeekTo,
-                            )
-                        }
-                    }
-                    // Reading tools (listen, speed read, full text…) are for articles only
-                    if (itemKindHere == ItemKind.ARTICLE) {
-                        ReaderToolbar(
-                            isTTSPlaying = viewState.isTTSPlaying,
-                            onListen = { if (viewState.isTTSPlaying) ttsOnPause() else ttsOnPlay() },
-                            fastReading = fastReading,
-                            onToggleFastReading = onToggleFastReading,
-                            onSpeedRead = onSpeedRead,
-                            showSummarize = viewState.showSummarize,
-                            onSummarize = onSummarize,
-                            onToggleFullText = onToggleFullText,
-                            showOriginalPageToggle = !viewState.articleLink.isNullOrBlank(),
-                            showOriginalPage = showOriginalPage,
-                            onToggleOriginalPage = onToggleOriginalPage,
-                        )
-                    }
-                }
+            } else if (viewState.podcastPlayerState.isVisible) {
+                HideablePodcastPlayer(
+                    visibleState = bottomBarVisibleState,
+                    viewState = viewState.podcastPlayerState,
+                    onPlay = podcastOnPlay,
+                    onPause = podcastOnPause,
+                    onStop = podcastOnStop,
+                    onSeekBack = podcastOnSeekBack,
+                    onSeekForward = podcastOnSeekForward,
+                    onSeekTo = podcastOnSeekTo,
+                )
+            }
+        },
+        floatingActionButton = {
+            // Reading aloud has its own player; podcasts and videos have their own Play
+            if (isArticle && !readingAloud && !viewState.podcastPlayerState.isVisible) {
+                ListenFab(
+                    expanded = listenExpanded,
+                    onClick = ttsOnPlay,
+                    modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)),
+                )
             }
         },
     ) { padding ->
@@ -618,6 +578,10 @@ fun ArticleScreen(
                         onSummarize = onSummarize,
                         onTranslate = onTranslate,
                         onToggleRead = onToggleRead,
+                        showTranscript = showTranscript,
+                        onToggleFullText = onToggleFullText,
+                        onShowWebPage = if (hasLink) onToggleOriginalPage else null,
+                        onRetryFullText = onRetryFullText,
                         modifier =
                             Modifier
                                 .focusGroup()
@@ -761,6 +725,11 @@ fun ArticleContent(
     onSummarize: (() -> Unit)? = null,
     onTranslate: (() -> Unit)? = null,
     onToggleRead: () -> Unit = onMarkAsUnread,
+    // Hoisted to the screen: the ⋮ menu's Transcript entry toggles it
+    showTranscript: Boolean = false,
+    onToggleFullText: () -> Unit = {},
+    onShowWebPage: (() -> Unit)? = null,
+    onRetryFullText: () -> Unit = {},
 ) {
     val toolbarColor = MaterialTheme.colorScheme.surface.toArgb()
 
@@ -785,7 +754,6 @@ fun ArticleContent(
             .rememberAddToPlaylist()
     val kind = itemKind(viewState.articleLink, viewState.enclosure.link.ifBlank { null }, viewState.enclosure.type)
     val progress = rememberItemProgress(viewState.articleId, if (kind == ItemKind.YOUTUBE) viewState.articleKey else "")
-    var showTranscript by rememberSaveable(viewState.articleId) { mutableStateOf(false) }
     val lengthSeconds =
         itemSeconds(
             kind = kind,
@@ -814,32 +782,6 @@ fun ArticleContent(
                     lengthSeconds = lengthSeconds,
                     progress = progress,
                     onFeedClick = onFeedTitleClick,
-                )
-                ItemContentActionRow(
-                    actions =
-                        ItemContentActions(
-                            kind = kind,
-                            saved = viewState.isBookmarked,
-                            read = !viewState.isUnread,
-                            onToggleSave = onBookmark,
-                            onToggleRead = onToggleRead,
-                            onPlaylist = { addToPlaylist(viewState.articleId, viewState.articleTitle) },
-                            onSummarize = if (viewState.showSummarize) onSummarize else null,
-                            onShare = onShare,
-                            onOriginal = if (viewState.articleLink.isNullOrBlank()) null else onOpenInCustomTab,
-                            onDelete = onDelete,
-                            onTranscript = { showTranscript = !showTranscript },
-                            transcriptShown = showTranscript,
-                        ),
-                    trailing = {
-                        if (viewState.showTranslate && onTranslate != null) {
-                            ItemActionButton(
-                                icon = Icons.Default.Translate,
-                                label = stringResource(if (viewState.isShowingTranslated) R.string.action_original else R.string.action_translate),
-                                onClick = onTranslate,
-                            )
-                        }
-                    },
                 )
                 // The episode's media block, right under the header like in Flip
                 if (kind == ItemKind.PODCAST && viewState.useInAppAudioPlayer && viewState.enclosure.link.isNotBlank()) {
@@ -987,11 +929,30 @@ fun ArticleContent(
                 }
 
                 TextToDisplay.FAILED_TO_LOAD_FULLTEXT -> {
-                    Text(text = stringResource(id = R.string.failed_to_fetch_full_article))
+                    FullTextFailure(
+                        message = stringResource(id = R.string.failed_to_fetch_full_article),
+                        onShowWebPage = onShowWebPage,
+                        onShowFeedText = onToggleFullText,
+                        onRetry = onRetryFullText,
+                    )
+                }
+
+                TextToDisplay.FAILED_BLOCKED -> {
+                    FullTextFailure(
+                        message = stringResource(id = R.string.full_text_blocked),
+                        onShowWebPage = onShowWebPage,
+                        onShowFeedText = onToggleFullText,
+                        onRetry = null,
+                    )
                 }
 
                 TextToDisplay.FAILED_MISSING_BODY -> {
-                    Text(text = stringResource(id = R.string.failed_to_fetch_full_article_missing_body))
+                    FullTextFailure(
+                        message = stringResource(id = R.string.failed_to_fetch_full_article_missing_body),
+                        onShowWebPage = onShowWebPage,
+                        onShowFeedText = onToggleFullText,
+                        onRetry = null,
+                    )
                 }
 
                 TextToDisplay.FAILED_MISSING_LINK -> {
@@ -999,7 +960,12 @@ fun ArticleContent(
                 }
 
                 TextToDisplay.FAILED_NOT_HTML -> {
-                    Text(text = stringResource(id = R.string.failed_to_fetch_full_article_not_html))
+                    FullTextFailure(
+                        message = stringResource(id = R.string.failed_to_fetch_full_article_not_html),
+                        onShowWebPage = onShowWebPage,
+                        onShowFeedText = onToggleFullText,
+                        onRetry = null,
+                    )
                 }
 
                 TextToDisplay.FAILED_FULLTEXT_TOO_LARGE -> {
@@ -1064,131 +1030,5 @@ private fun SummarySection(summary: OpenAISummaryState) {
                 }
             }
         }
-    }
-}
-
-/**
- * The reading tools in one floating pill, styled like the read-aloud player. Save, Unread and Delete
- * live under the title and in the top bar instead.
- */
-@Composable
-private fun ReaderToolbar(
-    isTTSPlaying: Boolean,
-    onListen: () -> Unit,
-    fastReading: Boolean,
-    onToggleFastReading: () -> Unit,
-    onSpeedRead: () -> Unit,
-    showSummarize: Boolean,
-    onSummarize: () -> Unit,
-    onToggleFullText: () -> Unit,
-    showOriginalPageToggle: Boolean,
-    showOriginalPage: Boolean,
-    onToggleOriginalPage: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom))
-                .padding(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 12.dp),
-    ) {
-        Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.inverseSurface,
-            contentColor = MaterialTheme.colorScheme.inverseOnSurface,
-            shadowElevation = 6.dp,
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
-            ) {
-                ReaderToolbarButton(
-                    icon = if (isTTSPlaying) Icons.Default.Pause else Icons.Default.Headphones,
-                    label = stringResource(if (isTTSPlaying) R.string.pause_reading else R.string.listen),
-                    onClick = onListen,
-                    primary = true,
-                )
-                ReaderToolbarButton(
-                    icon = Icons.Default.FormatBold,
-                    label = stringResource(R.string.fast_reading),
-                    onClick = onToggleFastReading,
-                    selected = fastReading,
-                )
-                ReaderToolbarButton(
-                    icon = Icons.Default.Speed,
-                    label = stringResource(R.string.speed_read_short),
-                    onClick = onSpeedRead,
-                )
-                if (showSummarize) {
-                    ReaderToolbarButton(
-                        icon = Icons.Outlined.AutoAwesome,
-                        label = stringResource(R.string.summary_short),
-                        onClick = onSummarize,
-                    )
-                }
-                ReaderToolbarButton(
-                    icon = Icons.AutoMirrored.Filled.Article,
-                    label = stringResource(R.string.full_text_short),
-                    onClick = onToggleFullText,
-                )
-                if (showOriginalPageToggle) {
-                    ReaderToolbarButton(
-                        icon = Icons.Default.Language,
-                        label = stringResource(R.string.original_page_short),
-                        onClick = onToggleOriginalPage,
-                        selected = showOriginalPage,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ReaderToolbarButton(
-    icon: ImageVector,
-    label: String,
-    onClick: () -> Unit,
-    primary: Boolean = false,
-    // Set for on/off tools, which then show their state
-    selected: Boolean? = null,
-) {
-    val highlighted = primary || selected == true
-    val background =
-        when {
-            primary -> MaterialTheme.colorScheme.primaryContainer
-            selected == true -> MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.18f)
-            else -> Color.Transparent
-        }
-    val color = if (primary) MaterialTheme.colorScheme.onPrimaryContainer else LocalContentColor.current
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-        modifier =
-            Modifier
-                .width(if (primary) 60.dp else 52.dp)
-                .height(50.dp)
-                .clip(CircleShape)
-                .background(background)
-                .then(
-                    if (selected == null) {
-                        Modifier.clickable(role = Role.Button, onClick = onClick)
-                    } else {
-                        Modifier.toggleable(value = selected, role = Role.Switch, onValueChange = { onClick() })
-                    },
-                ),
-    ) {
-        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(21.dp))
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = if (highlighted) FontWeight.Bold else FontWeight.Medium,
-            color = color,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
     }
 }

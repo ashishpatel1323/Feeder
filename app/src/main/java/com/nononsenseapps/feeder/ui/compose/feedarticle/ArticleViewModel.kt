@@ -32,6 +32,7 @@ import com.nononsenseapps.feeder.model.BergamotRuntimeDownloadRequiredException
 import com.nononsenseapps.feeder.model.FeedParserError
 import com.nononsenseapps.feeder.model.FullTextParser
 import com.nononsenseapps.feeder.model.FullTextTooLarge
+import com.nononsenseapps.feeder.model.HttpError
 import com.nononsenseapps.feeder.model.LocaleOverride
 import com.nononsenseapps.feeder.model.NoBody
 import com.nononsenseapps.feeder.model.NoUrl
@@ -264,6 +265,9 @@ class ArticleViewModel(
     private val textToDisplay = MutableStateFlow(TextToDisplay.CONTENT)
     private val displayFullTextOverride = MutableStateFlow<Boolean?>(null)
 
+    // Bumped by Try again, so the full text is fetched once more
+    private val fullTextRetry = MutableStateFlow(0)
+
     init {
         viewModelScope.launch {
             // Read aloud moved here with previous / next: show the full text it is reading
@@ -280,7 +284,8 @@ class ArticleViewModel(
         combine(
             articleFlow,
             displayFullTextOverride,
-        ) { article, fullTextOverride ->
+            fullTextRetry,
+        ) { article, fullTextOverride, _ ->
             article?.let {
                 it to (fullTextOverride ?: it.fullTextByDefault)
             }
@@ -487,6 +492,18 @@ class ArticleViewModel(
         }
     }
 
+    /** Whether the full article (rather than the feed's text) is shown, for the ⋮ menu's check mark. */
+    val showingFullText: StateFlow<Boolean> =
+        combine(articleFlow, displayFullTextOverride) { article, override ->
+            override ?: article?.fullTextByDefault ?: false
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    fun retryFullText() {
+        textToDisplay.update { TextToDisplay.LOADING_FULLTEXT }
+        displayFullTextOverride.value = true
+        fullTextRetry.value += 1
+    }
+
     fun toggleFullText() {
         // Using as general loading text
         textToDisplay.update { TextToDisplay.LOADING_FULLTEXT }
@@ -561,7 +578,7 @@ class ArticleViewModel(
                     true -> {
                         if (!blobFullFile(article.id, filePathProvider.fullArticleDir).isFile) {
                             // If the fulltext file is missing, try to fetch it
-                            when (retrieveFullText(article.id).leftOrNull()) {
+                            when (val err = retrieveFullText(article.id).leftOrNull()) {
                                 null -> {
                                     // Success. Do nothing yet
                                     null
@@ -571,6 +588,7 @@ class ArticleViewModel(
                                 is UnsupportedContentType -> TextToDisplay.FAILED_NOT_HTML
                                 is NotHTML -> TextToDisplay.FAILED_NOT_HTML
                                 is FullTextTooLarge -> TextToDisplay.FAILED_FULLTEXT_TOO_LARGE
+                                is HttpError -> if (err.code in BLOCKED_HTTP_CODES) TextToDisplay.FAILED_BLOCKED else TextToDisplay.FAILED_TO_LOAD_FULLTEXT
                                 else -> TextToDisplay.FAILED_TO_LOAD_FULLTEXT
                             }?.let { errorText ->
                                 textToDisplay.update { errorText }
@@ -1405,3 +1423,7 @@ private fun SilentSpeedReadState.toHighlight(): SpeechHighlight? {
         word = SpeechSegment(current.start, wordEnd(text, current.start)),
     )
 }
+
+// Answers a site gives an app it won't serve: login walls, bot checks (Ars Technica's AWS WAF
+// captcha comes back as 405) and rate limits. The in-app web page usually still works.
+internal val BLOCKED_HTTP_CODES = setOf(401, 403, 405, 429)

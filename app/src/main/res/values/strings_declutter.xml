@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="more_options">More options</string>
+  <string name="add_to_playlist_menu">Add to playlist</string>
+  <string name="menu_web_page">Web page</string>
+  <string name="menu_bold_word_starts">Bold word starts</string>
+  <string name="full_text_blocked">This site doesn\'t let apps load its pages. Open the web page instead, or read the feed\'s text.</string>
+  <string name="open_web_page">Open web page</string>
+  <string name="show_feed_text">Show feed text</string>
+  <string name="try_again">Try again</string>
+  <string name="go_online">Go online</string>
+  <string name="filter_show">Show</string>
+  <string name="filter_show_with_count">%1$s %2$d</string>
+</resources>
