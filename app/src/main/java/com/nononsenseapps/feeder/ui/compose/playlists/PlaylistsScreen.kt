@@ -123,6 +123,8 @@ import com.nononsenseapps.feeder.ui.compose.item.ItemRowModel
 import com.nononsenseapps.feeder.ui.compose.item.ageText
 import com.nononsenseapps.feeder.ui.compose.item.rememberItemCommands
 import com.nononsenseapps.feeder.ui.compose.item.rememberItemProgress
+import com.nononsenseapps.feeder.ui.compose.navigation.GlobalSearchTopBar
+import com.nononsenseapps.feeder.ui.compose.navigation.HideMainBar
 import com.nononsenseapps.feeder.ui.compose.theme.FeederTokens
 import com.nononsenseapps.feeder.ui.compose.theme.SensibleTopAppBar
 import kotlinx.coroutines.launch
@@ -159,6 +161,7 @@ fun PlaylistsScreen(
     BackHandler(enabled = open != null) { viewModel.open(null) }
 
     if (flipId != null) {
+        HideMainBar()
         // Flip view takes the whole screen, as it does for a feed, until the user leaves it
         PlaylistFlip(
             items = flipItems,
@@ -178,37 +181,44 @@ fun PlaylistsScreen(
         contentWindowInsets = WindowInsets.statusBars,
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
-            SensibleTopAppBar(
-                title = open?.name ?: stringResource(R.string.playlists),
-                navigationIcon = {
-                    IconButton(onClick = { if (open != null) viewModel.open(null) else onNavigateUp() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.go_back))
-                    }
-                },
-                actions = {
-                    if (open == null) {
+            if (open == null) {
+                // The list of playlists is a tab: the global search bar on top
+                GlobalSearchTopBar(
+                    actions = {
                         NewPlaylistAction(
                             onNewSmart = { editing = viewModel.newPlaylistDraft(true) },
                             onNew = { editing = viewModel.newPlaylistDraft(false) },
                         )
-                    } else {
-                        val items = remember(open, state) { open.items(state.candidates, state.ctx, state.byId) }
-                        val toDownload = items.filter { it.kind != ItemKind.ARTICLE && !it.isDownloaded(state.ctx) }
-                        PlaylistTopBarActions(
-                            smart = open.smart,
-                            canFlip = items.isNotEmpty(),
-                            onFlip = { viewModel.flip(open.id) },
-                            onEdit = { editing = open },
-                            downloadCount = toDownload.size,
-                            onDownload = {
-                                val n = viewModel.downloadAll(toDownload)
-                                scope.launch { snackbar.showSnackbar("Downloading $n items") }
-                            },
-                            onDelete = { confirmDelete = open },
-                        )
-                    }
-                },
-            )
+                    },
+                )
+            } else {
+                SensibleTopAppBar(
+                    title = open.name,
+                    navigationIcon = {
+                        IconButton(onClick = { viewModel.open(null) }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.go_back))
+                        }
+                    },
+                    actions = {
+                        run {
+                            val items = remember(open, state) { open.items(state.candidates, state.ctx, state.byId) }
+                            val toDownload = items.filter { it.kind != ItemKind.ARTICLE && !it.isDownloaded(state.ctx) }
+                            PlaylistTopBarActions(
+                                smart = open.smart,
+                                canFlip = items.isNotEmpty(),
+                                onFlip = { viewModel.flip(open.id) },
+                                onEdit = { editing = open },
+                                downloadCount = toDownload.size,
+                                onDownload = {
+                                    val n = viewModel.downloadAll(toDownload)
+                                    scope.launch { snackbar.showSnackbar("Downloading $n items") }
+                                },
+                                onDelete = { confirmDelete = open },
+                            )
+                        }
+                    },
+                )
+            }
         },
         bottomBar = {
             if (queue.active) {
@@ -256,6 +266,7 @@ fun PlaylistsScreen(
         )
     }
     if (carMode && queue.active) {
+        HideMainBar()
         CarMode(queue, state, viewModel, onClose = { carMode = false })
     }
 }

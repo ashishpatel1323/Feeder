@@ -39,6 +39,8 @@ import com.nononsenseapps.feeder.ui.compose.navigation.FeedDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.GlobalSearchDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.HighlightsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.HomeDestination
+import com.nononsenseapps.feeder.ui.compose.navigation.LibraryDestination
+import com.nononsenseapps.feeder.ui.compose.navigation.MainShell
 import com.nononsenseapps.feeder.ui.compose.navigation.ManageFeedsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.PlaylistsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.SearchFeedDestination
@@ -201,26 +203,29 @@ class MainActivity : DIAwareComponentActivity() {
         val navController = rememberNavController()
         val navDrawerListState = rememberLazyListState()
 
-        NavHost(navController, startDestination = HomeDestination.route) {
-            HomeDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
-            DiscoverDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
-            FeedDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
-            ArticleDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
-            // Feed editing
-            EditFeedDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
-            SearchFeedDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
-            GlobalSearchDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
-            AddFeedDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
-            // Settings
-            SettingsDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
-            // Sync settings
-            SyncScreenDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
-            // Add Fonts
-            TextSettingsDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
-            DownloadsDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
-            ManageFeedsDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
-            PlaylistsDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
-            HighlightsDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
+        MainShell(navController) {
+            NavHost(navController, startDestination = HomeDestination.route) {
+                HomeDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
+                DiscoverDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
+                FeedDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
+                ArticleDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
+                // Feed editing
+                EditFeedDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
+                SearchFeedDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
+                GlobalSearchDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
+                AddFeedDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
+                // Settings
+                SettingsDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
+                // Sync settings
+                SyncScreenDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
+                // Add Fonts
+                TextSettingsDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
+                DownloadsDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
+                ManageFeedsDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
+                PlaylistsDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
+                HighlightsDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
+                LibraryDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
+            }
         }
         // "Playlist" on any article, episode or video opens this sheet
         AddToPlaylistHost()

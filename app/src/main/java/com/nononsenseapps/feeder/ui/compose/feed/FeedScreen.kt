@@ -166,7 +166,10 @@ import com.nononsenseapps.feeder.ui.compose.navigation.ArticleDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.DownloadsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.EditFeedDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.FeedDestination
+import com.nononsenseapps.feeder.ui.compose.navigation.FeedsViewSwitch
 import com.nononsenseapps.feeder.ui.compose.navigation.GlobalSearchDestination
+import com.nononsenseapps.feeder.ui.compose.navigation.GlobalSearchTopBar
+import com.nononsenseapps.feeder.ui.compose.navigation.HideMainBar
 import com.nononsenseapps.feeder.ui.compose.navigation.HighlightsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.HomeDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.ManageFeedsDestination
@@ -813,6 +816,7 @@ fun FeedScreen(
     }
 
     if (flipMode.enabled) {
+        HideMainBar()
         // Flip view takes the whole screen: no bars, tabs or buttons until the user exits it.
         // A new pager per feed, so each feed opens at its first page.
         key(viewState.currentFeedOrTag) {
@@ -935,15 +939,18 @@ fun FeedScreen(
                     }
                 }
 
-                PlainTooltipBox(tooltip = { Text(stringResource(R.string.search_verb)) }) {
-                    Box {
-                        IconButton(
-                            onClick = { onShowSearchBar(true) },
-                        ) {
-                            Icon(
-                                Icons.Default.Search,
-                                contentDescription = stringResource(R.string.search_verb),
-                            )
+                // Latest has the global search bar instead
+                if (viewState.feedScreenTitle.type != FeedType.ALL_FEEDS) {
+                    PlainTooltipBox(tooltip = { Text(stringResource(R.string.search_verb)) }) {
+                        Box {
+                            IconButton(
+                                onClick = { onShowSearchBar(true) },
+                            ) {
+                                Icon(
+                                    Icons.Default.Search,
+                                    contentDescription = stringResource(R.string.search_verb),
+                                )
+                            }
                         }
                     }
                 }
@@ -1400,41 +1407,57 @@ fun FeedScreen(
             if (snackbarHostState != null) SnackbarHost(snackbarHostState)
         },
         topBar = {
-            SensibleTopAppBar(
-                scrollBehavior = scrollBehavior,
-                title =
-                    when (viewState.feedScreenTitle.type) {
-                        FeedType.FEED, FeedType.TAG -> viewState.feedScreenTitle.title
-                        FeedType.SAVED_ARTICLES -> stringResource(id = R.string.saved_articles)
-                        FeedType.ALL_FEEDS -> stringResource(id = R.string.all_feeds)
-                    }.let { title ->
-                        if (viewState.feedScreenTitle.type == FeedType.SAVED_ARTICLES ||
-                            !viewState.showTitleUnreadCount ||
-                            viewState.feedScreenTitle.unreadCount == 0 ||
-                            title == null
+            if (viewState.feedScreenTitle.type == FeedType.ALL_FEEDS && !viewState.searchBarVisible) {
+                // Latest view of the Feeds tab: the global search bar (with the drawer button
+                // inside it) and the Latest | By feed switch
+                Column {
+                    GlobalSearchTopBar(
+                        leading = {
+                            IconButton(onClick = onOpenNavDrawer) {
+                                Icon(Icons.Default.Menu, contentDescription = stringResource(R.string.navigation_drawer_open))
+                            }
+                        },
+                        actions = toolbarActions,
+                    )
+                    FeedsViewSwitch(latest = true)
+                }
+            } else {
+                SensibleTopAppBar(
+                    scrollBehavior = scrollBehavior,
+                    title =
+                        when (viewState.feedScreenTitle.type) {
+                            FeedType.FEED, FeedType.TAG -> viewState.feedScreenTitle.title
+                            FeedType.SAVED_ARTICLES -> stringResource(id = R.string.saved_articles)
+                            FeedType.ALL_FEEDS -> stringResource(id = R.string.all_feeds)
+                        }.let { title ->
+                            if (viewState.feedScreenTitle.type == FeedType.SAVED_ARTICLES ||
+                                !viewState.showTitleUnreadCount ||
+                                viewState.feedScreenTitle.unreadCount == 0 ||
+                                title == null
+                            ) {
+                                title
+                            } else {
+                                title + " ${
+                                    stringResource(
+                                        id = R.string.title_unread_count,
+                                        viewState.feedScreenTitle.unreadCount,
+                                    )
+                                }"
+                            }
+                        } ?: "",
+                    navigationIcon = {
+                        IconButton(
+                            onClick = onOpenNavDrawer,
                         ) {
-                            title
-                        } else {
-                            title + " ${
-                                stringResource(
-                                    id = R.string.title_unread_count,
-                                    viewState.feedScreenTitle.unreadCount,
-                                )
-                            }"
+                            Icon(
+                                Icons.Default.Menu,
+                                contentDescription = stringResource(R.string.navigation_drawer_open),
+                            )
                         }
-                    } ?: "",
-                navigationIcon = {
-                    IconButton(
-                        onClick = onOpenNavDrawer,
-                    ) {
-                        Icon(
-                            Icons.Default.Menu,
-                            contentDescription = stringResource(R.string.navigation_drawer_open),
-                        )
-                    }
-                },
-                actions = toolbarActions,
-            )
+                    },
+                    actions = toolbarActions,
+                )
+            }
         },
         bottomBar = {
             if (viewState.podcastPlayerState.isVisible) {

@@ -27,6 +27,7 @@ import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
 import com.nononsenseapps.feeder.base.diAwareViewModel
 import com.nononsenseapps.feeder.db.room.ID_ALL_FEEDS
+import com.nononsenseapps.feeder.db.room.ID_SAVED_ARTICLES
 import com.nononsenseapps.feeder.db.room.ID_UNSET
 import com.nononsenseapps.feeder.ui.MainActivityViewModel
 import com.nononsenseapps.feeder.ui.NavigationDeepLinkViewModel
@@ -402,12 +403,32 @@ data object HomeDestination : NavigationDestination(
             viewModel = backStackEntry.diAwareViewModel(),
             onOpenFeed = { id -> FeedDestination.navigate(navController, feedId = id, keepBackStack = true) },
             onOpenFolderArticles = { tag -> FeedDestination.navigate(navController, tag = tag, keepBackStack = true) },
-            onOpenArticles = { FeedDestination.navigate(navController, feedId = ID_ALL_FEEDS, keepBackStack = true) },
             onAddFeed = { SearchFeedDestination.navigate(navController) },
-            onOpenPlaylists = { PlaylistsDestination.navigate(navController) },
-            onDiscover = { DiscoverDestination.navigate(navController) },
             onManageFeeds = { ManageFeedsDestination.navigate(navController) },
-            onSearch = { GlobalSearchDestination.navigate(navController) },
+            onEditFeed = { id -> EditFeedDestination.navigate(navController, feedId = id) },
+        )
+    }
+}
+
+/** Library tab: Saved, Highlights, Downloads, Settings and Sync. */
+data object LibraryDestination : NavigationDestination(
+    path = "library",
+    navArguments = emptyList(),
+    deepLinks = emptyList(),
+) {
+    @Composable
+    override fun RegisterScreen(
+        navController: NavController,
+        backStackEntry: NavBackStackEntry,
+        navDrawerListState: LazyListState,
+        mainActivityViewModel: MainActivityViewModel,
+    ) {
+        com.nononsenseapps.feeder.ui.compose.library.LibraryScreen(
+            onOpenSaved = { FeedDestination.navigate(navController, feedId = ID_SAVED_ARTICLES, keepBackStack = true) },
+            onHighlights = { HighlightsDestination.navigate(navController) },
+            onDownloads = { DownloadsDestination.navigate(navController) },
+            onSettings = { SettingsDestination.navigate(navController) },
+            onSync = { SyncScreenDestination.navigate(navController, syncCode = "", secretKey = "") },
         )
     }
 }
@@ -433,7 +454,6 @@ data object DiscoverDestination : NavigationDestination(
     ) {
         DiscoverScreen(
             viewModel = backStackEntry.diAwareViewModel(),
-            onNavigateUp = { navController.popBackStack() },
             onOpenFeed = { id -> FeedDestination.navigate(navController, feedId = id, keepBackStack = true) },
         )
     }
@@ -651,12 +671,9 @@ data object FeedDestination : NavigationDestination(
         }
 
         navController.navigate("$path$params") {
-            // Pop up to the start destination of the graph to
-            // avoid building up a large stack of destinations
-            // on the back stack as users select items
-            popUpTo(navController.graph.id) {
-                inclusive = true
-            }
+            // Back to Home (the Feeds tab's tiles) only, so a stack doesn't build up as feeds
+            // are picked in the drawer, and the bottom bar's tabs keep their place
+            popUpTo(HomeDestination.route)
             // Avoid multiple copies of the same destination when
             // re-selecting the same item
             launchSingleTop = true

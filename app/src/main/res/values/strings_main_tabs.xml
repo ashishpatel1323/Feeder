@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="tab_feeds">Feeds</string>
+  <string name="tab_library">Library</string>
+  <string name="feeds_view_latest">Latest</string>
+  <string name="feeds_view_by_feed">By feed</string>
+  <string name="manage_short">Manage</string>
+  <string name="library_saved_desc">Read later and shared links</string>
+  <string name="library_highlights_desc">Notes and quotes</string>
+  <string name="library_downloads_desc">Offline videos and episodes</string>
+  <string name="library_app">App</string>
+</resources>
