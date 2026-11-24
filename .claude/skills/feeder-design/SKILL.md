@@ -20,11 +20,18 @@ Feeder follows Material 3 (and Material 3 Expressive on Android). These rules re
 2. **Secondary row actions are gestures, not buttons**: swipe toward the end = Save, toward the start
    = Mark read; long press = multi-select, whose bar has labeled bulk actions (Delete lives there).
    Every gesture action is also a TalkBack custom action. Never put Delete on every row.
-3. **Labels where there is room and focus**: the article/episode screen, the selection bar, the
-   Now playing sheet and dialogs keep icon + text buttons. Don't hide a label to fit a phone there; wrap.
-4. **One primary (filled) action per view.** Everything else is tonal, outlined or text.
-5. **Overflow (⋮) menus** only for rare or destructive actions that have no other home (the player's
-   Stop and close, the feed's settings). Never for an item's everyday actions.
+3. **Detail screens (article, episode) follow the M3 top app bar pattern** (revised Nov 2026 after
+   Ashish found 7 buttons + a 6-item bottom bar too busy): the top bar holds Back, **Save** and **Share**
+   as icon buttons (tooltip + content description), then **⋮**. Everything else (mark read, playlist,
+   full text, web page, open in browser, summarize, translate, bold word starts, speed read, transcript,
+   delete last in red) goes in the ⋮ menu, toggles with a check mark. The one primary action is a
+   **Listen** extended FAB (shrinks to the icon while scrolling down). No rows of labeled buttons under titles.
+   Web reader: Prev/Next, Listen (tonal pill), Highlights, Save, Share, More (`MoreMenu.tsx`); keyboard
+   shortcuts shown in the menu.
+4. **Filters fit one line**: a Show chip with a menu (Unread/All/Saved/Downloaded) instead of
+   segmented tabs, then Today and Sort. Modes like Offline live in ⋮ and show a chip only while on.
+5. **One primary (filled/tonal) action per view.** Everything else is an icon button or menu entry.
+   Web list rows: one round Play for media, then a ⋮ (`MoreMenu`) with Save, Playlist, Mark read, Delete.
 6. Keyboard hints stay in tooltips and, on wide screens, as `.btn-kbd` next to the label (web).
 
 ## Media players (Android and web)
@@ -88,7 +95,7 @@ The "design system" block at the end of `styles.css` normalises these; new scree
 
 ## Before you finish a UI change
 
-1. Web: run the dev server on a spare port (not 5173) and screenshot light + dark at 1440×900 and 390×844. Check nothing overflows and the rules above hold (one row action, labels on detail screens).
+1. Web: run the dev server on a spare port (not 5173) and screenshot light + dark at 1440×900 and 390×844. Check nothing overflows and the rules above hold (one row action, detail screens use top bar + ⋮).
 2. Run axe-core (wcag2a, wcag2aa) on the changed page: no new `color-contrast` or `button-name` violations.
 3. Web: `npm test` and `npm run build` in `web/` (Node 24 at /usr/local/bin).
 4. Android: `./gradlew :app:ktlintMainSourceSetCheck` for touched files, then install on the emulator and screenshot the screen.

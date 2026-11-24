@@ -5,24 +5,29 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudOff
-import androidx.compose.material.icons.filled.CloudQueue
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -30,14 +35,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -283,8 +286,8 @@ private val GROUPING_ORDER =
     )
 
 /**
- * Always visible controls under the top bar: the Show tabs (Unread, All, Saved), the Today chip
- * and a Sort and group button whose label says what is active. The button opens a bottom sheet.
+ * The one line of filters under the top bar: a Show chip (Unread, All, Saved, Downloaded in a
+ * menu), the Today chip and a Sort and group chip that opens a bottom sheet.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -303,46 +306,13 @@ fun FeedListFilterBar(
 ) {
     var showSheet by rememberSaveable { mutableStateOf(false) }
     Column(
-        verticalArrangement = Arrangement.spacedBy(4.dp),
         modifier =
             modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 4.dp),
     ) {
-        if (showTabs) {
-            val current = filter.show
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                FeedListShow.entries.forEachIndexed { index, option ->
-                    SegmentedButton(
-                        selected = option == current,
-                        onClick = { filterCallback.setShow(option) },
-                        shape = SegmentedButtonDefaults.itemShape(index = index, count = FeedListShow.entries.size),
-                        icon = {},
-                        label = {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            ) {
-                                Text(stringResource(option.stringId), maxLines = 1)
-                                val count =
-                                    when (option) {
-                                        FeedListShow.UNREAD -> unreadCount
-                                        FeedListShow.DOWNLOADED -> downloadedCount
-                                        else -> 0
-                                    }
-                                if (count > 0) {
-                                    Text(
-                                        count.toString(),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        maxLines = 1,
-                                    )
-                                }
-                            }
-                        },
-                    )
-                }
-            }
-        }
+        // Material 3 filter chips on one line: Show (a menu instead of four cut-off tabs), Today,
+        // Sort and group. Offline mode is turned on from the ⋮ menu and shows here only while on.
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -351,24 +321,32 @@ fun FeedListFilterBar(
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
         ) {
-            // Offline mode: nothing is fetched or synced, only what is on the device is shown
-            FilterChip(
-                selected = offlineMode,
-                onClick = { filterCallback.setOfflineMode(!offlineMode) },
-                label = {
-                    Text(
-                        stringResource(if (offlineMode) R.string.offline_mode else R.string.go_offline),
-                        maxLines = 1,
-                    )
-                },
-                leadingIcon = {
-                    Icon(
-                        if (offlineMode) Icons.Default.CloudOff else Icons.Default.CloudQueue,
-                        contentDescription = null,
-                        modifier = Modifier.size(FilterChipDefaults.IconSize),
-                    )
-                },
-            )
+            if (showTabs) {
+                ShowMenuChip(
+                    current = filter.show,
+                    onSelect = filterCallback::setShow,
+                    countOf = { option ->
+                        when (option) {
+                            FeedListShow.UNREAD -> unreadCount
+                            FeedListShow.DOWNLOADED -> downloadedCount
+                            else -> 0
+                        }
+                    },
+                )
+            }
+            if (offlineMode) {
+                FilterChip(
+                    selected = true,
+                    onClick = { filterCallback.setOfflineMode(false) },
+                    label = { Text(stringResource(R.string.offline_mode), maxLines = 1) },
+                    leadingIcon = {
+                        Icon(Icons.Default.CloudOff, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize))
+                    },
+                    trailingIcon = {
+                        Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize))
+                    },
+                )
+            }
             FilterChip(
                 selected = filter.today,
                 onClick = { filterCallback.setToday(!filter.today) },
@@ -425,6 +403,59 @@ fun FeedListFilterBar(
                     selected = grouping,
                     label = { stringResource(it.shortStringId) },
                     onSelect = onSelectGrouping,
+                )
+            }
+        }
+    }
+}
+
+/** The Show filter as one chip with a menu, so long labels and counts never get cut off. */
+@Composable
+private fun ShowMenuChip(
+    current: FeedListShow,
+    onSelect: (FeedListShow) -> Unit,
+    countOf: (FeedListShow) -> Int,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val currentLabel = stringResource(current.stringId)
+    val currentCount = countOf(current)
+    val showLabel = stringResource(R.string.filter_show)
+    Box {
+        FilterChip(
+            // Unread is the usual view; any other choice is highlighted as an active filter
+            selected = current != FeedListShow.UNREAD,
+            onClick = { expanded = true },
+            label = {
+                Text(
+                    if (currentCount > 0) stringResource(R.string.filter_show_with_count, currentLabel, currentCount) else currentLabel,
+                    maxLines = 1,
+                )
+            },
+            trailingIcon = {
+                Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize))
+            },
+            modifier =
+                Modifier.safeSemantics {
+                    contentDescription = "$showLabel: $currentLabel"
+                    role = Role.DropdownList
+                },
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            FeedListShow.entries.forEach { option ->
+                val count = countOf(option)
+                DropdownMenuItem(
+                    text = { Text(stringResource(option.stringId)) },
+                    onClick = {
+                        expanded = false
+                        onSelect(option)
+                    },
+                    leadingIcon =
+                        if (option == current) {
+                            { Icon(Icons.Default.Check, contentDescription = null) }
+                        } else {
+                            { Spacer(Modifier.size(24.dp)) }
+                        },
+                    trailingIcon = if (count > 0) ({ Text(count.toString(), style = MaterialTheme.typography.labelLarge) }) else null,
                 )
             }
         }

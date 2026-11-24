@@ -1249,4 +1249,7 @@ enum class TextToDisplay {
     FAILED_MISSING_LINK,
     FAILED_NOT_HTML,
     FAILED_FULLTEXT_TOO_LARGE,
+
+    // The site answered with a bot check or refused the app (Ars Technica's AWS WAF captcha, 403, 429)
+    FAILED_BLOCKED,
 }

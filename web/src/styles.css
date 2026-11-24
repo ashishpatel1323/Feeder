@@ -6104,7 +6104,7 @@ input:focus-visible {
    The same row for articles, episodes and videos in the list, Saved, playlists and Downloads. */
 .row.ir {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
   align-items: start;
   gap: var(--sp-2) 0;
   cursor: pointer;
@@ -6144,7 +6144,7 @@ input:focus-visible {
   .row.ir .ir-acts {
     grid-column: 1 / -1;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
   }
   .row.ir .ir-btn {
     flex-direction: column;
@@ -6349,4 +6349,78 @@ input:focus-visible {
 }
 .flip-actions {
   flex-wrap: wrap;
+}
+
+/* ⋮ More menu (MoreMenu.tsx): the less used actions of a bar */
+.more-menu {
+  display: inline-flex;
+}
+.more-menu-list {
+  min-width: 240px;
+  overflow-y: auto;
+}
+.ctx-sep {
+  height: 1px;
+  margin: var(--sp-1) 0;
+  background: var(--border);
+}
+.ctx-item .ctx-label {
+  flex: 1;
+}
+.ctx-item:disabled {
+  color: var(--disabled-ink);
+  cursor: default;
+}
+.ctx-item:disabled svg {
+  color: var(--disabled-ink);
+}
+.ctx-kbd {
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xs);
+  color: var(--text-3);
+}
+/* The reader bar's one primary action (Listen) */
+.reader-bar .icon-btn.bar-primary {
+  background: var(--accent-soft);
+  color: var(--text);
+  border-radius: var(--r-pill);
+}
+.select-chip.show-chip {
+  border-radius: var(--r-pill);
+}
+.select-chip.show-chip.on {
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+.select-chip.show-chip.on span {
+  color: var(--text-2);
+}
+
+/* List row trailing actions: one round Play for media, then ⋮ (Material 3 list item) */
+.ir-trail {
+  grid-column: 4;
+  grid-row: 1;
+  margin-left: var(--sp-2);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex: none;
+  align-self: center;
+}
+.ir-play {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  color: var(--text);
+  cursor: pointer;
+}
+.ir-play:hover {
+  filter: brightness(0.95);
+}
+.ir-trail .icon-btn {
+  color: var(--text-2);
 }
