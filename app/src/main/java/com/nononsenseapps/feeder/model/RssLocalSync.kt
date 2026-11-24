@@ -494,6 +494,15 @@ class RssLocalSync(
                     feedSql.imageUrl = feed.icon?.let { sloppyLinkToStrictURLNoThrows(it) }
                         ?: feedSql.imageUrl
 
+                    // The row was read before the download, which can take a while. Sync may have
+                    // moved the feed to another folder or changed its settings since, or removed it:
+                    // writing the old copy back would undo that here and then on every device.
+                    val current = repository.getFeed(feedSql.id)
+                    if (current == null) {
+                        logDebug(LOG_TAG, "Feed removed while it downloaded: ${feedSql.url}")
+                        return@catching
+                    }
+                    keepSettingsChangedDuringDownload(feedSql, current)
                     repository.upsertFeed(feedSql)
 
                     // Finally, prune database of old items
@@ -709,3 +718,27 @@ internal suspend fun youtubeChannelAvatar(
                 ?.replace("&amp;", "&")
         }
     }
+
+/**
+ * Copies onto [downloaded] (the row read before the download, updated with what the download
+ * found) every setting the user or sync owns from [current] (the row as it is now). The download
+ * only decides the title, address, artwork and fetch bookkeeping.
+ */
+internal fun keepSettingsChangedDuringDownload(
+    downloaded: Feed,
+    current: Feed,
+) {
+    downloaded.customTitle = current.customTitle
+    downloaded.tag = current.tag
+    downloaded.notify = current.notify
+    downloaded.fullTextByDefault = current.fullTextByDefault
+    downloaded.openArticlesWith = current.openArticlesWith
+    downloaded.alternateId = current.alternateId
+    downloaded.whenModified = current.whenModified
+    downloaded.skipDuplicates = current.skipDuplicates
+    downloaded.retryAfter = maxOf(downloaded.retryAfter, current.retryAfter)
+    downloaded.summarizeOnOpen = current.summarizeOnOpen
+    downloaded.fetchOgImages = current.fetchOgImages
+    downloaded.blockRules = current.blockRules
+    downloaded.allowRules = current.allowRules
+}

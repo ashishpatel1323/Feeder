@@ -72,7 +72,7 @@ class FeedStoreTest : DIAware {
         }
 
         coVerify {
-            dao.renameTag("oldTag", "newTag")
+            dao.renameTag("oldTag", "newTag", any())
         }
     }
 

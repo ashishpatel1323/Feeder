@@ -57,7 +57,7 @@ class FeedStore(
         oldTag: String,
         newTag: String,
     ) {
-        feedDao.renameTag(oldTag, newTag)
+        feedDao.renameTag(oldTag, newTag, System.currentTimeMillis())
     }
 
     suspend fun deleteFeeds(feedIds: List<Long>) {

@@ -210,10 +210,12 @@ interface FeedDao {
         notify: Boolean,
     )
 
-    @Query("UPDATE feeds SET tag = :newTag WHERE tag IS :oldTag")
+    /** Bumps when_modified too, so the new folder name wins over the old one in sync. */
+    @Query("UPDATE feeds SET tag = :newTag, when_modified = MAX(when_modified + 1, :whenModifiedMillis) WHERE tag IS :oldTag")
     suspend fun renameTag(
         oldTag: String,
         newTag: String,
+        whenModifiedMillis: Long,
     )
 
     @Query("UPDATE feeds SET notify = :notify")
