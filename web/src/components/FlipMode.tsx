@@ -389,7 +389,7 @@ export function FlipMode(p: Props) {
       <div className="flip-src">{feedDisplayTitle(feed)}</div>
       <div className="flip-meta">
         {facts ? <TypeBadge kind={facts.kind} label={facts.kindLabel} /> : null}
-        {[item.author, timeAgo(item.sortTime), facts?.lengthText].filter(Boolean).join(' · ')}
+        {[item.author, timeAgo(item.sortTime), facts?.percentText, facts?.lengthText].filter(Boolean).join(' · ')}
       </div>
       <h1 className="flip-title">{item.title || 'Untitled'}</h1>
       {videoId ? (

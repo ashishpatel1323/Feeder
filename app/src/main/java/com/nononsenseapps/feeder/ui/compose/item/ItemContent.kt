@@ -96,7 +96,8 @@ fun ItemHeader(
                     modifier = if (onFeedClick != null) Modifier.clickable(onClick = onFeedClick) else Modifier,
                 )
             }
-            val rest = listOfNotNull(date.ifBlank { null }, length).joinToString(" · ")
+            // "42% played" on an episode or video, as in the lists
+            val rest = listOfNotNull(date.ifBlank { null }, percentPlayedLabel(kind, progress, lengthSeconds), length).joinToString(" · ")
             if (rest.isNotBlank()) {
                 Text(
                     text = rest,

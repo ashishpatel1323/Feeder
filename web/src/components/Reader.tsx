@@ -471,6 +471,7 @@ export function Reader(p: Props) {
               {item.author ? <span>{item.author}</span> : null}
               <span>{date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</span>
               <TypeBadge kind={facts.kind} label={facts.kindLabel} />
+              {facts.percentText ? <span className="row-percent">{facts.percentText}</span> : null}
               {facts.lengthText ? <span>{facts.lengthText}</span> : null}
             </div>
             {videoId ? (
