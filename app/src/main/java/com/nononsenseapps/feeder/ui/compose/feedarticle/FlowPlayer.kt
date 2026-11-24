@@ -925,6 +925,7 @@ internal fun VideoInfo(
     modifier: Modifier = Modifier,
     transcriptShown: Boolean = false,
     onToggleTranscript: (() -> Unit)? = null,
+    playerLabel: String? = null,
 ) {
     val di = LocalDI.current
     val playback: YouTubePlayback by di.instance()
@@ -935,6 +936,8 @@ internal fun VideoInfo(
     Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = modifier.fillMaxWidth()) {
         val meta =
             listOfNotNull(
+                // First, so it is never cut off
+                playerLabel,
                 details.viewCount?.let { stringResource(R.string.video_views, VideoDetails.compactCount(it)) },
                 relativeDate(details.uploadDate),
                 positionLabel,

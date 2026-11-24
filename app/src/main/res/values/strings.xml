@@ -520,6 +520,9 @@
   <string name="video_more">…more</string>
   <string name="video_less">Show less</string>
   <string name="video_background">Background</string>
+  <string name="video_player_feeder">Feeder player</string>
+  <string name="video_player_youtube">YouTube\'s player (no background play). Feeder\'s player could not load this video: %1$s</string>
+  <string name="video_player_streams_failed">its streams would not play</string>
   <string name="video_download">Download</string>
   <string name="video_downloading">Downloading %1$d%%</string>
   <string name="video_watched">Watched</string>
