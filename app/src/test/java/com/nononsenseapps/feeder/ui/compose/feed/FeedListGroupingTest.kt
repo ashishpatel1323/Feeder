@@ -1,6 +1,8 @@
 package com.nononsenseapps.feeder.ui.compose.feed
 
+import com.nononsenseapps.feeder.archmodel.DateBucketBounds
 import com.nononsenseapps.feeder.archmodel.FeedListGrouping
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.util.Locale
 import kotlin.test.Test
@@ -22,14 +24,10 @@ class FeedListGroupingTest {
             noFeed = "No feed",
         )
 
+    private val bounds = DateBucketBounds(now, DayOfWeek.MONDAY)
+
     private fun dateHeader(date: LocalDate): String =
-        dateHeaderText(
-            date = date,
-            today = "Today",
-            yesterday = "Yesterday",
-            locale = Locale.ENGLISH,
-            now = now,
-        )
+        dateHeaderText(bounds.keyOf(date), labels, Locale.ENGLISH)
 
     private fun header(
         grouping: FeedListGrouping,
@@ -42,29 +40,31 @@ class FeedListGroupingTest {
             feedTitle = feedTitle,
             labels = labels,
             locale = Locale.ENGLISH,
-            now = now,
         )
 
     @Test
-    fun todayAndYesterday() {
-        assertEquals("Today", dateHeader(now))
-        assertEquals("Yesterday", dateHeader(now.minusDays(1)))
+    fun todayAndYesterdayShowTheDate() {
+        assertEquals("Today · Thu, 12 Nov", dateHeader(now))
+        assertEquals("Yesterday · Wed, 11 Nov", dateHeader(now.minusDays(1)))
     }
 
     @Test
-    fun lastWeekShowsWeekday() {
-        assertEquals("Monday", dateHeader(now.minusDays(3)))
-    }
-
-    @Test
-    fun olderShowsFullDate() {
-        assertEquals("Thursday, November 5, 2026", dateHeader(now.minusDays(7)))
+    fun weeksMonthsAndYears() {
+        // Week starts Monday 9 Nov
+        assertEquals("This week", dateHeader(LocalDate.of(2026, 11, 9)))
+        assertEquals("Last week", dateHeader(LocalDate.of(2026, 11, 2)))
+        assertEquals("Earlier this month", dateHeader(LocalDate.of(2026, 11, 1)))
+        assertEquals("Last month", dateHeader(LocalDate.of(2026, 10, 1)))
+        assertEquals("September", dateHeader(LocalDate.of(2026, 9, 30)))
+        assertEquals("January", dateHeader(LocalDate.of(2026, 1, 1)))
+        assertEquals("December 2025", dateHeader(LocalDate.of(2025, 12, 31)))
     }
 
     @Test
     fun dateGroupKeyIsParsed() {
-        assertEquals("Today", header(FeedListGrouping.DATE, "2026-11-12"))
-        assertEquals("Yesterday", header(FeedListGrouping.DATE, "2026-11-11"))
+        assertEquals("Today · Thu, 12 Nov", header(FeedListGrouping.DATE, "2026-11-12:today"))
+        assertEquals("Last week", header(FeedListGrouping.DATE, "2026-11-02:lastweek"))
+        assertEquals("March 2024", header(FeedListGrouping.DATE, "2024-03-01:y"))
     }
 
     @Test

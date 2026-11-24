@@ -56,6 +56,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nononsenseapps.feeder.R
+import com.nononsenseapps.feeder.archmodel.DateBucket
+import com.nononsenseapps.feeder.archmodel.DateBucketKey
 import com.nononsenseapps.feeder.archmodel.FeedListGrouping
 import com.nononsenseapps.feeder.archmodel.SortingOptions
 import com.nononsenseapps.feeder.ui.compose.components.safeSemantics
@@ -63,11 +65,7 @@ import com.nononsenseapps.feeder.ui.compose.feedarticle.FeedListFilter
 import com.nononsenseapps.feeder.ui.compose.feedarticle.FeedListFilterCallback
 import com.nononsenseapps.feeder.ui.compose.feedarticle.FeedListShow
 import com.nononsenseapps.feeder.ui.compose.feedarticle.show
-import java.time.LocalDate
-import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
-import java.time.format.FormatStyle
 import java.util.Locale
 
 /**
@@ -85,6 +83,10 @@ fun collapseKey(
 data class GroupHeaderLabels(
     val today: String,
     val yesterday: String,
+    val thisWeek: String = "This week",
+    val lastWeek: String = "Last week",
+    val earlierThisMonth: String = "Earlier this month",
+    val lastMonth: String = "Last month",
     val untagged: String,
     val quickReads: String,
     val mediumReads: String,
@@ -98,6 +100,10 @@ fun rememberGroupHeaderLabels(): GroupHeaderLabels =
     GroupHeaderLabels(
         today = stringResource(R.string.today),
         yesterday = stringResource(R.string.yesterday),
+        thisWeek = stringResource(R.string.group_this_week),
+        lastWeek = stringResource(R.string.group_last_week),
+        earlierThisMonth = stringResource(R.string.group_earlier_this_month),
+        lastMonth = stringResource(R.string.group_last_month),
         untagged = stringResource(R.string.group_untagged),
         quickReads = stringResource(R.string.group_quick_reads),
         mediumReads = stringResource(R.string.group_medium_reads),
@@ -128,23 +134,11 @@ internal fun groupHeaderText(
     feedTitle: String,
     labels: GroupHeaderLabels,
     locale: Locale,
-    zoneId: ZoneId = ZoneId.systemDefault(),
-    now: LocalDate = LocalDate.now(zoneId),
 ): String =
     when (grouping) {
         FeedListGrouping.NONE -> ""
         FeedListGrouping.DATE ->
-            try {
-                dateHeaderText(
-                    date = LocalDate.parse(groupKey),
-                    today = labels.today,
-                    yesterday = labels.yesterday,
-                    locale = locale,
-                    now = now,
-                )
-            } catch (_: DateTimeParseException) {
-                groupKey
-            }
+            DateBucketKey.parse(groupKey)?.let { dateHeaderText(it, labels, locale) } ?: groupKey
         FeedListGrouping.FEED -> feedTitle.ifBlank { labels.noFeed }
         FeedListGrouping.TAG -> groupKey.ifBlank { labels.untagged }
         FeedListGrouping.LENGTH ->
@@ -156,21 +150,27 @@ internal fun groupHeaderText(
         FeedListGrouping.SITE -> groupKey.ifBlank { labels.unknownSite }
     }
 
+/**
+ * Header of a Mail-style date group. Today and Yesterday also show the date; months of this
+ * year show the month name and older months add the year.
+ */
 internal fun dateHeaderText(
-    date: LocalDate,
-    today: String,
-    yesterday: String,
+    key: DateBucketKey,
+    labels: GroupHeaderLabels,
     locale: Locale,
-    now: LocalDate = LocalDate.now(),
-): String =
-    when {
-        date == now -> today
-        date == now.minusDays(1) -> yesterday
-        // Within the last week the weekday reads better than a date
-        date.isAfter(now.minusDays(7)) && !date.isAfter(now) ->
-            DateTimeFormatter.ofPattern("EEEE", locale).format(date)
-        else -> DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL).withLocale(locale).format(date)
+): String {
+    val day = { DateTimeFormatter.ofPattern("EEE, d MMM", locale).format(key.start) }
+    return when (key.bucket) {
+        DateBucket.TODAY -> "${labels.today} · ${day()}"
+        DateBucket.YESTERDAY -> "${labels.yesterday} · ${day()}"
+        DateBucket.THIS_WEEK -> labels.thisWeek
+        DateBucket.LAST_WEEK -> labels.lastWeek
+        DateBucket.THIS_MONTH -> labels.earlierThisMonth
+        DateBucket.LAST_MONTH -> labels.lastMonth
+        DateBucket.MONTH -> DateTimeFormatter.ofPattern("LLLL", locale).format(key.start)
+        DateBucket.OLDER_MONTH -> DateTimeFormatter.ofPattern("LLLL yyyy", locale).format(key.start)
     }
+}
 
 /**
  * Section header shown above the first article of each group: a full-width shaded band with
