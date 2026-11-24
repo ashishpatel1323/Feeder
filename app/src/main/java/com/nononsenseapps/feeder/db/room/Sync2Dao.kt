@@ -73,6 +73,18 @@ interface Sync2Dao {
         guid: String,
     ): Long?
 
+    /** The episode (an item with an enclosure) with this key, or null. */
+    @Query(
+        """
+        SELECT i.id FROM feed_items i JOIN feeds f ON i.feed_id = f.id
+        WHERE f.url = :feedUrl AND i.guid = :guid AND i.enclosure_link IS NOT NULL
+        """,
+    )
+    suspend fun getEpisodeId(
+        feedUrl: String,
+        guid: String,
+    ): Long?
+
     @Query(
         """
         SELECT i.id AS id, f.url AS feed_url, i.guid AS guid FROM feed_items i JOIN feeds f ON i.feed_id = f.id

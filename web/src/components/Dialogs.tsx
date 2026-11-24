@@ -293,7 +293,7 @@ function SyncSection({ toast }: { toast: (m: string) => void }) {
       <section className="settings-section">
         <h3>Sync with Feeder on your phone</h3>
         <p className="muted">
-          Syncs feeds and their settings, read marks, Saved, deleted articles and the order of feeds and folders, end-to-end encrypted. In Feeder on
+          Syncs feeds and their settings, read marks, Saved, deleted articles, the order of feeds and folders, playlists, and where episodes and videos were left, end-to-end encrypted. In Feeder on
           your phone, open Sync and copy the add-device link, then paste it here. No sync anywhere yet? Start one here and open its link on the
           phone.
         </p>
@@ -318,7 +318,7 @@ function SyncSection({ toast }: { toast: (m: string) => void }) {
     <section className="settings-section">
       <h3>Sync</h3>
       <p>
-        Sync is on: feeds, read marks, Saved, deleted articles and feed order.
+        Sync is on: feeds, read marks, Saved, deleted articles, feed order, playlists and where episodes and videos were left.
         {state.lastSyncAt ? ` Last synced ${new Date(state.lastSyncAt).toLocaleString()}.` : ''}
       </p>
       {state.fromChain ? <p className="muted small">Moved over from Feeder's old sync chain, with the same link and key.</p> : null}

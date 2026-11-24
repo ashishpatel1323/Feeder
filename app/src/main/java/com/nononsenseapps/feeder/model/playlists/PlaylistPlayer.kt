@@ -235,6 +235,9 @@ class PlaylistPlayer(
                         author = article.author.orEmpty(),
                         feedTitle = article.feedDisplayTitle,
                     )
+                    // Starting to read an article counts as reading it. The queue keeps its order,
+                    // so an Unread playlist that drops it doesn't skip the next one.
+                    if (article.isUnread) repository.markAsReadAndNotified(id)
                     return@launch
                 }
                 if (tts.ttsState.value != PlaybackStatus.STOPPED) tts.stop()
@@ -254,7 +257,8 @@ class PlaylistPlayer(
                 val player = _player.value ?: createPlayer()
                 player.setMediaSource(source)
                 player.prepare()
-                val at = store.resumeAt(id)
+                // Starts from the newest spot, from here or another device (which then needs no second seek)
+                val at = store.takeOtherDevicePosition(id) ?: store.resumeAt(id)
                 if (at > 0) player.seekTo(at * 1000)
                 player.playWhenReady = true
                 startService()
@@ -318,6 +322,12 @@ class PlaylistPlayer(
                         object : Player.Listener {
                             override fun onIsPlayingChanged(isPlaying: Boolean) {
                                 if (_state.value.kind != ItemKind.ARTICLE) _state.value = _state.value.copy(isPlaying = isPlaying)
+                                // Played further on another device since it was paused here: carry on from there
+                                if (isPlaying && _state.value.kind != ItemKind.ARTICLE) {
+                                    val id = _state.value.currentId
+                                    val at = id?.let { store.takeOtherDevicePosition(it) }
+                                    if (at != null) seekTo(at * 1000)
+                                }
                             }
 
                             override fun onPlaybackStateChanged(playbackState: Int) {

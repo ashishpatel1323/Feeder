@@ -55,7 +55,20 @@ data class Playlist(
     val itemIds: List<Long> = emptyList(),
     val sort: PlaylistSort = PlaylistSort.NEWEST,
     val createdAt: Long = 0L,
+    /** Last change made on this device (epoch millis): the sync time of its record. 0 = never edited. */
+    val modifiedAt: Long = 0L,
 )
+
+/**
+ * Fixed ids of the starter playlists, by name, the same on every device and in the web app, so
+ * syncing two devices doesn't give two of each.
+ */
+val STARTER_IDS: Map<String, String> =
+    mapOf(
+        "Morning drive" to "starter-morning-drive",
+        "New podcast episodes" to "starter-new-podcast-episodes",
+        "Short reads" to "starter-short-reads",
+    )
 
 val PLAYLIST_COLORS: List<Long> = listOf(0xFF1D4ED8, 0xFF7C3AED, 0xFF0E7490, 0xFFBE123C, 0xFFA16207, 0xFF15803D, 0xFFC2410C, 0xFF9D174D)
 val PLAYLIST_ICONS: List<String> = listOf("🚗", "🎙", "📰", "▶", "★", "☕", "🏃", "🌙", "🎧", "📚", "🧠", "✈")
@@ -282,7 +295,9 @@ fun newPlaylist(
 }
 
 /** The playlists a new user starts with, so the screen isn't empty. */
-fun starterPlaylists(): List<Playlist> {
+fun starterPlaylists(): List<Playlist> = starterPlaylistsRandomIds().map { it.copy(id = STARTER_IDS[it.name] ?: it.id, createdAt = 0L) }
+
+private fun starterPlaylistsRandomIds(): List<Playlist> {
     val list = mutableListOf<Playlist>()
     list +=
         newPlaylist(

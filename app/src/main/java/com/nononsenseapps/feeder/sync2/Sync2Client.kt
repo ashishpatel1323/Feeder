@@ -11,6 +11,7 @@ import com.nononsenseapps.feeder.db.room.Sync2Dao
 import com.nononsenseapps.feeder.db.room.Sync2ItemKey
 import com.nononsenseapps.feeder.db.room.Sync2Known
 import com.nononsenseapps.feeder.model.offline.OfflineFiles
+import com.nononsenseapps.feeder.model.playlists.PlaylistStore
 import com.nononsenseapps.feeder.model.youtube.VideoPositions
 import com.nononsenseapps.feeder.sharedlinks.LinkInfo
 import com.nononsenseapps.feeder.sharedlinks.SHARED_FEED_URL_STRING
@@ -51,7 +52,8 @@ const val SYNC2_SERVER = "https://feeder-web-snowy.vercel.app"
  *   saved   feedUrl \n guid     true / false (+ a small copy of the article in "a")
  *   hidden  feedUrl \n guid     true = deleted for good on every device
  *   layout  "main"              feed/folder order (web only; kept, not used here)
- *   video   feedUrl \n guid     { t, d }: where a YouTube video was left, in seconds
+ *   video   feedUrl \n guid     { t, d }: where a video or podcast episode was left, in seconds
+ *   playlist (key: playlist id) [SyncedPlaylist], or {"deleted": true} after deleting it
  *
  * The device remembers the last value exchanged for every record (sync2_known) and sends
  * whatever differs locally, then applies what other devices changed. Unknown kinds (Read later
@@ -67,7 +69,11 @@ class Sync2Client(
     private val videoPositions: VideoPositions by instance()
     private val sharedLinks by lazy { SharedLinks(di) }
     private val offlineFiles: OfflineFiles by instance()
+    private val playlistStore: PlaylistStore by instance()
     private val mutex = Mutex()
+
+    // Episode positions that arrived in this exchange, copied to the podcast player's store after it
+    private val arrivedPositions = mutableSetOf<String>()
 
     @Volatile
     private var configured: Boolean? = null
@@ -266,6 +272,8 @@ class Sync2Client(
         secret: SecretKeys,
         state: Sync2State,
     ) {
+        arrivedPositions.clear()
+        copyEpisodePositionsOut()
         val pending = collectChanges(System.currentTimeMillis())
         logDebug(LOG_TAG, "Sending ${pending.size} changes")
         val records =
@@ -305,6 +313,41 @@ class Sync2Client(
             i += BATCH
         } while (i < records.size)
         repository.applyRemoteReadMarks()
+        copyEpisodePositionsIn()
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Podcast episodes: the podcast player keeps where each was left by item id (PlaylistStore).
+    // They travel as "video" records, keyed like the web app keys them, through VideoPositions.
+
+    /** Episode positions saved here and newer than the synced copy go to [videoPositions]. */
+    private suspend fun copyEpisodePositionsOut() {
+        val stamped = playlistStore.stampedPositions().filterValues { it.third > 0 }
+        if (stamped.isEmpty()) return
+        for (chunk in stamped.keys.chunked(500)) {
+            for (k in dao.getItemKeys(chunk)) {
+                val (t, d, ts) = stamped[k.id] ?: continue
+                val key = "${k.feedUrl}\n${k.guid}"
+                val synced = videoPositions.get(key)
+                if (synced == null || synced.ts < ts) videoPositions.applyRemote(key, t.toDouble(), d.toDouble(), ts)
+            }
+        }
+    }
+
+    /** Positions from other devices for episodes this device has go to the podcast player's store. */
+    private suspend fun copyEpisodePositionsIn() {
+        val known = dao.getKnown(EPISODES_COPIED_KEY)
+        // The first time, every position synced so far (the web app has always sent episodes)
+        val keys = if (known == null) videoPositions.all.value.keys else arrivedPositions.toSet()
+        for (key in keys) {
+            val pos = videoPositions.get(key) ?: continue
+            val cut = key.indexOf('\n')
+            if (cut <= 0) continue
+            val id = dao.getEpisodeId(key.substring(0, cut), key.substring(cut + 1)) ?: continue
+            playlistStore.applyRemotePosition(id, pos.t.toLong(), pos.d.toLong(), pos.ts)
+        }
+        if (known == null) dao.upsertKnown(listOf(Sync2Known(EPISODES_COPIED_KEY, "true", System.currentTimeMillis())))
+        arrivedPositions.clear()
     }
 
     private suspend fun post(body: ExchangeRequest): ExchangeResponse =
@@ -380,7 +423,10 @@ class Sync2Client(
             if (kn.v == "true" && key !in hiddenHere) out += Pending("hidden", key, false, maxOf(now, kn.ts + 1))
         }
 
-        // Where YouTube videos were left, saved here since they were last exchanged
+        // Playlists: new, edited (newest edit wins) and deleted ones
+        out += collectPlaylists(now)
+
+        // Where videos and episodes were left, saved here since they were last exchanged
         val knownVideos = dao.getKnownWithPrefix("video\n").associateBy { it.k.removePrefix("video\n") }
         for ((key, pos) in videoPositions.all.value) {
             val kn = knownVideos[key]
@@ -388,6 +434,62 @@ class Sync2Client(
             if (kn == null || pos.ts > kn.ts) {
                 out += Pending("video", key, value, maxOf(pos.ts, (kn?.ts ?: 0) + 1))
             }
+        }
+        return out
+    }
+
+    private suspend fun itemIdOf(key: String): Long? {
+        val cut = key.indexOf('\n')
+        return if (cut > 0) dao.getItemId(key.substring(0, cut), key.substring(cut + 1)) else null
+    }
+
+    private suspend fun collectPlaylists(now: Long): List<Pending> {
+        val out = mutableListOf<Pending>()
+        val known = dao.getKnownWithPrefix("playlist\n").associateBy { it.k.removePrefix("playlist\n") }
+        val before = playlistStore.playlists.value
+        val adopted = SyncedPlaylist.adoptStarterIds(before, known.keys)
+        if (adopted != before) {
+            val renamed = before.zip(adopted).filter { (a, b) -> a.id != b.id }.associate { (a, b) -> a.id to b.id }
+            playlistStore.replaceFromSync { list -> list.map { p -> renamed[p.id]?.let { p.copy(id = it) } ?: p } }
+        }
+        val lists = playlistStore.playlists.value
+        val feeds = repository.getFeedsOrderedByUrl()
+        val feedUrls = feeds.associate { it.id to it.url.toString() }
+        val localFeedUrls = feedUrls.values.toSet()
+        val itemKeys =
+            lists
+                .filterNot { it.smart }
+                .flatMap { it.itemIds }
+                .distinct()
+                .chunked(500)
+                .flatMap { dao.getItemKeys(it) }
+                .associate { it.id to "${it.feedUrl}\n${it.guid}" }
+        for (pl in lists) {
+            val kn = known[pl.id]
+            val last = kn?.let { parse(it.v) as? Map<*, *> }?.takeUnless { isDeleted(it) }?.let { SyncedPlaylist.fromMap(it) }
+            val localKeys = pl.itemIds.mapNotNull { itemKeys[it] }.toSet()
+            val unresolvedItems =
+                last
+                    ?.items
+                    ?.withIndex()
+                    ?.filter { (_, key) -> key !in localKeys && itemIdOf(key) == null }
+                    .orEmpty()
+            val v =
+                SyncedPlaylist.of(
+                    pl,
+                    feedUrlOf = { feedUrls[it] },
+                    itemKeyOf = { itemKeys[it] },
+                    unresolvedFeeds = last?.feeds?.filter { it !in localFeedUrls }.orEmpty(),
+                    unresolvedItems = unresolvedItems,
+                )
+            if (last != v) {
+                val changedAt = pl.modifiedAt.takeIf { it > 0 } ?: pl.createdAt.takeIf { it > 0 } ?: 1L
+                out += Pending("playlist", pl.id, v.toMap(), maxOf(changedAt, (kn?.ts ?: 0) + 1))
+            }
+        }
+        val here = lists.map { it.id }.toSet()
+        for ((id, kn) in known) {
+            if (id !in here && !isDeleted(parse(kn.v))) out += Pending("playlist", id, mapOf("deleted" to true), maxOf(now, kn.ts + 1))
         }
         return out
     }
@@ -469,7 +571,24 @@ class Sync2Client(
                 "video" -> {
                     if (v is Map<*, *>) {
                         val t = (v["t"] as? Number)?.toDouble()
-                        if (t != null) videoPositions.applyRemote(key, t, (v["d"] as? Number)?.toDouble() ?: 0.0, ts)
+                        if (t != null) {
+                            videoPositions.applyRemote(key, t, (v["d"] as? Number)?.toDouble() ?: 0.0, ts)
+                            arrivedPositions += key
+                        }
+                    }
+                }
+
+                "playlist" -> {
+                    if (isDeleted(v)) {
+                        playlistStore.replaceFromSync { list -> list.filterNot { it.id == key } }
+                    } else if (v is Map<*, *>) {
+                        val synced = SyncedPlaylist.fromMap(v)
+                        val feedIds = repository.getFeedsOrderedByUrl().associate { it.url.toString() to it.id }
+                        val itemIds = synced.items.associateWith { itemIdOf(it) }
+                        val pl = synced.toPlaylist(key, ts, feedIdOf = { feedIds[it] }, itemIdOf = { itemIds[it] })
+                        playlistStore.replaceFromSync { list -> if (list.any { it.id == key }) list.map { if (it.id == key) pl else it } else list + pl }
+                        // Remember it as synced (with what this device doesn't have), so it isn't sent back
+                        dao.upsertKnown(listOf(Sync2Known(k, canonical(synced.toMap()), ts)))
                     }
                 }
                 // layout and kinds from newer versions are only remembered
@@ -522,6 +641,9 @@ class Sync2Client(
     companion object {
         private const val LOG_TAG = "FEEDER_SYNC2"
         private const val STATE_KEY = "\u0000state"
+
+        // Set once positions synced before this version were copied to the podcast player's store
+        private const val EPISODES_COPIED_KEY = "\u0000episodes"
         private const val BATCH = 400
 
         fun knownKey(

@@ -4,6 +4,7 @@ import { handleSync2, MemoryStore, type SyncRecord } from '../../../server/sync2
 import { db, FEED_ORDER_KEY, getKv, hideItems, itemId, newFeed, setKv, unhideItems, type Item } from '../db'
 import { decryptString, encryptString } from '../crypto'
 import { saveVideoPos } from '../videopos'
+import { deletePlaylist, loadPlaylists, newPlaylist, savePlaylist, seedPlaylists, PLAYLISTS_KEY } from '../playlists'
 import {
   addDeviceLink,
   deriveKeys,
@@ -239,6 +240,47 @@ describe('sync client', () => {
     // Watching on here again sends the new position
     await saveVideoPos(a, 520, 859)
     expect((await syncNow())?.sent).toBe(1)
+  })
+
+  it('syncs playlists: new, edited, deleted, and starters only once', async () => {
+    await joinSync(CODE, KEY)
+    await seedPlaylists()
+    const mine = newPlaylist({ name: 'Commute', smart: false, itemIds: [itemId('https://p/feed', 'e1')] })
+    await savePlaylist(mine)
+    await syncNow()
+    const other = await otherDevice()
+    const lists = (await other.all()).filter((p) => p.k === 'playlist')
+    expect(lists.map((p) => p.key).sort()).toEqual([mine.id, 'starter-morning-drive', 'starter-new-podcast-episodes', 'starter-short-reads'].sort())
+    expect(lists.find((p) => p.key === mine.id)?.v).toMatchObject({ name: 'Commute', smart: false, items: ['https://p/feed\ne1'] })
+    // Starters nobody edited go out with the oldest time, so an edit anywhere wins over them
+    expect(lists.find((p) => p.key === 'starter-short-reads')?.ts).toBe(1)
+    expect((await syncNow())?.sent).toBe(0)
+
+    // Edited elsewhere: the edit lands here and is not sent back
+    const v = lists.find((p) => p.key === mine.id)!.v as Record<string, unknown>
+    await other.push({ k: 'playlist', key: mine.id, v: { ...v, name: 'Commute home', items: ['https://p/feed\ne2', 'https://p/feed\ne1'] }, ts: Date.now() + 1000 })
+    await syncNow()
+    const here = (await loadPlaylists()).find((p) => p.id === mine.id)!
+    expect(here.name).toBe('Commute home')
+    expect(here.itemIds).toEqual(['https://p/feed\ne2', 'https://p/feed\ne1'])
+    expect((await syncNow())?.sent).toBe(0)
+
+    // A new playlist from elsewhere, then deleting one here
+    await other.push({ k: 'playlist', key: 'pl-other', v: { ...v, name: 'From the phone', smart: true, items: [] }, ts: 50 })
+    await syncNow()
+    expect((await loadPlaylists()).some((p) => p.id === 'pl-other' && p.smart)).toBe(true)
+    await deletePlaylist(mine.id)
+    expect((await syncNow())?.sent).toBe(1)
+    expect((await other.all()).find((p) => p.k === 'playlist' && p.key === mine.id)?.v).toEqual({ deleted: true })
+  })
+
+  it('gives starter playlists made before fixed ids their fixed id', async () => {
+    await joinSync(CODE, KEY)
+    await setKv(PLAYLISTS_KEY, [{ ...newPlaylist({ name: 'Short reads', smart: true }), id: 'pl-old', createdAt: 500 }])
+    await syncNow()
+    expect((await loadPlaylists()).map((p) => p.id)).toEqual(['starter-short-reads'])
+    const sent = (await (await otherDevice()).all()).find((p) => p.k === 'playlist')
+    expect(sent).toMatchObject({ key: 'starter-short-reads', ts: 500 })
   })
 
   it('undoing a delete brings the article back everywhere', async () => {
