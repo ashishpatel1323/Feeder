@@ -9,4 +9,6 @@ data class ItemStatus(
     val bookmarked: Boolean,
     /** Publication (sort) time in epoch millis. */
     @ColumnInfo(name = "sort_time") val sortTime: Long,
+    /** feedUrl \n guid: where YouTube keeps how far the video was watched. */
+    @ColumnInfo(name = "video_key") val videoKey: String = "",
 )

@@ -47,6 +47,21 @@ data class ItemProgress(
         get() = positionSeconds >= MIN_PROGRESS_SECONDS && (lengthSeconds <= 0 || positionSeconds < lengthSeconds - PLAYED_TAIL_SECONDS)
 }
 
+/**
+ * How much of an episode or video was played, 1 to 100 (the last [PLAYED_TAIL_SECONDS] count as
+ * all of it), or null when it wasn't started or its length isn't known. [lengthSeconds] is used
+ * when the saved position doesn't know the length.
+ */
+fun percentPlayed(
+    progress: ItemProgress?,
+    lengthSeconds: Long?,
+): Int? {
+    if (progress == null || progress.positionSeconds < MIN_PROGRESS_SECONDS) return null
+    val len = progress.lengthSeconds.takeIf { it > 0 } ?: lengthSeconds?.takeIf { it > 0 } ?: return null
+    if (progress.positionSeconds >= len - PLAYED_TAIL_SECONDS) return 100
+    return (progress.positionSeconds * 100 / len).toInt().coerceIn(1, 99)
+}
+
 /** Positions this early do not count as started. */
 const val MIN_PROGRESS_SECONDS = 5L
 

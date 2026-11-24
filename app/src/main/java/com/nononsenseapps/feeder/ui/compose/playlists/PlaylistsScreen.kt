@@ -98,7 +98,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.model.playlists.ItemKind
-import com.nononsenseapps.feeder.model.playlists.ItemProgress
 import com.nononsenseapps.feeder.model.playlists.PLAYLIST_COLORS
 import com.nononsenseapps.feeder.model.playlists.PLAYLIST_ICONS
 import com.nononsenseapps.feeder.model.playlists.PlayStatus
@@ -115,6 +114,7 @@ import com.nononsenseapps.feeder.model.playlists.label
 import com.nononsenseapps.feeder.model.playlists.matches
 import com.nononsenseapps.feeder.model.playlists.totalSeconds
 import com.nononsenseapps.feeder.model.playlists.withinLabel
+import com.nononsenseapps.feeder.model.youtube.VideoPositions
 import com.nononsenseapps.feeder.ui.compose.feed.PlainTooltipBox
 import com.nononsenseapps.feeder.ui.compose.item.ItemActionButton
 import com.nononsenseapps.feeder.ui.compose.item.ItemRow
@@ -122,6 +122,7 @@ import com.nononsenseapps.feeder.ui.compose.item.ItemRowActions
 import com.nononsenseapps.feeder.ui.compose.item.ItemRowModel
 import com.nononsenseapps.feeder.ui.compose.item.ageText
 import com.nononsenseapps.feeder.ui.compose.item.rememberItemCommands
+import com.nononsenseapps.feeder.ui.compose.item.rememberItemProgress
 import com.nononsenseapps.feeder.ui.compose.theme.FeederTokens
 import com.nononsenseapps.feeder.ui.compose.theme.SensibleTopAppBar
 import kotlinx.coroutines.launch
@@ -440,7 +441,8 @@ private fun PlaylistDetail(
         itemsIndexed(items, key = { _, it -> it.id }) { index, it ->
             val kind = it.kind
             val pos = state.ctx.positions[it.id]
-            val progress = pos?.let { (p, len) -> ItemProgress(p, len) }
+            // Episodes from the podcast player's positions, videos from YouTube's as well
+            val progress = rememberItemProgress(it.id, if (kind == ItemKind.YOUTUBE) VideoPositions.articleKey(it.feedUrl, it.guid) else "")
             ItemRow(
                 model =
                     ItemRowModel(

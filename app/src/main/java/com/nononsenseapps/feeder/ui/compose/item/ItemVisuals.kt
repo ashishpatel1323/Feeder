@@ -46,6 +46,7 @@ import com.nononsenseapps.feeder.model.playlists.ItemProgress
 import com.nononsenseapps.feeder.model.playlists.LengthText
 import com.nononsenseapps.feeder.model.playlists.badgeMinutes
 import com.nononsenseapps.feeder.model.playlists.clockText
+import com.nononsenseapps.feeder.model.playlists.percentPlayed
 import com.nononsenseapps.feeder.ui.compose.theme.FeederTokens
 
 /** Background and text colour of an item type's badge, from the theme. */
@@ -115,6 +116,18 @@ fun LengthText.label(): String =
         is LengthText.Total -> stringResource(R.string.item_length_total, minutes)
         is LengthText.Left -> stringResource(R.string.item_length_left, minutes)
     }
+
+/** "42% played" for an episode, "42% watched" for a video; null for articles or when not started. */
+@Composable
+fun percentPlayedLabel(
+    kind: ItemKind,
+    progress: ItemProgress?,
+    lengthSeconds: Long?,
+): String? {
+    if (kind == ItemKind.ARTICLE) return null
+    val percent = percentPlayed(progress, lengthSeconds) ?: return null
+    return stringResource(if (kind == ItemKind.YOUTUBE) R.string.item_percent_watched else R.string.item_percent_played, percent)
+}
 
 /** The badge on a thumbnail: "mm:ss" for audio and video, "N min" for articles. */
 @Composable

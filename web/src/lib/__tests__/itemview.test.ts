@@ -25,6 +25,7 @@ describe('itemFacts', () => {
     const it = item({ enclosureUrl: 'https://x/ep.mp3', duration: 1500 })
     const f = itemFacts(it, ctx([[it.id, { t: 300, d: 1500 }]]))
     expect(f.lengthText).toBe('20 min left')
+    expect(f.percentText).toBe('20% played')
     expect(f.primaryLabel).toBe('Resume')
     expect(f.progress).toBeCloseTo(0.2)
   })
@@ -32,6 +33,6 @@ describe('itemFacts', () => {
   it('calls a YouTube item a video, with Watch and Mark watched', () => {
     const it = item({ link: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', read: 1 })
     const f = itemFacts(it, ctx([[it.id, { t: 590, d: 600 }]]))
-    expect(f).toMatchObject({ kind: 'youtube', kindLabel: 'Video', lengthText: 'Watched', primaryLabel: 'Watch', readLabel: 'Mark unwatched', badge: '10:00' })
+    expect(f).toMatchObject({ kind: 'youtube', kindLabel: 'Video', lengthText: '10 min', percentText: '100% watched', primaryLabel: 'Watch', readLabel: 'Mark unwatched', badge: '10:00' })
   })
 })

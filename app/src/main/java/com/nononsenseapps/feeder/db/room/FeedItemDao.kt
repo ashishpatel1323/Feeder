@@ -34,7 +34,7 @@ interface FeedItemDao {
             i.primary_sort_time AS sort_time, i.word_count AS word_count, i.word_count_full AS word_count_full,
             i.image_url AS image_url, f.id AS feed_id, f.url AS feed_url, f.tag AS feed_tag,
             COALESCE(NULLIF(f.custom_title, ''), f.title) AS feed_title, f.image_url AS feed_image,
-            f.fulltext_by_default AS full_text_by_default
+            f.fulltext_by_default AS full_text_by_default, i.guid AS guid
         FROM feed_items i
         JOIN feeds f ON i.feed_id = f.id
         WHERE i.block_time IS NULL
@@ -46,8 +46,9 @@ interface FeedItemDao {
     @Query(
         """
         SELECT i.id AS id, (i.read_time IS NOT NULL) AS is_read, i.bookmarked AS bookmarked,
-            i.primary_sort_time AS sort_time
+            i.primary_sort_time AS sort_time, COALESCE(f.url || char(10) || i.guid, '') AS video_key
         FROM feed_items i
+        LEFT JOIN feeds f ON i.feed_id = f.id
         WHERE i.id IN (:ids)
         """,
     )

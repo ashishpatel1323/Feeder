@@ -518,7 +518,7 @@ private fun CompletedRow(
     val moveUp = stringResource(R.string.downloads_move_up)
     val moveDown = stringResource(R.string.downloads_move_down)
     val addToPlaylist = rememberAddToPlaylist()
-    val progress = rememberItemProgress(video.id)
+    val progress = rememberItemProgress(video.id, status?.videoKey.orEmpty())
     val read = status?.read ?: false
     val saved = status?.bookmarked ?: false
     ItemRow(
