@@ -26,6 +26,8 @@
     <string name="item_length_read">%1$d min read</string>
     <string name="item_length_total">%1$d min</string>
     <string name="item_length_left">%1$d min left</string>
+    <string name="item_percent_played">%1$d%% played</string>
+    <string name="item_percent_watched">%1$d%% watched</string>
     <string name="item_badge_minutes">%1$d min</string>
     <string name="item_now_playing">Now playing</string>
     <string name="item_untitled">(no title)</string>

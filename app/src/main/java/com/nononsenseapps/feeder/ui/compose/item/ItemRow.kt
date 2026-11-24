@@ -215,6 +215,8 @@ fun ItemRow(
                     val meta =
                         listOfNotNull(
                             model.kind.takeIf { it == ItemKind.ARTICLE }?.displayName(),
+                            // First, so a long feed name never cuts it off
+                            percentPlayedLabel(model.kind, model.progress, model.lengthSeconds),
                             model.feedTitle.ifBlank { null },
                             model.age.ifBlank { null },
                             length?.label(),

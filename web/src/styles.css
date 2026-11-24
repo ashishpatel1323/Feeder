@@ -6437,3 +6437,9 @@ input:focus-visible {
 .ir-trail .icon-btn {
   color: var(--text-2);
 }
+
+/* How much of an episode or video was played, first in the meta line so it is never cut off */
+.row-percent {
+  color: var(--accent);
+  font-weight: 600;
+}

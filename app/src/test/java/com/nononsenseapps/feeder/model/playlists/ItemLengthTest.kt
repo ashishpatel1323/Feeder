@@ -46,4 +46,16 @@ class ItemLengthTest {
         assertEquals("1:02:03", clockText(3723))
         assertEquals(1, badgeMinutes(20))
     }
+
+    @Test
+    fun percentPlayedMatchesTheWebApp() {
+        assertNull(percentPlayed(null, 1500))
+        assertNull(percentPlayed(ItemProgress(3, 1500), 1500))
+        assertEquals(20, percentPlayed(ItemProgress(300, 1500), null))
+        // The saved position may not know the length; the feed's does
+        assertEquals(20, percentPlayed(ItemProgress(300, 0), 1500))
+        assertNull(percentPlayed(ItemProgress(300, 0), null))
+        assertEquals(1, percentPlayed(ItemProgress(6, 3600), null))
+        assertEquals(100, percentPlayed(ItemProgress(1480, 1500), null))
+    }
 }

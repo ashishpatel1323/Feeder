@@ -27,4 +27,5 @@ data class PlaylistCandidate(
     @ColumnInfo(name = "feed_title") val feedTitle: String,
     @ColumnInfo(name = "feed_image") val feedImage: String?,
     @ColumnInfo(name = "full_text_by_default") val fullTextByDefault: Boolean,
+    @ColumnInfo(name = "guid") val guid: String = "",
 )

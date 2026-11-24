@@ -164,6 +164,7 @@ export function ItemRow(p: RowProps) {
         </button>
         <div className="row-meta">
           <TypeBadge kind={facts.kind} label={facts.kindLabel} />
+          {facts.percentText ? <span className="row-percent">{facts.percentText}</span> : null}
           {isShared(item) ? (
             <span className="row-feed shared" title="Added by sharing a link">
               {siteOf(item.link) || 'Shared link'}
