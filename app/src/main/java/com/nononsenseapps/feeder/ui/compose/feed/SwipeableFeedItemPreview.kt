@@ -19,15 +19,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -43,7 +41,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalDensity
@@ -63,19 +60,17 @@ import com.nononsenseapps.feeder.model.playlists.itemSeconds
 import com.nononsenseapps.feeder.ui.compose.components.safeSemantics
 import com.nononsenseapps.feeder.ui.compose.feedarticle.FeedListFilter
 import com.nononsenseapps.feeder.ui.compose.feedarticle.onlyUnread
-import com.nononsenseapps.feeder.ui.compose.item.ItemActionButton
 import com.nononsenseapps.feeder.ui.compose.item.ItemRow
 import com.nononsenseapps.feeder.ui.compose.item.ItemRowActions
 import com.nononsenseapps.feeder.ui.compose.item.ItemRowModel
 import com.nononsenseapps.feeder.ui.compose.item.ageText
+import com.nononsenseapps.feeder.ui.compose.item.markReadIcon
+import com.nononsenseapps.feeder.ui.compose.item.markReadLabel
+import com.nononsenseapps.feeder.ui.compose.item.saveIcon
 import com.nononsenseapps.feeder.ui.compose.item.rememberItemPlayer
 import com.nononsenseapps.feeder.ui.compose.item.rememberItemProgress
 import com.nononsenseapps.feeder.ui.compose.theme.LocalDimens
-import com.nononsenseapps.feeder.ui.compose.theme.SwipingItemToDeleteColor
-import com.nononsenseapps.feeder.ui.compose.theme.SwipingItemToReadColor
-import com.nononsenseapps.feeder.ui.compose.theme.SwipingItemToUnreadColor
 import com.nononsenseapps.feeder.util.logDebug
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -102,7 +97,7 @@ fun SwipeableFeedItemPreview(
     onOpenFeedItemInBrowser: () -> Unit,
     modifier: Modifier = Modifier,
     swipeEnabled: Boolean = true,
-    // Swiping toward the end (right in left-to-right languages) deletes the article for good
+    // Offered as a TalkBack action; deleting is otherwise in the selection bar and on the article screen
     onDelete: (() -> Unit)? = null,
     // Multi-select: "Select" on the row (or a long press) starts it, then taps add or remove articles
     selectionMode: Boolean = false,
@@ -112,26 +107,25 @@ fun SwipeableFeedItemPreview(
     val coroutineScope = rememberCoroutineScope()
     val addToPlaylist = com.nononsenseapps.feeder.ui.compose.playlists.LocalAddToPlaylist.current
     // Where the row's thumbnail and text are, so the swipe layer covers them and not the buttons
+    var contentLeft by remember { mutableIntStateOf(0) }
     var contentTop by remember { mutableIntStateOf(0) }
+    var contentWidth by remember { mutableIntStateOf(0) }
     var contentHeight by remember { mutableIntStateOf(0) }
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val anchoredDraggableState = remember { AnchoredDraggableState(FeedItemSwipeState.CENTER) }
     val onSwipeCallback by rememberUpdatedState(newValue = onSwipe)
-    val onDeleteCallback by rememberUpdatedState(newValue = onDelete)
+    val onSaveCallback by rememberUpdatedState(newValue = onToggleBookmark)
 
-    // Swiping toward the end deletes, when deleting is offered
-    val swipingToDelete by remember {
-        derivedStateOf {
-            onDeleteCallback != null && anchoredDraggableState.offset > 0
-        }
+    // Swiping toward the end (right in left-to-right languages) saves; toward the start marks read
+    val swipingToSave by remember {
+        derivedStateOf { anchoredDraggableState.offset > 0 }
     }
 
     val color by animateColorAsState(
         targetValue =
             when {
-                swipingToDelete -> SwipingItemToDeleteColor
-                item.unread || filter.onlyUnread -> SwipingItemToReadColor
-                else -> SwipingItemToUnreadColor
+                swipingToSave -> MaterialTheme.colorScheme.primaryContainer
+                else -> MaterialTheme.colorScheme.secondaryContainer
             },
         label = "swipeBackground",
     )
@@ -145,12 +139,9 @@ fun SwipeableFeedItemPreview(
 
     var skipHapticFeedback by remember { mutableStateOf(false) }
     LaunchedEffect(anchoredDraggableState.settledValue) {
-        val delete = onDeleteCallback
-        if (anchoredDraggableState.settledValue == FeedItemSwipeState.END && delete != null) {
-            logDebug(LOG_TAG, "onDelete ${item.id}")
-            delete()
-            // The article leaves the list; if it is still here after a moment, slide it back
-            delay(1500)
+        if (anchoredDraggableState.settledValue == FeedItemSwipeState.END) {
+            logDebug(LOG_TAG, "onSave ${item.id}")
+            onSaveCallback()
             skipHapticFeedback = true
             anchoredDraggableState.animateTo(FeedItemSwipeState.CENTER)
         } else if (anchoredDraggableState.settledValue != FeedItemSwipeState.CENTER) {
@@ -204,7 +195,7 @@ fun SwipeableFeedItemPreview(
                 .width(dimens.maxContentWidth)
                 .clipToBounds()
                 .combinedClickable(
-                    // Long press starts multi-select; every action also has a button on the row
+                    // Long press starts multi-select (bulk actions and Delete are in the selection bar)
                     onLongClick = onToggleSelect,
                     onClick = {
                         if (selectionMode && onToggleSelect != null) {
@@ -307,15 +298,25 @@ fun SwipeableFeedItemPreview(
                         drawRect(color = color)
                     }.padding(horizontal = 24.dp),
         ) {
-            Icon(
-                when {
-                    swipingToDelete -> Icons.Default.Delete
-                    item.unread -> Icons.Default.VisibilityOff
-                    else -> Icons.Default.Visibility
-                },
-                contentDescription = null,
-                tint = if (swipingToDelete) Color.White else LocalContentColor.current,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    when {
+                        swipingToSave -> saveIcon(item.bookmarked)
+                        else -> markReadIcon(!item.unread)
+                    },
+                    contentDescription = null,
+                    tint = if (swipingToSave) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    when {
+                        swipingToSave -> stringResource(if (item.bookmarked) R.string.swipe_to_unsave else R.string.swipe_to_save)
+                        else -> markReadLabel(item.kind, !item.unread)
+                    },
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (swipingToSave) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+            }
         }
 
         val rowOffset =
@@ -367,19 +368,14 @@ fun SwipeableFeedItemPreview(
                 ),
             primaryLabel = if (playingHere) stringResource(R.string.item_action_pause) else null,
             primaryIcon = if (playingHere) Icons.Default.Pause else null,
-            onContentLayout = { top, height ->
+            onContentLayout = { left, top, width, height ->
+                contentLeft = left
                 contentTop = top
+                contentWidth = width
                 contentHeight = height
             },
-            extras = {
-                if (onToggleSelect != null && !selectionMode) {
-                    ItemActionButton(
-                        icon = Icons.Outlined.CheckCircle,
-                        label = stringResource(R.string.select_article),
-                        onClick = onToggleSelect,
-                    )
-                }
-            },
+            // The parent below offers them (with Share, Read above/below…)
+            accessibilityActions = false,
             modifier =
                 rowOffset
                     .background(MaterialTheme.colorScheme.background),
@@ -412,8 +408,10 @@ fun SwipeableFeedItemPreview(
             Box(
                 modifier =
                     Modifier
-                        .fillMaxWidth()
-                        .padding(top = with(density) { contentTop.toDp() })
+                        .padding(
+                            start = with(density) { contentLeft.toDp() },
+                            top = with(density) { contentTop.toDp() },
+                        ).width(with(density) { contentWidth.toDp() })
                         .height(with(density) { contentHeight.toDp() }),
             ) {
                 Box(
@@ -428,10 +426,11 @@ fun SwipeableFeedItemPreview(
                                             .height(0.dp)
                                             .width(0.dp)
 
+                                    // The end half of the title area, so a short swipe right (Save) also fits
                                     SwipeAsRead.ONLY_FROM_END -> {
                                         this
                                             .fillMaxHeight()
-                                            .width(this@BoxWithConstraints.maxWidth / 4)
+                                            .fillMaxWidth(0.5f)
                                             .align(Alignment.CenterEnd)
                                     }
 
@@ -450,14 +449,13 @@ fun SwipeableFeedItemPreview(
                 )
 
                 // Dividing the maxWidth by 2 means you only have to swipe a quarter of the screen width to reach the swipe threshold, instead of a full half of the screen by default.
-                val canDelete = onDelete != null
-                LaunchedEffect(swipeAsRead, canDelete) {
+                LaunchedEffect(swipeAsRead) {
                     anchoredDraggableState.updateAnchors(
                         DraggableAnchors {
                             if (swipeAsRead == SwipeAsRead.ONLY_FROM_END) {
                                 FeedItemSwipeState.START at -(maxWidthPx / 2)
                                 FeedItemSwipeState.CENTER at 0f
-                                if (canDelete) FeedItemSwipeState.END at maxWidthPx / 2
+                                FeedItemSwipeState.END at maxWidthPx / 3
                             } else if (swipeAsRead == SwipeAsRead.FROM_ANYWHERE) {
                                 FeedItemSwipeState.START at -(maxWidthPx / 2)
                                 FeedItemSwipeState.CENTER at 0f

@@ -9,23 +9,27 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.FlowRowScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.Forward30
 import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.ClosedCaption
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -198,10 +202,11 @@ fun ItemContentActionRow(
 }
 
 /**
- * An episode's media block: cover art, Play / Resume / Pause on Feeder's own podcast player, back
- * 10 s and forward 30 s, and where it is. [showTranscript] adds the transcript under it.
+ * An episode's media block: cover art, where it is (a wavy line while it plays) and one large
+ * Play / Resume / Pause button on Feeder's own podcast player. Seeking, speed and the sleep timer
+ * are in the mini player and its Now playing sheet. [showTranscript] adds the transcript under it.
  */
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun PodcastMediaBlock(
     itemId: Long,
@@ -218,13 +223,15 @@ fun PodcastMediaBlock(
     val playing = player.isPlaying(itemId)
     val positionSec = if (loaded) state.positionMillis / 1000L else progress?.positionSeconds ?: 0L
     val lengthSec = (if (loaded && state.durationMillis > 0) state.durationMillis / 1000L else null) ?: lengthSeconds ?: progress?.lengthSeconds ?: 0L
+    val fraction = if (lengthSec > 0) (positionSec.toFloat() / lengthSec).coerceIn(0f, 1f) else 0f
+    val length = lengthText(ItemKind.PODCAST, lengthSec.takeIf { it > 0 }, progress)
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shape = RoundedCornerShape(FeederTokens.Radius.md),
+        shape = RoundedCornerShape(20.dp),
         modifier = modifier.fillMaxWidth(),
     ) {
         Column(
-            verticalArrangement = Arrangement.spacedBy(FeederTokens.Space.sm),
+            verticalArrangement = Arrangement.spacedBy(FeederTokens.Space.md),
             modifier = Modifier.padding(FeederTokens.Space.md),
         ) {
             Row(
@@ -235,13 +242,13 @@ fun PodcastMediaBlock(
                     modifier =
                         Modifier
                             .size(64.dp)
-                            .clip(RoundedCornerShape(FeederTokens.Radius.sm))
-                            .background(MaterialTheme.colorScheme.tertiaryContainer),
+                            .clip(RoundedCornerShape(FeederTokens.Radius.md))
+                            .background(MaterialTheme.colorScheme.secondaryContainer),
                 ) {
                     Icon(
                         ItemKind.PODCAST.icon,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
                         modifier = Modifier.align(Alignment.Center),
                     )
                     if (image != null) {
@@ -249,17 +256,24 @@ fun PodcastMediaBlock(
                     }
                 }
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(FeederTokens.Space.xs)) {
-                    if (loaded && (state.isLoading || state.isBuffering)) {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth().height(4.dp))
-                    } else {
-                        LinearProgressIndicator(
-                            progress = { if (lengthSec > 0) (positionSec.toFloat() / lengthSec).coerceIn(0f, 1f) else 0f },
-                            drawStopIndicator = {},
-                            modifier = Modifier.fillMaxWidth().height(4.dp),
-                        )
+                    when {
+                        loaded && (state.isLoading || state.isBuffering) ->
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth().height(4.dp))
+                        playing ->
+                            LinearWavyProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
+                        else ->
+                            LinearProgressIndicator(
+                                progress = { fraction },
+                                drawStopIndicator = {},
+                                modifier = Modifier.fillMaxWidth().height(4.dp),
+                            )
                     }
                     Text(
-                        text = if (lengthSec > 0) "${clockText(positionSec)} / ${clockText(lengthSec)}" else clockText(positionSec),
+                        text =
+                            listOfNotNull(
+                                if (lengthSec > 0) "${clockText(positionSec)} / ${clockText(lengthSec)}" else clockText(positionSec),
+                                length?.takeIf { progress?.partlyPlayed == true }?.label(),
+                            ).joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -268,20 +282,17 @@ fun PodcastMediaBlock(
                     }
                 }
             }
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(FeederTokens.Space.sm),
-                verticalArrangement = Arrangement.spacedBy(FeederTokens.Space.xs),
+            Button(
+                onClick = { player.togglePodcast(itemId, link, progress) },
+                shape = RoundedCornerShape(if (playing) 16.dp else 24.dp),
+                modifier = Modifier.fillMaxWidth().height(48.dp),
             ) {
-                ItemActionButton(
-                    icon = if (playing) Icons.Default.Pause else primaryIcon(ItemKind.PODCAST),
-                    label = if (playing) stringResource(R.string.item_action_pause) else primaryLabel(ItemKind.PODCAST, progress),
-                    onClick = { player.togglePodcast(itemId, link, progress) },
-                    primary = true,
+                Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(FeederTokens.Space.sm))
+                Text(
+                    if (playing) stringResource(R.string.item_action_pause) else primaryLabel(ItemKind.PODCAST, progress),
+                    style = MaterialTheme.typography.titleSmall,
                 )
-                if (loaded && state.canSeek) {
-                    ItemActionButton(Icons.Default.Replay10, stringResource(R.string.seek_back_10_seconds_short), { player.seekBy(-10_000) })
-                    ItemActionButton(Icons.Default.Forward30, stringResource(R.string.seek_forward_30_seconds_short), { player.seekBy(30_000) })
-                }
             }
             if (showTranscript) {
                 TranscriptPanel(
