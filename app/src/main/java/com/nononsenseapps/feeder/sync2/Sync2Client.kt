@@ -185,9 +185,11 @@ class Sync2Client(
     /** Sends everything this device has again and pulls everything. */
     suspend fun forceSync() {
         mutex.withLock {
+            // Unsubscribes are sent again with the time they happened, so a feed subscribed to again
+            // on another device since then stays
             val keep =
                 (dao.getKnownWithPrefix("feed\n").filter { isDeleted(parse(it.v)) } + dao.getKnownWithPrefix("hidden\n"))
-                    .map { Sync2Known(it.k, if (it.k.startsWith("feed\n")) """{"known":true}""" else "false", 0) }
+                    .map { if (it.k.startsWith("feed\n")) Sync2Known(it.k, PLACEHOLDER, it.ts) else Sync2Known(it.k, "false", 0) }
             resetKnown(getState().copy(cursor = 0))
             dao.upsertKnown(keep)
         }
@@ -254,7 +256,7 @@ class Sync2Client(
         }
         resetKnown(Sync2State(migrated = true))
         dao.upsertKnown(
-            repository.getRemotelySeenFeeds().map { Sync2Known(knownKey("feed", it.toString()), """{"known":true}""", 0) },
+            repository.getRemotelySeenFeeds().map { Sync2Known(knownKey("feed", it.toString()), PLACEHOLDER, 0) },
         )
     }
 
@@ -387,13 +389,23 @@ class Sync2Client(
             if (isSharedFeed(feed.url)) continue
             val v = feedValue(feed)
             val kn = knownFeeds[feed.url.toString()]
-            if (kn == null || parse(kn.v) != v) {
-                out += Pending("feed", feed.url.toString(), v, maxOf(feed.whenModified.toEpochMilli().takeIf { it > 0 } ?: now, (kn?.ts ?: 0) + 1))
+            val knV = kn?.let { parse(it.v) }
+            if (kn == null || knV != v) {
+                val ts =
+                    if (kn == null || isPlaceholder(knV)) {
+                        FIRST_CONTACT_TS
+                    } else {
+                        maxOf(feed.whenModified.toEpochMilli().takeIf { it > 0 } ?: now, kn.ts + 1)
+                    }
+                out += Pending("feed", feed.url.toString(), v, ts)
             }
         }
         val local = feeds.map { it.url.toString() }.toSet()
         for ((url, kn) in knownFeeds) {
-            if (url !in local && !isDeleted(parse(kn.v))) out += Pending("feed", url, mapOf("deleted" to true), maxOf(now, kn.ts + 1))
+            val knV = parse(kn.v)
+            if (url !in local && !isDeleted(knV)) {
+                out += Pending("feed", url, mapOf("deleted" to true), if (isPlaceholder(knV)) maxOf(kn.ts, 1) else maxOf(now, kn.ts + 1))
+            }
         }
 
         // Articles whose read or saved state changed here
@@ -410,7 +422,9 @@ class Sync2Client(
                     } else {
                         null
                     }
-                out += Pending("saved", key, d.bookmarked, maxOf(now, (d.savedTs ?: 0) + 1), article)
+                // Saved before this device ever exchanged it (a restored backup): other devices' state wins
+                val ts = d.savedTs?.let { maxOf(now, it + 1) } ?: FIRST_CONTACT_TS
+                out += Pending("saved", key, d.bookmarked, ts, article)
             }
         }
 
@@ -671,6 +685,20 @@ class Sync2Client(
         // Set once positions synced before this version were copied to the podcast player's store
         private const val EPISODES_COPIED_KEY = "\u0000episodes"
         private const val BATCH = 400
+
+        /**
+         * The time sent for a feed or Saved mark this device has never exchanged: after a reinstall
+         * restored an old backup, an OPML import, joining, or Force sync. It is older than anything
+         * another device synced, so their value wins and this one only fills in what the server lacks.
+         * Its clock can't tell an old copy from a new edit (OPML imports and Feeder News have no edit
+         * time, and Full article by default stamped every feed with the day it was turned on).
+         */
+        const val FIRST_CONTACT_TS = 1L
+
+        /** Known value of a record seen but never exchanged (moving over, Force sync). */
+        private const val PLACEHOLDER = """{"known":true}"""
+
+        fun isPlaceholder(v: Any?): Boolean = v is Map<*, *> && v["known"] == true
 
         fun knownKey(
             kind: String,

@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { handleSync2, MemoryStore, type SyncRecord } from '../../../server/sync2'
-import { db, FEED_ORDER_KEY, getKv, hideItems, itemId, newFeed, setKv, unhideItems, type Item } from '../db'
+import { db, deleteFeeds, FEED_ORDER_KEY, getKv, hideItems, itemId, newFeed, setKv, unhideItems, updateFeed, type Item } from '../db'
 import { decryptString, encryptString } from '../crypto'
 import { saveVideoPos } from '../videopos'
 import { deleteHighlight, saveHighlight, updateHighlight } from '../highlights'
@@ -9,6 +9,7 @@ import { deletePlaylist, loadPlaylists, newPlaylist, savePlaylist, seedPlaylists
 import {
   addDeviceLink,
   deriveKeys,
+  forceSync,
   getSyncState,
   joinSync,
   knownStateFor,
@@ -210,13 +211,85 @@ describe('sync client', () => {
 
   it('newer local changes win over older remote ones', async () => {
     await joinSync(CODE, KEY)
-    await db.feeds.put(newFeed('https://a/feed', { customTitle: 'Mine', whenModified: 9e12 }))
+    await db.feeds.put(newFeed('https://a/feed', { customTitle: 'Start', whenModified: 10 }))
+    await syncNow()
+    await updateFeed('https://a/feed', { customTitle: 'Mine' })
     const other = await otherDevice()
     await other.push({ k: 'feed', key: 'https://a/feed', v: { customTitle: 'Old' }, ts: 5 })
     await syncNow()
     expect((await db.feeds.get('https://a/feed'))?.customTitle).toBe('Mine')
     const remote = (await other.all()).find((p) => p.k === 'feed')
     expect(remote?.v).toMatchObject({ customTitle: 'Mine' })
+  })
+
+  it('joining with feeds already here keeps the folders other devices synced', async () => {
+    const other = await otherDevice()
+    await other.push(
+      { k: 'feed', key: 'https://a/feed', v: { title: 'A', tag: 'Tech' }, ts: 1000 },
+      { k: 'feed', key: 'https://gone/feed', v: { deleted: true }, ts: 1000 },
+    )
+    // An OPML import or an old copy: stamped now, but in old folders
+    await db.feeds.bulkPut([
+      newFeed('https://a/feed', { tag: 'Old folder' }),
+      newFeed('https://gone/feed', { tag: 'Old folder' }),
+      newFeed('https://only-here/feed', { tag: 'Mine' }),
+    ])
+    await joinSync(CODE, KEY)
+    await syncNow()
+
+    expect((await db.feeds.get('https://a/feed'))?.tag).toBe('Tech')
+    expect(await db.feeds.get('https://gone/feed')).toBeUndefined()
+    const records = await other.all()
+    const find = (key: string) => records.find((p) => p.k === 'feed' && p.key === key)?.v
+    expect(find('https://a/feed')).toMatchObject({ tag: 'Tech' })
+    expect(find('https://gone/feed')).toEqual({ deleted: true })
+    // What only this device has still goes out
+    expect(find('https://only-here/feed')).toMatchObject({ tag: 'Mine' })
+    expect((await syncNow())?.sent).toBe(0)
+  })
+
+  it('Force sync sends what is here without undoing changes made elsewhere', async () => {
+    await joinSync(CODE, KEY)
+    await db.feeds.bulkPut([newFeed('https://a/feed', { tag: 'Tech', whenModified: 10 }), newFeed('https://b/feed', { whenModified: 10 })])
+    await db.items.put(item('https://a/feed', 's', { saved: 1, readSynced: 0 }))
+    await syncNow()
+    await deleteFeeds(['https://b/feed'])
+    await syncNow()
+
+    // Elsewhere, later: moved to another folder, subscribed again, unsaved
+    const other = await otherDevice()
+    const later = Date.now()
+    await other.push(
+      { k: 'feed', key: 'https://a/feed', v: { tag: 'News' }, ts: later },
+      { k: 'feed', key: 'https://b/feed', v: { title: 'B again', tag: '' }, ts: later },
+      { k: 'saved', key: itemId('https://a/feed', 's'), v: false, ts: later },
+    )
+    // This device never got those, and has the item saved still. Its copy of the feed was stamped
+    // since without a change (like Android's Full article by default switch did to every feed).
+    await db.feeds.update('https://a/feed', { whenModified: later + 5 })
+    await new Promise((r) => setTimeout(r, 10))
+    await forceSync()
+
+    expect((await db.feeds.get('https://a/feed'))?.tag).toBe('News')
+    expect((await db.feeds.get('https://b/feed'))?.title).toBe('B again')
+    expect((await db.items.get(itemId('https://a/feed', 's')))?.saved).toBe(0)
+    const records = await other.all()
+    expect(records.find((p) => p.k === 'feed' && p.key === 'https://a/feed')?.v).toMatchObject({ tag: 'News' })
+    expect(records.find((p) => p.k === 'feed' && p.key === 'https://b/feed')?.v).toMatchObject({ title: 'B again' })
+  })
+
+  it('Force sync still sends an unsubscribe the server lost', async () => {
+    await joinSync(CODE, KEY)
+    await db.feeds.put(newFeed('https://b/feed', { whenModified: 10 }))
+    await syncNow()
+    await deleteFeeds(['https://b/feed'])
+    await syncNow()
+    store = new MemoryStore() // the server starts over
+    const other = await otherDevice()
+    await other.push({ k: 'feed', key: 'https://b/feed', v: { title: 'B' }, ts: 10 })
+    await forceSync()
+    expect(await db.feeds.get('https://b/feed')).toBeUndefined()
+    expect((await other.all()).find((p) => p.k === 'feed')?.v).toEqual({ deleted: true })
   })
 
   it('syncs video positions, newest wins', async () => {

@@ -344,6 +344,16 @@ async function layoutValue(): Promise<LayoutValue> {
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 const isDeleted = (v: unknown) => !!v && typeof v === 'object' && (v as { deleted?: boolean }).deleted === true
+/** Known value of a record seen but never exchanged (moving over from the old chain, Force sync). */
+const isPlaceholder = (v: unknown) => !!v && typeof v === 'object' && (v as { known?: boolean }).known === true
+
+/**
+ * The time sent for a feed or Saved mark this device has never exchanged: joining with feeds
+ * already here (an OPML import, a restored copy), or Force sync. It is older than anything another
+ * device synced, so their value wins and this one only fills in what the server lacks. The Android
+ * app sends the same.
+ */
+export const FIRST_CONTACT_TS = 1
 
 // ---------------------------------------------------------------------------------------------
 // Local changes
@@ -364,11 +374,16 @@ export async function collectChanges(now = Date.now()): Promise<Pending[]> {
   for (const f of feeds) {
     const v = feedValue(f)
     const kn = knownFeeds.get(f.url)
-    if (!kn || !same(kn.v, v)) out.push({ k: 'feed', key: f.url, v, ts: Math.max(f.whenModified || now, (kn?.ts ?? 0) + 1) })
+    if (!kn || !same(kn.v, v)) {
+      const ts = !kn || isPlaceholder(kn.v) ? FIRST_CONTACT_TS : Math.max(f.whenModified || now, kn.ts + 1)
+      out.push({ k: 'feed', key: f.url, v, ts })
+    }
   }
   const local = new Set(feeds.map((f) => f.url))
   for (const [url, kn] of knownFeeds) {
-    if (!local.has(url) && !isDeleted(kn.v)) out.push({ k: 'feed', key: url, v: { deleted: true }, ts: Math.max(now, kn.ts + 1) })
+    if (!local.has(url) && !isDeleted(kn.v)) {
+      out.push({ k: 'feed', key: url, v: { deleted: true }, ts: isPlaceholder(kn.v) ? Math.max(kn.ts, 1) : Math.max(now, kn.ts + 1) })
+    }
   }
 
   // Articles touched here since the last sync
@@ -385,7 +400,8 @@ export async function collectChanges(now = Date.now()): Promise<Pending[]> {
     }
     const ks = knownItems.get(knownKey('saved', i.id))
     if (!!i.saved !== (ks?.v === true)) {
-      out.push({ k: 'saved', key: i.id, v: !!i.saved, a: i.saved ? savedArticle(i) : undefined, ts: Math.max(now, (ks?.ts ?? 0) + 1), item })
+      const ts = ks ? Math.max(now, ks.ts + 1) : FIRST_CONTACT_TS
+      out.push({ k: 'saved', key: i.id, v: !!i.saved, a: i.saved ? savedArticle(i) : undefined, ts, item })
     }
     if (out.length === before) out.push({ k: '', key: i.id, v: null, ts: 0, item }) // just mark as sent
   }
@@ -727,10 +743,13 @@ export async function forceSync(): Promise<SyncResult | null> {
 
 async function resetExchange(state: SyncState) {
   await db.transaction('rw', [db.items, db.syncKnown, db.kv], async () => {
-    // Keep remembered unsubscribes and deletions, so they are sent again rather than undone
+    // Keep remembered unsubscribes and deletions, so they are sent again rather than undone.
+    // Unsubscribes keep the time they happened, so a feed subscribed to again elsewhere since stays.
     const keep = await db.syncKnown.filter((r) => (r.k.startsWith('feed\n') && isDeleted(r.v)) || r.k.startsWith('hidden\n')).toArray()
     await db.syncKnown.clear()
-    await db.syncKnown.bulkPut(keep.map((r) => ({ ...r, ts: 0, v: r.k.startsWith('feed\n') ? { known: true } : false })))
+    await db.syncKnown.bulkPut(
+      keep.map((r) => (r.k.startsWith('feed\n') ? { ...r, v: { known: true } } : { ...r, ts: 0, v: false })),
+    )
     await db.items.toCollection().modify({ readSynced: 0 })
     await setKv(STATE_KEY, { ...state, cursor: 0 })
   })
