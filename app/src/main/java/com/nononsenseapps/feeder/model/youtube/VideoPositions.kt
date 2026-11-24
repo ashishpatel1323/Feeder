@@ -3,12 +3,14 @@ package com.nononsenseapps.feeder.model.youtube
 import android.app.Application
 import android.content.Context
 import androidx.compose.runtime.Immutable
+import com.nononsenseapps.feeder.sync2.SyncNudge
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.kodein.di.DI
 import org.kodein.di.DIAware
 import org.kodein.di.instance
+import org.kodein.di.instanceOrNull
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -30,6 +32,9 @@ class VideoPositions(
 ) : DIAware {
     private val app: Application by instance()
     private val prefs by lazy { app.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
+
+    // Sends where a video is to other devices while it plays, not only when it stops
+    private val syncNudge: SyncNudge? by instanceOrNull()
 
     private val _all = MutableStateFlow<Map<String, VideoPos>>(emptyMap())
     private var loaded = false
@@ -64,6 +69,7 @@ class VideoPositions(
         val old = _all.value[key]
         val next = nextPos(old, t, d, now) ?: return false
         put(key, next)
+        syncNudge?.changed(positionOnly = true)
         return true
     }
 
