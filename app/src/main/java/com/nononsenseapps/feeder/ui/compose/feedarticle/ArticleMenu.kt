@@ -3,8 +3,8 @@ package com.nononsenseapps.feeder.ui.compose.feedarticle
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.BorderColor
 import androidx.compose.material.icons.outlined.ClosedCaption
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -73,6 +74,9 @@ class ArticleMenuActions(
     val fastReading: Boolean = false,
     val onToggleFastReading: (() -> Unit)? = null,
     val onSpeedRead: (() -> Unit)? = null,
+    // The article's highlights: list, select all, share as image
+    val highlightCount: Int = 0,
+    val onHighlights: (() -> Unit)? = null,
     val onDelete: (() -> Unit)? = null,
 )
 
@@ -126,6 +130,9 @@ private fun ArticleMenuItems(
         }
     MenuEntry(markReadIcon(menu.read), markReadLabel(menu.kind, menu.read), run(menu.onToggleRead))
     menu.onPlaylist?.let { MenuEntry(PlaylistIcon, stringResource(R.string.add_to_playlist_menu), run(it)) }
+    menu.onHighlights?.let {
+        MenuEntry(Icons.Outlined.BorderColor, stringResource(R.string.highlights_in_article, menu.highlightCount), run(it))
+    }
     menu.onToggleTranscript?.let {
         MenuEntry(Icons.Outlined.ClosedCaption, stringResource(R.string.transcript), run(it), checked = menu.transcriptShown)
     }

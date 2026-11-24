@@ -36,6 +36,7 @@ import com.nononsenseapps.feeder.ui.compose.navigation.DownloadsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.EditFeedDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.FeedDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.DiscoverDestination
+import com.nononsenseapps.feeder.ui.compose.navigation.HighlightsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.HomeDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.PlaylistsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.SearchFeedDestination
@@ -215,6 +216,7 @@ class MainActivity : DIAwareComponentActivity() {
             TextSettingsDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
             DownloadsDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
             PlaylistsDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
+            HighlightsDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
         }
         // "Playlist" on any article, episode or video opens this sheet
         AddToPlaylistHost()

@@ -187,6 +187,17 @@
       android:exported="true"
       android:readPermission="${applicationId}.permission.read" />
 
+    <!-- Highlight share images for the share sheet -->
+    <provider
+      android:name="androidx.core.content.FileProvider"
+      android:authorities="${applicationId}.shareimages"
+      android:exported="false"
+      android:grantUriPermissions="true">
+      <meta-data
+        android:name="android.support.FILE_PROVIDER_PATHS"
+        android:resource="@xml/share_image_paths" />
+    </provider>
+
     <!-- Service for background jobs -->
     <receiver android:name=".model.ReadAloudStopReceiver" android:exported="false" />
 

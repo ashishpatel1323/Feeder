@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="highlights">Highlights</string>
+  <string name="highlight_action">Highlight</string>
+  <string name="highlight_close">Close</string>
+  <string name="highlight_new">New highlight</string>
+  <string name="highlight_edit">Highlight</string>
+  <string name="highlight_color">Color</string>
+  <string name="highlight_color_yellow">Yellow</string>
+  <string name="highlight_color_green">Green</string>
+  <string name="highlight_color_blue">Blue</string>
+  <string name="highlight_color_pink">Pink</string>
+  <string name="highlight_note_hint">Add a note (optional)</string>
+  <string name="highlight_save_note">Save note</string>
+  <string name="highlight_saved">Saved</string>
+  <string name="highlight_share_image">Share image</string>
+  <string name="highlight_copy_text">Copy text + link</string>
+  <string name="highlight_delete">Delete highlight</string>
+  <string name="highlight_deleted">Highlight deleted</string>
+  <string name="highlight_added">Highlighted</string>
+  <string name="highlight_copied">Copied quote and link</string>
+  <string name="highlight_not_in_text">Couldn\'t find that text in the article</string>
+  <string name="highlight_not_shown">This highlight isn\'t in the text shown. Try switching full text.</string>
+  <string name="highlights_in_article">Highlights (%1$d)</string>
+  <string name="highlights_select_all">Select all (%1$d/%2$d)</string>
+  <string name="highlights_include">Include in shared</string>
+  <string name="highlights_image_link">Image + link</string>
+  <string name="highlights_text_link">Text + link</string>
+  <string name="highlights_all_image">All as image</string>
+  <string name="highlights_all_text">All as text</string>
+  <string name="highlights_empty_article">Select text in the article and choose Highlight. Your highlights show up here.</string>
+  <string name="highlights_empty">No highlights yet. Open an article, select some text and choose Highlight.</string>
+  <string name="highlights_no_match">No highlights match.</string>
+  <string name="highlights_all">All %1$d</string>
+  <string name="highlights_with_notes">With notes</string>
+  <string name="highlights_search">Search highlights</string>
+  <string name="highlights_show_in_article">Show in the article</string>
+  <string name="highlight_article_gone">That article is no longer in Feeder</string>
+  <plurals name="highlights_copied_many">
+    <item quantity="one">Copied %d highlight with the link</item>
+    <item quantity="other">Copied %d highlights with the link</item>
+  </plurals>
+  <plurals name="highlights_count">
+    <item quantity="one">%d highlight</item>
+    <item quantity="other">%d highlights</item>
+  </plurals>
+
+  <!-- Share as image -->
+  <string name="share_highlight">Share highlight</string>
+  <string name="share_highlights">Share %1$d highlights</string>
+  <string name="share_layout_photo">Full photo</string>
+  <string name="share_layout_blur">Blurred + card</string>
+  <string name="share_layout_split">Photo on top</string>
+  <string name="share_layout_color">Color</string>
+  <string name="share_background">Background</string>
+  <string name="share_bg_article">Article</string>
+  <string name="share_bg_loading">Loading…</string>
+  <string name="share_bg_photo">My photo</string>
+  <string name="share_bg_pick">Photo</string>
+  <string name="share_gradient_green">Green</string>
+  <string name="share_gradient_blue">Blue</string>
+  <string name="share_gradient_sunset">Sunset</string>
+  <string name="share_gradient_night">Night</string>
+  <string name="share_size_story">Story 9:16</string>
+  <string name="share_size_post">Post 4:5</string>
+  <string name="share_include_note">Include my note</string>
+  <string name="share_include_notes">Include notes</string>
+  <string name="share_feeder_mark">Feeder mark</string>
+  <string name="share_save_image">Save image</string>
+  <string name="share_image_saved">Saved to Pictures/Feeder</string>
+  <string name="share_image_failed">Couldn\'t make the image</string>
+  <string name="share_previous_layout">Previous layout</string>
+  <string name="share_next_layout">Next layout</string>
+</resources>

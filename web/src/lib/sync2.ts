@@ -12,6 +12,7 @@
  *   layout   "main"               { feedOrder, folderOrder, emptyFolders } (web only so far)
  *   video    feedUrl \n guid      { t, d }: where a video or podcast episode was left, in seconds
  *   playlist playlist id          PlaylistValue, or { deleted: true } after deleting it
+ *   highlight highlight id        HighlightValue, or { deleted: true } after deleting it
  *
  * New kinds (Read later links, …) can be added later: devices keep records of kinds they
  * don't know and the server never looks inside.
@@ -32,6 +33,8 @@ import {
   newFeed,
   setKv,
   type Feed,
+  type Highlight,
+  type HighlightColor,
   type Item,
   type SyncKnown,
 } from './db'
@@ -49,7 +52,7 @@ export interface SyncState {
   lastError?: string | null
 }
 
-export type Kind = 'feed' | 'read' | 'saved' | 'hidden' | 'layout' | 'video' | 'playlist'
+export type Kind = 'feed' | 'read' | 'saved' | 'hidden' | 'layout' | 'video' | 'playlist' | 'highlight'
 
 /** The plaintext inside a record. */
 export interface Payload {
@@ -184,6 +187,64 @@ export function adoptStarterIds(list: Playlist[], synced: Set<string>): Playlist
     taken.add(fixed)
     return { ...p, id: fixed }
   })
+}
+
+/**
+ * A highlight as synced; the Android app writes the same fields in the same order. `item` is the
+ * article's "feedUrl \n guid"; title, link, feed and image are copied so the Highlights page works
+ * on devices that never fetched the article. `start` counts characters of that device's article
+ * text, so devices find the text again by `text` and `prefix` when it doesn't match.
+ */
+export interface HighlightValue {
+  item: string
+  title: string
+  link: string | null
+  feed: string
+  image: string | null
+  text: string
+  start: number
+  prefix: string
+  color: HighlightColor
+  note: string
+  createdAt: number
+}
+
+const HIGHLIGHT_COLOR_IDS: HighlightColor[] = ['yellow', 'green', 'blue', 'pink']
+
+export function highlightValue(h: Highlight): HighlightValue {
+  return {
+    item: h.itemId,
+    title: h.itemTitle,
+    link: h.itemLink,
+    feed: h.feedTitle,
+    image: h.imageUrl,
+    text: h.text,
+    start: h.start,
+    prefix: h.prefix,
+    color: h.color,
+    note: h.note,
+    createdAt: h.createdAt,
+  }
+}
+
+/** A highlight from a synced value; fields an older or newer device left out get defaults. */
+export function highlightFromValue(id: string, v: Partial<HighlightValue>, ts: number): Highlight {
+  const str = (x: unknown) => (typeof x === 'string' ? x : '')
+  return {
+    id,
+    itemId: str(v.item),
+    itemTitle: str(v.title),
+    itemLink: typeof v.link === 'string' ? v.link : null,
+    feedTitle: str(v.feed),
+    imageUrl: typeof v.image === 'string' ? v.image : null,
+    text: str(v.text),
+    start: typeof v.start === 'number' && Number.isFinite(v.start) ? v.start : 0,
+    prefix: str(v.prefix),
+    color: HIGHLIGHT_COLOR_IDS.includes(v.color as HighlightColor) ? (v.color as HighlightColor) : 'yellow',
+    note: str(v.note),
+    createdAt: typeof v.createdAt === 'number' ? v.createdAt : ts,
+    modifiedAt: ts,
+  }
 }
 
 export interface LayoutValue {
@@ -365,6 +426,19 @@ export async function collectChanges(now = Date.now()): Promise<Pending[]> {
     if (!localLists.has(id) && !isDeleted(kn.v)) out.push({ k: 'playlist', key: id, v: { deleted: true }, ts: Math.max(now, kn.ts + 1) })
   }
 
+  // Highlights: new, recolored or noted (newest edit wins) and deleted ones
+  const knownHl = new Map((await db.syncKnown.where('k').startsWith('highlight\n').toArray()).map((r) => [r.k.slice('highlight\n'.length), r]))
+  const highlights = await db.highlights.toArray()
+  for (const h of highlights) {
+    const v = highlightValue(h)
+    const kn = knownHl.get(h.id)
+    if (!kn || !same(kn.v, v)) out.push({ k: 'highlight', key: h.id, v, ts: Math.max(h.modifiedAt || h.createdAt || 1, (kn?.ts ?? 0) + 1) })
+  }
+  const localHl = new Set(highlights.map((h) => h.id))
+  for (const [id, kn] of knownHl) {
+    if (!localHl.has(id) && !isDeleted(kn.v)) out.push({ k: 'highlight', key: id, v: { deleted: true }, ts: Math.max(now, kn.ts + 1) })
+  }
+
   // Video and episode positions saved here since they were last exchanged
   const videos = await db.videoPos.toArray()
   const knownVideos = await db.syncKnown.bulkGet(videos.map((v) => knownKey('video', v.id)))
@@ -391,7 +465,7 @@ export interface ApplyResult {
 /** Applies one record from another device, unless what this device knows is newer. */
 export async function applyRemote(p: Payload, ts: number, result: ApplyResult): Promise<void> {
   const k = knownKey(p.k, p.key)
-  await db.transaction('rw', [db.feeds, db.items, db.syncKnown, db.hidden, db.kv, db.videoPos], async () => {
+  await db.transaction('rw', [db.feeds, db.items, db.syncKnown, db.hidden, db.kv, db.videoPos, db.highlights], async () => {
     const kn = await db.syncKnown.get(k)
     if (kn && kn.ts > ts) return
     if (kn && kn.ts === ts && same(kn.v, p.v)) return
@@ -465,6 +539,18 @@ export async function applyRemote(p: Payload, ts: number, result: ApplyResult): 
           await setKv(PLAYLISTS_KEY, list.some((x) => x.id === p.key) ? list.map((x) => (x.id === p.key ? pl : x)) : [...list, pl])
           // Remember it as stored here, so fields another device wrote differently don't look like edits
           await db.syncKnown.put({ k, v: playlistValue(pl), ts })
+        }
+        break
+      }
+      case 'highlight': {
+        if (isDeleted(p.v)) {
+          await db.highlights.delete(p.key)
+        } else if (p.v && typeof p.v === 'object') {
+          const h = highlightFromValue(p.key, p.v as Partial<HighlightValue>, ts)
+          if (h.itemId && h.text) {
+            await db.highlights.put(h)
+            await db.syncKnown.put({ k, v: highlightValue(h), ts })
+          }
         }
         break
       }
