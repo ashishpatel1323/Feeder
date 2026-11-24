@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { addEmptyFolder, FEED_ORDER_KEY, FOLDER_ORDER_KEY, getKv, renameTag, type Feed, type Item } from '../lib/db'
 import {
@@ -38,6 +38,10 @@ interface Props {
   onArrange: () => void
   /** Discover: find new feeds, podcasts and YouTube channels. */
   onDiscover: () => void
+  /** Global search (the ⌘K palette). */
+  onSearch: () => void
+  /** Latest | By feed */
+  feedsSwitch: ReactNode
   onMenu: () => void
   toast: (m: string) => void
 }
@@ -287,7 +291,10 @@ export function HomePage(p: Props) {
               <h1>{openFolder}</h1>
             </>
           ) : (
-            <h1>Home</h1>
+            <>
+              <h1>Feeds</h1>
+              {p.feedsSwitch}
+            </>
           )}
           <input
             className="home-search"
@@ -313,9 +320,13 @@ export function HomePage(p: Props) {
             <Icon name="refresh" size={18} />
             <span>{p.refreshing ? `Refreshing ${p.refreshing}` : 'Refresh all'}</span>
           </button>
-          <button type="button" className="mf-btn" onClick={p.onDiscover}>
-            <Icon name="explore" size={18} />
-            <span>Discover</span>
+          <button type="button" className="mf-btn" onClick={p.onSearch} title="Search everything (⌘K or /)">
+            <Icon name="search" size={18} />
+            <span>Search</span>
+          </button>
+          <button type="button" className="mf-btn" onClick={p.onArrange} title="Manage feeds: folders, order and settings">
+            <Icon name="tune" size={18} />
+            <span>Manage</span>
           </button>
           <button type="button" className="mf-btn primary" onClick={p.onAddFeed}>
             <Icon name="add" size={18} />

@@ -33,6 +33,8 @@ import { CommandPalette, SearchView, useSearchData, type OpenOptions, type Palet
 import { queryTerms, type SearchHit, type SearchScope } from './lib/search'
 import { RESUME_BACK, saveVideoPos } from './lib/videopos'
 import { kindOf } from './lib/playlists'
+import { feedsViewIsLatest, FeedsSwitch, LibraryPage, rememberFeedsView, TabBar, useTabShortcuts, type Tab } from './components/Tabs'
+import { useVideoJobs, useVideoSavingAvailable } from './lib/offline'
 
 const NAV_COLLAPSED_KEY = 'feeder.navCollapsed'
 /** The Manage feeds page has its own address so it can be bookmarked and Back works. */
@@ -46,6 +48,8 @@ const HOME_HASH = '#/home'
 const isHomeHash = () => window.location.hash === HOME_HASH
 /** Discover: find new feeds, podcasts and YouTube channels. */
 const DISCOVER_HASH = '#/discover'
+const LIBRARY_HASH = '#/library'
+const isLibraryHash = () => window.location.hash === LIBRARY_HASH
 const isDiscoverHash = () => window.location.hash === DISCOVER_HASH
 const DOWNLOADS_HASH = '#/downloads'
 const isDownloadsHash = () => window.location.hash === DOWNLOADS_HASH
@@ -79,7 +83,7 @@ type Dialog = { kind: 'settings' } | { kind: 'add' } | { kind: 'edit'; url: stri
 function selectionTitle(s: Selection, feeds: Map<string, Feed>): string {
   switch (s.kind) {
     case 'all':
-      return 'All articles'
+      return 'Latest'
     case 'saved':
       return 'Saved'
     case 'tag':
@@ -125,11 +129,13 @@ export default function App() {
   const [managing, setManaging] = useState(isFeedsHash)
   const [highlightsPage, setHighlightsPage] = useState(isHighlightsHash)
   const [downloadsPage, setDownloadsPage] = useState(isDownloadsHash)
-  const [homePage, setHomePage] = useState(() => isHomeHash() || !window.location.hash)
+  // A fresh start opens the Feeds tab on the view used last: the tiles (Home) or Latest
+  const [homePage, setHomePage] = useState(() => isHomeHash() || (!window.location.hash && !feedsViewIsLatest()))
   const [discoverPage, setDiscoverPage] = useState(isDiscoverHash)
+  const [libraryPage, setLibraryPage] = useState(isLibraryHash)
   // Start on Home: give it its own address, so Back from the article list returns to it
   useEffect(() => {
-    if (!window.location.hash) history.replaceState(null, '', window.location.pathname + window.location.search + HOME_HASH)
+    if (!window.location.hash && !feedsViewIsLatest()) history.replaceState(null, '', window.location.pathname + window.location.search + HOME_HASH)
   }, [])
   const [feedPage, setFeedPage] = useState<string | null>(feedFromHash)
   /** null = not on Playlists; '' = all playlists; else one playlist's id. */
@@ -153,6 +159,7 @@ export default function App() {
       setFeedPage(feedFromHash())
       setHomePage(isHomeHash())
       setDiscoverPage(isDiscoverHash())
+      setLibraryPage(isLibraryHash())
       setPlaylistPage(playlistFromHash())
     }
     window.addEventListener('hashchange', onHash)
@@ -177,6 +184,7 @@ export default function App() {
     }
     if (on) setPlaylistPage(null)
     if (on) setDiscoverPage(false)
+    if (on) setLibraryPage(false)
   }, [])
   const showHighlights = useCallback((on: boolean) => {
     if (on !== isHighlightsHash()) {
@@ -193,6 +201,7 @@ export default function App() {
     }
     if (on) setPlaylistPage(null)
     if (on) setDiscoverPage(false)
+    if (on) setLibraryPage(false)
   }, [])
   const showDownloads = useCallback((on: boolean) => {
     if (on !== isDownloadsHash()) {
@@ -209,6 +218,7 @@ export default function App() {
     }
     if (on) setPlaylistPage(null)
     if (on) setDiscoverPage(false)
+    if (on) setLibraryPage(false)
   }, [])
   const showHome = useCallback((on: boolean) => {
     if (on !== isHomeHash()) {
@@ -225,6 +235,7 @@ export default function App() {
     }
     if (on) setPlaylistPage(null)
     if (on) setDiscoverPage(false)
+    if (on) setLibraryPage(false)
   }, [])
   const showDiscover = useCallback((on: boolean) => {
     if (on !== isDiscoverHash()) {
@@ -237,6 +248,24 @@ export default function App() {
       setManaging(false)
       setHighlightsPage(false)
       setDownloadsPage(false)
+      setFeedPage(null)
+      feedPageFromApp.current = false
+      setPlaylistPage(null)
+      setLibraryPage(false)
+    }
+  }, [])
+  const showLibrary = useCallback((on: boolean) => {
+    if (on !== isLibraryHash()) {
+      if (on) window.location.hash = LIBRARY_HASH
+      else if (isLibraryHash()) history.pushState(null, '', window.location.pathname + window.location.search)
+    }
+    setLibraryPage(on)
+    if (on) {
+      setHomePage(false)
+      setManaging(false)
+      setHighlightsPage(false)
+      setDownloadsPage(false)
+      setDiscoverPage(false)
       setFeedPage(null)
       feedPageFromApp.current = false
       setPlaylistPage(null)
@@ -254,6 +283,7 @@ export default function App() {
       setManaging(false)
       setHighlightsPage(false)
       setDownloadsPage(false)
+      setLibraryPage(false)
       setFeedPage(null)
       feedPageFromApp.current = false
     }
@@ -272,6 +302,7 @@ export default function App() {
     setDiscoverPage(false)
     setHighlightsPage(false)
     setPlaylistPage(null)
+    setLibraryPage(false)
   }, [])
   /** Leaves the feed page for the article list. */
   const leaveFeedPage = useCallback(() => {
@@ -733,6 +764,7 @@ export default function App() {
     showDownloads(false)
     showHome(false)
     showDiscover(false)
+    showLibrary(false)
     if (feedPage) leaveFeedPage()
     setFlip(null)
   }
@@ -749,6 +781,7 @@ export default function App() {
     showDownloads(false)
     showHome(false)
     showDiscover(false)
+    showLibrary(false)
     showPlaylists(null)
     if (feedPage) leaveFeedPage()
   }
@@ -757,7 +790,7 @@ export default function App() {
   const searchData = useSearchData(items, feeds, allHighlights, settings.readAloudRate, searchActive)
 
   // Opening another page closes the results view
-  const anyPage = managing || highlightsPage || !!feedPage || downloadsPage || homePage || discoverPage || playlistPage !== null
+  const anyPage = managing || highlightsPage || !!feedPage || downloadsPage || homePage || discoverPage || libraryPage || playlistPage !== null
   useEffect(() => {
     if (anyPage) setSearchView(null)
   }, [anyPage])
@@ -823,18 +856,9 @@ export default function App() {
     },
     { id: 'theme', label: darkNow ? 'Switch to light theme' : 'Switch to dark theme', icon: darkNow ? 'lightMode' : 'darkMode', keywords: 'theme dark light mode appearance night', run: () => void updateSettings({ theme: darkNow ? 'light' : 'dark' }) },
     { id: 'offline', label: settings.offlineMode ? 'Go back online' : 'Go offline', icon: 'offline', keywords: 'offline mode online airplane downloaded', run: () => void updateSettings({ offlineMode: !settings.offlineMode }) },
-    {
-      id: 'home',
-      label: 'Go to Home',
-      icon: 'home',
-      keywords: 'start tiles feeds',
-      run: () => {
-        showPlaylists(null)
-        if (feedPage) leaveFeedPage()
-        showHome(true)
-      },
-    },
-    { id: 'all', label: 'Go to All articles', icon: 'article', keywords: 'unread list everything', run: () => selectList({ kind: 'all' }) },
+    { id: 'home', label: 'Go to Feeds: By feed', icon: 'gridView', keywords: 'home start tiles feeds g f', run: () => showFeedsView(false) },
+    { id: 'all', label: 'Go to Feeds: Latest', icon: 'viewAgenda', keywords: 'all articles unread list everything', run: () => showFeedsView(true) },
+    { id: 'library', label: 'Go to Library', icon: 'library', keywords: 'saved highlights downloads g l', run: () => openTab('library') },
     { id: 'saved', label: 'Go to Saved', icon: 'bookmark', keywords: 'bookmarks read later', run: () => selectList({ kind: 'saved' }) },
     { id: 'playlists', label: 'Go to Playlists', icon: 'queue', keywords: 'queue listen', run: () => showPlaylists('') },
     { id: 'highlights', label: 'Go to Highlights', icon: 'highlight', keywords: 'notes quotes', run: () => showHighlights(true) },
@@ -861,6 +885,46 @@ export default function App() {
   }, [dialog])
 
   const onPlaylists = playlistPage !== null
+
+  // The tab the screen belongs to, for the sidebar and the bottom bar
+  const currentTab: Tab | null = onPlaylists
+    ? 'playlists'
+    : discoverPage && !feedPage
+      ? 'discover'
+      : libraryPage || highlightsPage || downloadsPage || (selection.kind === 'saved' && !anyPage && !searchView)
+        ? 'library'
+        : searchView && !anyPage
+          ? null
+          : 'feeds'
+  const feedsLatest = currentTab === 'feeds' && !homePage && !managing && !feedPage && selection.kind === 'all'
+  /** Latest | By feed: the article list of every feed, or the tiles. Remembered for the Feeds tab. */
+  const showFeedsView = (latest: boolean) => {
+    rememberFeedsView(latest)
+    if (latest) selectList({ kind: 'all' })
+    else {
+      leavePages()
+      setSearchView(null)
+      setDrawer(false)
+      showHome(true)
+    }
+  }
+  const openTab = (t: Tab) => {
+    setDrawer(false)
+    setSearchView(null)
+    if (t === 'feeds') return showFeedsView(feedsViewIsLatest())
+    leavePages()
+    if (t === 'discover') showDiscover(true)
+    else if (t === 'playlists') showPlaylists('')
+    else showLibrary(true)
+  }
+  const openTabRef = useRef(openTab)
+  openTabRef.current = openTab
+  const onTabKey = useCallback((t: Tab) => openTabRef.current(t), [])
+  useTabShortcuts(onTabKey, !!dialog || paletteOpen || !!flip)
+  const videoJobs = useVideoJobs()
+  const canSaveVideos = useVideoSavingAvailable()
+  const downloadCount = items.filter((i) => i.offlineVideo).length + Object.keys(videoJobs).length
+  const savedCount = items.filter((i) => i.saved).length
   const syncLabel = syncState
     ? syncState.lastError
       ? 'Sync problem, see Settings'
@@ -870,7 +934,7 @@ export default function App() {
     : 'Not syncing'
 
   return (
-    <div className={`app pane-${pane}${drawer ? ' drawer-open' : ''}${navCollapsed ? ' nav-collapsed' : ''}${managing || highlightsPage || feedPage || downloadsPage || homePage || discoverPage || onPlaylists ? ' page-feeds' : ''}${queue.kind ? ' has-queue' : ''}`}>
+    <div className={`app pane-${pane}${drawer ? ' drawer-open' : ''}${navCollapsed ? ' nav-collapsed' : ''}${managing || highlightsPage || feedPage || downloadsPage || homePage || discoverPage || libraryPage || onPlaylists ? ' page-feeds' : ''}${queue.kind ? ' has-queue' : ''}`}>
       <div className="drawer-scrim" onClick={() => setDrawer(false)} />
       <Sidebar
         feeds={feedList}
@@ -888,30 +952,9 @@ export default function App() {
           if (feedPage) leaveFeedPage()
           showPlaylists(id)
         }}
-        showingDiscover={discoverPage && !feedPage}
-        onDiscover={() => {
-          setDrawer(false)
-          if (feedPage) leaveFeedPage()
-          showDiscover(true)
-        }}
-        showingHome={homePage && !discoverPage && !managing && !highlightsPage && !downloadsPage && !feedPage && !onPlaylists}
-        onHome={() => {
-          setDrawer(false)
-          showPlaylists(null)
-          if (feedPage) leaveFeedPage()
-          showHome(true)
-        }}
-        highlightCount={allHighlights.length}
-        showingHighlights={highlightsPage}
-        onHighlights={() => {
-          setDrawer(false)
-          showHighlights(!highlightsPage)
-        }}
-        showingDownloads={downloadsPage}
-        onDownloads={() => {
-          setDrawer(false)
-          showDownloads(!downloadsPage)
-        }}
+        currentTab={currentTab}
+        onTab={openTab}
+        showingList={(currentTab === 'feeds' || currentTab === 'library') && !homePage && !managing && !feedPage && !libraryPage}
         onEditFeed={(url) => setDialog({ kind: 'edit', url })}
         onMoveFeed={moveFeed}
         onAddFeed={() => setDialog({ kind: 'add' })}
@@ -1010,6 +1053,20 @@ export default function App() {
           onMoveFeed={moveFeed}
           toast={toast}
         />
+      ) : libraryPage ? (
+        <LibraryPage
+          savedCount={savedCount}
+          highlightCount={allHighlights.length}
+          downloadCount={downloadCount}
+          showDownloads={canSaveVideos || downloadCount > 0}
+          onSaved={() => selectList({ kind: 'saved' })}
+          onHighlights={() => showHighlights(true)}
+          onDownloads={() => showDownloads(true)}
+          onSettings={() => setDialog({ kind: 'settings' })}
+          onManageFeeds={() => showManage(true)}
+          onSearch={() => setPaletteOpen(true)}
+          onMenu={() => setDrawer(true)}
+        />
       ) : discoverPage ? (
         <DiscoverPage feeds={feedList} onOpenFeed={openFeedPage} onMenu={() => setDrawer(true)} toast={toast} />
       ) : homePage ? (
@@ -1029,6 +1086,8 @@ export default function App() {
           onArrange={() => showManage(true)}
           onDiscover={() => showDiscover(true)}
           onMenu={() => setDrawer(true)}
+          onSearch={() => setPaletteOpen(true)}
+          feedsSwitch={<FeedsSwitch latest={false} onChange={showFeedsView} />}
           toast={toast}
         />
       ) : (
@@ -1049,9 +1108,10 @@ export default function App() {
         onOpenFeed={openFeedPage}
         onAddLink={selection.kind === 'saved' ? addLink : undefined}
         onSearch={() => setPaletteOpen(true)}
+        feedsSwitch={feedsLatest ? <FeedsSwitch latest onChange={showFeedsView} /> : null}
         />
       )}
-      {managing || highlightsPage || feedPage || downloadsPage || homePage || discoverPage || onPlaylists || flip ? null : openItem ? (
+      {managing || highlightsPage || feedPage || downloadsPage || homePage || discoverPage || libraryPage || onPlaylists || flip ? null : openItem ? (
         <Reader
           item={openItem}
           feed={feeds.get(openItem.feedUrl)}
@@ -1073,7 +1133,7 @@ export default function App() {
         />
       ) : (
         <section className="reader-pane empty-reader">
-          <p>Select an article. Keyboard: ⌘K or / search everything, J / K next and previous, F flip mode, R read aloud, S save, M unread, O open original, [ hide or show feeds.</p>
+          <p>Select an article. Keyboard: ⌘K or / search everything, G then F, D, P or L switch tabs, J / K next and previous, F flip mode, R read aloud, S save, M unread, O open original, [ hide or show feeds.</p>
         </section>
       )}
       {dialog?.kind === 'settings' ? <SettingsDialog
@@ -1122,6 +1182,7 @@ export default function App() {
           open(id, queue.ids)
         }}
       />
+      {flip ? null : <TabBar current={currentTab} onTab={openTab} />}
       <AddToPlaylistMenu toast={toast} />
       {paletteOpen ? (
         <CommandPalette data={searchData} actions={paletteActions} onClose={() => setPaletteOpen(false)} onOpen={openHit} onShowAll={showAllResults} onResume={resumeItem} />
