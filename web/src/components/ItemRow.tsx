@@ -4,7 +4,7 @@
  * you got) on it, a type badge, and the same labeled buttons everywhere: Read/Play/Watch, Save,
  * Playlist, Mark read, Delete. A page adds its own buttons after those (extras).
  */
-import { useMemo, useState, type MouseEvent, type ReactNode } from 'react'
+import { useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, feedDisplayTitle, getKv, hideItems, unhideItems, type Feed, type Item } from '../lib/db'
 import { proxiedUrl } from '../lib/api'
@@ -18,6 +18,7 @@ import { syncNow } from '../lib/sync2'
 import type { Toast } from '../lib/toast'
 import { openAddToPlaylist } from './AddToPlaylist'
 import { Icon, type IconName } from './Icon'
+import { MoreMenu } from './MoreMenu'
 
 /** Everything a row needs to know besides the item itself (feed kinds, play positions, lengths), kept live. */
 export function usePlaylistContext(feeds: Map<string, Feed>, rate: number): PlaylistContext {
@@ -143,6 +144,7 @@ export function ItemRow(p: RowProps) {
   }
   const primaryLabel = p.primaryLabel ?? (facts.kind === 'podcast' && playingHere ? 'Pause' : facts.primaryLabel)
   const primaryIcon: IconName = p.primaryIcon ?? (primaryLabel === 'Pause' ? 'pause' : facts.kind === 'article' ? 'article' : 'play')
+  const trail = useRef<HTMLSpanElement>(null)
   const setRead = (read: boolean) => (p.onSetRead ? p.onSetRead(read) : void setItemRead(item, read))
   return (
     <div
@@ -188,30 +190,30 @@ export function ItemRow(p: RowProps) {
           </div>
         ) : null}
       </div>
+      {/* Material 3 list row: at most one action (Play/Pause for episodes and videos), the rest in ⋮ */}
+      <span className="ir-trail" ref={trail} onClick={stop} onPointerDown={stop}>
+        {facts.kind !== 'article' ? (
+          <button type="button" className="ir-play" title={primaryLabel} aria-label={`${primaryLabel}: ${item.title}`} onClick={primary}>
+            <Icon name={primaryIcon} size={22} />
+          </button>
+        ) : null}
+        <MoreMenu
+          label={item.title ? `More for ${item.title}` : 'More'}
+          entries={[
+            { icon: item.saved ? 'bookmarkFilled' : 'bookmark', label: item.saved ? 'Saved' : 'Save', checked: !!item.saved, onClick: () => void toggleSaved(item) },
+            { icon: 'playlistAdd', label: p.inPlaylist ? 'In playlist: add to another' : 'Add to playlist', onClick: () => trail.current && openAddToPlaylist([item.id], item.title, trail.current) },
+            { icon: item.read ? 'unread' : 'read', label: facts.readLabel, onClick: () => setRead(!item.read) },
+            'separator',
+            { icon: 'delete', label: 'Delete on all devices', onClick: p.onDelete, danger: true },
+          ]}
+        />
+      </span>
       </div>
-        <div className="ir-acts" onClick={stop} onPointerDown={stop}>
-          <button type="button" className="mf-btn ir-btn" onClick={primary}>
-            <Icon name={primaryIcon} size={16} />
-            {primaryLabel}
-          </button>
-          <button type="button" className={`mf-btn ir-btn${item.saved ? ' on' : ''}`} aria-pressed={!!item.saved} onClick={() => void toggleSaved(item)}>
-            <Icon name={item.saved ? 'bookmarkFilled' : 'bookmark'} size={16} />
-            {item.saved ? 'Saved' : 'Save'}
-          </button>
-          <button type="button" className={`mf-btn ir-btn${p.inPlaylist ? ' on' : ''}`} title="Add to a playlist, or play next" onClick={(e) => openAddToPlaylist([item.id], item.title, e.currentTarget)}>
-            <Icon name="playlistAdd" size={16} />
-            {p.inPlaylist ? 'In playlist' : 'Playlist'}
-          </button>
-          <button type="button" className="mf-btn ir-btn" onClick={() => setRead(!item.read)}>
-            <Icon name={item.read ? 'unread' : 'read'} size={16} />
-            {facts.readLabel}
-          </button>
-          <button type="button" className="mf-btn danger ir-btn" title="Delete on all your devices" onClick={p.onDelete}>
-            <Icon name="delete" size={16} />
-            Delete
-          </button>
-          {p.extras}
-        </div>
+        {p.extras ? (
+          <div className="ir-acts" onClick={stop} onPointerDown={stop}>
+            {p.extras}
+          </div>
+        ) : null}
     </div>
   )
 }

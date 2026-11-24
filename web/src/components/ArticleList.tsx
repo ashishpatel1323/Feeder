@@ -4,6 +4,7 @@ import type { Group } from '../lib/listquery'
 import { updateSettings, type Grouping, type Settings, type ShowFilter, type Sorting } from '../lib/settings'
 import { useNetwork } from '../lib/offline'
 import { Icon, IconButton } from './Icon'
+import { MoreMenu } from './MoreMenu'
 import { isShared } from '../lib/share'
 import { articleVideoId } from '../lib/youtube'
 import { useManualMembership } from './AddToPlaylist'
@@ -339,23 +340,32 @@ export function ArticleList(p: Props) {
           {p.title}
         </h1>
         {network ? (
-          <button
-            type="button"
-            className={`offline-toggle${s.offlineMode ? ' on' : ''}`}
-            aria-pressed={s.offlineMode}
-            title={s.offlineMode ? 'Offline mode is on: only downloaded content, nothing fetched. Click to go online.' : 'Offline mode: use only downloaded content, even with internet'}
-            onClick={() => updateSettings({ offlineMode: !s.offlineMode })}
-          >
-            <Icon name="download" size={16} /> {s.offlineMode ? 'Offline mode' : 'Go offline'}
-          </button>
+          // Offline mode is turned on from More; while on, this says so and turns it off
+          s.offlineMode ? (
+            <button
+              type="button"
+              className="offline-toggle on"
+              aria-pressed
+              title="Offline mode is on: only downloaded content, nothing fetched. Click to go online."
+              onClick={() => updateSettings({ offlineMode: false })}
+            >
+              <Icon name="download" size={16} /> Offline mode
+            </button>
+          ) : null
         ) : (
           <span className="offline-badge" title="No connection: downloaded articles still open, and changes sync later">
             No connection
           </span>
         )}
         <IconButton icon="flip" label="Flip mode (F)" text="Flip" kbd="F" onClick={p.onFlip} />
-        <IconButton icon="doneAll" label="Mark all as read" text="Mark all read" onClick={p.onMarkAllRead} />
-        <IconButton icon="delete" label="Delete read articles on all devices" text="Delete read" onClick={p.onDeleteRead} />
+        <MoreMenu
+          entries={[
+            { icon: 'doneAll', label: 'Mark all as read', onClick: p.onMarkAllRead },
+            { icon: 'download', label: s.offlineMode ? 'Go online' : 'Go offline', checked: s.offlineMode, onClick: () => updateSettings({ offlineMode: !s.offlineMode }), hidden: !network },
+            'separator',
+            { icon: 'delete', label: 'Delete read articles on all devices', onClick: p.onDeleteRead, danger: true },
+          ]}
+        />
       </header>
       {selected.length ? (
         <div className="select-bar" role="toolbar" aria-label="Selected articles">
@@ -375,17 +385,20 @@ export function ArticleList(p: Props) {
       {p.onAddLink ? <AddLinkBar onAdd={p.onAddLink} kind={savedKind} onKind={setSavedKind} /> : null}
       <div className="list-filters">
         <div className="filter-row">
-          <div className="segmented" role="radiogroup" aria-label="Show">
-            {SHOWS.map(([v, l]) => {
-              const n = countOf(v)
-              return (
-                <button key={v} role="radio" aria-checked={s.show === v} className={`seg${s.show === v ? ' on' : ''}`} onClick={() => updateSettings({ show: v })}>
-                  {l}
-                  {n ? <span className="seg-count">{n}</span> : null}
-                </button>
-              )
-            })}
-          </div>
+          {/* One Show chip instead of four segments, which got cut off on phones */}
+          <label className={`select-chip show-chip${s.show !== 'unread' ? ' on' : ''}`}>
+            <span>Show</span>
+            <select value={s.show} onChange={(e) => updateSettings({ show: e.target.value as ShowFilter })}>
+              {SHOWS.map(([v, l]) => {
+                const n = countOf(v)
+                return (
+                  <option key={v} value={v}>
+                    {n ? `${l} (${n})` : l}
+                  </option>
+                )
+              })}
+            </select>
+          </label>
           <button className={`chip${s.today ? ' on' : ''}`} aria-pressed={s.today} onClick={() => updateSettings({ today: !s.today })}>
             {s.today ? <Icon name="check" size={16} /> : null}
             Today

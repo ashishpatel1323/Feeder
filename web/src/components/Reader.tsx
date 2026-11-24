@@ -15,6 +15,7 @@ import { applyFastReading } from '../lib/fastReading'
 import { AUTO_SCROLL_SPEEDS, useAutoScroll } from '../lib/autoscroll'
 import { openAddToPlaylist } from './AddToPlaylist'
 import { Icon, IconButton } from './Icon'
+import { MoreMenu } from './MoreMenu'
 import { Player } from './Player'
 import { articleVideoId, iinaUrl, isMac, youtubeVideoId, youtubeWatchUrl } from '../lib/youtube'
 import { YouTubeFrame } from './YouTubeFrame'
@@ -414,12 +415,10 @@ export function Reader(p: Props) {
         <IconButton icon="prev" label="Previous article (K)" text="Prev" kbd="K" onClick={p.onPrev} disabled={!p.hasPrev} />
         <IconButton icon="next" label="Next article (J)" text="Next" kbd="J" onClick={p.onNext} disabled={!p.hasNext} />
         <span className="spacer" />
-        {/* Like the Android app, these hide while the player is open: it has the same controls */}
+        {/* Material 3: the bar keeps the everyday actions (Listen, Highlights, Save, Share); the rest
+            are in More. Every keyboard shortcut still works. Listen hides while the player is open. */}
         {playing || !isArticle ? null : (
-          <>
-            <IconButton icon="headphones" label="Read aloud (R)" text="Read aloud" kbd="R" onClick={() => readAloud.play()} disabled={!readAloud.supported} />
-            <IconButton icon="speed" label="Speed read: show the word as it is read (V)" text="Speed read" kbd="V" onClick={showWord} disabled={!readAloud.supported} />
-          </>
+          <IconButton icon="headphones" label="Listen: read aloud (R)" text="Listen" kbd="R" onClick={() => readAloud.play()} disabled={!readAloud.supported} className="bar-primary" />
         )}
         <button
           type="button"
@@ -430,14 +429,24 @@ export function Reader(p: Props) {
         >
           <Icon name="highlight" size={18} /> <span><span className="narrow-label">Highlights </span>{highlights?.length ?? 0}</span>
         </button>
-        {isArticle ? <IconButton icon="article" label={fullMode ? 'Show feed text' : 'Full text'} text="Full text" active={fullMode} onClick={() => setFullMode(!fullMode)} /> : null}
-        {item.link ? (
-          <a className="icon-btn texted" href={item.link} target="_blank" rel="noopener noreferrer" title="Open original page (O)" aria-label="Open original page">
-            <Icon name="open" />
-            <span className="btn-text">Original</span>
-            <kbd className="btn-kbd">O</kbd>
-          </a>
-        ) : null}
+        <IconButton icon={item.saved ? 'bookmarkFilled' : 'bookmark'} label={item.saved ? 'Saved (S)' : 'Save (S)'} active={!!item.saved} onClick={toggleSave} />
+        <IconButton icon="share" label="Share" onClick={shareLink} />
+        <MoreMenu
+          entries={[
+            { icon: item.read ? 'unread' : 'read', label: facts.readLabel, kbd: 'M', onClick: toggleRead },
+            { icon: 'playlistAdd', label: 'Add to playlist', onClick: () => openAddToPlaylist([item.id], item.title, { x: Math.max(8, window.innerWidth - 340), y: 64 }) },
+            'separator',
+            { icon: 'article', label: 'Full text', checked: fullMode, onClick: () => setFullMode(!fullMode), hidden: !isArticle },
+            { icon: 'open', label: 'Open original page', kbd: 'O', onClick: () => item.link && window.open(item.link, '_blank', 'noopener,noreferrer'), hidden: !item.link },
+            'separator',
+            { icon: 'summarize', label: summaryState === 'loading' ? 'Summarizing…' : 'Summarize', onClick: doSummary, disabled: summaryState === 'loading' },
+            { icon: 'speed', label: 'Speed read', kbd: 'V', onClick: showWord, disabled: !readAloud.supported, hidden: !isArticle || playing },
+            { icon: 'formatBold', label: 'Bold word starts', kbd: 'B', checked: fastReading, onClick: () => updateSettings({ fastReading: !fastReading }), hidden: !isArticle },
+            { icon: 'autoScroll', label: 'Auto scroll', kbd: 'A', checked: auto.active, onClick: auto.toggle, disabled: playing, hidden: !isArticle },
+            'separator',
+            { icon: 'delete', label: 'Delete on all devices', kbd: 'Del', onClick: () => void remove(), danger: true },
+          ]}
+        />
       </header>
 
       <div className={`reader-stage${railOpen ? ' with-rail' : ''}`}>
@@ -504,6 +513,14 @@ export function Reader(p: Props) {
             {fullMode && fullState === 'error' ? (
               <p className="notice error">
                 Couldn't load the full text: {fullError}. Showing the feed's text instead.
+                {item.link ? (
+                  <>
+                    {' '}
+                    <a href={item.link} target="_blank" rel="noopener noreferrer">
+                      Open the original page
+                    </a>
+                  </>
+                ) : null}
               </p>
             ) : null}
             <div className="article-body" ref={bodyRef} onClick={onBodyClick} dangerouslySetInnerHTML={{ __html: html }} />
@@ -567,42 +584,6 @@ export function Reader(p: Props) {
       ) : null}
       {share ? <ShareDialog subject={share} onClose={() => setShare(null)} toast={p.toast} /> : null}
 
-      <footer className="action-bar">
-        <IconButton icon={item.saved ? 'bookmarkFilled' : 'bookmark'} label={item.saved ? 'Saved' : 'Save'} active={!!item.saved} kbd="S" onClick={toggleSave} showLabel />
-        <button type="button" className="icon-btn labeled" onClick={(e) => openAddToPlaylist([item.id], item.title, e.currentTarget)} title="Add to a playlist, or play next" aria-label="Playlist">
-          <Icon name="playlistAdd" />
-          <span className="btn-text">Playlist</span>
-        </button>
-        <IconButton icon={item.read ? 'unread' : 'read'} label={facts.readLabel} kbd="M" onClick={toggleRead} showLabel />
-        <IconButton icon="summarize" label={summaryState === 'loading' ? 'Summarizing…' : 'Summarize'} onClick={doSummary} disabled={summaryState === 'loading'} showLabel className="act-primary" />
-        <IconButton icon="share" label="Share" onClick={shareLink} showLabel />
-        <IconButton icon="delete" label="Delete" title="Delete on all your devices (Delete key)" kbd="Del" onClick={remove} showLabel className="act-danger" />
-        {isArticle ? (
-          <>
-            <IconButton
-              icon="formatBold"
-              label="Fast read"
-              title={fastReading ? 'Turn off bold word starts (B)' : 'Bold word starts to read faster (B)'}
-              kbd="B"
-              active={fastReading}
-              onClick={() => updateSettings({ fastReading: !fastReading })}
-              showLabel
-              className="act-tool"
-            />
-            <IconButton
-              icon="autoScroll"
-              label="Scroll"
-              title={auto.active ? 'Stop auto scroll (A)' : 'Scroll the article on its own while you read (A)'}
-              kbd="A"
-              active={auto.active}
-              onClick={auto.toggle}
-              disabled={playing}
-              showLabel
-              className="act-tool"
-            />
-          </>
-        ) : null}
-      </footer>
 
       {playing ? (
         <Player
