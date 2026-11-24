@@ -43,7 +43,6 @@ import com.nononsenseapps.feeder.ui.compose.readaloud.SpeechFollowViewport
 import com.nononsenseapps.feeder.ui.compose.readaloud.SpeechHighlight
 import com.nononsenseapps.feeder.ui.compose.readaloud.TTSPlayer
 import com.nononsenseapps.feeder.ui.compose.readaloud.stopSpeechFollowingOnAccessibilityScroll
-import com.nononsenseapps.feeder.ui.compose.readaloud.stopSpeechFollowingOnUserScroll
 import com.nononsenseapps.feeder.ui.compose.theme.PreviewTheme
 import com.nononsenseapps.feeder.ui.compose.utils.ImmutableHolder
 import kotlinx.coroutines.Dispatchers
@@ -111,12 +110,11 @@ class ReadAloudPlayerRenderTest {
                     activity.setContent {
                         scroll = rememberScrollState()
                         PreviewTheme {
-                            SpeechFollowViewport(centerSpeech = highlight.value?.followSpokenText == true) {
-                                Column(
-                                    Modifier.fillMaxSize().stopSpeechFollowingOnUserScroll {
-                                        highlight.value = highlight.value?.copy(followSpokenText = false)
-                                    },
-                                ) {
+                            SpeechFollowViewport(
+                                centerSpeech = highlight.value?.followSpokenText == true,
+                                onUserScroll = { highlight.value = highlight.value?.copy(followSpokenText = false) },
+                            ) {
+                                Column(Modifier.fillMaxSize()) {
                                     Column(
                                         Modifier
                                             .weight(1f)

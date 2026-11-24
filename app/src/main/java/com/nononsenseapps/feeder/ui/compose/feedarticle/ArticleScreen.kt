@@ -96,7 +96,6 @@ import com.nononsenseapps.feeder.ui.compose.readaloud.SpeechFollowViewport
 import com.nononsenseapps.feeder.ui.compose.readaloud.SpeechHighlight
 import com.nononsenseapps.feeder.ui.compose.readaloud.WordModeState
 import com.nononsenseapps.feeder.ui.compose.readaloud.stopSpeechFollowingOnAccessibilityScroll
-import com.nononsenseapps.feeder.ui.compose.readaloud.stopSpeechFollowingOnUserScroll
 import com.nononsenseapps.feeder.ui.compose.theme.FeederTokens
 import com.nononsenseapps.feeder.ui.compose.theme.LocalDimens
 import com.nononsenseapps.feeder.ui.compose.theme.SensibleTopAppBar
@@ -570,7 +569,7 @@ fun ArticleScreen(
             ) {
                 SpeechFollowViewport(
                     centerSpeech = speechHighlight?.followSpokenText == true,
-                    modifier = Modifier.stopSpeechFollowingOnUserScroll(ttsOnUserScroll),
+                    onUserScroll = ttsOnUserScroll,
                 ) {
                     val coroutineScope = rememberCoroutineScope()
                     ArticleContent(
