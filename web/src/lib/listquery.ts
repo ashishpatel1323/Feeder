@@ -31,23 +31,80 @@ export function siteOf(item: Item): string {
   return host.startsWith('www.') ? host.slice(4) : host
 }
 
-function localDate(ms: number): string {
-  const d = new Date(ms)
+function ymd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-function dateLabel(key: string): string {
-  const today = localDate(Date.now())
-  const yesterday = localDate(Date.now() - 86_400_000)
-  if (key === today) return 'Today'
-  if (key === yesterday) return 'Yesterday'
-  const [y, m, d] = key.split('-').map(Number)
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
-    weekday: 'long',
-    month: 'short',
-    day: 'numeric',
-    year: y === new Date().getFullYear() ? undefined : 'numeric',
-  })
+/** First day of the week for the browser's locale (0 = Sunday), Monday when unknown. */
+function firstDayOfWeek(): number {
+  try {
+    const loc = new Intl.Locale(navigator.language) as Intl.Locale & {
+      getWeekInfo?: () => { firstDay: number }
+      weekInfo?: { firstDay: number }
+    }
+    const firstDay = (loc.getWeekInfo?.() ?? loc.weekInfo)?.firstDay
+    // Intl uses 1 = Monday ... 7 = Sunday
+    if (firstDay) return firstDay % 7
+  } catch {
+    // Older browsers: fall through
+  }
+  return 1
+}
+
+/**
+ * Mail-style date group of a time: Today, Yesterday, This week, Last week, Earlier this month,
+ * Last month, then each month (with the year for earlier years). The key is
+ * "yyyy-MM-dd:kind" with the date where the group starts, so keys sort like the dates they
+ * hold. Mirrors the Android fork's archmodel/DateBuckets.kt.
+ */
+export function dateBucketKey(ms: number, now: Date = new Date(), weekStartsOn: number = firstDayOfWeek()): string {
+  const day = (y: number, m: number, d: number) => new Date(y, m, d)
+  const today = day(now.getFullYear(), now.getMonth(), now.getDate())
+  const date = new Date(ms)
+  const d = day(date.getFullYear(), date.getMonth(), date.getDate())
+  const shift = (base: Date, days: number) => day(base.getFullYear(), base.getMonth(), base.getDate() + days)
+  const weekStart = shift(today, -((today.getDay() - weekStartsOn + 7) % 7))
+  const fixed: [Date, string][] = [
+    [today, 'today'],
+    [shift(today, -1), 'yesterday'],
+    [weekStart, 'week'],
+    [shift(weekStart, -7), 'lastweek'],
+    [day(today.getFullYear(), today.getMonth(), 1), 'month'],
+    [day(today.getFullYear(), today.getMonth() - 1, 1), 'lastmonth'],
+  ]
+  // Anything dated in the future counts as today
+  if (d >= today) return `${ymd(today)}:today`
+  for (const [start, kind] of fixed) {
+    if (d >= start) return `${ymd(start)}:${kind}`
+  }
+  const month = day(d.getFullYear(), d.getMonth(), 1)
+  return `${ymd(month)}:${d.getFullYear() === today.getFullYear() ? 'm' : 'y'}`
+}
+
+const FIXED_DATE_LABELS: Record<string, string> = {
+  week: 'This week',
+  lastweek: 'Last week',
+  month: 'Earlier this month',
+  lastmonth: 'Last month',
+}
+
+export function dateLabel(key: string): string {
+  const [date, kind] = key.split(':')
+  const [y, m, d] = date.split('-').map(Number)
+  const start = new Date(y, m - 1, d)
+  switch (kind) {
+    case 'today':
+    case 'yesterday': {
+      const day = start.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
+      return `${kind === 'today' ? 'Today' : 'Yesterday'} · ${day}`
+    }
+    case 'm':
+      return start.toLocaleDateString(undefined, { month: 'long' })
+    case 'y':
+      return start.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+    default:
+      return FIXED_DATE_LABELS[kind] ?? key
+  }
 }
 
 export function selectItems(items: Item[], feeds: Map<string, Feed>, selection: Selection): Item[] {
@@ -129,7 +186,7 @@ function groupKey(grouping: Grouping, item: Item, feeds: Map<string, Feed>): str
     case 'none':
       return ''
     case 'date':
-      return localDate(item.sortTime)
+      return dateBucketKey(item.sortTime)
     case 'feed':
       return item.feedUrl
     case 'tag':

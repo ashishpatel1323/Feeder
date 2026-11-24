@@ -175,6 +175,10 @@
   <string name="group_by_site">Site</string>
   <string name="today">Today</string>
   <string name="yesterday">Yesterday</string>
+  <string name="group_this_week">This week</string>
+  <string name="group_last_week">Last week</string>
+  <string name="group_earlier_this_month">Earlier this month</string>
+  <string name="group_last_month">Last month</string>
   <string name="group_expanded">Expanded</string>
   <string name="group_collapsed">Collapsed</string>
   <string name="send_bug_report">Send bug report</string>

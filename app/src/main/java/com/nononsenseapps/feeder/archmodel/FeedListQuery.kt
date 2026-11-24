@@ -41,13 +41,16 @@ private val SITE_EXPR: String =
         "(CASE WHEN $host LIKE 'www.%' THEN substr($host, 5) ELSE $host END)"
     }
 
+/** The article's date in the device's time zone, as "yyyy-MM-dd". */
+internal const val LOCAL_DATE_EXPR = "date(feed_items.primary_sort_time / 1000, 'unixepoch', 'localtime')"
+
 /**
  * The group key of an article as text. See [FeedListGroup] for the formats.
  */
 internal fun FeedListGrouping.keyExpr(): String =
     when (this) {
         FeedListGrouping.NONE -> "''"
-        FeedListGrouping.DATE -> "date(feed_items.primary_sort_time / 1000, 'unixepoch', 'localtime')"
+        FeedListGrouping.DATE -> DateBucketBounds.current().keySql(LOCAL_DATE_EXPR)
         FeedListGrouping.FEED -> "CAST(IFNULL(feeds.id, 0) AS TEXT)"
         FeedListGrouping.TAG -> TAG_EXPR
         FeedListGrouping.LENGTH ->
@@ -143,7 +146,7 @@ internal fun StringBuilder.appendRangeCondition(
 /**
  * One group of the current article list, in list order.
  *
- * [key] formats: DATE "yyyy-MM-dd" (local date); FEED the feed id ("0" = no feed); TAG the tag
+ * [key] formats: DATE "yyyy-MM-dd:kind", see [DateBucketKey]; FEED the feed id ("0" = no feed); TAG the tag
  * ("" = untagged); LENGTH "0" quick (under 3 min), "1" medium (3 to 10 min), "2" long; SITE the host without "www." ("" = unknown).
  */
 data class FeedListGroup(
