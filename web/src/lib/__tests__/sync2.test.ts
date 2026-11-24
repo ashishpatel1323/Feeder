@@ -4,6 +4,7 @@ import { handleSync2, MemoryStore, type SyncRecord } from '../../../server/sync2
 import { db, FEED_ORDER_KEY, getKv, hideItems, itemId, newFeed, setKv, unhideItems, type Item } from '../db'
 import { decryptString, encryptString } from '../crypto'
 import { saveVideoPos } from '../videopos'
+import { deleteHighlight, saveHighlight, updateHighlight } from '../highlights'
 import { deletePlaylist, loadPlaylists, newPlaylist, savePlaylist, seedPlaylists, PLAYLISTS_KEY } from '../playlists'
 import {
   addDeviceLink,
@@ -240,6 +241,61 @@ describe('sync client', () => {
     // Watching on here again sends the new position
     await saveVideoPos(a, 520, 859)
     expect((await syncNow())?.sent).toBe(1)
+  })
+
+  it('syncs highlights: new, recolored, noted, deleted, newest wins', async () => {
+    await joinSync(CODE, KEY)
+    const article = itemId('https://f/feed', 'g1')
+    const h = {
+      id: 'hl-1',
+      itemId: article,
+      itemTitle: 'An article',
+      itemLink: 'https://f/a',
+      feedTitle: 'F',
+      imageUrl: null,
+      text: 'a quote',
+      start: 10,
+      prefix: 'before ',
+      color: 'yellow' as const,
+      note: '',
+      createdAt: 1000,
+    }
+    await saveHighlight(h)
+    expect((await syncNow())?.sent).toBe(1)
+    const other = await otherDevice()
+    const sent = (await other.all()).find((p) => p.k === 'highlight')
+    expect(sent).toMatchObject({ key: 'hl-1', ts: 1000, v: { item: article, title: 'An article', text: 'a quote', start: 10, prefix: 'before ', color: 'yellow', note: '' } })
+    expect((await syncNow())?.sent).toBe(0)
+
+    // Recolored elsewhere, and a new one from the phone for an article this browser never fetched
+    const v = sent!.v as Record<string, unknown>
+    await other.push(
+      { k: 'highlight', key: 'hl-1', v: { ...v, color: 'pink', note: 'nice' }, ts: 5000 },
+      { k: 'highlight', key: 'hl-2', v: { ...v, item: 'https://f/feed\ng9', text: 'from the phone' }, ts: 4000 },
+    )
+    await syncNow()
+    expect(await db.highlights.get('hl-1')).toMatchObject({ color: 'pink', note: 'nice', modifiedAt: 5000 })
+    expect(await db.highlights.get('hl-2')).toMatchObject({ itemId: 'https://f/feed\ng9', text: 'from the phone', itemTitle: 'An article' })
+    expect((await syncNow())?.sent).toBe(0)
+
+    // An older edit loses to the one here
+    await other.push({ k: 'highlight', key: 'hl-1', v: { ...v, color: 'blue' }, ts: 4500 })
+    await syncNow()
+    expect((await db.highlights.get('hl-1'))?.color).toBe('pink')
+
+    // Editing and deleting here go out
+    await updateHighlight('hl-1', { note: 'nicer' })
+    expect((await syncNow())?.sent).toBe(1)
+    expect((await other.all()).find((p) => p.key === 'hl-1')?.v).toMatchObject({ note: 'nicer', color: 'pink' })
+    await deleteHighlight('hl-2')
+    expect((await syncNow())?.sent).toBe(1)
+    expect((await other.all()).find((p) => p.key === 'hl-2')?.v).toEqual({ deleted: true })
+
+    // Deleted elsewhere
+    await other.push({ k: 'highlight', key: 'hl-1', v: { deleted: true }, ts: Date.now() + 1000 })
+    await syncNow()
+    expect(await db.highlights.get('hl-1')).toBeUndefined()
+    expect((await syncNow())?.sent).toBe(0)
   })
 
   it('syncs playlists: new, edited, deleted, and starters only once', async () => {

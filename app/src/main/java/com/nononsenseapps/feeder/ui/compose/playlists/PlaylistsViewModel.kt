@@ -2,6 +2,7 @@ package com.nononsenseapps.feeder.ui.compose.playlists
 
 import androidx.lifecycle.viewModelScope
 import com.nononsenseapps.feeder.archmodel.FeedItemStore
+import com.nononsenseapps.feeder.archmodel.Repository
 import com.nononsenseapps.feeder.base.DIAwareViewModel
 import com.nononsenseapps.feeder.db.room.FeedItemDao
 import com.nononsenseapps.feeder.db.room.PlaylistCandidate
@@ -57,6 +58,7 @@ class PlaylistsViewModel(
     private val offlineFiles: OfflineFiles by instance()
     private val offlineVideos: OfflineVideos by instance()
     private val feedItemStore: FeedItemStore by instance()
+    private val repository: Repository by instance()
 
     val queue: StateFlow<QueueState> = player.state
     val messages: SharedFlow<QueueMessage> = player.messages
@@ -123,11 +125,25 @@ class PlaylistsViewModel(
                 pl.items(s.candidates, s.ctx, s.byId).map { it.id }.take(MAX_FLIP_ITEMS)
             }
         flipId.value = id
+        // Read aloud's Up next and the reader's swipes follow the pages
+        if (id != null) flipIds.value?.let { openingArticle(id, it) }
     }
 
     fun open(id: String?) {
         openId.value = id
     }
+
+    /**
+     * An article is opened from playlist [playlistId], showing [order]: swiping left and right in
+     * the reader goes through the playlist in this order, as it goes through a feed list.
+     */
+    fun openingArticle(
+        playlistId: String,
+        order: List<Long>,
+    ) = repository.setArticleSwipeList("playlist:$playlistId", order)
+
+    /** The ids of the flip pages, in order. */
+    fun flipOrder(): List<Long> = flipIds.value.orEmpty()
 
     fun play(
         playlist: Playlist,

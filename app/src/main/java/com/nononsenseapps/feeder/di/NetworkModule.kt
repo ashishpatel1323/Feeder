@@ -47,6 +47,13 @@ val networkModule =
                     .PlaylistStore(instance())
                     .also { store -> store.onChanged = { positionOnly -> nudge.changed(positionOnly) } }
             }
+        bind<com.nononsenseapps.feeder.model.highlights.HighlightStore>() with
+            singleton {
+                val nudge = instance<SyncNudge>()
+                com.nononsenseapps.feeder.model.highlights
+                    .HighlightStore(instance())
+                    .also { store -> store.onChanged = { nudge.changed(false) } }
+            }
         bind<com.nononsenseapps.feeder.model.playlists.PlaylistPlayer>() with
             singleton {
                 com.nononsenseapps.feeder.model.playlists

@@ -264,6 +264,32 @@ data object PlaylistsDestination : NavigationDestination(
     }
 }
 
+/** Every highlight, grouped by article, with filters, search and share as image. */
+data object HighlightsDestination : NavigationDestination(
+    path = "highlights",
+    navArguments = emptyList(),
+    deepLinks = emptyList(),
+) {
+    fun navigate(navController: NavController) {
+        navController.navigate(path) {
+            launchSingleTop = true
+        }
+    }
+
+    @Composable
+    override fun RegisterScreen(
+        navController: NavController,
+        backStackEntry: NavBackStackEntry,
+        navDrawerListState: LazyListState,
+        mainActivityViewModel: MainActivityViewModel,
+    ) {
+        com.nononsenseapps.feeder.ui.compose.highlights.HighlightsScreen(
+            onNavigateUp = { navController.popBackStack() },
+            onOpenArticle = { id -> ArticleDestination.navigate(navController, itemId = id) },
+        )
+    }
+}
+
 /** Manage feeds: every feed by folder, with sorting, quick settings, stats, moving and deleting. */
 data object ManageFeedsDestination : NavigationDestination(
     path = "manage/feeds",

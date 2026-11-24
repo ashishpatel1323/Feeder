@@ -10,6 +10,7 @@ import com.nononsenseapps.feeder.db.room.ID_UNSET
 import com.nononsenseapps.feeder.db.room.RemoteReadMarkReadyToBeApplied
 import com.nononsenseapps.feeder.sync.SyncRestClient
 import com.nononsenseapps.feeder.sync2.Sync2Client
+import com.nononsenseapps.feeder.ui.compose.feedarticle.emptyFeedListFilter
 import com.nononsenseapps.feeder.util.addDynamicShortcutToFeed
 import com.nononsenseapps.feeder.util.reportShortcutToFeedUsed
 import io.mockk.MockKAnnotations
@@ -204,6 +205,48 @@ class RepositoryTest : DIAware {
 
         coVerify(exactly = 1, timeout = 500L) {
             settingsStore.setMinReadTime(any())
+        }
+    }
+
+    private fun stubFeedList(ids: List<Long>) {
+        every { settingsStore.currentFeedAndTag } returns MutableStateFlow(ID_ALL_FEEDS to "")
+        every { settingsStore.currentSorting } returns MutableStateFlow(SortingOptions.NEWEST_FIRST)
+        every { settingsStore.feedListGrouping } returns MutableStateFlow(FeedListGrouping.NONE)
+        every { settingsStore.feedListFilter } returns MutableStateFlow(emptyFeedListFilter)
+        coEvery { feedItemStore.getFeedListItemIds(any(), any(), any(), any(), any(), any(), any(), any()) } returns ids
+    }
+
+    @Test
+    fun swipingFromPlaylistFollowsPlaylistOrder() {
+        stubFeedList(listOf(1L, 2L, 3L, 5L, 9L))
+        repository.setArticleSwipeList("playlist:p1", listOf(9L, 3L, 5L))
+
+        runBlocking {
+            assertEquals(9L to 5L, repository.getArticleSwipeNeighbors(3L))
+            assertEquals(null to 3L, repository.getArticleSwipeNeighbors(9L))
+            assertEquals(3L to null, repository.getArticleSwipeNeighbors(5L))
+        }
+        coVerify(exactly = 0) { feedItemStore.getFeedListItemIds(any(), any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun articleOutsidePlaylistSwipesThroughFeedList() {
+        stubFeedList(listOf(1L, 2L, 3L))
+        repository.setArticleSwipeList("playlist:p1", listOf(9L, 5L))
+
+        runBlocking {
+            assertEquals(1L to 3L, repository.getArticleSwipeNeighbors(2L))
+        }
+    }
+
+    @Test
+    fun openingFromFeedListReplacesPlaylistOrder() {
+        stubFeedList(listOf(1L, 3L, 5L))
+        repository.setArticleSwipeList("playlist:p1", listOf(5L, 3L, 1L))
+
+        runBlocking {
+            repository.captureArticleSwipeList(3L)
+            assertEquals(1L to 5L, repository.getArticleSwipeNeighbors(3L))
         }
     }
 

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
 import type { Highlight } from '../db'
-import { anchorOf, applyHighlights, articlePicture, locate, quoteText, textOf } from '../highlights'
+import { anchorOf, applyHighlights, articlePicture, locate, locateRange, quoteText, textOf } from '../highlights'
 
 const hl = (over: Partial<Highlight>): Highlight => ({
   id: 'h1',
@@ -17,6 +17,21 @@ const hl = (over: Partial<Highlight>): Highlight => ({
   note: '',
   createdAt: 1,
   ...over,
+})
+
+describe('locateRange', () => {
+  it('finds highlights made on Android: curly quotes and paragraphs joined differently', () => {
+    const full = "Intro.\n\nOne of Apple's biggest shows.Next para — here"
+    expect(locateRange(full, { text: 'One of Apple’s biggest', start: 300, prefix: 'xx\n' })).toEqual([8, 30])
+    expect(locateRange(full, { text: 'shows.\nNext para - here', start: 0, prefix: '' })).toEqual([31, 53])
+    expect(locateRange(full, { text: 'missing', start: 0, prefix: '' })).toBeNull()
+  })
+
+  it('marks an Android highlight in the article html', () => {
+    const html = "<p>One of Apple's biggest shows</p><p>is sticking around.</p>"
+    const out = applyHighlights(html, [{ id: 'a', itemId: 'i', itemTitle: '', itemLink: null, feedTitle: '', imageUrl: null, text: 'Apple’s biggest shows\nis sticking', start: 99, prefix: '', color: 'green', note: '', createdAt: 1 }])
+    expect(out).toBe('<p>One of <mark class="hl hl-green" data-hl="a">Apple\'s biggest shows</mark></p><p><mark class="hl hl-green" data-hl="a">is sticking</mark> around.</p>')
+  })
 })
 
 describe('locate', () => {

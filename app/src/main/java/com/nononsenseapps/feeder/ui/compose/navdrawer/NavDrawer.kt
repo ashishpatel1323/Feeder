@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.UnfoldLess
 import androidx.compose.material.icons.filled.UnfoldMore
+import androidx.compose.material.icons.outlined.BorderColor
 import androidx.compose.material.minimumInteractiveComponentSize
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -97,6 +98,7 @@ fun ScreenWithNavDrawer(
     homeCount: Int = 0,
     onHomeClick: (() -> Unit)? = null,
     onPlaylistsClick: (() -> Unit)? = null,
+    onHighlightsClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -163,6 +165,15 @@ fun ScreenWithNavDrawer(
                                 onClick()
                             }
                         },
+                    onHighlightsClick =
+                        onHighlightsClick?.let { onClick ->
+                            {
+                                coroutineScope.launch {
+                                    drawerState.close()
+                                }
+                                onClick()
+                            }
+                        },
                 )
             }
         },
@@ -186,6 +197,7 @@ fun ListOfFeedsAndTags(
     homeCount: Int = 0,
     onHomeClick: (() -> Unit)? = null,
     onPlaylistsClick: (() -> Unit)? = null,
+    onHighlightsClick: (() -> Unit)? = null,
 ) {
     LazyColumn(
         state = state,
@@ -289,6 +301,20 @@ fun ListOfFeedsAndTags(
                                 image = {
                                     Icon(
                                         Icons.AutoMirrored.Filled.QueueMusic,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(24.dp),
+                                    )
+                                },
+                            )
+                        }
+                        if (onHighlightsClick != null) {
+                            Feed(
+                                title = stringResource(id = R.string.highlights),
+                                unreadCount = 0,
+                                onItemClick = onHighlightsClick,
+                                image = {
+                                    Icon(
+                                        Icons.Outlined.BorderColor,
                                         contentDescription = null,
                                         modifier = Modifier.size(24.dp),
                                     )

@@ -71,7 +71,7 @@ export interface RemoteFeed {
   url: string
 }
 
-/** A highlighted passage of an article, with an optional note. Kept in this browser only. */
+/** A highlighted passage of an article, with an optional note. Synced as "highlight" records (sync2.ts). */
 export interface Highlight {
   id: string
   itemId: string
@@ -88,6 +88,8 @@ export interface Highlight {
   color: HighlightColor
   note: string
   createdAt: number
+  /** Last color or note change, which sync goes by (newest wins). Unset = createdAt. */
+  modifiedAt?: number
 }
 
 export type HighlightColor = 'yellow' | 'green' | 'blue' | 'pink'

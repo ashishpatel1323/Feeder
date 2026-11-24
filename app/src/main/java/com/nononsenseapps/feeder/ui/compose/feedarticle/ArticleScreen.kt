@@ -84,6 +84,8 @@ import com.nononsenseapps.feeder.model.playlists.itemSeconds
 import com.nononsenseapps.feeder.ui.MainActivityViewModel
 import com.nononsenseapps.feeder.ui.ScrollDirection
 import com.nononsenseapps.feeder.ui.compose.components.TranslationProgressContent
+import com.nononsenseapps.feeder.ui.compose.highlights.ArticleHighlightsHost
+import com.nononsenseapps.feeder.ui.compose.highlights.ArticleHighlightsState
 import com.nononsenseapps.feeder.ui.compose.html.ColumnArticleContent
 import com.nononsenseapps.feeder.ui.compose.item.ItemHeader
 import com.nononsenseapps.feeder.ui.compose.item.PodcastMediaBlock
@@ -191,118 +193,127 @@ fun ArticleScreen(
     val toolbarColor = MaterialTheme.colorScheme.surface.toArgb()
     val context = LocalContext.current
 
-    ArticleScreen(
-        viewState = viewState,
-        onToggleFullText = viewModel::toggleFullText,
-        onMarkAsUnread = viewModel::markAsUnread,
-        onShare = {
-            if (viewState.articleId > ID_UNSET) {
-                val intent =
-                    Intent.createChooser(
-                        Intent(Intent.ACTION_SEND).apply {
-                            val articleLink = viewState.articleLink
-                            if (articleLink != null) {
-                                putExtra(
-                                    Intent.EXTRA_TEXT,
-                                    stripTrackingParameters(articleLink),
-                                )
-                            }
-                            putExtra(Intent.EXTRA_TITLE, viewState.articleTitle)
-                            type = "text/plain"
-                        },
-                        null,
+    ArticleHighlightsHost(
+        articleId = viewState.articleId,
+        title = viewState.articleTitle,
+        link = viewState.articleLink,
+        feedTitle = viewState.feedDisplayTitle,
+        imageUrl = viewState.image?.url,
+    ) { highlights ->
+        ArticleScreen(
+            highlights = highlights,
+            viewState = viewState,
+            onToggleFullText = viewModel::toggleFullText,
+            onMarkAsUnread = viewModel::markAsUnread,
+            onShare = {
+                if (viewState.articleId > ID_UNSET) {
+                    val intent =
+                        Intent.createChooser(
+                            Intent(Intent.ACTION_SEND).apply {
+                                val articleLink = viewState.articleLink
+                                if (articleLink != null) {
+                                    putExtra(
+                                        Intent.EXTRA_TEXT,
+                                        stripTrackingParameters(articleLink),
+                                    )
+                                }
+                                putExtra(Intent.EXTRA_TITLE, viewState.articleTitle)
+                                type = "text/plain"
+                            },
+                            null,
+                        )
+                    activityLauncher.startActivity(
+                        openAdjacentIfSuitable = false,
+                        intent = intent,
                     )
+                }
+            },
+            onOpenInCustomTab = {
+                viewState.articleLink?.let { link ->
+                    activityLauncher.openLinkInCustomTab(link, toolbarColor)
+                }
+            },
+            onFeedTitleClick = {
+                onNavigateToFeed(viewState.articleFeedId)
+            },
+            onOpenAudioPlayer = viewModel::openPodcastPlayer,
+            ttsOnPlay = viewModel::ttsPlay,
+            ttsOnPause = viewModel::ttsPause,
+            ttsOnStop = viewModel::ttsStop,
+            ttsOnSkipNext = viewModel::ttsSkipNext,
+            ttsOnSelectLanguage = viewModel::ttsOnSelectLanguage,
+            readAloudProgress = readAloudProgress,
+            speechHighlight = speechHighlight,
+            ttsOnSeekTo = viewModel::ttsSeekTo,
+            ttsOnSetSpeed = viewModel::ttsSetSpeed,
+            ttsDiagnostics = viewModel::ttsDiagnostics,
+            isReadingAloud = isReadingAloudHere,
+            ttsOnReadFrom = viewModel::ttsReadFrom,
+            ttsOnUserScroll = viewModel::ttsStopFollowing,
+            ttsOnGoToSpokenText = {
+                viewModel.ttsFocusSpokenText()?.let { articleId ->
+                    if (articleId != viewState.articleId) onNavigateToArticle(articleId)
+                }
+            },
+            podcastOnPlay = viewModel::podcastPlay,
+            podcastOnPause = viewModel::podcastPause,
+            podcastOnStop = viewModel::stopPodcastPlayback,
+            podcastOnSeekBack = { viewModel.podcastSeekBy(-10_000) },
+            podcastOnSeekForward = { viewModel.podcastSeekBy(10_000) },
+            podcastOnSeekTo = viewModel::podcastSeekTo,
+            onToggleBookmark = {
+                viewModel.setBookmarked(!viewState.isBookmarked)
+            },
+            onDelete = {
+                viewModel.deleteForGood()
+                Toast.makeText(context, R.string.article_deleted_everywhere, Toast.LENGTH_SHORT).show()
+                onNavigateUp()
+            },
+            articleScrollState = articleScrollState,
+            onNavigateUp = onNavigateUp,
+            onSummarize = {
+                viewModel.summarize()
+            },
+            onTranslate = {
+                viewModel.translate()
+            },
+            onOpenSystemTranslationSettings = {
                 activityLauncher.startActivity(
                     openAdjacentIfSuitable = false,
-                    intent = intent,
+                    intent = Intent(Settings.ACTION_SETTINGS),
                 )
-            }
-        },
-        onOpenInCustomTab = {
-            viewState.articleLink?.let { link ->
-                activityLauncher.openLinkInCustomTab(link, toolbarColor)
-            }
-        },
-        onFeedTitleClick = {
-            onNavigateToFeed(viewState.articleFeedId)
-        },
-        onOpenAudioPlayer = viewModel::openPodcastPlayer,
-        ttsOnPlay = viewModel::ttsPlay,
-        ttsOnPause = viewModel::ttsPause,
-        ttsOnStop = viewModel::ttsStop,
-        ttsOnSkipNext = viewModel::ttsSkipNext,
-        ttsOnSelectLanguage = viewModel::ttsOnSelectLanguage,
-        readAloudProgress = readAloudProgress,
-        speechHighlight = speechHighlight,
-        ttsOnSeekTo = viewModel::ttsSeekTo,
-        ttsOnSetSpeed = viewModel::ttsSetSpeed,
-        ttsDiagnostics = viewModel::ttsDiagnostics,
-        isReadingAloud = isReadingAloudHere,
-        ttsOnReadFrom = viewModel::ttsReadFrom,
-        ttsOnUserScroll = viewModel::ttsStopFollowing,
-        ttsOnGoToSpokenText = {
-            viewModel.ttsFocusSpokenText()?.let { articleId ->
-                if (articleId != viewState.articleId) onNavigateToArticle(articleId)
-            }
-        },
-        podcastOnPlay = viewModel::podcastPlay,
-        podcastOnPause = viewModel::podcastPause,
-        podcastOnStop = viewModel::stopPodcastPlayback,
-        podcastOnSeekBack = { viewModel.podcastSeekBy(-10_000) },
-        podcastOnSeekForward = { viewModel.podcastSeekBy(10_000) },
-        podcastOnSeekTo = viewModel::podcastSeekTo,
-        onToggleBookmark = {
-            viewModel.setBookmarked(!viewState.isBookmarked)
-        },
-        onDelete = {
-            viewModel.deleteForGood()
-            Toast.makeText(context, R.string.article_deleted_everywhere, Toast.LENGTH_SHORT).show()
-            onNavigateUp()
-        },
-        articleScrollState = articleScrollState,
-        onNavigateUp = onNavigateUp,
-        onSummarize = {
-            viewModel.summarize()
-        },
-        onTranslate = {
-            viewModel.translate()
-        },
-        onOpenSystemTranslationSettings = {
-            activityLauncher.startActivity(
-                openAdjacentIfSuitable = false,
-                intent = Intent(Settings.ACTION_SETTINGS),
-            )
-            viewModel.dismissSystemTranslationSettingsPrompt()
-        },
-        onDismissSystemTranslationSettings = viewModel::dismissSystemTranslationSettingsPrompt,
-        onDownloadBergamotRuntime = viewModel::downloadBergamotRuntimeAndTranslate,
-        onDismissBergamotRuntimeDownload = viewModel::dismissBergamotRuntimeDownloadPrompt,
-        modifier = modifier,
-        isPagingMode = isPagingMode,
-        isAnimatedPaging = isAnimatedPaging,
-        showOriginalPage = showOriginalPage,
-        onToggleOriginalPage = viewModel::toggleOriginalPage,
-        onOriginalPageText = viewModel::setOriginalPageText,
-        onOpenLink = { link -> activityLauncher.openLinkInCustomTab(link, toolbarColor) },
-        swipeNeighbors = swipeNeighbors,
-        onSwipeToArticle = onSwipeToArticle,
-        readAloudNeighbors = readAloudNeighbors,
-        ttsOnSkipArticle = viewModel::ttsSkipArticle,
-        readAloudAutoContinue = readAloudAutoContinue,
-        ttsOnSetAutoContinue = viewModel::ttsSetAutoContinue,
-        onSpeedRead = viewModel::startSpeedReading,
-        wordMode = wordMode,
-        onSetShowWord = viewModel::setShowWord,
-        onSetMuted = viewModel::setVoiceMuted,
-        onSetWpm = viewModel::speedReadSetWpm,
-        onSkipWords = viewModel::speedReadSkipWords,
-        onJumpToWord = viewModel::speedReadJumpToWord,
-        fastReading = fastReading,
-        onToggleFastReading = { viewModel.setFastReading(!fastReading) },
-        onToggleRead = viewModel::toggleRead,
-        showingFullText = showingFullText,
-        onRetryFullText = viewModel::retryFullText,
-    )
+                viewModel.dismissSystemTranslationSettingsPrompt()
+            },
+            onDismissSystemTranslationSettings = viewModel::dismissSystemTranslationSettingsPrompt,
+            onDownloadBergamotRuntime = viewModel::downloadBergamotRuntimeAndTranslate,
+            onDismissBergamotRuntimeDownload = viewModel::dismissBergamotRuntimeDownloadPrompt,
+            modifier = modifier,
+            isPagingMode = isPagingMode,
+            isAnimatedPaging = isAnimatedPaging,
+            showOriginalPage = showOriginalPage,
+            onToggleOriginalPage = viewModel::toggleOriginalPage,
+            onOriginalPageText = viewModel::setOriginalPageText,
+            onOpenLink = { link -> activityLauncher.openLinkInCustomTab(link, toolbarColor) },
+            swipeNeighbors = swipeNeighbors,
+            onSwipeToArticle = onSwipeToArticle,
+            readAloudNeighbors = readAloudNeighbors,
+            ttsOnSkipArticle = viewModel::ttsSkipArticle,
+            readAloudAutoContinue = readAloudAutoContinue,
+            ttsOnSetAutoContinue = viewModel::ttsSetAutoContinue,
+            onSpeedRead = viewModel::startSpeedReading,
+            wordMode = wordMode,
+            onSetShowWord = viewModel::setShowWord,
+            onSetMuted = viewModel::setVoiceMuted,
+            onSetWpm = viewModel::speedReadSetWpm,
+            onSkipWords = viewModel::speedReadSkipWords,
+            onJumpToWord = viewModel::speedReadJumpToWord,
+            fastReading = fastReading,
+            onToggleFastReading = { viewModel.setFastReading(!fastReading) },
+            onToggleRead = viewModel::toggleRead,
+            showingFullText = showingFullText,
+            onRetryFullText = viewModel::retryFullText,
+        )
+    }
 }
 
 @OptIn(
@@ -372,6 +383,7 @@ fun ArticleScreen(
     onToggleRead: () -> Unit = onMarkAsUnread,
     showingFullText: Boolean = false,
     onRetryFullText: () -> Unit = {},
+    highlights: ArticleHighlightsState? = null,
 ) {
     val itemKindHere = itemKind(viewState.articleLink, viewState.enclosure.link.ifBlank { null }, viewState.enclosure.type)
 
@@ -413,6 +425,8 @@ fun ArticleScreen(
             fastReading = fastReading,
             onToggleFastReading = if (isArticle) onToggleFastReading else null,
             onSpeedRead = if (isArticle) onSpeedRead else null,
+            highlightCount = highlights?.count ?: 0,
+            onHighlights = highlights?.onShowList,
             onDelete = onDelete,
         )
     // Listen is a full label at the top and while scrolling back up, an icon while reading down
