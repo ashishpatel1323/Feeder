@@ -33,6 +33,8 @@ interface Props {
   onPrev: () => void
   onNext: () => void
   onBack: () => void
+  /** Opened from a playlist: Back returns there, and shows on wide screens too. */
+  fromPlaylist?: boolean
   autoplay: boolean
   onAutoplayConsumed: () => void
   toast: Toast
@@ -409,9 +411,13 @@ export function Reader(p: Props) {
   return (
     <section className="reader-pane" aria-label="Article">
       <header className="pane-bar reader-bar">
-        <span className="only-narrow">
-          <IconButton icon="back" label="Back to list" onClick={p.onBack} />
-        </span>
+        {p.fromPlaylist ? (
+          <IconButton icon="back" label="Back to playlist (Esc)" onClick={p.onBack} />
+        ) : (
+          <span className="only-narrow">
+            <IconButton icon="back" label="Back to list" onClick={p.onBack} />
+          </span>
+        )}
         <IconButton icon="prev" label="Previous article (K)" text="Prev" kbd="K" onClick={p.onPrev} disabled={!p.hasPrev} />
         <IconButton icon="next" label="Next article (J)" text="Next" kbd="J" onClick={p.onNext} disabled={!p.hasNext} />
         <span className="spacer" />

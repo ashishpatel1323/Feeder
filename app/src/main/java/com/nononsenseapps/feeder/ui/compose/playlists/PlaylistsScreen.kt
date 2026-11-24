@@ -162,7 +162,10 @@ fun PlaylistsScreen(
         // Flip view takes the whole screen, as it does for a feed, until the user leaves it
         PlaylistFlip(
             items = flipItems,
-            onOpenArticle = onOpenArticle,
+            onOpenArticle = { id ->
+                viewModel.openingArticle(flipId.orEmpty(), viewModel.flipOrder())
+                onOpenArticle(id)
+            },
             onExit = { viewModel.flip(null) },
             snackbar = snackbar,
             modifier = modifier,
@@ -358,6 +361,11 @@ private fun PlaylistDetail(
     val feedTitles = remember(state.feeds) { state.feeds.toMap() }
     val playingId = if (queue.playlistId == pl.id) queue.currentId else null
     val addToPlaylist = rememberAddToPlaylist()
+    // Swiping in the reader goes through the playlist as shown here
+    val openArticle: (Long) -> Unit = { id ->
+        viewModel.openingArticle(pl.id, items.map { it.id })
+        onOpenArticle(id)
+    }
 
     LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
@@ -467,13 +475,13 @@ private fun PlaylistDetail(
                 actions =
                     ItemRowActions(
                         // Episodes and videos play here, in this playlist's order; articles open
-                        onPrimary = { if (kind == ItemKind.PODCAST) viewModel.play(pl, start = index) else onOpenArticle(it.id) },
+                        onPrimary = { if (kind == ItemKind.PODCAST) viewModel.play(pl, start = index) else openArticle(it.id) },
                         onToggleSave = { commands.setSaved(it.id, !it.bookmarked) },
                         onPlaylist = { addToPlaylist(it.id, it.title) },
                         onToggleRead = { commands.setRead(it.id, !it.read) },
                         onDelete = { commands.delete(it.id, snackbar) },
                     ),
-                onOpen = { onOpenArticle(it.id) },
+                onOpen = { openArticle(it.id) },
                 highlighted = it.id == playingId,
                 primaryLabel = if (it.id == playingId) stringResource(R.string.item_now_playing) else null,
                 extras = {
