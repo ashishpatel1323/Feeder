@@ -36,6 +36,7 @@ import { saveVideo, useVideoSavingAvailable } from '../lib/offline'
 import { articleVideoId } from '../lib/youtube'
 import { Icon, IconButton } from './Icon'
 import { deleteItemWithUndo, ItemRow, usePlaylistContext } from './ItemRow'
+import { MoreMenu } from './MoreMenu'
 
 export { usePlaylistContext }
 
@@ -49,6 +50,8 @@ interface Props {
   readRate: number
   onRoute: (id: string | null) => void
   onOpenArticle: (id: string, order: string[]) => void
+  /** Opens Flip mode on these items, in this order. */
+  onFlip: (order: string[]) => void
   onMenu: () => void
   onBack: () => void
   toast: Toast
@@ -110,6 +113,11 @@ export function PlaylistsPage(p: Props) {
             onPlay={(start, shuffle) => play(current, start, shuffle)}
             onEdit={() => setEditing(current)}
             onDelete={() => void remove(current)}
+            onFlip={() => {
+              const ids = playlistItems(current, p.items, ctx, byId).map((i) => i.id)
+              if (!ids.length) return p.toast(`${current.name} has nothing to flip through right now`)
+              p.onFlip(ids)
+            }}
             onOpenArticle={p.onOpenArticle}
             toast={p.toast}
           />
@@ -228,6 +236,7 @@ function PlaylistDetail(p: {
   onPlay: (start: number, shuffle?: boolean) => void
   onEdit: () => void
   onDelete: () => void
+  onFlip: () => void
   onOpenArticle: (id: string, order: string[]) => void
   toast: Toast
 }) {
@@ -274,51 +283,41 @@ function PlaylistDetail(p: {
             <Icon name="play" size={20} />
             <span>Play all</span>
           </button>
-          <button className="mf-btn" onClick={() => p.onPlay(0, true)} disabled={its.length < 2}>
-            <Icon name="shuffle" size={18} />
-            <span>Shuffle</span>
-          </button>
-          {canSave && toDownload.length ? (
-            <button className="mf-btn" onClick={() => void downloadAll()} title="Save the YouTube videos in this playlist so they can play as audio">
-              <Icon name="download" size={18} />
-              <span>Download videos ({toDownload.length})</span>
-            </button>
-          ) : null}
-          <button className="mf-btn" onClick={p.onEdit}>
-            <Icon name="edit" size={18} />
-            <span>{pl.smart ? 'Edit rules' : 'Rename'}</span>
-          </button>
-          <button className="mf-btn danger" onClick={p.onDelete}>
-            <Icon name="delete" size={18} />
-            <span>Delete</span>
-          </button>
+          <IconButton icon="shuffle" label="Shuffle" onClick={() => p.onPlay(0, true)} disabled={its.length < 2} />
+          <IconButton icon="flip" label="Flip mode" onClick={p.onFlip} disabled={!its.length} />
+          <MoreMenu
+            label="Playlist"
+            entries={[
+              { icon: 'edit', label: pl.smart ? 'Edit rules' : 'Rename', onClick: p.onEdit },
+              {
+                icon: 'download',
+                label: `Download videos (${toDownload.length})`,
+                onClick: () => void downloadAll(),
+                hidden: !(canSave && toDownload.length),
+              },
+              'separator',
+              { icon: 'delete', label: 'Delete playlist', onClick: p.onDelete, danger: true },
+            ]}
+          />
         </div>
       </div>
       {pl.smart ? (
         <div className="pl-rules">
-          {chips.length ? (
-            chips.map((c, i) => (
-              <button key={i} className="pl-rule" onClick={p.onEdit} title="Change the rules">
-                {c.label ? <b>{c.label}</b> : null} {c.value}
-              </button>
-            ))
-          ) : (
-            <span className="mf-note">No rules yet: every article, episode and video matches.</span>
-          )}
-          <button className="pl-rule add" onClick={p.onEdit}>
-            <Icon name="add" size={16} /> Rule
+          {/* Rules and order on one line, as the article list's filters are */}
+          <button className={`pl-rule${chips.length ? ' on' : ''}`} onClick={p.onEdit} title="Change the rules">
+            <Icon name="filter" size={16} />
+            <span className="pl-rule-text">{chips.length ? chips.map((c) => c.value).join(' · ') : 'Every item matches · add a rule'}</span>
           </button>
-          <span className="mf-sp" />
-          <span className="pl-sort">
-            Sort
-            <span className="pl-seg">
+          <label className="select-chip">
+            <span>Sort</span>
+            <select value={pl.sort} onChange={(e) => setSort(e.target.value as Playlist['sort'])}>
               {PLAYLIST_SORTS.map((s) => (
-                <button key={s} className={pl.sort === s ? 'on' : ''} onClick={() => setSort(s)} aria-pressed={pl.sort === s}>
+                <option key={s} value={s}>
                   {SORT_LABELS[s]}
-                </button>
+                </option>
               ))}
-            </span>
-          </span>
+            </select>
+          </label>
         </div>
       ) : (
         <p className="mf-note pl-hint">Drag rows (or use the arrows) to change the order. Items leave this playlist once they are played to the end.</p>

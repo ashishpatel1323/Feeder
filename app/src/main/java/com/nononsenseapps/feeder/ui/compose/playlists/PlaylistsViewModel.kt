@@ -1,6 +1,7 @@
 package com.nononsenseapps.feeder.ui.compose.playlists
 
 import androidx.lifecycle.viewModelScope
+import com.nononsenseapps.feeder.archmodel.FeedItemStore
 import com.nononsenseapps.feeder.base.DIAwareViewModel
 import com.nononsenseapps.feeder.db.room.FeedItemDao
 import com.nononsenseapps.feeder.db.room.PlaylistCandidate
@@ -18,12 +19,16 @@ import com.nononsenseapps.feeder.model.playlists.items
 import com.nononsenseapps.feeder.model.playlists.kind
 import com.nononsenseapps.feeder.model.playlists.newPlaylist
 import com.nononsenseapps.feeder.sharedlinks.SHARED_FEED_URL_STRING
+import com.nononsenseapps.feeder.ui.compose.feed.FeedListItem
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -51,6 +56,7 @@ class PlaylistsViewModel(
     private val tts: TTSStateHolder by instance()
     private val offlineFiles: OfflineFiles by instance()
     private val offlineVideos: OfflineVideos by instance()
+    private val feedItemStore: FeedItemStore by instance()
 
     val queue: StateFlow<QueueState> = player.state
     val messages: SharedFlow<QueueMessage> = player.messages
@@ -93,6 +99,31 @@ class PlaylistsViewModel(
             )
         }.flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PlaylistsViewState())
+
+    /** The playlist shown as flip pages, null when none is. */
+    val flipId = MutableStateFlow<String?>(null)
+
+    // The items of the flipped playlist when flip view opened. Kept as they were, as the feed list
+    // keeps what it showed: an item read while flipping stays, instead of the pages shifting under
+    // the reader in an Unread playlist.
+    private val flipIds = MutableStateFlow<List<Long>?>(null)
+
+    /** The flip pages: [flipId]'s items in playlist order, as the feed list shows them. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val flipItems: StateFlow<List<FeedListItem>?> =
+        flipIds
+            .flatMapLatest { ids -> if (ids == null) flowOf(null) else feedItemStore.getFeedListItemsByIds(ids) }
+            .flowOn(Dispatchers.IO)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    fun flip(id: String?) {
+        val s = viewState.value
+        flipIds.value =
+            id?.let { s.playlists.firstOrNull { it.id == id } }?.let { pl ->
+                pl.items(s.candidates, s.ctx, s.byId).map { it.id }.take(MAX_FLIP_ITEMS)
+            }
+        flipId.value = id
+    }
 
     fun open(id: String?) {
         openId.value = id
@@ -179,3 +210,6 @@ class PlaylistsViewModel(
         if (article) tts.setSpeed(speed) else player.setAudioSpeed(speed)
     }
 }
+
+// SQLite limits the ids in one query; nobody flips through more in one go
+private const val MAX_FLIP_ITEMS = 900

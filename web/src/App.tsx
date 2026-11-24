@@ -742,6 +742,7 @@ export default function App() {
             showPlaylists(null)
             open(id, order)
           }}
+          onFlip={(order) => setFlip({ queue: order, start: order[0] })}
           onMenu={() => setDrawer(true)}
           onBack={() => showPlaylists(null)}
           toast={toast}
@@ -880,6 +881,8 @@ export default function App() {
           onExit={exitFlip}
           onOpenInReader={(id) => {
             setFlip(null)
+            // Flip mode may have been opened from a playlist page, which would hide the reader
+            if (playlistPage != null) showPlaylists(null)
             open(id, flip.queue)
           }}
           toast={toast}

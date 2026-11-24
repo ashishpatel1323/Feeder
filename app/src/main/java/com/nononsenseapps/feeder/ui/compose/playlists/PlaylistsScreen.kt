@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,13 +37,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DirectionsCar
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -58,6 +54,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -68,9 +65,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -109,7 +103,6 @@ import com.nononsenseapps.feeder.model.playlists.PLAYLIST_COLORS
 import com.nononsenseapps.feeder.model.playlists.PLAYLIST_ICONS
 import com.nononsenseapps.feeder.model.playlists.PlayStatus
 import com.nononsenseapps.feeder.model.playlists.Playlist
-import com.nononsenseapps.feeder.model.playlists.PlaylistSort
 import com.nononsenseapps.feeder.model.playlists.QueueState
 import com.nononsenseapps.feeder.model.playlists.SmartRules
 import com.nononsenseapps.feeder.model.playlists.describe
@@ -122,6 +115,7 @@ import com.nononsenseapps.feeder.model.playlists.label
 import com.nononsenseapps.feeder.model.playlists.matches
 import com.nononsenseapps.feeder.model.playlists.totalSeconds
 import com.nononsenseapps.feeder.model.playlists.withinLabel
+import com.nononsenseapps.feeder.ui.compose.feed.PlainTooltipBox
 import com.nononsenseapps.feeder.ui.compose.item.ItemActionButton
 import com.nononsenseapps.feeder.ui.compose.item.ItemRow
 import com.nononsenseapps.feeder.ui.compose.item.ItemRowActions
@@ -147,6 +141,8 @@ fun PlaylistsScreen(
     var editing by remember { mutableStateOf<Playlist?>(null) }
     var confirmDelete by remember { mutableStateOf<Playlist?>(null) }
     var carMode by remember { mutableStateOf(false) }
+    val flipId by viewModel.flipId.collectAsStateWithLifecycle()
+    val flipItems by viewModel.flipItems.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -160,6 +156,18 @@ fun PlaylistsScreen(
     }
 
     BackHandler(enabled = open != null) { viewModel.open(null) }
+
+    if (flipId != null) {
+        // Flip view takes the whole screen, as it does for a feed, until the user leaves it
+        PlaylistFlip(
+            items = flipItems,
+            onOpenArticle = onOpenArticle,
+            onExit = { viewModel.flip(null) },
+            snackbar = snackbar,
+            modifier = modifier,
+        )
+        return
+    }
 
     Scaffold(
         modifier = modifier.windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal)),
@@ -175,11 +183,25 @@ fun PlaylistsScreen(
                 },
                 actions = {
                     if (open == null) {
-                        LabeledAction(Icons.Default.Bolt, stringResource(R.string.playlist_new_smart).substringBefore(' ') + " smart") { editing = viewModel.newPlaylistDraft(true) }
-                        LabeledAction(Icons.Default.Add, stringResource(R.string.playlist_new)) { editing = viewModel.newPlaylistDraft(false) }
+                        NewPlaylistAction(
+                            onNewSmart = { editing = viewModel.newPlaylistDraft(true) },
+                            onNew = { editing = viewModel.newPlaylistDraft(false) },
+                        )
                     } else {
-                        LabeledAction(Icons.Default.Edit, stringResource(if (open.smart) R.string.playlist_edit_rules else R.string.playlist_rename)) { editing = open }
-                        LabeledAction(Icons.Default.Delete, stringResource(R.string.playlist_delete)) { confirmDelete = open }
+                        val items = remember(open, state) { open.items(state.candidates, state.ctx, state.byId) }
+                        val toDownload = items.filter { it.kind != ItemKind.ARTICLE && !it.isDownloaded(state.ctx) }
+                        PlaylistTopBarActions(
+                            smart = open.smart,
+                            canFlip = items.isNotEmpty(),
+                            onFlip = { viewModel.flip(open.id) },
+                            onEdit = { editing = open },
+                            downloadCount = toDownload.size,
+                            onDownload = {
+                                val n = viewModel.downloadAll(toDownload)
+                                scope.launch { snackbar.showSnackbar("Downloading $n items") }
+                            },
+                            onDelete = { confirmDelete = open },
+                        )
                     }
                 },
             )
@@ -194,9 +216,7 @@ fun PlaylistsScreen(
             if (open == null) {
                 PlaylistIndex(state, queue, onOpen = viewModel::open, onPlay = { viewModel.play(it) })
             } else {
-                PlaylistDetail(open, state, queue, viewModel, onEdit = { editing = open }, onOpenArticle = onOpenArticle, onMessage = { text ->
-                    scope.launch { snackbar.showSnackbar(text) }
-                }, snackbar = snackbar)
+                PlaylistDetail(open, state, queue, viewModel, onEdit = { editing = open }, onOpenArticle = onOpenArticle, snackbar = snackbar)
             }
         }
     }
@@ -233,25 +253,6 @@ fun PlaylistsScreen(
     }
     if (carMode && queue.active) {
         CarMode(queue, state, viewModel, onClose = { carMode = false })
-    }
-}
-
-@Composable
-private fun LabeledAction(
-    icon: ImageVector,
-    label: String,
-    onClick: () -> Unit,
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier =
-            Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .clickable(onClick = onClick)
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-    ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
-        Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
     }
 }
 
@@ -348,13 +349,11 @@ private fun PlaylistDetail(
     viewModel: PlaylistsViewModel,
     onEdit: () -> Unit,
     onOpenArticle: (Long) -> Unit,
-    onMessage: (String) -> Unit,
     snackbar: SnackbarHostState? = null,
 ) {
     val items = remember(pl, state) { pl.items(state.candidates, state.ctx, state.byId) }
     val commands = rememberItemCommands()
     val (total, unknown) = remember(items, state.ctx) { items.totalSeconds(state.ctx) }
-    val toDownload = items.filter { it.kind != ItemKind.ARTICLE && !it.isDownloaded(state.ctx) }
     val feedTitles = remember(state.feeds) { state.feeds.toMap() }
     val playingId = if (queue.playlistId == pl.id) queue.currentId else null
     val addToPlaylist = rememberAddToPlaylist()
@@ -385,9 +384,9 @@ private fun PlaylistDetail(
                     )
                 }
             }
-            FlowRow(
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier.padding(horizontal = 16.dp),
             ) {
                 Button(onClick = { viewModel.play(pl) }, enabled = items.isNotEmpty()) {
@@ -395,42 +394,26 @@ private fun PlaylistDetail(
                     Spacer(Modifier.width(4.dp))
                     Text(stringResource(R.string.playlist_play_all), fontWeight = FontWeight.Bold)
                 }
-                OutlinedButton(onClick = { viewModel.play(pl, shuffle = true) }, enabled = items.size > 1) {
-                    Icon(Icons.Default.Shuffle, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(stringResource(R.string.playlist_shuffle))
-                }
-                if (toDownload.isNotEmpty()) {
-                    OutlinedButton(onClick = {
-                        val n = viewModel.downloadAll(toDownload)
-                        onMessage("Downloading $n items")
-                    }) {
-                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text(stringResource(R.string.playlist_download, toDownload.size))
+                val shuffleLabel = stringResource(R.string.playlist_shuffle)
+                PlainTooltipBox(tooltip = { Text(shuffleLabel) }) {
+                    FilledTonalIconButton(onClick = { viewModel.play(pl, shuffle = true) }, enabled = items.size > 1) {
+                        Icon(Icons.Default.Shuffle, contentDescription = shuffleLabel)
                     }
                 }
             }
             if (pl.smart) {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                // Rules and order on one line of chips, as the feed list's filters are
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
                 ) {
-                    pl.rules.describe { feedTitles[it] ?: "?" }.forEach { text ->
-                        FilterChip(selected = false, onClick = onEdit, label = { Text(text, style = MaterialTheme.typography.bodyMedium) })
-                    }
-                    FilterChip(selected = false, onClick = onEdit, label = { Text("+ " + stringResource(R.string.playlist_add_rule), color = MaterialTheme.colorScheme.primary) })
-                }
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth()) {
-                    PlaylistSort.entries.forEachIndexed { i, s ->
-                        SegmentedButton(
-                            selected = pl.sort == s,
-                            onClick = { viewModel.save(pl.copy(sort = s)) },
-                            shape = SegmentedButtonDefaults.itemShape(i, PlaylistSort.entries.size),
-                            icon = {},
-                        ) { Text(s.label, style = MaterialTheme.typography.bodySmall, maxLines = 1) }
-                    }
+                    RulesChip(rules = pl.rules.describe { feedTitles[it] ?: "?" }, onClick = onEdit)
+                    SortMenuChip(current = pl.sort, onSelect = { viewModel.save(pl.copy(sort = it)) })
                 }
             } else {
                 Text(

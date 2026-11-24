@@ -89,6 +89,13 @@ class FeedItemStore(
             else -> dao.widgetPreviewsAllFeeds()
         }.map { list -> list.map { it.toFeedListItem(application) } }
 
+    /** The list items of [ids] in that order, kept up to date; ids that are gone are left out. */
+    fun getFeedListItemsByIds(ids: List<Long>): Flow<List<FeedListItem>> =
+        dao.previewsByIds(ids).map { list ->
+            val byId = list.associateBy { it.id }
+            ids.mapNotNull { id -> byId[id]?.toFeedListItem(application) }
+        }
+
     fun getPagedFeedItemsRaw(
         feedId: Long,
         tag: String,
