@@ -190,6 +190,16 @@ interface FeedItemDao {
     )
     suspend fun loadItemsForStats(feedId: Long): List<FeedItemForStats>
 
+    /** For Manage feeds: the stats columns of every stored, not blocked article, with its feed. */
+    @Query(
+        """
+        SELECT feed_id, primary_sort_time, first_synced_time, read_time, bookmarked, word_count, word_count_full
+        FROM feed_items
+        WHERE block_time IS NULL
+        """,
+    )
+    fun loadAllItemsForStats(): Flow<List<FeedItemForStatsWithFeed>>
+
     @Query(
         """
         SELECT *

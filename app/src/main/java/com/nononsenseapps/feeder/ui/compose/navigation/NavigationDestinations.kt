@@ -39,6 +39,7 @@ import com.nononsenseapps.feeder.ui.compose.editfeed.EditFeedScreenViewModel
 import com.nononsenseapps.feeder.ui.compose.feed.FeedScreen
 import com.nononsenseapps.feeder.ui.compose.feedarticle.ArticleScreen
 import com.nononsenseapps.feeder.ui.compose.home.HomeScreen
+import com.nononsenseapps.feeder.ui.compose.managefeeds.ManageFeedsScreen
 import com.nononsenseapps.feeder.ui.compose.playlists.PlaylistsScreen
 import com.nononsenseapps.feeder.ui.compose.searchfeed.SearchFeedScreen
 import com.nononsenseapps.feeder.ui.compose.settings.SettingsScreen
@@ -289,6 +290,35 @@ data object HighlightsDestination : NavigationDestination(
     }
 }
 
+/** Manage feeds: every feed by folder, with sorting, quick settings, stats, moving and deleting. */
+data object ManageFeedsDestination : NavigationDestination(
+    path = "manage/feeds",
+    navArguments = emptyList(),
+    deepLinks = emptyList(),
+) {
+    fun navigate(navController: NavController) {
+        navController.navigate(path) {
+            launchSingleTop = true
+        }
+    }
+
+    @Composable
+    override fun RegisterScreen(
+        navController: NavController,
+        backStackEntry: NavBackStackEntry,
+        navDrawerListState: LazyListState,
+        mainActivityViewModel: MainActivityViewModel,
+    ) {
+        ManageFeedsScreen(
+            viewModel = backStackEntry.diAwareViewModel(),
+            onNavigateUp = { navController.popBackStack() },
+            onAddFeed = { SearchFeedDestination.navigate(navController) },
+            onShowArticles = { id -> FeedDestination.navigate(navController, feedId = id, keepBackStack = true) },
+            onEditFeed = { id -> EditFeedDestination.navigate(navController, feedId = id) },
+        )
+    }
+}
+
 /** Home: every feed as a tile, with type and folder filters. The start screen. */
 data object HomeDestination : NavigationDestination(
     path = "home",
@@ -319,6 +349,7 @@ data object HomeDestination : NavigationDestination(
             onAddFeed = { SearchFeedDestination.navigate(navController) },
             onOpenPlaylists = { PlaylistsDestination.navigate(navController) },
             onDiscover = { DiscoverDestination.navigate(navController) },
+            onManageFeeds = { ManageFeedsDestination.navigate(navController) },
         )
     }
 }

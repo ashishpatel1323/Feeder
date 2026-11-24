@@ -39,8 +39,12 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Headphones
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -54,6 +58,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -89,8 +96,10 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     onOpenPlaylists: () -> Unit = {},
     onDiscover: () -> Unit = {},
+    onManageFeeds: () -> Unit = {},
 ) {
     val state by viewModel.viewState.collectAsStateWithLifecycle()
+    var menuOpen by remember { mutableStateOf(false) }
     val folder = state.openFolder
 
     BackHandler(enabled = folder != null) { viewModel.openFolder(null) }
@@ -117,6 +126,22 @@ fun HomeScreen(
                     LabeledAction(Icons.Default.Explore, stringResource(R.string.discover), onDiscover)
                     LabeledAction(Icons.AutoMirrored.Filled.QueueMusic, stringResource(R.string.playlists), onOpenPlaylists)
                     LabeledAction(Icons.Default.Refresh, stringResource(R.string.home_refresh), viewModel::refreshAll)
+                    // Less used destinations live in the menu
+                    Box {
+                        IconButton(onClick = { menuOpen = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.open_menu))
+                        }
+                        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.manage_feeds)) },
+                                leadingIcon = { Icon(Icons.Default.Tune, contentDescription = null) },
+                                onClick = {
+                                    menuOpen = false
+                                    onManageFeeds()
+                                },
+                            )
+                        }
+                    }
                 },
             )
         },

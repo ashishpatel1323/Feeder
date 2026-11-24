@@ -45,9 +45,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.CloudQueue
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ImportExport
@@ -58,6 +58,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VerticalAlignBottom
 import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material.icons.outlined.AutoStories
@@ -167,6 +168,7 @@ import com.nononsenseapps.feeder.ui.compose.navigation.EditFeedDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.FeedDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.HighlightsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.HomeDestination
+import com.nononsenseapps.feeder.ui.compose.navigation.ManageFeedsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.PlaylistsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.SearchFeedDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.SettingsDestination
@@ -445,6 +447,9 @@ fun FeedScreen(
                 },
                 onSettings = {
                     SettingsDestination.navigate(navController)
+                },
+                onManageFeeds = {
+                    ManageFeedsDestination.navigate(navController)
                 },
                 onImport = {
                     try {
@@ -789,6 +794,7 @@ fun FeedScreen(
     snackbarHostState: SnackbarHostState? = null,
     onDeleteItem: ((Long) -> Unit)? = null,
     selection: FeedSelection? = null,
+    onManageFeeds: () -> Unit = {},
 ) {
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -1051,6 +1057,21 @@ fun FeedScreen(
                                 },
                                 text = {
                                     Text(stringResource(id = R.string.delete_feed))
+                                },
+                            )
+                            DropdownMenuItem(
+                                onClick = {
+                                    onShowToolbarMenu(false)
+                                    onManageFeeds()
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Tune,
+                                        contentDescription = null,
+                                    )
+                                },
+                                text = {
+                                    Text(stringResource(id = R.string.manage_feeds))
                                 },
                             )
                             if (viewState.feedScreenTitle.type == FeedType.TAG && !viewState.currentFeedOrTag.isFeed) {
