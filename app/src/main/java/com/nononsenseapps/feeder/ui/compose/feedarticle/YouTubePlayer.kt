@@ -27,6 +27,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.selection.DisableSelection
 import androidx.compose.material.icons.Icons
@@ -36,6 +40,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -43,7 +48,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -69,7 +76,9 @@ import com.nononsenseapps.feeder.model.youtube.VideoPositions
 import com.nononsenseapps.feeder.model.youtube.YouTubePlayback
 import com.nononsenseapps.feeder.model.youtube.youtubeWatchUrl
 import com.nononsenseapps.feeder.ui.compose.theme.FeedListItemDateStyle
+import com.nononsenseapps.feeder.ui.compose.transcript.TranscriptPanel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import org.kodein.di.compose.LocalDI
 import org.kodein.di.instance
 import androidx.compose.ui.graphics.Color as ComposeColor
@@ -102,6 +111,9 @@ fun YouTubeVideoBlock(
     link: String? = null,
     isBookmarked: Boolean = false,
     onToggleBookmark: (() -> Unit)? = null,
+    // Hoisted where the ⋮ menu also toggles it; otherwise kept here
+    showTranscript: Boolean? = null,
+    onToggleTranscript: (() -> Unit)? = null,
 ) {
     val di = LocalDI.current
     val videoPositions: VideoPositions by di.instance()
@@ -118,6 +130,10 @@ fun YouTubeVideoBlock(
         openInYouTubeApp(context, youtubeWatchUrl(videoId, at))
     }
     val positionLabel = pos?.let { VideoPositions.positionLabel(it, stringResource(R.string.video_watched)) }
+    var transcriptHere by rememberSaveable(playerKey) { mutableStateOf(false) }
+    val transcriptShown = itemId > 0 && (showTranscript ?: transcriptHere)
+    val toggleTranscript: (() -> Unit)? =
+        if (itemId > 0) onToggleTranscript ?: { transcriptHere = !transcriptHere } else null
 
     DisableSelection {
         Column(
@@ -134,6 +150,7 @@ fun YouTubeVideoBlock(
                 LaunchedEffect(Unit) {
                     playback.errors.collect { if (it == playerKey) playFailed = true }
                 }
+                val iframe = remember { IframeControl() }
                 val details by produceState<DetailsState>(
                     // Back to a video that kept playing in the background: no wait
                     playback.state.value
@@ -166,6 +183,7 @@ fun YouTubeVideoBlock(
                                 }
                             },
                             modifier = playerModifier,
+                            control = iframe,
                         )
 
                     current is DetailsState.Ready ->
@@ -198,13 +216,100 @@ fun YouTubeVideoBlock(
                         onToggleBookmark = onToggleBookmark,
                         positionLabel = positionLabel,
                         onOpenInYouTube = openInYouTube,
+                        transcriptShown = transcriptShown,
+                        onToggleTranscript = toggleTranscript,
                     )
                 } else {
                     // Download stays here too: saving can work when direct playback doesn't
-                    OpenInYouTubeRow(positionLabel, openInYouTube, itemId.takeIf { it > 0 && link != null }, link)
+                    OpenInYouTubeRow(
+                        positionLabel,
+                        openInYouTube,
+                        itemId.takeIf { it > 0 && link != null },
+                        link,
+                        transcriptShown = transcriptShown,
+                        onToggleTranscript = toggleTranscript,
+                    )
+                }
+                if (transcriptShown) {
+                    val flow = (current as? DetailsState.Ready)?.details?.takeIf { !playFailed }
+                    VideoTranscript(
+                        itemId = itemId,
+                        positionMs =
+                            if (flow != null) {
+                                flowPositionMs(playback, playerKey)
+                            } else {
+                                iframe.positionMs
+                            },
+                        onSeek = { ms ->
+                            if (flow != null) {
+                                // Starts the video there if it is not playing here yet
+                                playback.open(playerKey, videoId, articleKey, itemId, title, flow, (ms / 1000).toInt())
+                                playback.seekTo(ms / 1000.0)
+                                playback.player.value?.play()
+                            } else {
+                                iframe.seekTo(ms)
+                            }
+                        },
+                    )
                 }
             }
         }
+    }
+}
+
+/** The video's transcript under it: the line being said lit, tap a line to jump there. */
+@Composable
+private fun VideoTranscript(
+    itemId: Long,
+    positionMs: Long,
+    onSeek: (Long) -> Unit,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        TranscriptPanel(
+            itemId = itemId,
+            positionMs = positionMs,
+            onSeek = onSeek,
+            video = true,
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).heightIn(max = 360.dp),
+        )
+    }
+}
+
+/** Where the Flow-style player is in [key]'s video, checked a few times a second; 0 when it plays another. */
+@Composable
+private fun flowPositionMs(
+    playback: YouTubePlayback,
+    key: String,
+): Long {
+    val state by playback.state.collectAsState()
+    val exo by playback.player.collectAsState()
+    val here = state?.key == key
+    val position by produceState(0L, here, exo) {
+        val player = exo
+        if (!here || player == null) {
+            value = 0L
+            return@produceState
+        }
+        while (true) {
+            value = player.currentPosition
+            delay(250)
+        }
+    }
+    return position
+}
+
+/** Lets the transcript follow YouTube's own player and move it. */
+internal class IframeControl {
+    var positionMs by mutableLongStateOf(0L)
+    var webView: WebView? = null
+
+    fun seekTo(ms: Long) {
+        positionMs = ms
+        webView?.evaluateJavascript("if(player&&player.seekTo){player.seekTo(${ms / 1000.0},true);player.playVideo()}", null)
     }
 }
 
@@ -214,11 +319,13 @@ private fun OpenInYouTubeRow(
     onOpenInYouTube: () -> Unit,
     downloadItemId: Long?,
     link: String?,
+    transcriptShown: Boolean,
+    onToggleTranscript: (() -> Unit)?,
 ) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
     ) {
         FilledTonalButton(onClick = onOpenInYouTube) {
             Icon(
@@ -230,6 +337,9 @@ private fun OpenInYouTubeRow(
                 text = stringResource(R.string.open_in_youtube_app),
                 modifier = Modifier.padding(start = ButtonDefaults.IconSpacing),
             )
+        }
+        if (onToggleTranscript != null) {
+            TranscriptButton(transcriptShown, onToggleTranscript)
         }
         if (downloadItemId != null && link != null) {
             DownloadVideoButton(downloadItemId, link)
@@ -293,15 +403,17 @@ private fun openInYouTubeApp(
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-fun YouTubePlayer(
+internal fun YouTubePlayer(
     videoId: String,
     start: Int,
     title: String,
     onPosition: (t: Double, d: Double, stopped: Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    control: IframeControl? = null,
 ) {
     val currentOnPosition by rememberUpdatedState(onPosition)
     val tracker = remember(videoId) { PositionTracker { t, d, stopped -> currentOnPosition(t, d, stopped) } }
+    tracker.onTime = control?.let { c -> { t -> c.positionMs = (t * 1000).toLong() } }
     val lifecycleOwner = LocalLifecycleOwner.current
     val holder = remember(videoId) { WebViewHolder() }
     val context = LocalContext.current
@@ -339,6 +451,7 @@ fun YouTubePlayer(
             factory = { ctx ->
                 WebView(ctx).apply {
                     holder.webView = this
+                    control?.webView = this
                     contentDescription = title
                     setBackgroundColor(Color.BLACK)
                     settings.javaScriptEnabled = true
@@ -374,6 +487,7 @@ fun YouTubePlayer(
                 chromeClient.onHideCustomView()
                 tracker.stop()
                 holder.webView = null
+                if (control?.webView === webView) control.webView = null
                 (webView.parent as? ViewGroup)?.removeView(webView)
                 webView.destroy()
             },
@@ -394,6 +508,9 @@ private class PositionTracker(
     private var last: Pair<Double, Double>? = null
     private var lastSaved = 0L
 
+    /** Every position the page reports (for the transcript), on the main thread. */
+    var onTime: ((Double) -> Unit)? = null
+
     @JavascriptInterface
     fun onProgress(
         state: Int,
@@ -408,6 +525,7 @@ private class PositionTracker(
         t: Double,
         d: Double,
     ) {
+        if (state == PLAYING || state == PAUSED) onTime?.invoke(t)
         when (state) {
             PLAYING -> {
                 last = t to d
@@ -511,7 +629,7 @@ internal fun playerHtml(
       player=new YT.Player('p',{width:'100%',height:'100%',videoId:'$videoId',
         playerVars:{rel:0,playsinline:1,start:${start.coerceAtLeast(0)},origin:location.origin},
         events:{onStateChange:function(){report()}}});
-      setInterval(function(){if(player&&player.getPlayerState&&player.getPlayerState()==1)report()},1000);
+      setInterval(function(){if(player&&player.getPlayerState&&player.getPlayerState()==1)report()},500);
     }
     </script>
     <script src="https://www.youtube.com/iframe_api"></script>

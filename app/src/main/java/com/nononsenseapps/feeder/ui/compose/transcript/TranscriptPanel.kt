@@ -92,6 +92,8 @@ fun TranscriptPanel(
     positionMs: Long,
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
+    /** A YouTube video's transcript (its captions), not a podcast episode's. */
+    video: Boolean = false,
 ) {
     val di = LocalDI.current
     val transcripts: Transcripts by di.instance()
@@ -120,6 +122,7 @@ fun TranscriptPanel(
             Box(modifier = Modifier.weight(1f)) {
                 TranscriptStatusRow(
                     state = state,
+                    video = video,
                     canGenerate = transcripts.canGenerate,
                     modelSizeMb = transcripts.modelSizeMb,
                     onGenerate = { transcripts.generate(itemId) },
@@ -243,6 +246,7 @@ private fun TranscriptSearchBar(
 @Composable
 private fun TranscriptStatusRow(
     state: TranscriptState,
+    video: Boolean,
     canGenerate: Boolean,
     modelSizeMb: Int,
     onGenerate: () -> Unit,
@@ -263,7 +267,7 @@ private fun TranscriptStatusRow(
             Column(modifier = padding, horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(Icons.Default.ClosedCaption, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(
-                    stringResource(R.string.transcript_none_in_feed),
+                    stringResource(if (video) R.string.transcript_none_video else R.string.transcript_none_in_feed),
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(vertical = 4.dp),
@@ -291,7 +295,11 @@ private fun TranscriptStatusRow(
             val label =
                 when (state.status) {
                     TranscriptStatus.DOWNLOADING_MODEL -> stringResource(R.string.transcript_downloading_model, (state.progress * 100).toInt())
-                    TranscriptStatus.DOWNLOADING_AUDIO -> stringResource(R.string.transcript_downloading_audio, (state.progress * 100).toInt())
+                    TranscriptStatus.DOWNLOADING_AUDIO ->
+                        stringResource(
+                            if (video) R.string.transcript_downloading_video_audio else R.string.transcript_downloading_audio,
+                            (state.progress * 100).toInt(),
+                        )
                     else ->
                         stringResource(
                             R.string.transcript_transcribing,
@@ -339,7 +347,11 @@ private fun TranscriptStatusRow(
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp)) {
                 Text(
                     stringResource(
-                        if (state.source == TranscriptSource.PHONE) R.string.transcript_source_phone else R.string.transcript_source_feed,
+                        when (state.source) {
+                            TranscriptSource.PHONE -> R.string.transcript_source_phone
+                            TranscriptSource.YOUTUBE -> R.string.transcript_source_youtube
+                            else -> R.string.transcript_source_feed
+                        },
                     ),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
