@@ -36,6 +36,7 @@ import com.nononsenseapps.feeder.ui.compose.navigation.DiscoverDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.DownloadsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.EditFeedDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.FeedDestination
+import com.nononsenseapps.feeder.ui.compose.navigation.GlobalSearchDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.HighlightsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.HomeDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.ManageFeedsDestination
@@ -208,6 +209,7 @@ class MainActivity : DIAwareComponentActivity() {
             // Feed editing
             EditFeedDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
             SearchFeedDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
+            GlobalSearchDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
             AddFeedDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
             // Settings
             SettingsDestination.register(this, navController, navDrawerListState, mainActivityViewModel)

@@ -1,0 +1,334 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Feeder command palette mockups</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,400,0..1,0" />
+<style>
+:root {
+  --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-read: Georgia, 'Iowan Old Style', serif;
+  --fs-2xs: 11px; --fs-xs: 12px; --fs-sm: 13px; --fs-md: 14px; --fs-base: 15px; --fs-lg: 18px; --fs-xl: 22px; --fs-2xl: 26px;
+  --r-xs: 4px; --r-sm: 8px; --r-md: 12px; --r-lg: 16px; --r-xl: 24px; --r-pill: 999px;
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
+  --control-h: 36px; --chip-h: 32px;
+  --bg: #fbfdf9; --surface: #ffffff; --surface-2: #eef4ee; --surface-3: #e1ebe2;
+  --text: #191c1a; --text-2: #4f5a52; --text-3: #5c6760; --border: #d6ddd7;
+  --accent: #1f6f4a; --accent-ink: #ffffff; --accent-soft: #cdeedb; --danger: #b3261e;
+  --hl-tap: #ffe066; --match: rgba(31,111,74,.18);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,.18);
+}
+:root[data-theme='dark'] {
+  --bg: #111412; --surface: #191c1a; --surface-2: #222724; --surface-3: #2c332e;
+  --text: #e1e3df; --text-2: #b9c3bb; --text-3: #8b958e; --border: #3a423c;
+  --accent: #8cd5ac; --accent-ink: #00391f; --accent-soft: #1f4a33; --danger: #f2b8b5;
+  --hl-tap: #8a7300; --match: rgba(140,213,172,.22);
+  --shadow-lg: 0 16px 48px rgba(0,0,0,.6);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { font-family: var(--font-ui); background: var(--bg); color: var(--text); font-size: var(--fs-base); overflow: hidden; }
+.ms { font-family: 'Material Symbols Rounded'; font-weight: normal; font-style: normal; font-size: 20px; line-height: 1; display: inline-block; font-variation-settings: 'FILL' 0, 'wght' 400, 'opsz' 20; -webkit-font-smoothing: antialiased; }
+.ms.fill { font-variation-settings: 'FILL' 1, 'wght' 400, 'opsz' 20; }
+b.m, mark { background: var(--match); color: var(--text); font-weight: 600; border-radius: 3px; padding: 0 2px; }
+mark.y { background: var(--hl-tap); }
+kbd { font-family: var(--font-ui); font-size: var(--fs-2xs); color: var(--text-2); background: var(--surface-3); border-radius: var(--r-xs); padding: 2px 6px; min-width: 20px; text-align: center; display: inline-block; }
+
+/* ---------- faux app backdrop ---------- */
+.app { display: grid; grid-template-columns: 248px 392px 1fr; height: 100vh; }
+.side { background: var(--surface); border-right: 1px solid var(--border); padding: var(--sp-3); display: flex; flex-direction: column; gap: 2px; }
+.brand { font-weight: 700; font-size: var(--fs-lg); padding: var(--sp-2) var(--sp-3) var(--sp-3); display: flex; align-items: center; gap: var(--sp-2); }
+.brand .ms { color: var(--accent); }
+.nav { display: flex; align-items: center; gap: var(--sp-3); padding: 0 var(--sp-3); height: 40px; border-radius: var(--r-pill); font-size: var(--fs-md); color: var(--text-2); }
+.nav.on { background: var(--accent-soft); color: var(--text); font-weight: 600; }
+.nav .n { margin-left: auto; font-size: var(--fs-xs); color: var(--text-3); }
+.sect { font-size: var(--fs-xs); color: var(--text-3); padding: var(--sp-4) var(--sp-3) var(--sp-1); font-weight: 600; }
+.list { background: var(--bg); border-right: 1px solid var(--border); overflow: hidden; }
+.list-top { height: 56px; display: flex; align-items: center; gap: var(--sp-2); padding: 0 var(--sp-4); font-weight: 700; font-size: var(--fs-lg); }
+.list-top .sp { flex: 1; }
+.list-top .ms { color: var(--text-2); }
+.chips { display: flex; gap: var(--sp-2); padding: 0 var(--sp-4) var(--sp-3); }
+.chip { height: var(--chip-h); padding: 0 var(--sp-3); border: 1px solid var(--border); border-radius: var(--r-pill); display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--text-2); white-space: nowrap; }
+.chip.on { background: var(--accent-soft); border-color: transparent; color: var(--text); font-weight: 600; }
+.chip .c { color: var(--text-3); font-weight: 500; }
+.chip.on .c { color: var(--text-2); }
+.row { display: grid; grid-template-columns: 1fr 72px; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--border); }
+.row.sel { background: var(--surface-2); }
+.row .t { font-weight: 600; font-size: var(--fs-md); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.row .meta { font-size: var(--fs-xs); color: var(--text-3); margin-top: 4px; }
+.thumb { width: 72px; height: 72px; border-radius: var(--r-md); }
+.reader { background: var(--bg); overflow: hidden; }
+.reader-top { height: 56px; display: flex; align-items: center; gap: var(--sp-3); padding: 0 var(--sp-4); color: var(--text-2); border-bottom: 1px solid var(--border); }
+.reader-top .sp { flex: 1; }
+.reader-body { max-width: 720px; margin: 0 auto; padding: var(--sp-6) var(--sp-5); }
+.reader-body h1 { font-family: var(--font-read); font-size: 34px; line-height: 1.2; margin: 0 0 var(--sp-3); }
+.reader-body .by { color: var(--text-3); font-size: var(--fs-sm); margin-bottom: var(--sp-5); }
+.reader-body p { font-family: var(--font-read); font-size: 19px; line-height: 1.65; color: var(--text-2); }
+.hero { height: 220px; border-radius: var(--r-lg); margin-bottom: var(--sp-5); }
+
+/* gradient "artwork" */
+.g1 { background: linear-gradient(135deg,#3b6d8f,#1d2f3f); } .g2 { background: linear-gradient(135deg,#7a4b2a,#2d1a10); }
+.g3 { background: linear-gradient(135deg,#a33b2b,#3d120c); } .g4 { background: linear-gradient(135deg,#4c7a3a,#1a2b14); }
+.g5 { background: linear-gradient(135deg,#5b3f8f,#1f1533); } .g6 { background: linear-gradient(135deg,#76b900,#2e4a00); }
+.g7 { background: linear-gradient(135deg,#c0392b,#5c0f08); } .g8 { background: linear-gradient(135deg,#2b6f8a,#0b2430); }
+
+.scrim { position: fixed; inset: 0; background: rgba(0,0,0,.45); }
+:root:not([data-theme='dark']) .scrim { background: rgba(25,28,26,.32); }
+
+/* ---------- Option A: Spotlight palette ---------- */
+.pal { position: fixed; left: 50%; top: 96px; transform: translateX(-50%); width: 680px; background: var(--surface); border-radius: var(--r-xl); box-shadow: var(--shadow-lg); overflow: hidden; border: 1px solid var(--border); }
+.pal-in { height: 60px; display: flex; align-items: center; gap: var(--sp-3); padding: 0 var(--sp-5); border-bottom: 1px solid var(--border); }
+.pal-in .ms { color: var(--text-2); font-size: 22px; }
+.pal-in .q { font-size: var(--fs-lg); flex: 1; display: flex; align-items: center; }
+.pal-in .q.ph { color: var(--text-3); }
+.caret { width: 2px; height: 22px; background: var(--accent); margin-left: 1px; }
+.scope { height: 28px; padding: 0 10px; border-radius: var(--r-pill); background: var(--accent-soft); font-size: var(--fs-sm); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+.pal-body { max-height: 560px; overflow: hidden; padding: var(--sp-2) 0; }
+.grp { font-size: var(--fs-xs); font-weight: 600; color: var(--text-3); padding: var(--sp-3) var(--sp-5) var(--sp-1); display: flex; align-items: center; }
+.grp .all { margin-left: auto; font-weight: 500; color: var(--text-3); }
+.res { display: flex; align-items: center; gap: var(--sp-3); padding: 0 var(--sp-3); margin: 0 var(--sp-2); min-height: 52px; border-radius: var(--r-md); }
+.res.sel { background: var(--accent-soft); }
+.res .ic { width: 36px; height: 36px; border-radius: var(--r-sm); display: grid; place-items: center; flex: none; color: #fff; position: relative; }
+.res .ic.plain { background: var(--surface-3); color: var(--text-2); }
+.res .ic .badge { position: absolute; right: -4px; bottom: -4px; width: 18px; height: 18px; border-radius: 50%; background: var(--surface); display: grid; place-items: center; }
+.res .ic .badge .ms { font-size: 13px; color: var(--text-2); }
+.res .ic.round { border-radius: 50%; }
+.res .txt { flex: 1; min-width: 0; padding: 6px 0; }
+.res .tt { font-size: var(--fs-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.res .mm { font-size: var(--fs-xs); color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.res .snip { font-size: var(--fs-sm); color: var(--text-2); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.res .hint { display: flex; gap: var(--sp-2); align-items: center; font-size: var(--fs-xs); color: var(--text-2); flex: none; }
+.res.sel .hint kbd { background: var(--surface); }
+.res .kb { display: flex; gap: 4px; }
+.pal-foot { height: 40px; display: flex; align-items: center; gap: var(--sp-4); padding: 0 var(--sp-5); border-top: 1px solid var(--border); font-size: var(--fs-xs); color: var(--text-3); background: var(--surface-2); }
+.pal-foot span { display: inline-flex; align-items: center; gap: 6px; }
+.pal-foot .sp { flex: 1; }
+.recent { display: flex; flex-wrap: wrap; gap: var(--sp-2); padding: var(--sp-1) var(--sp-5) var(--sp-2); }
+
+/* ---------- Option B: M3 search view in the list pane ---------- */
+.appB { grid-template-columns: 248px 460px 1fr; }
+.sbar { height: 44px; border-radius: var(--r-pill); background: var(--surface-2); display: flex; align-items: center; gap: var(--sp-2); padding: 0 var(--sp-3); color: var(--text-3); font-size: var(--fs-md); margin: 0 0 var(--sp-2); }
+.sbar kbd { margin-left: auto; }
+.sview-top { padding: var(--sp-3) var(--sp-4) var(--sp-2); }
+.sfield { height: 52px; border-radius: var(--r-pill); background: var(--surface-3); display: flex; align-items: center; gap: var(--sp-3); padding: 0 var(--sp-4); font-size: var(--fs-base); }
+.sfield .ms { color: var(--text-2); }
+.sfield .q { flex: 1; display: flex; align-items: center; }
+.chips.scroll { overflow: hidden; padding-top: var(--sp-2); }
+.sres { padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--border); display: grid; grid-template-columns: 1fr 64px; gap: var(--sp-3); }
+.sres.sel { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--accent); }
+.sres .k { font-size: var(--fs-2xs); font-weight: 600; color: var(--accent); letter-spacing: .02em; display: flex; align-items: center; gap: 4px; }
+.sres .k .ms { font-size: 14px; }
+.sres .t { font-weight: 600; font-size: var(--fs-md); line-height: 1.35; margin-top: 2px; }
+.sres .snip { font-size: var(--fs-sm); color: var(--text-2); margin-top: 4px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sres .meta { font-size: var(--fs-xs); color: var(--text-3); margin-top: 4px; }
+.sres .thumb { width: 64px; height: 64px; }
+.compact { display: flex; align-items: center; gap: var(--sp-3); padding: 10px var(--sp-4); border-bottom: 1px solid var(--border); font-size: var(--fs-md); }
+.compact .ms { color: var(--text-2); }
+.compact .meta { margin-left: auto; font-size: var(--fs-xs); color: var(--text-3); }
+.slabel { font-size: var(--fs-xs); font-weight: 600; color: var(--text-3); padding: var(--sp-3) var(--sp-4) var(--sp-1); display: flex; }
+.slabel .all { margin-left: auto; color: var(--accent); font-weight: 600; }
+.tr { display: grid; grid-template-columns: 56px 1fr; gap: var(--sp-3); padding: var(--sp-2) 0; font-size: 17px; line-height: 1.55; }
+.tr .ts { font-size: var(--fs-sm); color: var(--text-3); padding-top: 3px; }
+.tr.now { background: var(--surface-2); border-radius: var(--r-md); margin: 0 -12px; padding: var(--sp-2) 12px; }
+.findbar { display: flex; align-items: center; gap: var(--sp-3); height: 44px; border-radius: var(--r-pill); background: var(--surface-2); padding: 0 var(--sp-4); font-size: var(--fs-md); margin-bottom: var(--sp-3); }
+.findbar .sp { flex: 1; }
+.findbar .ms { color: var(--text-2); }
+.player-card { display: flex; align-items: center; gap: var(--sp-3); background: var(--surface-2); border-radius: var(--r-pill); height: 48px; padding: 0 var(--sp-4); margin-bottom: var(--sp-4); font-size: var(--fs-sm); color: var(--text-2); }
+.bar { flex: 1; height: 4px; border-radius: 2px; background: var(--surface-3); position: relative; }
+.bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 76%; background: var(--accent); border-radius: 2px; }
+
+/* ---------- Option C: palette with preview ---------- */
+.palC { width: 1040px; top: 72px; }
+.palC .split { display: grid; grid-template-columns: 440px 1fr; height: 600px; }
+.palC .left { border-right: 1px solid var(--border); padding: var(--sp-2) 0; overflow: hidden; }
+.prev { padding: var(--sp-5); overflow: hidden; background: var(--bg); }
+.prev .art { display: flex; gap: var(--sp-4); align-items: center; margin-bottom: var(--sp-4); }
+.prev .art .a { width: 88px; height: 88px; border-radius: var(--r-lg); flex: none; }
+.prev h2 { font-family: var(--font-read); font-size: var(--fs-xl); margin: 0 0 4px; line-height: 1.25; }
+.prev .by { font-size: var(--fs-sm); color: var(--text-3); }
+.prev .lbl { font-size: var(--fs-xs); font-weight: 600; color: var(--text-3); margin: var(--sp-4) 0 var(--sp-2); display: flex; }
+.prev .lbl .r { margin-left: auto; font-weight: 500; }
+.prev .tr { font-size: var(--fs-base); }
+.prev .acts { display: flex; gap: var(--sp-2); margin-top: var(--sp-4); }
+.btn { height: 40px; padding: 0 var(--sp-5); border-radius: var(--r-pill); display: inline-flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-md); font-weight: 600; border: 1px solid var(--border); color: var(--text); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.btn .ms { font-size: 18px; }
+.btn kbd { background: rgba(255,255,255,.2); color: inherit; }
+.btn.primary kbd { background: rgba(0,0,0,.15); }
+
+.label-tag { position: fixed; left: 16px; bottom: 16px; font-size: var(--fs-xs); background: var(--accent); color: var(--accent-ink); padding: 6px 12px; border-radius: var(--r-pill); font-weight: 700; z-index: 10; }
+.view { display: none; }
+</style>
+</head>
+<body>
+<script>
+  const params = new URLSearchParams(location.search)
+  document.documentElement.dataset.theme = params.get('theme') || 'dark'
+  const V = params.get('v') || 'a'
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-v]').forEach((el) => { if (el.dataset.v.split(' ').includes(V)) el.style.display = 'block' })
+  })
+</script>
+
+<!-- ======== shared backdrop (A0, A, C) ======== -->
+<div class="view" data-v="a0 a c">
+  <div class="app">
+    <aside class="side">
+      <div class="brand"><span class="ms fill">rss_feed</span>Feeder</div>
+      <div class="nav"><span class="ms">home</span>Home</div>
+      <div class="nav on"><span class="ms">inbox</span>Unread<span class="n">199</span></div>
+      <div class="nav"><span class="ms">bookmark</span>Saved<span class="n">14</span></div>
+      <div class="nav"><span class="ms">queue_music</span>Playlists</div>
+      <div class="nav"><span class="ms">ink_highlighter</span>Highlights</div>
+      <div class="nav"><span class="ms">download</span>Downloads</div>
+      <div class="sect">Folders</div>
+      <div class="nav"><span class="ms">folder</span>Tech<span class="n">64</span></div>
+      <div class="nav"><span class="ms">folder</span>Podcasts<span class="n">31</span></div>
+      <div class="nav"><span class="ms">folder</span>YouTube<span class="n">22</span></div>
+      <div class="nav"><span class="ms">folder</span>Economics<span class="n">18</span></div>
+    </aside>
+    <section class="list">
+      <div class="list-top">Unread<span class="sp"></span><span class="ms">refresh</span><span class="ms">more_vert</span></div>
+      <div class="chips"><span class="chip on">Unread<span class="ms" style="font-size:18px">arrow_drop_down</span></span><span class="chip">Today</span><span class="chip">Newest</span></div>
+      <div class="row"><div><div class="t">You Can Seize Everything (The U.S. is reviving pirate law)</div><div class="meta">Planet Money · 2d · 21 min</div></div><div class="thumb g2"></div></div>
+      <div class="row sel"><div><div class="t">Two ways big bets on data centers might affect you</div><div class="meta">Planet Money · 5d · 21 min</div></div><div class="thumb g1"></div></div>
+      <div class="row"><div><div class="t">Are wildfires making the future uninsurable?</div><div class="meta">Planet Money · Nov 14 · 18 min</div></div><div class="thumb g3"></div></div>
+      <div class="row"><div><div class="t">How bodegas led to the Yemeni coffeehouse explosion</div><div class="meta">Planet Money · Nov 11 · 24 min</div></div><div class="thumb g4"></div></div>
+      <div class="row"><div><div class="t">Inside the insurance industry's destruction lab</div><div class="meta">Planet Money · Nov 9 · 19 min</div></div><div class="thumb g8"></div></div>
+      <div class="row"><div><div class="t">The quiet comeback of the humble pager</div><div class="meta">The Verge · Nov 8 · 6 min read</div></div><div class="thumb g5"></div></div>
+    </section>
+    <main class="reader">
+      <div class="reader-top"><span class="ms">arrow_back</span><span class="ms">arrow_forward</span><span class="sp"></span><span class="ms">bookmark</span><span class="ms">share</span><span class="ms">more_vert</span></div>
+      <div class="reader-body">
+        <div class="hero g1"></div>
+        <h1>Two ways big bets on data centers might affect you</h1>
+        <div class="by">Planet Money · Nov 19 · 21 min</div>
+        <p>Your money might be fueling the AI boom, just as some AI data center bets look shakier than they did a year ago. Here are two indicators worth watching.</p>
+        <p>Open AI pays Oracle to use its cloud infrastructure and says it'll pay a lot more in the coming years.</p>
+      </div>
+    </main>
+  </div>
+  <div class="scrim"></div>
+</div>
+
+<!-- ======== A0: Spotlight palette, empty state ======== -->
+<div class="view" data-v="a0">
+  <div class="pal">
+    <div class="pal-in"><span class="ms">search</span><span class="q ph"><span class="caret" style="margin:0 2px 0 0"></span>Search articles, episodes, videos, feeds…</span><kbd>esc</kbd></div>
+    <div class="pal-body">
+      <div class="grp">Recent searches</div>
+      <div class="recent"><span class="chip"><span class="ms" style="font-size:16px">history</span>nvidia</span><span class="chip"><span class="ms" style="font-size:16px">history</span>tariffs</span><span class="chip"><span class="ms" style="font-size:16px">history</span>acquired</span><span class="chip"><span class="ms" style="font-size:16px">history</span>sleep science</span></div>
+      <div class="grp">Jump back in</div>
+      <div class="res sel"><div class="ic g1"><span class="ms fill">play_arrow</span></div><div class="txt"><div class="tt">Two ways big bets on data centers might affect you</div><div class="mm">Episode · Planet Money · 76% played</div></div><div class="hint">Resume <kbd>↵</kbd></div></div>
+      <div class="res"><div class="ic plain"><span class="ms">queue_music</span></div><div class="txt"><div class="tt">Morning commute</div><div class="mm">Playlist · 12 items · 3h 40m</div></div></div>
+      <div class="res"><div class="ic g7"><span class="ms fill">smart_display</span></div><div class="txt"><div class="tt">I tested the RTX 5090 for a month</div><div class="mm">Video · Hardware Weekly · 42% watched</div></div></div>
+      <div class="grp">Actions</div>
+      <div class="res"><div class="ic plain"><span class="ms">add_link</span></div><div class="txt"><div class="tt">Add feed or paste a link</div></div></div>
+      <div class="res"><div class="ic plain"><span class="ms">refresh</span></div><div class="txt"><div class="tt">Refresh all feeds</div></div></div>
+      <div class="res"><div class="ic plain"><span class="ms">playlist_add</span></div><div class="txt"><div class="tt">New playlist</div></div></div>
+      <div class="res"><div class="ic plain"><span class="ms">dark_mode</span></div><div class="txt"><div class="tt">Switch to light theme</div></div></div>
+    </div>
+    <div class="pal-foot"><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>↵</kbd> open</span><span><kbd>tab</kbd> filter by type</span><span class="sp"></span><span><kbd>⌘</kbd><kbd>K</kbd> or <kbd>/</kbd> anywhere</span></div>
+  </div>
+</div>
+
+<!-- ======== A: Spotlight palette, typed ======== -->
+<div class="view" data-v="a">
+  <div class="pal">
+    <div class="pal-in"><span class="ms">search</span><span class="q">nvidia<span class="caret"></span></span><kbd>esc</kbd></div>
+    <div class="pal-body">
+      <div class="grp">Top hit</div>
+      <div class="res sel"><div class="ic g1"><span class="ms fill">podcasts</span></div><div class="txt"><div class="tt">Two ways big bets on data centers might affect you</div><div class="snip">16:17 “So, Oracle buys chips from <b class="m">NVIDIA</b> to build this cloud…” <span style="color:var(--text-3)">+4 more</span></div></div><div class="hint">Play from 16:17 <kbd>↵</kbd></div></div>
+      <div class="grp">Articles<span class="all">8 more · <kbd>⌘</kbd> <kbd>↵</kbd> see all</span></div>
+      <div class="res"><div class="ic g6"><span class="ms">article</span></div><div class="txt"><div class="tt"><b class="m">Nvidia</b>'s Rubin chips are shipping early, and that changes the math</div><div class="mm">The Verge · 2h · 6 min read</div></div></div>
+      <div class="res"><div class="ic g5"><span class="ms">article</span></div><div class="txt"><div class="tt">The <b class="m">Nvidia</b> tax: who really pays for the AI build-out</div><div class="mm">Stratechery · Nov 18 · Saved</div></div></div>
+      <div class="grp">Videos and episodes</div>
+      <div class="res"><div class="ic g7"><span class="ms fill">smart_display</span></div><div class="txt"><div class="tt">I tested the RTX 5090 for a month</div><div class="mm">Video · Hardware Weekly · 18:22 · 42% watched</div></div></div>
+      <div class="res"><div class="ic g8"><span class="ms fill">podcasts</span></div><div class="txt"><div class="tt"><b class="m">Nvidia</b> Part III: The dawn of the AI era</div><div class="mm">Episode · Acquired · 2h 51m · Downloaded</div></div></div>
+      <div class="grp">Highlights</div>
+      <div class="res"><div class="ic plain"><span class="ms" style="color:#c9a300">ink_highlighter</span></div><div class="txt"><div class="tt">“And then <mark class="y">NVIDIA</mark> invests money into OpenAI so that OpenAI can buy…”</div><div class="mm">Two ways big bets on data centers… · your note: circular money</div></div></div>
+      <div class="grp">Feeds, folders and playlists</div>
+      <div class="res"><div class="ic g6 round"><span class="ms">rss_feed</span></div><div class="txt"><div class="tt"><b class="m">NVIDIA</b> Technical Blog</div><div class="mm">Feed in Tech · 12 unread</div></div></div>
+      <div class="res"><div class="ic plain"><span class="ms">auto_awesome</span></div><div class="txt"><div class="tt">Create smart playlist “nvidia”</div><div class="mm">Action · every item that mentions nvidia</div></div></div>
+    </div>
+    <div class="pal-foot"><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>↵</kbd> open</span><span><kbd>⌘</kbd><kbd>↵</kbd> all results</span><span><kbd>tab</kbd> filter by type</span><span class="sp"></span><span>23 results</span></div>
+  </div>
+</div>
+
+<!-- ======== B: M3 search view replaces the list pane ======== -->
+<div class="view" data-v="b">
+  <div class="app appB">
+    <aside class="side">
+      <div class="brand"><span class="ms fill">rss_feed</span>Feeder</div>
+      <div class="sbar"><span class="ms" style="font-size:18px">search</span>Search<kbd>⌘K</kbd></div>
+      <div class="nav"><span class="ms">home</span>Home</div>
+      <div class="nav"><span class="ms">inbox</span>Unread<span class="n">199</span></div>
+      <div class="nav"><span class="ms">bookmark</span>Saved<span class="n">14</span></div>
+      <div class="nav"><span class="ms">queue_music</span>Playlists</div>
+      <div class="nav"><span class="ms">ink_highlighter</span>Highlights</div>
+      <div class="nav"><span class="ms">download</span>Downloads</div>
+      <div class="sect">Folders</div>
+      <div class="nav"><span class="ms">folder</span>Tech<span class="n">64</span></div>
+      <div class="nav"><span class="ms">folder</span>Podcasts<span class="n">31</span></div>
+      <div class="nav"><span class="ms">folder</span>YouTube<span class="n">22</span></div>
+      <div class="nav"><span class="ms">folder</span>Economics<span class="n">18</span></div>
+    </aside>
+    <section class="list">
+      <div class="sview-top">
+        <div class="sfield"><span class="ms">arrow_back</span><span class="q">nvidia<span class="caret"></span></span><span class="ms">close</span></div>
+        <div class="chips scroll" style="padding-left:0;padding-right:0"><span class="chip on">All <span class="c">23</span></span><span class="chip">Articles <span class="c">10</span></span><span class="chip">Episodes <span class="c">6</span></span><span class="chip">Videos <span class="c">3</span></span><span class="chip">Highlights <span class="c">2</span></span><span class="chip">Feeds <span class="c">1</span></span></div>
+      </div>
+      <div class="sres sel"><div><div class="k"><span class="ms">podcasts</span>EPISODE · 5 MATCHES IN TRANSCRIPT</div><div class="t">Two ways big bets on data centers might affect you</div><div class="snip">16:17 So, Oracle buys chips from <b class="m">NVIDIA</b> to build this cloud even more.</div><div class="meta">Planet Money · 5d · 76% played</div></div><div class="thumb g1"></div></div>
+      <div class="sres"><div><div class="k"><span class="ms">article</span>ARTICLE · TITLE</div><div class="t"><b class="m">Nvidia</b>'s Rubin chips are shipping early, and that changes the math</div><div class="snip">Rubin was due next spring. Instead, <b class="m">Nvidia</b> told partners the first racks leave in January…</div><div class="meta">The Verge · 2h · 6 min read</div></div><div class="thumb g6"></div></div>
+      <div class="sres"><div><div class="k"><span class="ms">smart_display</span>VIDEO · DESCRIPTION</div><div class="t">I tested the RTX 5090 for a month</div><div class="snip">Thanks to <b class="m">NVIDIA</b> for sending the review unit. Opinions are my own…</div><div class="meta">Hardware Weekly · 18:22 · 42% watched</div></div><div class="thumb g7"></div></div>
+      <div class="sres"><div><div class="k"><span class="ms">ink_highlighter</span>YOUR HIGHLIGHT</div><div class="t" style="font-weight:500">“And then <mark class="y">NVIDIA</mark> invests money into OpenAI so that OpenAI can buy a computing space…”</div><div class="meta">Two ways big bets on data centers… · note: circular money</div></div><div class="thumb g1"></div></div>
+      <div class="compact"><span class="ms">rss_feed</span><span><b class="m">NVIDIA</b> Technical Blog</span><span class="meta">Feed · 12 unread</span></div>
+    </section>
+    <main class="reader">
+      <div class="reader-top"><span class="ms">keyboard_arrow_up</span><span class="ms">keyboard_arrow_down</span><span style="font-size:var(--fs-sm)">Result 1 of 23</span><span class="sp"></span><span class="ms">bookmark</span><span class="ms">share</span><span class="ms">more_vert</span></div>
+      <div class="reader-body" style="padding-top:var(--sp-5)">
+        <h1 style="font-size:28px">Two ways big bets on data centers might affect you</h1>
+        <div class="by">Planet Money · Nov 19 · 21 min</div>
+        <div class="player-card"><span class="ms fill" style="color:var(--text)">pause</span>16:17<div class="bar"><i></i></div>21:24<span class="ms">speed</span></div>
+        <div class="findbar"><span class="ms">search</span>nvidia<span class="sp"></span><span style="color:var(--text-3)">2 of 5</span><span class="ms">keyboard_arrow_up</span><span class="ms">keyboard_arrow_down</span></div>
+        <div class="tr"><span class="ts">16:09</span><span>This bit has more implications for the wider economy.</span></div>
+        <div class="tr"><span class="ts">16:11</span><span>Open AI pays Oracle to use its cloud infrastructure and says it'll pay a lot more in the coming years.</span></div>
+        <div class="tr now"><span class="ts">16:17</span><span>So, Oracle buys chips from <b class="m" style="outline:2px solid var(--accent)">NVIDIA</b> to build this cloud even more.</span></div>
+        <div class="tr"><span class="ts">16:22</span><span>And then <b class="m">NVIDIA</b> invests money into OpenAI so that OpenAI can buy a computing space from Oracle which remembers buying those <b class="m">NVIDIA</b> chips.</span></div>
+        <div class="tr"><span class="ts">16:28</span><span>&gt;&gt; I'm just picturing a circle.</span></div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ======== C: wide palette with preview ======== -->
+<div class="view" data-v="c">
+  <div class="pal palC">
+    <div class="pal-in"><span class="ms">search</span><span class="q">nvidia<span class="caret"></span></span><span class="scope">Episodes<span class="ms" style="font-size:16px">close</span></span><kbd>esc</kbd></div>
+    <div class="split">
+      <div class="left">
+        <div class="grp">Episodes · 6</div>
+        <div class="res sel"><div class="ic g1"><span class="ms fill">podcasts</span></div><div class="txt"><div class="tt">Two ways big bets on data centers might…</div><div class="mm">Planet Money · 5 matches</div></div></div>
+        <div class="res"><div class="ic g8"><span class="ms fill">podcasts</span></div><div class="txt"><div class="tt"><b class="m">Nvidia</b> Part III: The dawn of the AI era</div><div class="mm">Acquired · 112 matches</div></div></div>
+        <div class="res"><div class="ic g5"><span class="ms fill">podcasts</span></div><div class="txt"><div class="tt">Is the AI boom a bubble?</div><div class="mm">The Indicator · 9 matches</div></div></div>
+        <div class="res"><div class="ic g3"><span class="ms fill">podcasts</span></div><div class="txt"><div class="tt">The chip war, explained</div><div class="mm">Hard Fork · 7 matches</div></div></div>
+        <div class="res"><div class="ic g4"><span class="ms fill">podcasts</span></div><div class="txt"><div class="tt">What Jensen gets right about pricing</div><div class="mm">Odd Lots · 4 matches</div></div></div>
+        <div class="res"><div class="ic g2"><span class="ms fill">podcasts</span></div><div class="txt"><div class="tt">Taiwan, TSMC and the next decade</div><div class="mm">Decoder · 2 matches</div></div></div>
+      </div>
+      <div class="prev">
+        <div class="art"><div class="a g1"></div><div><h2>Two ways big bets on data centers might affect you</h2><div class="by">Planet Money · Nov 19 · 21 min · 76% played</div></div></div>
+        <div class="lbl">In the transcript<span class="r">5 matches</span></div>
+        <div class="tr"><span class="ts">16:11</span><span style="color:var(--text-2)">Open AI pays Oracle to use its cloud infrastructure and says it'll pay a lot more…</span></div>
+        <div class="tr now"><span class="ts">16:17</span><span>So, Oracle buys chips from <b class="m">NVIDIA</b> to build this cloud even more.</span></div>
+        <div class="tr"><span class="ts">16:22</span><span style="color:var(--text-2)">And then <b class="m">NVIDIA</b> invests money into OpenAI so that OpenAI can buy a computing space…</span></div>
+        <div class="tr"><span class="ts">18:40</span><span style="color:var(--text-2)">…which is why <b class="m">NVIDIA</b>'s earnings call is basically a macro event now.</span></div>
+        <div class="lbl">Your highlight</div>
+        <div style="font-size:var(--fs-md);line-height:1.5">“And then <mark class="y">NVIDIA</mark> invests money into OpenAI…” <span style="color:var(--text-3)">· circular money</span></div>
+        <div class="acts"><span class="btn primary"><span class="ms fill">play_arrow</span>Play from 16:17 <kbd>↵</kbd></span><span class="btn">Open <kbd>⌘↵</kbd></span></div>
+      </div>
+    </div>
+    <div class="pal-foot"><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>→</kbd> step through matches</span><span><kbd>⌫</kbd> clear filter</span><span class="sp"></span><span>6 episodes</span></div>
+  </div>
+</div>
+</body>
+</html>

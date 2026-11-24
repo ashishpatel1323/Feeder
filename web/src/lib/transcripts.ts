@@ -323,3 +323,9 @@ export function stopTranscribing() {
   for (const p of pending.values()) p.reject(new Error('stopped'))
   pending.clear()
 }
+
+/** Every transcript saved in this browser, as plain lines by item id, for global search. */
+export async function storedTranscriptLines(): Promise<Map<string, { startMs: number; text: string }[]>> {
+  const all = await tdb.transcripts.toArray()
+  return new Map(all.map((t) => [t.itemId, t.cues.map((c) => ({ startMs: c.startMs, text: c.text }))]))
+}

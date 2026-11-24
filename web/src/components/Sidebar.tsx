@@ -6,6 +6,7 @@ import { Icon, IconButton } from './Icon'
 import { proxiedUrl } from '../lib/api'
 import { useVideoJobs, useVideoSavingAvailable } from '../lib/offline'
 import { usePlaylists } from './Playlists'
+import { isMacLike } from '../lib/search'
 import { collapseAllFolders, loadClosedFolders, saveClosedFolders, toggleFolder } from '../lib/folders'
 
 interface Props {
@@ -37,6 +38,10 @@ interface Props {
   onPlaylists: (id: string) => void
   onRefresh: () => void
   onSettings: () => void
+  /** Opens global search (the ⌘K palette). */
+  onSearch: () => void
+  /** The search results view is in the list pane: no list is selected. */
+  searching: boolean
   refreshing: string | null
   syncLabel: string
   /** Desktop only: the sidebar is shrunk to a slim rail of icons. */
@@ -119,7 +124,7 @@ export function Sidebar(p: Props) {
   const folderNames = tags.map(([t]) => t).filter(Boolean)
 
   const playlists = usePlaylists()
-  const isSel = (s: Selection) => !p.showingHome && !p.showingDiscover && !p.managing && !p.showingHighlights && !p.showingDownloads && p.showingPlaylist === null && JSON.stringify(s) === JSON.stringify(p.selection)
+  const isSel = (s: Selection) => !p.searching && !p.showingHome && !p.showingDiscover && !p.managing && !p.showingHighlights && !p.showingDownloads && p.showingPlaylist === null && JSON.stringify(s) === JSON.stringify(p.selection)
 
   const feedRow = (f: Feed, i: number, folder: Feed[]) => (
     <li
@@ -175,6 +180,9 @@ export function Sidebar(p: Props) {
     <nav className="sidebar">
       <div className="sidebar-rail" aria-label="Feeds (collapsed)">
         <IconButton icon="panelOpen" label="Show feeds" title="Show feeds ( [ )" onClick={p.onToggleCollapsed} />
+        <button className="rail-btn" title={`Search everything (${searchKeys()})`} aria-label="Search" onClick={p.onSearch}>
+          <Icon name="search" size={20} />
+        </button>
         <button className={`rail-btn${p.showingHome ? ' selected' : ''}`} title="Home: all your feeds as tiles" aria-label="Home" onClick={p.onHome}>
           <Icon name="home" size={20} />
         </button>
@@ -239,6 +247,11 @@ export function Sidebar(p: Props) {
           <IconButton icon="panelClose" label="Hide feeds" title="Hide feeds ( [ )" onClick={p.onToggleCollapsed} />
         </span>
       </div>
+      <button type="button" className="sidebar-search" onClick={p.onSearch} aria-label="Search everything" title="Search articles, episodes, videos, feeds, playlists and highlights">
+        <Icon name="search" size={18} />
+        <span>Search</span>
+        <kbd>{searchKeys()}</kbd>
+      </button>
       {p.refreshing ? <div className="sidebar-status">Refreshing {p.refreshing}</div> : null}
       <ul className="nav-list">
         <li>
@@ -357,3 +370,5 @@ export function Sidebar(p: Props) {
     </nav>
   )
 }
+
+const searchKeys = () => (isMacLike() ? '⌘K' : 'Ctrl K')

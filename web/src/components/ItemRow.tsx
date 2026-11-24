@@ -122,6 +122,10 @@ interface RowProps {
   /** More meta (size of a download, "needs download"). */
   metaExtra?: ReactNode
   snippetLines?: number
+  /** Shown instead of the feed's snippet (global search: the line that matched, words marked). */
+  snippet?: ReactNode
+  /** Shown instead of the plain title (global search: the title with the words marked). */
+  titleNode?: ReactNode
   inPlaylist?: boolean
   className?: string
   selected?: boolean
@@ -160,7 +164,7 @@ export function ItemRow(p: RowProps) {
       </button>
       <div className="ir-main row-main">
         <button type="button" className="row-title ir-title" onClick={(e) => (stop(e), p.onOpen(e))}>
-          {item.title || '(no title)'}
+          {p.titleNode ?? (item.title || '(no title)')}
         </button>
         <div className="row-meta">
           <TypeBadge kind={facts.kind} label={facts.kindLabel} />
@@ -185,7 +189,11 @@ export function ItemRow(p: RowProps) {
           ) : null}
           {p.metaExtra}
         </div>
-        {p.snippetLines && item.snippet ? (
+        {p.snippet ? (
+          <div className="row-snippet" style={{ WebkitLineClamp: p.snippetLines ?? 2 }}>
+            {p.snippet}
+          </div>
+        ) : p.snippetLines && item.snippet ? (
           <div className="row-snippet" style={{ WebkitLineClamp: p.snippetLines }}>
             {item.snippet}
           </div>

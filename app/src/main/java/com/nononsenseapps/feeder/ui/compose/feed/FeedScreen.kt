@@ -166,6 +166,7 @@ import com.nononsenseapps.feeder.ui.compose.navigation.ArticleDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.DownloadsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.EditFeedDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.FeedDestination
+import com.nononsenseapps.feeder.ui.compose.navigation.GlobalSearchDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.HighlightsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.HomeDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.ManageFeedsDestination
@@ -605,7 +606,10 @@ fun FeedScreen(
                 onSetFeedListGrouping = viewModel::setFeedListGrouping,
                 onSetSorting = viewModel::setCurrentSorting,
                 onMarkGroupAsRead = { groupKey -> viewModel.markGroupAsRead(groupKey) },
-                onShowSearchBar = viewModel::setSearchBarVisible,
+                // The search button opens global search (every feed, transcripts, highlights, playlists)
+                onShowSearchBar = { show ->
+                    if (show) GlobalSearchDestination.navigate(navController) else viewModel.setSearchBarVisible(false)
+                },
                 searchCallback = viewModel::searchCallback,
                 feedListState = feedListState,
                 feedGridState = feedGridState,

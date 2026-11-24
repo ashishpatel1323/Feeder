@@ -29,6 +29,10 @@ import { playQueue, useQueue } from './lib/playqueue'
 import { combinedSubject, ShareDialog, type ShareSubject } from './components/ShareDialog'
 import { articlePicture, deleteHighlight } from './lib/highlights'
 import type { Highlight } from './lib/db'
+import { CommandPalette, SearchView, useSearchData, type OpenOptions, type PaletteAction } from './components/Search'
+import { queryTerms, type SearchHit, type SearchScope } from './lib/search'
+import { RESUME_BACK, saveVideoPos } from './lib/videopos'
+import { kindOf } from './lib/playlists'
 
 const NAV_COLLAPSED_KEY = 'feeder.navCollapsed'
 /** The Manage feeds page has its own address so it can be bookmarked and Back works. */
@@ -134,6 +138,11 @@ export default function App() {
   // Whether the feed page was opened from inside the app, so its Back button can go back there
   const feedPageFromApp = useRef(false)
   const [focusHighlight, setFocusHighlight] = useState<string | null>(null)
+  // Global search: the ⌘K palette, the results view in the list pane, and what to mark in the reader
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const [searchView, setSearchView] = useState<{ query: string; scope: SearchScope } | null>(null)
+  const [searchOrder, setSearchOrder] = useState<string[]>([])
+  const [searchFocus, setSearchFocus] = useState<{ terms: string[]; query: string; at: Record<string, number | null> } | null>(null)
   const [pageShare, setPageShare] = useState<ShareSubject | null>(null)
   const allHighlights = useLiveQuery(() => db.highlights.toArray(), []) ?? []
   useEffect(() => {
@@ -537,7 +546,7 @@ export default function App() {
         }
         return
       }
-      const order = visibleOrder
+      const order = searchView ? searchOrder : visibleOrder
       const startFromList = () => {
         const i = openId ? order.indexOf(openId) : -1
         return i
@@ -579,6 +588,7 @@ export default function App() {
           break
         case 'Escape':
           if (pane === 'reader') leaveReader()
+          else if (searchView) setSearchView(null)
           break
         default:
           return
@@ -587,7 +597,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [dialog, visibleOrder, openId, nextId, prevId, goNext, goPrev, open, openItem, pane, toggleNav, managing, showManage, highlightsPage, showHighlights, downloadsPage, showDownloads, feedPage, closeFeedPage, startFlip, homePage, playlistPage, showPlaylists, leaveReader])
+  }, [dialog, visibleOrder, openId, nextId, prevId, goNext, goPrev, open, openItem, pane, toggleNav, managing, showManage, highlightsPage, showHighlights, downloadsPage, showDownloads, feedPage, closeFeedPage, startFlip, homePage, playlistPage, showPlaylists, leaveReader, searchView, searchOrder])
 
   const markAllRead = async () => {
     const ids = groups.flatMap((g) => g.items).filter((i) => !i.read).map((i) => i.id)
@@ -692,6 +702,7 @@ export default function App() {
       return
     }
     setReaderFrom(null)
+    if (!searchView) setSearchFocus(null)
     open(item.id, visibleOrder)
   }
 
@@ -714,6 +725,141 @@ export default function App() {
     open(h.itemId, visibleOrder.includes(h.itemId) ? visibleOrder : [h.itemId])
   }
 
+  /** Leaves whatever page is open (Home, Playlists, Highlights…) so the list and reader show. */
+  const leavePages = () => {
+    showPlaylists(null)
+    showManage(false)
+    showHighlights(false)
+    showDownloads(false)
+    showHome(false)
+    showDiscover(false)
+    if (feedPage) leaveFeedPage()
+    setFlip(null)
+  }
+
+  /** Shows one list of articles (as a sidebar entry does). */
+  const selectList = (s: Selection) => {
+    setSelection(s)
+    setDrawer(false)
+    setPane('list')
+    setReaderFrom(null)
+    setSearchView(null)
+    showManage(false)
+    showHighlights(false)
+    showDownloads(false)
+    showHome(false)
+    showDiscover(false)
+    showPlaylists(null)
+    if (feedPage) leaveFeedPage()
+  }
+
+  const searchActive = paletteOpen || !!searchView
+  const searchData = useSearchData(items, feeds, allHighlights, settings.readAloudRate, searchActive)
+
+  // Opening another page closes the results view
+  const anyPage = managing || highlightsPage || !!feedPage || downloadsPage || homePage || discoverPage || playlistPage !== null
+  useEffect(() => {
+    if (anyPage) setSearchView(null)
+  }, [anyPage])
+
+  /** Opens a search result: an item in the reader (marked, at its transcript line), a feed's articles, a playlist… */
+  const openHit = (hit: SearchHit, o: OpenOptions) => {
+    setDrawer(false)
+    if (hit.type === 'item') {
+      const item = hit.item
+      if (item.link && opensInBrowser(feeds.get(item.feedUrl))) return void window.open(item.link, '_blank', 'noopener')
+      leavePages()
+      setReaderFrom(null)
+      const terms = queryTerms(o.query)
+      // The transcript's own search looks for one phrase: the longest word finds the line most surely
+      const phrase = terms.length > 1 ? [...terms].sort((a, b) => b.length - a.length)[0] : o.query.trim()
+      setSearchFocus({ terms, query: phrase, at: o.at })
+      if (o.play && hit.atMs != null) {
+        const name = feedDisplayTitle(feeds.get(item.feedUrl)) || 'Podcast'
+        void saveVideoPos(item.id, hit.atMs / 1000 + RESUME_BACK, item.duration ?? 0).then(() => playQueue.start([item.id], { name }))
+      }
+      open(item.id, o.order.includes(item.id) ? o.order : [item.id])
+    } else if (hit.type === 'highlight') {
+      leavePages()
+      setSearchFocus(null)
+      void openHighlight(hit.highlight)
+    } else if (hit.type === 'feed') selectList({ kind: 'feed', url: hit.feed.url })
+    else if (hit.type === 'folder') selectList({ kind: 'tag', tag: hit.tag })
+    else {
+      setSearchView(null)
+      showPlaylists(hit.playlist.id)
+    }
+  }
+
+  /** "Jump back in": an episode carries on in the bottom player and opens; a video opens where it was left. */
+  const resumeItem = (item: Item) => {
+    leavePages()
+    setReaderFrom(null)
+    setSearchFocus(null)
+    if (kindOf(item, searchData.ctx) === 'podcast') playQueue.start([item.id], { name: feedDisplayTitle(feeds.get(item.feedUrl)) || 'Podcast' })
+    open(item.id, [item.id])
+  }
+
+  const showAllResults = (query: string, scope: SearchScope) => {
+    leavePages()
+    setSearchView({ query, scope })
+    setPane('list')
+  }
+
+  const darkNow = settings.theme === 'dark' || (settings.theme === 'system' && typeof matchMedia !== 'undefined' && matchMedia('(prefers-color-scheme: dark)').matches)
+  // Only things that are easy to undo: nothing here deletes or marks things read
+  const paletteActions: PaletteAction[] = [
+    { id: 'add', label: 'Add a feed', icon: 'add', keywords: 'subscribe new rss podcast youtube channel url', run: () => setDialog({ kind: 'add' }) },
+    { id: 'refresh', label: 'Refresh all feeds', icon: 'refresh', keywords: 'update sync fetch reload new', run: () => void fullRefresh() },
+    {
+      id: 'discover',
+      label: 'Discover new feeds',
+      icon: 'explore',
+      keywords: 'find browse topics podcasts channels',
+      run: () => {
+        if (feedPage) leaveFeedPage()
+        showDiscover(true)
+      },
+    },
+    { id: 'theme', label: darkNow ? 'Switch to light theme' : 'Switch to dark theme', icon: darkNow ? 'lightMode' : 'darkMode', keywords: 'theme dark light mode appearance night', run: () => void updateSettings({ theme: darkNow ? 'light' : 'dark' }) },
+    { id: 'offline', label: settings.offlineMode ? 'Go back online' : 'Go offline', icon: 'offline', keywords: 'offline mode online airplane downloaded', run: () => void updateSettings({ offlineMode: !settings.offlineMode }) },
+    {
+      id: 'home',
+      label: 'Go to Home',
+      icon: 'home',
+      keywords: 'start tiles feeds',
+      run: () => {
+        showPlaylists(null)
+        if (feedPage) leaveFeedPage()
+        showHome(true)
+      },
+    },
+    { id: 'all', label: 'Go to All articles', icon: 'article', keywords: 'unread list everything', run: () => selectList({ kind: 'all' }) },
+    { id: 'saved', label: 'Go to Saved', icon: 'bookmark', keywords: 'bookmarks read later', run: () => selectList({ kind: 'saved' }) },
+    { id: 'playlists', label: 'Go to Playlists', icon: 'queue', keywords: 'queue listen', run: () => showPlaylists('') },
+    { id: 'highlights', label: 'Go to Highlights', icon: 'highlight', keywords: 'notes quotes', run: () => showHighlights(true) },
+    { id: 'manage', label: 'Manage feeds', icon: 'tune', keywords: 'folders organize edit rename', run: () => showManage(true) },
+    { id: 'settings', label: 'Settings', icon: 'settings', keywords: 'preferences options sync voice', run: () => setDialog({ kind: 'settings' }) },
+  ]
+
+  // ⌘K / Ctrl+K anywhere, and / when not typing, open the palette
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setPaletteOpen((o) => !o)
+        return
+      }
+      if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey || dialog) return
+      const t = e.target as HTMLElement
+      if (/INPUT|TEXTAREA|SELECT/.test(t.tagName) || t.isContentEditable || document.querySelector('[aria-modal="true"]')) return
+      e.preventDefault()
+      setPaletteOpen(true)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [dialog])
+
   const onPlaylists = playlistPage !== null
   const syncLabel = syncState
     ? syncState.lastError
@@ -730,18 +876,11 @@ export default function App() {
         feeds={feedList}
         items={items}
         selection={selection}
-        onSelect={(s) => {
-          setSelection(s)
+        onSelect={selectList}
+        searching={!!searchView && !anyPage}
+        onSearch={() => {
           setDrawer(false)
-          setPane('list')
-          setReaderFrom(null)
-          showManage(false)
-          showHighlights(false)
-          showDownloads(false)
-          showHome(false)
-          showDiscover(false)
-          showPlaylists(null)
-          if (feedPage) leaveFeedPage()
+          setPaletteOpen(true)
         }}
         showingPlaylist={playlistPage}
         onPlaylists={(id) => {
@@ -788,7 +927,22 @@ export default function App() {
         collapsed={navCollapsed}
         onToggleCollapsed={toggleNav}
       />
-      {onPlaylists ? (
+      {searchView && !anyPage ? (
+        <SearchView
+          query={searchView.query}
+          scope={searchView.scope}
+          onQuery={(query) => setSearchView((v) => (v ? { ...v, query } : v))}
+          onScope={(scope) => setSearchView((v) => (v ? { ...v, scope } : v))}
+          data={searchData}
+          selectedId={openId}
+          onOpen={openHit}
+          onClose={() => setSearchView(null)}
+          onMenu={() => setDrawer(true)}
+          onDelete={deleteFromList}
+          onOpenFeed={openFeedPage}
+          onOrder={setSearchOrder}
+        />
+      ) : onPlaylists ? (
         <PlaylistsPage
           playlistId={playlistPage || null}
           items={items}
@@ -894,6 +1048,7 @@ export default function App() {
         onFlip={startFlip}
         onOpenFeed={openFeedPage}
         onAddLink={selection.kind === 'saved' ? addLink : undefined}
+        onSearch={() => setPaletteOpen(true)}
         />
       )}
       {managing || highlightsPage || feedPage || downloadsPage || homePage || discoverPage || onPlaylists || flip ? null : openItem ? (
@@ -914,10 +1069,11 @@ export default function App() {
           focusHighlight={focusHighlight}
           onFocusConsumed={() => setFocusHighlight(null)}
           onOpenFeed={openFeedPage}
+          searchFocus={searchFocus && openItem.id in searchFocus.at ? { terms: searchFocus.terms, query: searchFocus.query, atMs: searchFocus.at[openItem.id] } : null}
         />
       ) : (
         <section className="reader-pane empty-reader">
-          <p>Select an article. Keyboard: J / K next and previous, F flip mode, R read aloud, S save, M unread, O open original, [ hide or show feeds.</p>
+          <p>Select an article. Keyboard: ⌘K or / search everything, J / K next and previous, F flip mode, R read aloud, S save, M unread, O open original, [ hide or show feeds.</p>
         </section>
       )}
       {dialog?.kind === 'settings' ? <SettingsDialog
@@ -967,6 +1123,9 @@ export default function App() {
         }}
       />
       <AddToPlaylistMenu toast={toast} />
+      {paletteOpen ? (
+        <CommandPalette data={searchData} actions={paletteActions} onClose={() => setPaletteOpen(false)} onOpen={openHit} onShowAll={showAllResults} onResume={resumeItem} />
+      ) : null}
       {toastMsg ? (
         <div className="toast" role="status">
           {toastMsg.msg}
