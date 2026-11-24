@@ -6824,3 +6824,192 @@ mark.sr-mark {
   background-color: var(--hl-word);
   color: inherit;
 }
+
+/* ---------- Main tabs: Feeds, Discover, Playlists, Library (as on Android) ---------- */
+.tab-kbd {
+  margin-left: auto;
+  font: 500 10px var(--font-ui);
+  color: var(--text-3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 4px;
+  opacity: 0;
+}
+.nav-row:hover .tab-kbd,
+.nav-row:focus-visible .tab-kbd {
+  opacity: 1;
+}
+.tab-row .count + .tab-kbd {
+  margin-left: 6px;
+}
+.feeds-switch {
+  display: inline-flex;
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  overflow: hidden;
+  height: 32px;
+}
+.feeds-switch button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  font: 500 var(--fs-sm) var(--font-ui);
+  cursor: pointer;
+}
+.feeds-switch button + button {
+  border-left: 1px solid var(--border);
+}
+.feeds-switch button.on {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.pane-bar .feeds-switch {
+  margin-left: 8px;
+}
+.search-everything {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  height: 48px;
+  margin-bottom: 16px;
+  padding: 0 var(--sp-4);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--text-3);
+  font: 500 var(--fs-md) var(--font-ui);
+  cursor: pointer;
+  text-align: left;
+}
+.search-everything:hover {
+  background: var(--surface-3);
+}
+.search-everything kbd {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+}
+.lib-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg, 12px);
+  overflow: hidden;
+  background: var(--surface);
+}
+.lib-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.lib-row + .lib-row {
+  border-top: 1px solid var(--border);
+}
+.lib-row:hover {
+  background: var(--surface-2);
+}
+.lib-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.lib-title {
+  font-weight: 500;
+}
+.lib-desc {
+  color: var(--text-3);
+  font-size: var(--fs-sm);
+}
+.lib-section {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--accent);
+  margin: 24px 0 8px;
+}
+.lib-page .mf-page {
+  max-width: 720px;
+}
+
+/* Bottom bar on narrow screens; wide screens have the tabs in the sidebar */
+.tabbar {
+  display: none;
+}
+@media (max-width: 1100px) {
+  .app {
+    --tabbar-h: 64px;
+    height: calc(100% - var(--tabbar-h));
+  }
+  .app.has-queue {
+    height: calc(100% - 76px - var(--tabbar-h));
+  }
+  .app .queue-player {
+    bottom: var(--tabbar-h);
+  }
+  .app .toast {
+    bottom: calc(24px + var(--tabbar-h));
+  }
+  .tabbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 35;
+    display: flex;
+    height: var(--tabbar-h);
+    padding-bottom: env(safe-area-inset-bottom);
+    background: var(--surface-2);
+    border-top: 1px solid var(--border);
+  }
+  .tabbar-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    border: 0;
+    background: transparent;
+    color: var(--text-2);
+    font: 500 var(--fs-xs) var(--font-ui);
+    cursor: pointer;
+  }
+  .tabbar-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 30px;
+    border-radius: var(--r-pill);
+  }
+  .tabbar-item.selected {
+    color: var(--text);
+  }
+  .tabbar-item.selected .tabbar-pill {
+    background: var(--accent-soft);
+  }
+}
+@media (max-width: 720px) {
+  .app.has-queue {
+    height: calc(100% - 132px - var(--tabbar-h));
+  }
+  /* Reading an article on a phone: the whole screen, no bar (as on Android) */
+  .app.pane-reader {
+    --tabbar-h: 0px;
+  }
+  .app.pane-reader .tabbar {
+    display: none;
+  }
+}

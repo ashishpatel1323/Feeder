@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { db, type Feed, type Item } from '../lib/db'
 import type { Group } from '../lib/listquery'
 import { updateSettings, type Grouping, type Settings, type ShowFilter, type Sorting } from '../lib/settings'
@@ -33,6 +33,8 @@ interface Props {
   onAddLink?: (text: string) => Promise<boolean>
   /** Opens global search; a button only on narrow screens (wide ones have the sidebar's search bar). */
   onSearch?: () => void
+  /** Latest | By feed, when this is the Latest view of the Feeds tab */
+  feedsSwitch?: ReactNode
 }
 
 type SavedKind = 'all' | 'links' | 'videos'
@@ -341,6 +343,7 @@ export function ArticleList(p: Props) {
         <h1 className="pane-title" title={p.title}>
           {p.title}
         </h1>
+        {p.feedsSwitch}
         {network ? (
           // Offline mode is turned on from More; while on, this says so and turns it off
           s.offlineMode ? (

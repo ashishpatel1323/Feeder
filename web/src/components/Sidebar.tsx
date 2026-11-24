@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { FEED_ORDER_KEY, feedDisplayTitle, FOLDER_ORDER_KEY, getKv, sortFolder, sortFolders, type Feed, type Item } from '../lib/db'
 import type { Selection } from '../lib/listquery'
+import { TABS, tabKeys, type Tab } from './Tabs'
 import { Icon, IconButton } from './Icon'
 import { proxiedUrl } from '../lib/api'
-import { useVideoJobs, useVideoSavingAvailable } from '../lib/offline'
 import { usePlaylists } from './Playlists'
 import { isMacLike } from '../lib/search'
 import { collapseAllFolders, loadClosedFolders, saveClosedFolders, toggleFolder } from '../lib/folders'
@@ -24,15 +24,11 @@ interface Props {
   onManageFeeds: () => void
   /** The Manage feeds page is open. */
   managing: boolean
-  highlightCount: number
-  showingHighlights: boolean
-  onHighlights: () => void
-  showingHome: boolean
-  showingDiscover: boolean
-  onDiscover: () => void
-  onHome: () => void
-  showingDownloads: boolean
-  onDownloads: () => void
+  /** Which of the four tabs is shown (Feeds, Discover, Playlists, Library), null for search results. */
+  currentTab: Tab | null
+  onTab: (t: Tab) => void
+  /** An article list is shown (not Home, Manage feeds or a feed page): its feed or folder row is selected. */
+  showingList: boolean
   /** null = not on Playlists, '' = all playlists, else the open playlist's id. */
   showingPlaylist: string | null
   onPlaylists: (id: string) => void
@@ -105,12 +101,6 @@ export function Sidebar(p: Props) {
     return m
   }, [p.items])
   const totalUnread = useMemo(() => [...unreadByFeed.values()].reduce((a, b) => a + b, 0), [unreadByFeed])
-  const savedCount = useMemo(() => p.items.filter((i) => i.saved).length, [p.items])
-  const videoJobs = useVideoJobs()
-  const canSaveVideos = useVideoSavingAvailable()
-  // Saved videos plus unfinished downloads; the entry shows where videos can be saved or already are
-  const downloadCount = useMemo(() => p.items.filter((i) => i.offlineVideo).length, [p.items]) + Object.keys(videoJobs).length
-  const showDownloads = canSaveVideos || downloadCount > 0 || p.showingDownloads
 
   const tags = useMemo(() => {
     const byTag = new Map<string, Feed[]>()
@@ -124,7 +114,7 @@ export function Sidebar(p: Props) {
   const folderNames = tags.map(([t]) => t).filter(Boolean)
 
   const playlists = usePlaylists()
-  const isSel = (s: Selection) => !p.searching && !p.showingHome && !p.showingDiscover && !p.managing && !p.showingHighlights && !p.showingDownloads && p.showingPlaylist === null && JSON.stringify(s) === JSON.stringify(p.selection)
+  const isSel = (s: Selection) => !p.searching && p.showingList && JSON.stringify(s) === JSON.stringify(p.selection)
 
   const feedRow = (f: Feed, i: number, folder: Feed[]) => (
     <li
@@ -176,6 +166,22 @@ export function Sidebar(p: Props) {
     </li>
   )
 
+  const playlistRows = playlists.length ? (
+            <ul className="nav-list nested">
+              {playlists.map((pl) => (
+                <li key={pl.id}>
+                  <button className={`nav-row pl-nav${p.showingPlaylist === pl.id ? ' selected' : ''}`} onClick={() => p.onPlaylists(pl.id)}>
+                    <span className="pl-nav-dot" style={{ background: pl.color }} aria-hidden="true">
+                      {pl.icon}
+                    </span>
+                    <span className="nav-title">{pl.name}</span>
+                    {pl.smart ? <Icon name="bolt" size={14} title="Smart playlist" /> : <span className="count muted">{pl.itemIds.length}</span>}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null
+
   return (
     <nav className="sidebar">
       <div className="sidebar-rail" aria-label="Feeds (collapsed)">
@@ -183,54 +189,17 @@ export function Sidebar(p: Props) {
         <button className="rail-btn" title={`Search everything (${searchKeys()})`} aria-label="Search" onClick={p.onSearch}>
           <Icon name="search" size={20} />
         </button>
-        <button className={`rail-btn${p.showingHome ? ' selected' : ''}`} title="Home: all your feeds as tiles" aria-label="Home" onClick={p.onHome}>
-          <Icon name="home" size={20} />
-        </button>
-        <button className={`rail-btn${p.showingDiscover ? ' selected' : ''}`} title="Discover new feeds, podcasts and channels" aria-label="Discover" onClick={p.onDiscover}>
-          <Icon name="explore" size={20} />
-        </button>
-        <button
-          className={`rail-btn${isSel({ kind: 'all' }) ? ' selected' : ''}`}
-          title={`All articles${totalUnread ? ` (${totalUnread} unread)` : ''}`}
-          aria-label="All articles"
-          onClick={() => p.onSelect({ kind: 'all' })}
-        >
-          <Icon name="article" size={20} />
-        </button>
-        <button
-          className={`rail-btn${isSel({ kind: 'saved' }) ? ' selected' : ''}`}
-          title="Saved"
-          aria-label="Saved"
-          onClick={() => p.onSelect({ kind: 'saved' })}
-        >
-          <Icon name="bookmark" size={20} />
-        </button>
-        <button
-          className={`rail-btn${p.showingHighlights ? ' selected' : ''}`}
-          title="Highlights"
-          aria-label="Highlights"
-          onClick={p.onHighlights}
-        >
-          <Icon name="highlight" size={20} />
-        </button>
-        <button
-          className={`rail-btn${p.showingPlaylist !== null ? ' selected' : ''}`}
-          title="Playlists"
-          aria-label="Playlists"
-          onClick={() => p.onPlaylists('')}
-        >
-          <Icon name="queue" size={20} />
-        </button>
-        {showDownloads ? (
+        {TABS.map((t) => (
           <button
-            className={`rail-btn${p.showingDownloads ? ' selected' : ''}`}
-            title="Downloads"
-            aria-label="Downloads"
-            onClick={p.onDownloads}
+            key={t.tab}
+            className={`rail-btn${p.currentTab === t.tab ? ' selected' : ''}`}
+            title={`${t.label}: ${t.hint} (${tabKeys(t.tab)})`}
+            aria-label={t.label}
+            onClick={() => p.onTab(t.tab)}
           >
-            <Icon name="download" size={20} />
+            <Icon name={t.icon} size={20} />
           </button>
-        ) : null}
+        ))}
         <span className="rail-gap" />
         <IconButton icon="refresh" label={p.refreshing ? `Refreshing ${p.refreshing}` : 'Refresh'} onClick={p.onRefresh} disabled={!!p.refreshing} />
         <IconButton icon="add" label="Add feed" onClick={p.onAddFeed} />
@@ -254,71 +223,22 @@ export function Sidebar(p: Props) {
       </button>
       {p.refreshing ? <div className="sidebar-status">Refreshing {p.refreshing}</div> : null}
       <ul className="nav-list">
-        <li>
-          <button className={`nav-row${p.showingHome ? ' selected' : ''}`} onClick={p.onHome}>
-            <Icon name="home" size={20} />
-            <span className="nav-title">Home</span>
-            <span className="count muted">{p.feeds.length}</span>
-          </button>
-        </li>
-        <li>
-          <button className={`nav-row${p.showingDiscover ? ' selected' : ''}`} onClick={p.onDiscover}>
-            <Icon name="explore" size={20} />
-            <span className="nav-title">Discover</span>
-          </button>
-        </li>
-        <li>
-          <button className={`nav-row${isSel({ kind: 'all' }) ? ' selected' : ''}`} onClick={() => p.onSelect({ kind: 'all' })}>
-            <Icon name="article" size={20} />
-            <span className="nav-title">All articles</span>
-            {totalUnread ? <span className="count">{totalUnread}</span> : null}
-          </button>
-        </li>
-        <li>
-          <button className={`nav-row${isSel({ kind: 'saved' }) ? ' selected' : ''}`} onClick={() => p.onSelect({ kind: 'saved' })}>
-            <Icon name="bookmark" size={20} />
-            <span className="nav-title">Saved</span>
-            {savedCount ? <span className="count muted">{savedCount}</span> : null}
-          </button>
-        </li>
-        <li>
-          <button className={`nav-row${p.showingHighlights ? ' selected' : ''}`} onClick={p.onHighlights}>
-            <Icon name="highlight" size={20} />
-            <span className="nav-title">Highlights</span>
-            {p.highlightCount ? <span className="count muted">{p.highlightCount}</span> : null}
-          </button>
-        </li>
-        {showDownloads ? (
-          <li>
-            <button className={`nav-row${p.showingDownloads ? ' selected' : ''}`} onClick={p.onDownloads}>
-              <Icon name="download" size={20} />
-              <span className="nav-title">Downloads</span>
-              {downloadCount ? <span className="count muted">{downloadCount}</span> : null}
+        {TABS.map((t) => (
+          <li key={t.tab}>
+            <button
+              className={`nav-row tab-row${p.currentTab === t.tab && (t.tab !== 'playlists' || !p.showingPlaylist) ? ' selected' : ''}`}
+              title={`${t.hint} (${tabKeys(t.tab)})`}
+              onClick={() => p.onTab(t.tab)}
+            >
+              <Icon name={t.icon} size={20} />
+              <span className="nav-title">{t.label}</span>
+              {t.tab === 'feeds' && totalUnread ? <span className="count">{totalUnread}</span> : null}
+              {t.tab === 'playlists' && playlists.length ? <span className="count muted">{playlists.length}</span> : null}
+              <kbd className="tab-kbd">G {t.key.toUpperCase()}</kbd>
             </button>
+            {t.tab === 'playlists' ? playlistRows : null}
           </li>
-        ) : null}
-        <li>
-          <button className={`nav-row${p.showingPlaylist === '' ? ' selected' : ''}`} onClick={() => p.onPlaylists('')}>
-            <Icon name="queue" size={20} />
-            <span className="nav-title">Playlists</span>
-            {playlists.length ? <span className="count muted">{playlists.length}</span> : null}
-          </button>
-          {playlists.length ? (
-            <ul className="nav-list nested">
-              {playlists.map((pl) => (
-                <li key={pl.id}>
-                  <button className={`nav-row pl-nav${p.showingPlaylist === pl.id ? ' selected' : ''}`} onClick={() => p.onPlaylists(pl.id)}>
-                    <span className="pl-nav-dot" style={{ background: pl.color }} aria-hidden="true">
-                      {pl.icon}
-                    </span>
-                    <span className="nav-title">{pl.name}</span>
-                    {pl.smart ? <Icon name="bolt" size={14} title="Smart playlist" /> : <span className="count muted">{pl.itemIds.length}</span>}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </li>
+        ))}
       </ul>
       {folderNames.length ? (
         <div className="folder-tools">
