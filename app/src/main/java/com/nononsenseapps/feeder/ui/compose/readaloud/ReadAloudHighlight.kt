@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
@@ -30,6 +31,9 @@ import com.nononsenseapps.feeder.model.html.LinearBlockQuote
 import com.nononsenseapps.feeder.model.html.LinearElement
 import com.nononsenseapps.feeder.model.html.LinearListItem
 import com.nononsenseapps.feeder.model.html.LinearText
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.IdentityHashMap
 
@@ -51,41 +55,89 @@ internal object CenteredSpeechBringIntoViewSpec : BringIntoViewSpec {
     ): Float = offset + size / 2f - containerSize / 2f
 }
 
+/**
+ * The article's viewport. While following the spoken text it keeps that text centered, and it
+ * stops following on user input: scrolling, dragging, or holding a finger on the text.
+ *
+ * Following never scrolls while a finger is down. A long press selects text (Copy, Highlight),
+ * and text moving under the finger would cancel it.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun SpeechFollowViewport(
     centerSpeech: Boolean,
+    onUserScroll: () -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    val spec = if (centerSpeech) CenteredSpeechBringIntoViewSpec else LocalBringIntoViewSpec.current
+    val touch = remember { TouchState() }
+    val spec =
+        if (centerSpeech) {
+            remember(touch) { HoldStillBringIntoViewSpec(CenteredSpeechBringIntoViewSpec, touch) }
+        } else {
+            LocalBringIntoViewSpec.current
+        }
     CompositionLocalProvider(LocalBringIntoViewSpec provides spec) {
-        Box(modifier, content = content)
+        Box(modifier.stopSpeechFollowingOnUserInput(touch, onUserScroll), content = content)
     }
+}
+
+internal class TouchState {
+    var down: Boolean = false
+}
+
+/** No scrolling to the spoken text while a finger is on the screen. */
+@OptIn(ExperimentalFoundationApi::class)
+internal class HoldStillBringIntoViewSpec(
+    private val spec: BringIntoViewSpec,
+    private val touch: TouchState,
+) : BringIntoViewSpec {
+    override fun calculateScrollDistance(
+        offset: Float,
+        size: Float,
+        containerSize: Float,
+    ): Float = if (touch.down) 0f else spec.calculateScrollDistance(offset, size, containerSize)
 }
 
 /** Programmatic bring-into-view scrolling must not disable following; user input must. */
 @Composable
-internal fun Modifier.stopSpeechFollowingOnUserScroll(onUserScroll: () -> Unit): Modifier {
+private fun Modifier.stopSpeechFollowingOnUserInput(
+    touch: TouchState,
+    onUserScroll: () -> Unit,
+): Modifier {
     val callback = rememberUpdatedState(onUserScroll)
-    return pointerInput(Unit) {
-        awaitPointerEventScope {
-            var origin: Offset? = null
-            var dragging = false
-            while (true) {
-                val event = awaitPointerEvent(PointerEventPass.Initial)
-                if (event.type == PointerEventType.Scroll && event.changes.any { it.scrollDelta != Offset.Zero }) {
-                    callback.value()
-                }
-                val pressed = event.changes.firstOrNull { it.pressed }
-                if (pressed == null) {
-                    origin = null
-                    dragging = false
-                } else if (origin == null) {
-                    origin = pressed.position
-                } else if (!dragging && (pressed.position - checkNotNull(origin)).getDistance() > viewConfiguration.touchSlop) {
-                    dragging = true
-                    callback.value()
+    return pointerInput(touch) {
+        coroutineScope {
+            var holding: Job? = null
+            awaitPointerEventScope {
+                var origin: Offset? = null
+                var dragging = false
+                while (true) {
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    if (event.type == PointerEventType.Scroll && event.changes.any { it.scrollDelta != Offset.Zero }) {
+                        callback.value()
+                    }
+                    val pressed = event.changes.firstOrNull { it.pressed }
+                    touch.down = pressed != null
+                    if (pressed == null) {
+                        origin = null
+                        dragging = false
+                        holding?.cancel()
+                        holding = null
+                    } else if (origin == null) {
+                        origin = pressed.position
+                        // Held: a long press to select text. A quick tap (read from here, links) leaves following on
+                        holding =
+                            launch {
+                                delay(viewConfiguration.longPressTimeoutMillis)
+                                callback.value()
+                            }
+                    } else if (!dragging && (pressed.position - checkNotNull(origin)).getDistance() > viewConfiguration.touchSlop) {
+                        dragging = true
+                        holding?.cancel()
+                        holding = null
+                        callback.value()
+                    }
                 }
             }
         }
