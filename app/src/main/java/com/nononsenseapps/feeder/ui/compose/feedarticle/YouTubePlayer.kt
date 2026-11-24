@@ -165,7 +165,7 @@ fun YouTubeVideoBlock(
                             throw e
                         } catch (e: Exception) {
                             Log.w(LOG_TAG, "No direct streams for $videoId, using YouTube's player", e)
-                            DetailsState.Failed
+                            DetailsState.Failed(failureReason(e))
                         }
                 }
                 val current = details
@@ -218,6 +218,7 @@ fun YouTubeVideoBlock(
                         onOpenInYouTube = openInYouTube,
                         transcriptShown = transcriptShown,
                         onToggleTranscript = toggleTranscript,
+                        playerLabel = stringResource(R.string.video_player_feeder),
                     )
                 } else {
                     // Download stays here too: saving can work when direct playback doesn't
@@ -229,6 +230,18 @@ fun YouTubeVideoBlock(
                         transcriptShown = transcriptShown,
                         onToggleTranscript = toggleTranscript,
                     )
+                    if (playFailed || current is DetailsState.Failed) {
+                        // Says which player this is and why Feeder's own could not be used
+                        val reason =
+                            if (playFailed) stringResource(R.string.video_player_streams_failed) else (current as DetailsState.Failed).reason
+                        Text(
+                            text = stringResource(R.string.video_player_youtube, reason),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
                 if (transcriptShown) {
                     val flow = (current as? DetailsState.Ready)?.details?.takeIf { !playFailed }
@@ -363,7 +376,23 @@ private sealed interface DetailsState {
         val details: VideoDetails,
     ) : DetailsState
 
-    data object Failed : DetailsState
+    data class Failed(
+        val reason: String,
+    ) : DetailsState
+}
+
+/** yt-dlp's own error line ("Sign in to confirm you're not a bot"), shortened, for the player label. */
+internal fun failureReason(e: Throwable): String {
+    val text = e.message.orEmpty()
+    val line =
+        text.lines().lastOrNull { it.contains("ERROR:") }
+            ?: text.lines().firstOrNull { it.isNotBlank() }
+            ?: e.javaClass.simpleName
+    return line
+        .substringAfter("ERROR:")
+        .replace(Regex("^\\s*\\[[^]]*]\\s*[A-Za-z0-9_-]{11}:\\s*"), "")
+        .trim()
+        .take(160)
 }
 
 /** "4:12 / 14:19" or "Watched" on a YouTube article's list row, once some of it was watched. */

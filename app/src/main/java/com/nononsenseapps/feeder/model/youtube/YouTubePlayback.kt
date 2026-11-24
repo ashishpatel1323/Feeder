@@ -75,8 +75,11 @@ data class PlaybackState(
     val audio: AudioStream?,
     val subtitle: SubtitleTrack?,
     val speed: Float,
-    /** Keeps playing (sound) with the screen off or in other apps, with lock-screen controls. */
-    val background: Boolean = false,
+    /**
+     * Keeps playing (sound) with the screen off or in other apps, with lock-screen and
+     * notification controls. On for every video; its Background button turns it off for one.
+     */
+    val background: Boolean = true,
     /** When the sleep timer pauses: epoch ms, [SLEEP_AT_END] or 0 = off. */
     val sleepAt: Long = 0,
     val segments: List<SkipSegment> = emptyList(),
@@ -133,6 +136,7 @@ class YouTubePlayback(
     private var reporter: PlaybackReporter? = null
     private var tick: Job? = null
     private var attached: String? = null
+    private var serviceStarted = false
     private val skippedSegments = mutableSetOf<String>()
 
     /**
@@ -167,6 +171,7 @@ class YouTubePlayback(
                 audio = details.audios.firstOrNull(),
                 subtitle = subtitle,
                 speed = p.speed,
+                background = true,
             )
         val exo =
             ExoPlayer
@@ -236,7 +241,7 @@ class YouTubePlayback(
         tick = null
         reporter = null
         _player.value = null
-        if (_state.value?.background == true) stopService()
+        stopService()
         _state.value = null
     }
 
@@ -285,11 +290,20 @@ class YouTubePlayback(
         if (current.background == on) return
         _state.value = current.copy(background = on)
         if (on) {
-            // Started while the app is in front (the button was tapped): allowed on every Android
-            app.startService(Intent(app, VideoPlaybackService::class.java))
+            if (_player.value?.isPlaying == true) startService()
         } else {
             stopService()
         }
+    }
+
+    /**
+     * Shows the player to Android (notification, lock screen) once it plays with background play
+     * on. Started from a tap in the app (play, or the Background button): allowed on every Android.
+     */
+    private fun startService() {
+        if (serviceStarted) return
+        serviceStarted = true
+        app.startService(Intent(app, VideoPlaybackService::class.java))
     }
 
     /** [minutes] from now, [PlaybackState.SLEEP_AT_END], or 0 = off. */
@@ -309,6 +323,7 @@ class YouTubePlayback(
     }
 
     private fun stopService() {
+        serviceStarted = false
         app.stopService(Intent(app, VideoPlaybackService::class.java))
     }
 
@@ -380,6 +395,7 @@ class YouTubePlayback(
     private fun listener(exo: ExoPlayer) =
         object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying && _state.value?.background == true) startService()
                 if (!isPlaying && exo.playbackState != Player.STATE_ENDED) {
                     reporter?.paused(exo.currentPosition / 1000.0, exo.durationSeconds())
                 }
