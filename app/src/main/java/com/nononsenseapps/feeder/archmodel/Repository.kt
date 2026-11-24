@@ -598,13 +598,27 @@ class Repository(
     }
 
     /**
+     * The article is opened from somewhere other than a feed list, such as a playlist: swiping
+     * goes through [ids] in this order, until an article is opened from a feed list again.
+     */
+    fun setArticleSwipeList(
+        source: String,
+        ids: List<Long>,
+    ) {
+        articleSwipeListKey = FixedSwipeList(source)
+        articleSwipeList = ids
+    }
+
+    /**
      * The articles before and after [itemId] in the list the user came from, null at either end.
      */
     suspend fun getArticleSwipeNeighbors(itemId: Long): Pair<Long?, Long?> {
         var list = articleSwipeList
         var index = list.indexOf(itemId)
         val key = currentArticleSwipeListKey()
-        if (index < 0 || key != articleSwipeListKey) {
+        // A playlist's order doesn't depend on the feed list's settings
+        val fixed = articleSwipeListKey is FixedSwipeList
+        if (index < 0 || (!fixed && key != articleSwipeListKey)) {
             // Opened from somewhere else, like a notification, or the list has changed since:
             // use the list as it is now
             list = loadCurrentFeedListIds(alsoIncludeId = itemId)
@@ -1267,3 +1281,8 @@ enum class TextToDisplay {
     // The site answered with a bot check or refused the app (Ars Technica's AWS WAF captcha, 403, 429)
     FAILED_BLOCKED,
 }
+
+/** The key of a swipe list set by [Repository.setArticleSwipeList], such as a playlist's. */
+private data class FixedSwipeList(
+    val source: String,
+)

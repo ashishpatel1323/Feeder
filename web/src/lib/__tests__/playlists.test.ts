@@ -170,3 +170,15 @@ describe('playlist items', () => {
     expect(describeRules(drive.rules, feeds).map((c) => c.value)).toEqual(['Podcast · Article', 'Unread or In progress', 'last 2 days', 'under 40 min'])
   })
 })
+
+describe('reading from an Unread smart playlist', () => {
+  it('drops the article once it is read, keeping the order of the rest', () => {
+    const pl = newPlaylist({ name: 'Unread', smart: true, rules: { ...EMPTY_RULES, statuses: ['unread'] } })
+    const a = art({ sortTime: NOW - 1000 })
+    const b = art({ sortTime: NOW - 2000 })
+    const c = art({ sortTime: NOW - 3000 })
+    expect(playlistItems(pl, [a, b, c], ctx()).map((i) => i.id)).toEqual([a.id, b.id, c.id])
+    const readB = { ...b, read: 1, readTime: NOW }
+    expect(playlistItems(pl, [a, readB, c], ctx()).map((i) => i.id)).toEqual([a.id, c.id])
+  })
+})

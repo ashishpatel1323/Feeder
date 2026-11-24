@@ -338,6 +338,16 @@ export default function App() {
     [settings.markReadOnOpen],
   )
 
+  // The playlist the open article came from: Back in the reader returns to it, not to the list
+  const [readerFrom, setReaderFrom] = useState<string | null>(null)
+  const leaveReader = useCallback(() => {
+    setPane('list')
+    if (readerFrom) {
+      setReaderFrom(null)
+      showPlaylists(readerFrom)
+    }
+  }, [readerFrom, showPlaylists])
+
   const goPrev = useCallback(() => prevId && open(prevId), [prevId, open])
   const goNext = useCallback(() => nextId && open(nextId), [nextId, open])
 
@@ -565,7 +575,7 @@ export default function App() {
           startFlip()
           break
         case 'Escape':
-          if (pane === 'reader') setPane('list')
+          if (pane === 'reader') leaveReader()
           break
         default:
           return
@@ -574,7 +584,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [dialog, visibleOrder, openId, nextId, prevId, goNext, goPrev, open, openItem, pane, toggleNav, managing, showManage, highlightsPage, showHighlights, downloadsPage, showDownloads, feedPage, closeFeedPage, startFlip, homePage, playlistPage, showPlaylists])
+  }, [dialog, visibleOrder, openId, nextId, prevId, goNext, goPrev, open, openItem, pane, toggleNav, managing, showManage, highlightsPage, showHighlights, downloadsPage, showDownloads, feedPage, closeFeedPage, startFlip, homePage, playlistPage, showPlaylists, leaveReader])
 
   const markAllRead = async () => {
     const ids = groups.flatMap((g) => g.items).filter((i) => !i.read).map((i) => i.id)
@@ -678,6 +688,7 @@ export default function App() {
       if (settings.markReadOnOpen && !item.read) db.items.update(item.id, { read: 1, readTime: Date.now(), readSynced: 0 })
       return
     }
+    setReaderFrom(null)
     open(item.id, visibleOrder)
   }
 
@@ -720,6 +731,7 @@ export default function App() {
           setSelection(s)
           setDrawer(false)
           setPane('list')
+          setReaderFrom(null)
           showManage(false)
           showHighlights(false)
           showDownloads(false)
@@ -783,6 +795,7 @@ export default function App() {
           onOpenArticle={(id, order) => {
             const it = items.find((i) => i.id === id)
             if (it?.link && opensInBrowser(feeds.get(it.feedUrl))) return void window.open(it.link, '_blank', 'noopener')
+            setReaderFrom(playlistPage || null)
             showPlaylists(null)
             open(id, order)
           }}
@@ -890,7 +903,8 @@ export default function App() {
           nextTitle={nextTitle}
           onPrev={goPrev}
           onNext={goNext}
-          onBack={() => setPane('list')}
+          onBack={leaveReader}
+          fromPlaylist={!!readerFrom}
           autoplay={autoplay}
           onAutoplayConsumed={() => setAutoplay(false)}
           toast={toast}
@@ -926,6 +940,7 @@ export default function App() {
           onOpenInReader={(id) => {
             setFlip(null)
             // Flip mode may have been opened from a playlist page, which would hide the reader
+            setReaderFrom(playlistPage || null)
             if (playlistPage != null) showPlaylists(null)
             open(id, flip.queue)
           }}
