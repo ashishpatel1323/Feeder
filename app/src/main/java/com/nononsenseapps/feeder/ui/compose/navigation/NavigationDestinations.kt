@@ -10,7 +10,11 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.navigation.NamedNavArgument
 import androidx.navigation.NavArgumentBuilder
 import androidx.navigation.NavBackStackEntry
@@ -565,11 +569,20 @@ data object FeedDestination : NavigationDestination(
         val navigationDeepLinkViewModel: NavigationDeepLinkViewModel =
             backStackEntry.diAwareViewModel()
 
+        // Saved with this back stack entry: false only the first time the list is shown, not
+        // when coming back to it from an article
+        var listOpened by rememberSaveable { mutableStateOf(false) }
+
         LaunchedEffect(feedId, tag) {
             logDebug(LOG_TAG, "FeedDestinationScreen setCurrent: $feedId, $tag")
             if (feedId != ID_UNSET || tag.isNotBlank()) {
-                navigationDeepLinkViewModel.setCurrentFeedAndTag(feedId = feedId, tag = tag)
+                navigationDeepLinkViewModel.setCurrentFeedAndTag(
+                    feedId = feedId,
+                    tag = tag,
+                    freshList = !listOpened,
+                )
             }
+            listOpened = true
         }
         FeedScreen(
             navController = navController,

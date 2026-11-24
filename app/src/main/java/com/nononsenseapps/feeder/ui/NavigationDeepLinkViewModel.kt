@@ -12,11 +12,20 @@ class NavigationDeepLinkViewModel(
 ) : DIAwareViewModel(di) {
     private val repository: Repository by instance()
 
+    /**
+     * [freshList]: the list was just opened (not returned to from an article), so articles
+     * read before now leave the Unread list.
+     */
     fun setCurrentFeedAndTag(
         feedId: Long,
         tag: String,
+        freshList: Boolean = false,
     ) {
-        repository.setCurrentFeedAndTag(feedId, tag)
+        if (freshList) {
+            repository.openFeedList(feedId, tag)
+        } else {
+            repository.setCurrentFeedAndTag(feedId, tag)
+        }
         // Should open feed in portrait
         repository.setIsArticleOpen(false)
     }
