@@ -28,7 +28,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Check
@@ -44,7 +43,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -98,7 +96,6 @@ private fun DiscoverKind.icon(): ImageVector =
 @Composable
 fun DiscoverScreen(
     viewModel: DiscoverViewModel,
-    onNavigateUp: () -> Unit,
     onOpenFeed: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -113,12 +110,9 @@ fun DiscoverScreen(
         contentWindowInsets = WindowInsets.statusBars,
         topBar = {
             SensibleTopAppBar(
+                // A tab of its own now: no Back arrow. It keeps a title instead of the global
+                // search bar, since its own search field (for new feeds) is right below.
                 title = "Discover",
-                navigationIcon = {
-                    IconButton(onClick = onNavigateUp) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
             )
         },
     ) { padding ->

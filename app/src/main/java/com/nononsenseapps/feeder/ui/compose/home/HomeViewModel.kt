@@ -3,6 +3,7 @@ package com.nononsenseapps.feeder.ui.compose.home
 import android.content.SharedPreferences
 import androidx.core.content.edit
 import androidx.lifecycle.viewModelScope
+import com.nononsenseapps.feeder.archmodel.Repository
 import com.nononsenseapps.feeder.background.runOnceRssSync
 import com.nononsenseapps.feeder.base.DIAwareViewModel
 import com.nononsenseapps.feeder.db.room.FeedDao
@@ -57,6 +58,10 @@ class HomeViewModel(
 ) : DIAwareViewModel(di) {
     private val feedDao: FeedDao by instance()
     private val prefs: SharedPreferences by instance()
+    private val repository: Repository by instance()
+
+    /** True while feeds sync: the spinner of pull-to-refresh. */
+    val syncing: StateFlow<Boolean> = repository.currentlySyncing.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     private val filter = MutableStateFlow(HomeFilter())
     private val openFolder = MutableStateFlow<String?>(null)

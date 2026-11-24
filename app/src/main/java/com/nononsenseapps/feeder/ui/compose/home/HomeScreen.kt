@@ -1,8 +1,10 @@
 package com.nononsenseapps.feeder.ui.compose.home
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,16 +35,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Article
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -85,6 +83,11 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.nononsenseapps.feeder.R
+import com.nononsenseapps.feeder.ui.compose.navigation.FeedsViewSwitch
+import com.nononsenseapps.feeder.ui.compose.navigation.GlobalSearchTopBar
+import com.nononsenseapps.feeder.ui.compose.pullrefresh.PullRefreshIndicator
+import com.nononsenseapps.feeder.ui.compose.pullrefresh.pullRefresh
+import com.nononsenseapps.feeder.ui.compose.pullrefresh.rememberPullRefreshState
 import com.nononsenseapps.feeder.ui.compose.theme.SensibleTopAppBar
 
 @Composable
@@ -92,69 +95,62 @@ fun HomeScreen(
     viewModel: HomeViewModel,
     onOpenFeed: (Long) -> Unit,
     onOpenFolderArticles: (String) -> Unit,
-    onOpenArticles: () -> Unit,
     onAddFeed: () -> Unit,
     modifier: Modifier = Modifier,
-    onOpenPlaylists: () -> Unit = {},
-    onDiscover: () -> Unit = {},
     onManageFeeds: () -> Unit = {},
-    onSearch: () -> Unit = {},
+    onEditFeed: (Long) -> Unit = {},
 ) {
     val state by viewModel.viewState.collectAsStateWithLifecycle()
+    val syncing by viewModel.syncing.collectAsStateWithLifecycle()
     var menuOpen by remember { mutableStateOf(false) }
     val folder = state.openFolder
+    val pullRefreshState = rememberPullRefreshState(refreshing = syncing, onRefresh = viewModel::refreshAll)
 
     BackHandler(enabled = folder != null) { viewModel.openFolder(null) }
 
     Scaffold(
-        modifier = modifier.windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal)),
+        modifier =
+            modifier
+                .pullRefresh(pullRefreshState)
+                .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal)),
         contentWindowInsets = WindowInsets.statusBars,
         topBar = {
-            SensibleTopAppBar(
-                title = folder ?: stringResource(R.string.home),
-                navigationIcon = {
-                    if (folder != null) {
+            if (folder != null) {
+                SensibleTopAppBar(
+                    title = folder,
+                    navigationIcon = {
                         IconButton(onClick = { viewModel.openFolder(null) }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.go_back))
                         }
-                    }
-                },
-                actions = {
-                    LabeledAction(Icons.Default.Search, stringResource(R.string.search_verb), onSearch)
-                    if (folder != null) {
+                    },
+                    actions = {
                         LabeledAction(Icons.AutoMirrored.Filled.Article, stringResource(R.string.home_show_articles)) { onOpenFolderArticles(folder) }
-                    } else {
-                        LabeledAction(Icons.AutoMirrored.Filled.List, stringResource(R.string.home_articles), onOpenArticles)
-                    }
-                    LabeledAction(Icons.Default.Explore, stringResource(R.string.discover), onDiscover)
-                    LabeledAction(Icons.AutoMirrored.Filled.QueueMusic, stringResource(R.string.playlists), onOpenPlaylists)
-                    // Less used destinations live in the menu
-                    Box {
-                        IconButton(onClick = { menuOpen = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.open_menu))
-                        }
-                        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                            // In the menu so the title still fits beside Search
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.home_refresh)) },
-                                leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
-                                onClick = {
-                                    menuOpen = false
-                                    viewModel.refreshAll()
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.manage_feeds)) },
-                                leadingIcon = { Icon(Icons.Default.Tune, contentDescription = null) },
-                                onClick = {
-                                    menuOpen = false
-                                    onManageFeeds()
-                                },
-                            )
-                        }
-                    }
-                },
-            )
+                    },
+                )
+            } else {
+                Column {
+                    GlobalSearchTopBar(
+                        actions = {
+                            Box {
+                                IconButton(onClick = { menuOpen = true }) {
+                                    Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.open_menu))
+                                }
+                                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.home_refresh)) },
+                                        leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
+                                        onClick = {
+                                            menuOpen = false
+                                            viewModel.refreshAll()
+                                        },
+                                    )
+                                }
+                            }
+                        },
+                    )
+                    FeedsViewSwitch(latest = false)
+                }
+            }
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
@@ -177,8 +173,11 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier.padding(padding).fillMaxSize(),
         ) {
-            header("filters") { Filters(state, viewModel) }
-            homeBody(state, viewModel, onOpenFeed)
+            header("filters") { Filters(state, viewModel, onManageFeeds) }
+            homeBody(state, viewModel, onOpenFeed, onEditFeed)
+        }
+        Box(Modifier.padding(padding).fillMaxSize()) {
+            PullRefreshIndicator(syncing, pullRefreshState, Modifier.align(Alignment.TopCenter))
         }
     }
 }
@@ -192,6 +191,7 @@ private fun LazyGridScope.homeBody(
     state: HomeViewState,
     viewModel: HomeViewModel,
     onOpenFeed: (Long) -> Unit,
+    onEditFeed: (Long) -> Unit,
 ) {
     if (!state.loaded) return
     val shown = state.shown
@@ -207,7 +207,7 @@ private fun LazyGridScope.homeBody(
         state.asFolders -> {
             val (folders, loose) = shown.groupByFolder(state.sort)
             items(folders, key = { "folder:${it.name}" }) { FolderTile(it) { viewModel.openFolder(it.name) } }
-            items(loose, key = { it.id }) { FeedTile(it) { onOpenFeed(it.id) } }
+            items(loose, key = { it.id }) { FeedTile(it, onLongClick = { onEditFeed(it.id) }) { onOpenFeed(it.id) } }
         }
         state.group == HomeGroup.TYPE && state.openFolder == null -> {
             val sorted = shown.sortHome(state.sort)
@@ -223,10 +223,10 @@ private fun LazyGridScope.homeBody(
                         Text("${list.size}", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                items(list, key = { it.id }) { FeedTile(it) { onOpenFeed(it.id) } }
+                items(list, key = { it.id }) { FeedTile(it, onLongClick = { onEditFeed(it.id) }) { onOpenFeed(it.id) } }
             }
         }
-        else -> items(shown.sortHome(state.sort), key = { it.id }) { FeedTile(it) { onOpenFeed(it.id) } }
+        else -> items(shown.sortHome(state.sort), key = { it.id }) { FeedTile(it, onLongClick = { onEditFeed(it.id) }) { onOpenFeed(it.id) } }
     }
 }
 
@@ -280,17 +280,44 @@ private fun FeedKind.icon(): ImageVector =
 private fun Filters(
     state: HomeViewState,
     viewModel: HomeViewModel,
+    onManageFeeds: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-            CountChip(state.filter.kind == null, stringResource(R.string.home_type_all), state.kindCount(null)) { viewModel.setKind(null) }
-            for (kind in FeedKind.entries) {
-                CountChip(state.filter.kind == kind, kind.label(), state.kindCount(kind), kind.icon()) {
-                    viewModel.setKind(if (state.filter.kind == kind) null else kind)
-                }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ChipsRow(state, viewModel, Modifier.weight(1f))
+            TextButton(onClick = onManageFeeds) {
+                Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.manage_short))
             }
-            CountChip(state.filter.unreadOnly, stringResource(R.string.home_has_unread), state.unreadCount) { viewModel.toggleUnreadOnly() }
         }
+        FiltersRest(state, viewModel)
+    }
+}
+
+@Composable
+private fun ChipsRow(
+    state: HomeViewState,
+    viewModel: HomeViewModel,
+    modifier: Modifier = Modifier,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = modifier.horizontalScroll(rememberScrollState())) {
+        CountChip(state.filter.kind == null, stringResource(R.string.home_type_all), state.kindCount(null)) { viewModel.setKind(null) }
+        for (kind in FeedKind.entries) {
+            CountChip(state.filter.kind == kind, kind.label(), state.kindCount(kind), kind.icon()) {
+                viewModel.setKind(if (state.filter.kind == kind) null else kind)
+            }
+        }
+        CountChip(state.filter.unreadOnly, stringResource(R.string.home_has_unread), state.unreadCount) { viewModel.toggleUnreadOnly() }
+    }
+}
+
+@Composable
+private fun FiltersRest(
+    state: HomeViewState,
+    viewModel: HomeViewModel,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         if (state.openFolder == null) {
             val folders = state.folderCounts
             if (folders.any { it.first.isNotBlank() }) {
@@ -462,9 +489,11 @@ private fun Badge(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FeedTile(
     feed: HomeFeed,
+    onLongClick: () -> Unit,
     onClick: () -> Unit,
 ) {
     val description = stringResource(R.string.home_feed_tile, feed.title, feed.unread)
@@ -474,7 +503,8 @@ private fun FeedTile(
                 .aspectRatio(1f)
                 .shadow(2.dp, RoundedCornerShape(6.dp))
                 .clip(RoundedCornerShape(6.dp))
-                .clickable(onClick = onClick)
+                // Long-press opens the feed's settings
+                .combinedClickable(onClick = onClick, onLongClick = onLongClick)
                 .semantics { contentDescription = description },
     ) {
         Box(Modifier.clearAndSetSemantics { }) { Art(feed) }
