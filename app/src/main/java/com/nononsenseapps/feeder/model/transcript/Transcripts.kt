@@ -364,6 +364,18 @@ class Transcripts(
         if (!part.renameTo(target)) error("Could not save ${target.name}")
     }
 
+    /** Every transcript saved on the phone, as lines by item id, for global search. Call off the main thread. */
+    fun storedLines(): Map<Long, List<TranscriptCue>> =
+        dir
+            .listFiles { f -> f.isFile && f.name.endsWith(".json") }
+            .orEmpty()
+            .mapNotNull { file ->
+                file.name
+                    .removeSuffix(".json")
+                    .toLongOrNull()
+                    ?.let { id -> readStored(id)?.let { id to it.cues } }
+            }.toMap()
+
     private fun readStored(itemId: Long): StoredTranscript? =
         File(dir, "$itemId.json")
             .takeIf { it.isFile }

@@ -42,6 +42,10 @@ interface FeedItemDao {
     )
     fun loadPlaylistCandidates(): Flow<List<PlaylistCandidate>>
 
+    /** Snippet and author of every article, for global search (titles come with the candidates). */
+    @Query("SELECT id, plain_snippet, author FROM feed_items WHERE block_time IS NULL")
+    fun loadSearchTexts(): Flow<List<SearchText>>
+
     /** Read and saved state of [ids], kept up to date (Save and Mark read on download rows). */
     @Query(
         """

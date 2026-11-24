@@ -234,7 +234,14 @@ data object DownloadsDestination : NavigationDestination(
 /** Playlists to listen to (smart and hand-made), with the Now playing bar and car mode. */
 data object PlaylistsDestination : NavigationDestination(
     path = "playlists",
-    navArguments = emptyList(),
+    navArguments =
+        listOf(
+            // A playlist to open right away (from global search), "" for the list of playlists
+            QueryParamArgument("open") {
+                type = NavType.StringType
+                defaultValue = ""
+            },
+        ),
     // The playlist notification opens Playlists
     deepLinks =
         listOf(
@@ -242,6 +249,44 @@ data object PlaylistsDestination : NavigationDestination(
                 uriPattern = "$DEEP_LINK_BASE_URI/playlists"
             },
         ),
+) {
+    fun navigate(
+        navController: NavController,
+        open: String = "",
+    ) {
+        navController.navigate(if (open.isEmpty()) path else "$path?open=${Uri.encode(open)}") {
+            launchSingleTop = true
+        }
+    }
+
+    @Composable
+    override fun RegisterScreen(
+        navController: NavController,
+        backStackEntry: NavBackStackEntry,
+        navDrawerListState: LazyListState,
+        mainActivityViewModel: MainActivityViewModel,
+    ) {
+        val viewModel: com.nononsenseapps.feeder.ui.compose.playlists.PlaylistsViewModel = backStackEntry.diAwareViewModel()
+        val open = remember { backStackEntry.arguments?.getString("open").orEmpty() }
+        // Only the first time: Back from the open playlist then shows the list
+        var opened by rememberSaveable { mutableStateOf(false) }
+        LaunchedEffect(open) {
+            if (open.isNotEmpty() && !opened) viewModel.open(open)
+            opened = true
+        }
+        PlaylistsScreen(
+            viewModel = viewModel,
+            onNavigateUp = { navController.popBackStack() },
+            onOpenArticle = { id -> ArticleDestination.navigate(navController, itemId = id) },
+        )
+    }
+}
+
+/** Global search: articles, episodes, videos, transcripts, highlights, feeds, folders and playlists. */
+data object GlobalSearchDestination : NavigationDestination(
+    path = "search/global",
+    navArguments = emptyList(),
+    deepLinks = emptyList(),
 ) {
     fun navigate(navController: NavController) {
         navController.navigate(path) {
@@ -256,10 +301,22 @@ data object PlaylistsDestination : NavigationDestination(
         navDrawerListState: LazyListState,
         mainActivityViewModel: MainActivityViewModel,
     ) {
-        PlaylistsScreen(
+        val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+        com.nononsenseapps.feeder.ui.compose.search.GlobalSearchScreen(
             viewModel = backStackEntry.diAwareViewModel(),
-            onNavigateUp = { navController.popBackStack() },
-            onOpenArticle = { id -> ArticleDestination.navigate(navController, itemId = id) },
+            nav =
+                com.nononsenseapps.feeder.ui.compose.search.GlobalSearchNav(
+                    onBack = { navController.popBackStack() },
+                    onOpenArticle = { id -> ArticleDestination.navigate(navController, itemId = id) },
+                    onOpenFeed = { id -> FeedDestination.navigate(navController, feedId = id, keepBackStack = true) },
+                    onOpenFolder = { tag -> FeedDestination.navigate(navController, tag = tag, keepBackStack = true) },
+                    onOpenPlaylist = { id -> PlaylistsDestination.navigate(navController, open = id) },
+                    onOpenLink = { link -> runCatching { uriHandler.openUri(link) } },
+                    onAddFeed = { SearchFeedDestination.navigate(navController) },
+                    onDiscover = { DiscoverDestination.navigate(navController) },
+                    onPlaylists = { PlaylistsDestination.navigate(navController) },
+                    onHighlights = { HighlightsDestination.navigate(navController) },
+                ),
         )
     }
 }
@@ -350,6 +407,7 @@ data object HomeDestination : NavigationDestination(
             onOpenPlaylists = { PlaylistsDestination.navigate(navController) },
             onDiscover = { DiscoverDestination.navigate(navController) },
             onManageFeeds = { ManageFeedsDestination.navigate(navController) },
+            onSearch = { GlobalSearchDestination.navigate(navController) },
         )
     }
 }

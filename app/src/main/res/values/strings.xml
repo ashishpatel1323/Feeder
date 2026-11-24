@@ -533,4 +533,30 @@
   <string name="undo">Undo</string>
   <string name="no_link_shared">There is no link in what was shared</string>
   <string name="shared_link_full_article">Full article opens in the reader · syncs to web and Mac</string>
+  <!-- Global search -->
+  <string name="search_everything">Search everything</string>
+  <string name="search_hint">Search articles, episodes, videos, feeds…</string>
+  <string name="search_recent">Recent searches</string>
+  <string name="search_forget">Remove %1$s from recent searches</string>
+  <string name="search_jump_back">Jump back in</string>
+  <string name="search_go_to">Go to</string>
+  <string name="search_add_feed">Add a feed</string>
+  <string name="search_top_hit">Top hit</string>
+  <string name="search_scope_all">All</string>
+  <string name="search_scope_articles">Articles</string>
+  <string name="search_scope_episodes">Episodes</string>
+  <string name="search_scope_videos">Videos</string>
+  <string name="search_scope_highlights">Highlights</string>
+  <string name="search_scope_library">Feeds &amp; playlists</string>
+  <string name="search_library_group">Feeds, folders and playlists</string>
+  <string name="search_show_all">Show all %1$d</string>
+  <string name="search_no_matches">No matches for “%1$s”</string>
+  <string name="search_play_from">Play from %1$s</string>
+  <string name="search_percent_played">%1$d%% played</string>
+  <string name="search_clear">Clear search</string>
+  <string name="search_feed">Feed</string>
+  <string name="search_unread">%1$d unread</string>
+  <string name="search_folder_feeds">Folder · %1$d feeds</string>
+  <string name="search_playlist">Playlist</string>
+  <string name="search_smart_playlist">Smart playlist</string>
 </resources>

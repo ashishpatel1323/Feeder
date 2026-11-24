@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -97,6 +98,7 @@ fun HomeScreen(
     onOpenPlaylists: () -> Unit = {},
     onDiscover: () -> Unit = {},
     onManageFeeds: () -> Unit = {},
+    onSearch: () -> Unit = {},
 ) {
     val state by viewModel.viewState.collectAsStateWithLifecycle()
     var menuOpen by remember { mutableStateOf(false) }
@@ -118,6 +120,7 @@ fun HomeScreen(
                     }
                 },
                 actions = {
+                    LabeledAction(Icons.Default.Search, stringResource(R.string.search_verb), onSearch)
                     if (folder != null) {
                         LabeledAction(Icons.AutoMirrored.Filled.Article, stringResource(R.string.home_show_articles)) { onOpenFolderArticles(folder) }
                     } else {
@@ -125,13 +128,21 @@ fun HomeScreen(
                     }
                     LabeledAction(Icons.Default.Explore, stringResource(R.string.discover), onDiscover)
                     LabeledAction(Icons.AutoMirrored.Filled.QueueMusic, stringResource(R.string.playlists), onOpenPlaylists)
-                    LabeledAction(Icons.Default.Refresh, stringResource(R.string.home_refresh), viewModel::refreshAll)
                     // Less used destinations live in the menu
                     Box {
                         IconButton(onClick = { menuOpen = true }) {
                             Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.open_menu))
                         }
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                            // In the menu so the title still fits beside Search
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.home_refresh)) },
+                                leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
+                                onClick = {
+                                    menuOpen = false
+                                    viewModel.refreshAll()
+                                },
+                            )
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.manage_feeds)) },
                                 leadingIcon = { Icon(Icons.Default.Tune, contentDescription = null) },
