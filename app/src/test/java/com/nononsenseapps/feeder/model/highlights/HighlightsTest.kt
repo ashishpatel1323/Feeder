@@ -44,6 +44,13 @@ class HighlightsTest {
     }
 
     @Test
+    fun findsWebHighlightsWithStraightQuotes() {
+        val curly = HighlightLocator(listOf("One of Apple\u2019s biggest shows \u2014 yes."))
+        assertEquals(mapOf(0 to 7..21), curly.ranges("Apple's biggest", "", 0))
+        assertEquals(mapOf(0 to 29..33), curly.ranges("- yes", "", 0))
+    }
+
+    @Test
     fun textNotInTheArticleIsNotFound() {
         assertNull(locator.anchorOf("a cat"))
         assertTrue(locator.ranges("a cat", "", 0).isEmpty())

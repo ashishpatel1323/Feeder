@@ -23,15 +23,15 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -161,7 +161,7 @@ private const val PREFS = "share_image"
 /**
  * Share a highlight as an image, Strava style: the article's picture, your own photo or a color,
  * with the highlighted text on it. Four layouts, story or post size. The share sheet gets the
- * image with the quote and link as its text (also put on the clipboard, since many apps drop it).
+ * image with the quote and link as its text; Copy text + link is there for apps that drop it.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -288,38 +288,46 @@ fun ShareImageDialog(
                             .padding(horizontal = FeederTokens.Space.lg, vertical = FeederTokens.Space.sm),
                 ) {
                     // The image, with arrows and swipes to step through the layouts
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        IconButton(onClick = { step(-1) }) {
-                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = stringResource(R.string.share_previous_layout))
-                        }
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier =
-                                Modifier
-                                    .weight(1f)
-                                    .heightIn(max = 460.dp)
-                                    .aspectRatio(size.w.toFloat() / size.h)
-                                    .clip(RoundedCornerShape(FeederTokens.Radius.md))
-                                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                                    .pointerInput(Unit) {
-                                        var total = 0f
-                                        detectHorizontalDragGestures(
-                                            onDragStart = { total = 0f },
-                                            onDragEnd = { if (abs(total) > 50) step(if (total < 0) 1 else -1) },
-                                        ) { _, dx -> total += dx }
-                                    },
+                    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                        // Exactly the image's shape: as wide as fits between the arrows, at most 460 dp tall
+                        val ratio = size.w.toFloat() / size.h
+                        val previewHeight = minOf(460.dp, (maxWidth - 96.dp) / ratio)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier.fillMaxWidth(),
                         ) {
-                            preview?.let {
-                                Image(
-                                    bitmap = it.asImageBitmap(),
-                                    contentDescription = subject.text,
-                                    contentScale = ContentScale.Fit,
-                                    modifier = Modifier.fillMaxSize(),
-                                )
+                            IconButton(onClick = { step(-1) }) {
+                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = stringResource(R.string.share_previous_layout))
                             }
-                        }
-                        IconButton(onClick = { step(1) }) {
-                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = stringResource(R.string.share_next_layout))
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier =
+                                    Modifier
+                                        .height(previewHeight)
+                                        .width(previewHeight * ratio)
+                                        .clip(RoundedCornerShape(FeederTokens.Radius.md))
+                                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                                        .pointerInput(Unit) {
+                                            var total = 0f
+                                            detectHorizontalDragGestures(
+                                                onDragStart = { total = 0f },
+                                                onDragEnd = { if (abs(total) > 50) step(if (total < 0) 1 else -1) },
+                                            ) { _, dx -> total += dx }
+                                        },
+                            ) {
+                                preview?.let {
+                                    Image(
+                                        bitmap = it.asImageBitmap(),
+                                        contentDescription = subject.text,
+                                        contentScale = ContentScale.Fit,
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
+                                }
+                            }
+                            IconButton(onClick = { step(1) }) {
+                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = stringResource(R.string.share_next_layout))
+                            }
                         }
                     }
 
@@ -547,9 +555,6 @@ private suspend fun shareImage(
             }
         }
     val uri = FileProvider.getUriForFile(context, "${context.packageName}.shareimages", file)
-    // The caption also goes on the clipboard: many apps drop the text when sharing an image
-    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-    cm.setPrimaryClip(ClipData.newPlainText("Feeder", caption))
     val send =
         Intent(Intent.ACTION_SEND).apply {
             type = "image/png"

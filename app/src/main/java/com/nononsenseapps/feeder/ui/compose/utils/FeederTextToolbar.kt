@@ -15,7 +15,6 @@ import android.view.MenuItem
 import android.view.View
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.remember
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalTextToolbar
 import androidx.compose.ui.platform.LocalView
@@ -30,10 +29,7 @@ private const val LOG_TAG = "FEEDER_TEXTTOOL"
 @Composable
 fun WithFeederTextToolbar(content: @Composable () -> Unit) {
     val activityLauncher: ActivityLauncher by LocalDI.current.instance()
-    val view = LocalView.current
-    // One toolbar per view, so a screen can add its own action to it (the article's Highlight)
-    val toolbar = remember(view) { FeederTextToolbar(view, activityLauncher) }
-    CompositionLocalProvider(LocalTextToolbar provides toolbar) {
+    CompositionLocalProvider(LocalTextToolbar provides FeederTextToolbar(LocalView.current, activityLauncher)) {
         content()
     }
 }
@@ -53,16 +49,6 @@ class FeederTextToolbar(
         )
     override var status: TextToolbarStatus = TextToolbarStatus.Hidden
         private set
-
-    /**
-     * An extra first action for selected text, with its label, set by the screen showing the text
-     * (the article screen's Highlight). It gets the selected text.
-     */
-    var extraAction: Pair<String, (String) -> Unit>?
-        get() = textActionModeCallback.extraAction
-        set(value) {
-            textActionModeCallback.extraAction = value
-        }
 
     override fun hide() {
         status = TextToolbarStatus.Hidden
@@ -104,7 +90,6 @@ class FeederTextActionModeCallback(
     var onPasteRequested: (() -> Unit)? = null,
     var onCutRequested: (() -> Unit)? = null,
     var onSelectAllRequested: (() -> Unit)? = null,
-    var extraAction: Pair<String, (String) -> Unit>? = null,
 ) : ActionMode.Callback {
     private val displayNameComparator by lazy {
         ResolveInfo.DisplayNameComparator(packageManager)
@@ -125,7 +110,6 @@ class FeederTextActionModeCallback(
         requireNotNull(menu)
         requireNotNull(mode)
 
-        addExtraAction(menu)
         onCopyRequested?.let {
             addMenuItem(menu, MenuItemOption.Copy)
         }
@@ -160,10 +144,6 @@ class FeederTextActionModeCallback(
         item: MenuItem?,
     ): Boolean {
         when (val itemId = item!!.itemId) {
-            EXTRA_ACTION_ID -> {
-                val action = extraAction?.second
-                copySelection()?.let { text -> action?.invoke(text) }
-            }
             MenuItemOption.Copy.id -> onCopyRequested?.invoke()
             MenuItemOption.Paste.id -> onPasteRequested?.invoke()
             MenuItemOption.Cut.id -> onCutRequested?.invoke()
@@ -207,33 +187,6 @@ class FeederTextActionModeCallback(
         onActionModeDestroy?.invoke()
     }
 
-    /** The selected text, read through the clipboard (Compose doesn't offer it), which is then put back. */
-    private fun copySelection(): String? {
-        val prevClip = clipboardManager.primaryClip
-        onCopyRequested?.invoke() ?: return null
-        val text =
-            clipboardManager.primaryClip
-                ?.takeIf { it.itemCount > 0 }
-                ?.getItemAt(0)
-                ?.coerceToText(context)
-                ?.toString()
-        try {
-            prevClip?.let { clipboardManager.setPrimaryClip(it) }
-        } catch (e: Exception) {
-            Log.e(LOG_TAG, "Resetting clipboard failed", e)
-        }
-        return text?.takeIf { it.isNotBlank() }
-    }
-
-    private fun addExtraAction(menu: Menu) {
-        val action = extraAction
-        when {
-            action != null && onCopyRequested != null && menu.findItem(EXTRA_ACTION_ID) == null ->
-                menu.add(0, EXTRA_ACTION_ID, 0, action.first).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
-            (action == null || onCopyRequested == null) && menu.findItem(EXTRA_ACTION_ID) != null -> menu.removeItem(EXTRA_ACTION_ID)
-        }
-    }
-
     private fun addTextProcessors(menu: Menu) {
         textProcessors.clear()
 
@@ -268,7 +221,6 @@ class FeederTextActionModeCallback(
     }
 
     private fun updateMenuItems(menu: Menu) {
-        addExtraAction(menu)
         addOrRemoveMenuItem(menu, MenuItemOption.Copy, onCopyRequested)
         addOrRemoveMenuItem(menu, MenuItemOption.Paste, onPasteRequested)
         addOrRemoveMenuItem(menu, MenuItemOption.Cut, onCutRequested)
@@ -299,8 +251,6 @@ class FeederTextActionModeCallback(
         }
     }
 }
-
-private const val EXTRA_ACTION_ID = 50
 
 internal enum class MenuItemOption(
     val id: Int,

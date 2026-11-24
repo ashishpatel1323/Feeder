@@ -160,8 +160,9 @@ data class HighlightAnchor(
 
 /**
  * Finds highlights in an article's text, made of paragraphs (the reader's text elements, in
- * order). Spaces and line breaks are ignored when comparing, because a selection across
- * paragraphs and the web app's text join paragraphs differently.
+ * order). Spaces, line breaks and quote styles are ignored when comparing, because a selection
+ * across paragraphs and the web app's text join paragraphs differently, and the web app's feed
+ * text often has straight quotes where this app shows curly ones.
  */
 class HighlightLocator(
     private val paragraphs: List<String>,
@@ -183,8 +184,8 @@ class HighlightLocator(
         var offset = 0
         paragraphs.forEachIndexed { pi, text ->
             text.forEachIndexed { ci, ch ->
-                if (!ch.isWhitespace() && ch != ' ') {
-                    sb.append(ch)
+                if (!isGap(ch)) {
+                    sb.append(fold(ch))
                     p += pi
                     i += ci
                     f += offset + ci
@@ -245,7 +246,8 @@ class HighlightLocator(
         return out
     }
 
-    fun contains(h: Highlight): Boolean = find(h.text, h.prefix, h.start) != null
+    /** Where a highlight starts in this text, for reading order; null when it isn't in it. */
+    fun positionOf(h: Highlight): Int? = find(h.text, h.prefix, h.start)?.let { fullIndex[it.first] }
 
     /** Where a selected passage is, to save it as a highlight. Null when it isn't in the article text. */
     fun anchorOf(selected: String): HighlightAnchor? {
@@ -258,7 +260,18 @@ class HighlightLocator(
     companion object {
         const val PREFIX_LEN = 32
 
-        private fun strip(s: String): String = s.filterNot { it.isWhitespace() || it == ' ' }
+        private fun isGap(c: Char): Boolean = c.isWhitespace() || c == '\u00a0' || c == '\u200b'
+
+        /** Curly quotes and dashes as plain ones, the same as the web app's foldChar. */
+        private fun fold(c: Char): Char =
+            when (c) {
+                '\u2018', '\u2019', '\u201a', '\u201b', '\u02bc', '\u2032' -> '\''
+                '\u201c', '\u201d', '\u201e', '\u2033' -> '"'
+                '\u2013', '\u2014', '\u2212' -> '-'
+                else -> c
+            }
+
+        private fun strip(s: String): String = buildString { s.forEach { if (!isGap(it)) append(fold(it)) } }
     }
 }
 

@@ -173,13 +173,14 @@ object ShareImageRenderer {
         w: Float,
         h: Float,
     ) {
-        val sw = 36
-        val sh = (36 * h / w).roundToInt().coerceAtLeast(1)
+        val sw = 24
+        val sh = (24 * h / w).roundToInt().coerceAtLeast(1)
         val small = createBitmap(sw, sh)
         drawCover(Canvas(small), img, 0f, 0f, sw.toFloat(), sh.toFloat())
-        // Two steps up, so the stretch is smooth rather than blocky
-        val mid = small.scale(sw * 4, sh * 4, filter = true)
-        c.drawBitmap(mid, Rect(0, 0, mid.width, mid.height), RectF(0f, 0f, w, h), Paint(Paint.FILTER_BITMAP_FLAG))
+        // Doubling in steps keeps the stretch smooth rather than blocky
+        var up = small
+        while (up.width * 2 < w) up = up.scale(up.width * 2, up.height * 2, filter = true)
+        c.drawBitmap(up, Rect(0, 0, up.width, up.height), RectF(0f, 0f, w, h), Paint(Paint.FILTER_BITMAP_FLAG))
     }
 
     private fun fillGradient(

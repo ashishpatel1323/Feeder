@@ -76,6 +76,47 @@ export function locate(full: string, h: Pick<Highlight, 'text' | 'start' | 'pref
   return best
 }
 
+/** Curly quotes, dashes and no-break spaces as plain ones: devices and feeds write them differently. */
+const foldChar = (c: string) => (/[\u2018\u2019\u201a\u201b\u02bc\u2032]/.test(c) ? "'" : /[\u201c\u201d\u201e\u2033]/.test(c) ? '"' : /[\u2013\u2014\u2212]/.test(c) ? '-' : c)
+const isGap = (c: string) => /[\s\u00a0\u200b]/.test(c)
+
+/** The text without spaces and with plain quotes, and where each of its characters is in `text`. */
+function folded(text: string): { s: string; at: number[] } {
+  let s = ''
+  const at: number[] = []
+  for (let i = 0; i < text.length; i++) {
+    if (isGap(text[i])) continue
+    s += foldChar(text[i])
+    at.push(i)
+  }
+  return { s, at }
+}
+
+/**
+ * Where a highlight is, as [start, end) in `full`. Exact text first; then ignoring spaces,
+ * line breaks and quote styles, so highlights made on the Android app (whose text joins
+ * paragraphs and curls quotes differently) are found too.
+ */
+export function locateRange(full: string, h: Pick<Highlight, 'text' | 'start' | 'prefix'>): [number, number] | null {
+  const exact = locate(full, h)
+  if (exact >= 0) return [exact, exact + h.text.length]
+  const f = folded(full)
+  const needle = folded(h.text).s
+  if (!needle) return null
+  const before = folded(h.prefix).s
+  let best = -1
+  let bestScore = -1
+  for (let i = f.s.indexOf(needle); i >= 0; i = f.s.indexOf(needle, i + 1)) {
+    let score = 0
+    while (score < before.length && f.s[i - 1 - score] === before[before.length - 1 - score]) score++
+    if (score > bestScore) {
+      best = i
+      bestScore = score
+    }
+  }
+  return best < 0 ? null : [f.at[best], f.at[best + needle.length - 1] + 1]
+}
+
 /**
  * Wraps each highlight's text in <mark class="hl hl-color" data-hl="id"> elements. Only adds
  * elements, so read aloud and tap-to-read see the same text and offsets.
@@ -87,9 +128,9 @@ export function applyHighlights(html: string, highlights: Highlight[]): string {
   const root = template.content
   const full = textOf(root)
   const spans = highlights
-    .map((h) => ({ h, at: locate(full, h) }))
-    .filter((s) => s.at >= 0)
-    .map((s) => ({ h: s.h, start: s.at, end: s.at + s.h.text.length }))
+    .map((h) => ({ h, at: locateRange(full, h) }))
+    .filter((s): s is { h: Highlight; at: [number, number] } => s.at !== null)
+    .map((s) => ({ h: s.h, start: s.at[0], end: s.at[1] }))
     .sort((a, b) => a.start - b.start)
   if (!spans.length) return html
 
