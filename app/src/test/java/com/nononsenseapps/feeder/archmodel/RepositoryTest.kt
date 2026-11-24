@@ -193,6 +193,21 @@ class RepositoryTest : DIAware {
     }
 
     @Test
+    fun openFeedListToSameStillChangesMinReadTime() {
+        coEvery { feedStore.getDisplayTitle(10L) } returns "fooFeed"
+        coEvery { settingsStore.setCurrentFeedAndTag(any(), any()) } returns false
+        coEvery { settingsStore.setMinReadTime(any()) } just Runs
+
+        mockkStatic("com.nononsenseapps.feeder.util.ContextExtensionsKt")
+
+        repository.openFeedList(10L, "")
+
+        coVerify(exactly = 1, timeout = 500L) {
+            settingsStore.setMinReadTime(any())
+        }
+    }
+
+    @Test
     fun renameTagNotCurrentTag() {
         every { settingsStore.currentFeedAndTag } returns MutableStateFlow(5L to "anotherTag")
 

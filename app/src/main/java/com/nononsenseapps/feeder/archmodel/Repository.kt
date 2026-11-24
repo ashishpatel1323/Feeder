@@ -159,6 +159,20 @@ class Repository(
         }
     }
 
+    /**
+     * The user opened an article list (from Home, the drawer, a shortcut). Unlike
+     * [setCurrentFeedAndTag], this starts a fresh list even when it is the same feed or folder as
+     * last time, so articles read earlier drop out of the Unread list. Articles read while the
+     * list stays open (opened and come back from) still stay, dimmed, until the list is left.
+     */
+    fun openFeedList(
+        feedId: Long,
+        tag: String,
+    ) {
+        setCurrentFeedAndTag(feedId, tag)
+        setMinReadTime(Instant.now())
+    }
+
     fun setCurrentWidgetFeedAndTag(
         feedId: Long,
         tag: String,
