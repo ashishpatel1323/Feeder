@@ -3,6 +3,7 @@ package com.nononsenseapps.feeder.ui.compose.highlights
 import android.content.Context
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.text.contextmenu.builder.item
+import androidx.compose.foundation.text.contextmenu.data.ProcessTextKey
 import androidx.compose.foundation.text.contextmenu.data.TextContextMenuItem
 import androidx.compose.foundation.text.contextmenu.data.TextContextMenuKeys
 import androidx.compose.foundation.text.contextmenu.modifier.appendTextContextMenuComponents
@@ -85,22 +86,13 @@ fun ArticleHighlightsHost(
     val realClipboard = LocalClipboard.current
     val clipboard = remember(realClipboard, context) { CatchingClipboard(realClipboard, context) }
     val scope = rememberCoroutineScope()
-    val selectAllItem = remember { arrayOfNulls<TextContextMenuItem>(1) }
     val menuModifier =
         if (itemKey == null) {
             Modifier
         } else {
             Modifier
-                .filterTextContextMenuComponents { component ->
-                    val item = component as? TextContextMenuItem
-                    when (item?.key) {
-                        TextContextMenuKeys.CopyKey -> copyItem[0] = item
-                        // Moved behind Highlight, so Highlight shows in the bar rather than its overflow
-                        TextContextMenuKeys.SelectAllKey -> selectAllItem[0] = item
-                    }
-                    item?.key != TextContextMenuKeys.SelectAllKey
-                }.appendTextContextMenuComponents {
-                    // Copy and Select all are found by the filter above, which runs when the menu is made
+                .appendTextContextMenuComponents {
+                    // Copy is found by the filter below. Appends run before filters.
                     item(key = HighlightMenuKey, label = label) {
                         val copy = copyItem[0]
                         if (copy != null) {
@@ -109,9 +101,16 @@ fun ArticleHighlightsHost(
                         }
                         close()
                     }
-                    item(key = SelectAllMenuKey, label = selectAllLabel) {
-                        selectAllItem[0]?.onClick?.invoke(this)
+                    for (moved in MovedMenuItems.startMenu()) {
+                        val itemLabel = if (moved.key == TextContextMenuKeys.SelectAllKey) selectAllLabel else moved.label
+                        item(key = MovedMenuKey(moved.key), label = itemLabel, leadingIcon = moved.leadingIcon) {
+                            MovedMenuItems.current(moved.key)?.onClick?.invoke(this)
+                        }
                     }
+                }.filterTextContextMenuComponents { component ->
+                    val item = component as? TextContextMenuItem
+                    if (item?.key == TextContextMenuKeys.CopyKey) copyItem[0] = item
+                    item == null || !MovedMenuItems.filter(item)
                 }
         }
 
@@ -213,7 +212,43 @@ fun ArticleHighlightsHost(
 
 private object HighlightMenuKey
 
-private object SelectAllMenuKey
+private data class MovedMenuKey(
+    val key: Any,
+)
+
+/**
+ * The selection toolbar shows only a few items before its overflow (⋮), in the order they come.
+ * Other apps' text actions (Translate, Ask Gemini, Read aloud) and Select all come before items
+ * added here, so with a few such apps installed Highlight lands in the overflow, out of sight.
+ *
+ * Items can't be reordered in place, and a menu's appends run before its filters. So the filter
+ * removes those items and the next menu adds copies of them after Highlight. The first menu after
+ * the app starts keeps the original order. A copy runs the item of the menu it is in.
+ */
+private object MovedMenuItems {
+    private val latest = LinkedHashMap<Any, TextContextMenuItem>()
+    private var seen = mutableSetOf<Any>()
+    private var readded = emptySet<Any>()
+
+    /** A menu is being made: the items to add after Highlight, as the last menu had them. */
+    fun startMenu(): List<TextContextMenuItem> {
+        if (seen.isNotEmpty()) latest.keys.retainAll(seen)
+        seen = mutableSetOf()
+        readded = latest.keys.toSet()
+        return latest.values.toList()
+    }
+
+    /** True when [item] is one that was added after Highlight, so the original is left out. */
+    fun filter(item: TextContextMenuItem): Boolean {
+        val key = item.key
+        if (key != TextContextMenuKeys.SelectAllKey && key !is ProcessTextKey) return false
+        seen += key
+        latest[key] = item
+        return key in readded
+    }
+
+    fun current(key: Any): TextContextMenuItem? = latest[key]?.takeIf { key in seen }
+}
 
 /**
  * The real clipboard, except that the next copy after [catchNext] goes to its callback instead:
