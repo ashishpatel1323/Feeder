@@ -10,6 +10,8 @@ import com.nononsenseapps.feeder.db.room.HiddenItem
 import com.nononsenseapps.feeder.db.room.Sync2Dao
 import com.nononsenseapps.feeder.db.room.Sync2ItemKey
 import com.nononsenseapps.feeder.db.room.Sync2Known
+import com.nononsenseapps.feeder.model.highlights.Highlight
+import com.nononsenseapps.feeder.model.highlights.HighlightStore
 import com.nononsenseapps.feeder.model.offline.OfflineFiles
 import com.nononsenseapps.feeder.model.playlists.PlaylistStore
 import com.nononsenseapps.feeder.model.youtube.VideoPositions
@@ -54,6 +56,7 @@ const val SYNC2_SERVER = "https://feeder-web-snowy.vercel.app"
  *   layout  "main"              feed/folder order (web only; kept, not used here)
  *   video   feedUrl \n guid     { t, d }: where a video or podcast episode was left, in seconds
  *   playlist (key: playlist id) [SyncedPlaylist], or {"deleted": true} after deleting it
+ *   highlight (key: highlight id) [highlightValue], or {"deleted": true} after deleting it
  *
  * The device remembers the last value exchanged for every record (sync2_known) and sends
  * whatever differs locally, then applies what other devices changed. Unknown kinds (Read later
@@ -70,6 +73,7 @@ class Sync2Client(
     private val sharedLinks by lazy { SharedLinks(di) }
     private val offlineFiles: OfflineFiles by instance()
     private val playlistStore: PlaylistStore by instance()
+    private val highlightStore: HighlightStore by instance()
     private val mutex = Mutex()
 
     // Episode positions that arrived in this exchange, copied to the podcast player's store after it
@@ -426,6 +430,20 @@ class Sync2Client(
         // Playlists: new, edited (newest edit wins) and deleted ones
         out += collectPlaylists(now)
 
+        // Highlights: new, recolored or noted (newest edit wins) and deleted ones
+        val knownHl = dao.getKnownWithPrefix("highlight\n").associateBy { it.k.removePrefix("highlight\n") }
+        val highlights = highlightStore.highlights.value
+        for (h in highlights) {
+            val kn = knownHl[h.id]
+            if (kn == null || h.modifiedAt > kn.ts) {
+                out += Pending("highlight", h.id, highlightValue(h), maxOf(h.modifiedAt, (kn?.ts ?: 0) + 1, 1L))
+            }
+        }
+        val localHl = highlights.map { it.id }.toSet()
+        for ((id, kn) in knownHl) {
+            if (id !in localHl && !isDeleted(parse(kn.v))) out += Pending("highlight", id, mapOf("deleted" to true), maxOf(now, kn.ts + 1))
+        }
+
         // Where videos and episodes were left, saved here since they were last exchanged
         val knownVideos = dao.getKnownWithPrefix("video\n").associateBy { it.k.removePrefix("video\n") }
         for ((key, pos) in videoPositions.all.value) {
@@ -591,6 +609,14 @@ class Sync2Client(
                         dao.upsertKnown(listOf(Sync2Known(k, canonical(synced.toMap()), ts)))
                     }
                 }
+
+                "highlight" -> {
+                    if (isDeleted(v)) {
+                        highlightStore.deleteFromSync(key)
+                    } else if (v is Map<*, *>) {
+                        highlightFromValue(key, v, ts)?.let { highlightStore.putFromSync(it) }
+                    }
+                }
                 // layout and kinds from newer versions are only remembered
             }
         } catch (e: Exception) {
@@ -662,6 +688,51 @@ class Sync2Client(
         }
 
         fun isDeleted(v: Any?): Boolean = v is Map<*, *> && v["deleted"] == true
+
+        /** A highlight as synced, in the same field order as the web app's HighlightValue. */
+        fun highlightValue(h: Highlight): Map<String, Any?> =
+            linkedMapOf(
+                "item" to h.itemKey,
+                "title" to h.itemTitle,
+                "link" to h.itemLink,
+                "feed" to h.feedTitle,
+                "image" to h.imageUrl,
+                "text" to h.text,
+                "start" to h.start,
+                "prefix" to h.prefix,
+                "color" to h.color,
+                "note" to h.note,
+                "createdAt" to h.createdAt,
+            )
+
+        /** A highlight from another device; null when it has no article or text. */
+        fun highlightFromValue(
+            id: String,
+            v: Map<*, *>,
+            ts: Long,
+        ): Highlight? {
+            val item = v["item"] as? String ?: return null
+            val text = v["text"] as? String ?: return null
+            if (item.isBlank() || text.isBlank()) return null
+            return Highlight(
+                id = id,
+                itemKey = item,
+                itemTitle = v["title"] as? String ?: "",
+                itemLink = v["link"] as? String,
+                feedTitle = v["feed"] as? String ?: "",
+                imageUrl = v["image"] as? String,
+                text = text,
+                start = (v["start"] as? Number)?.toInt() ?: 0,
+                prefix = v["prefix"] as? String ?: "",
+                color =
+                    com.nononsenseapps.feeder.model.highlights.HighlightColor
+                        .of(v["color"] as? String)
+                        .id,
+                note = v["note"] as? String ?: "",
+                createdAt = (v["createdAt"] as? Number)?.toLong() ?: ts,
+                modifiedAt = ts,
+            )
+        }
 
         /** The synced fields of a feed, in the same order as the web app. */
         fun feedValue(f: Feed): Map<String, Any?> =

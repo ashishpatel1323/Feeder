@@ -453,14 +453,17 @@ export default function App() {
     return () => clearTimeout(t)
   }, [pendingMarks, syncState])
 
-  // Playlists and where episodes and videos were left: sent a few seconds after they change (so
+  // Playlists, highlights and where episodes and videos were left: sent a few seconds after they change (so
   // pausing sends the spot right away), and at least every minute while something keeps playing,
   // so another device can carry on from here
   const playbackSig = useLiveQuery(async () => {
     const lists = await db.kv.get(PLAYLISTS_KEY)
     let last = 0
     await db.videoPos.each((p) => void (last = Math.max(last, p.ts)))
-    return `${last}|${JSON.stringify(lists?.value ?? null)}`
+    // Highlights too: new, recolored, noted or deleted
+    let hl = 0
+    await db.highlights.each((h) => void (hl = Math.max(hl, h.modifiedAt || h.createdAt)))
+    return `${last}|${hl}|${await db.highlights.count()}|${JSON.stringify(lists?.value ?? null)}`
   }, [])
   const firstUnsent = useRef(0)
   useEffect(() => {

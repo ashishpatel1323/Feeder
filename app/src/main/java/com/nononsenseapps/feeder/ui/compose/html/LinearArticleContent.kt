@@ -45,6 +45,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -130,6 +131,12 @@ import com.nononsenseapps.feeder.ui.compose.coil.RestrainedFillWidthScaling
 import com.nononsenseapps.feeder.ui.compose.coil.RestrainedFitScaling
 import com.nononsenseapps.feeder.ui.compose.coil.rememberTintedVectorPainter
 import com.nononsenseapps.feeder.ui.compose.feedarticle.YouTubeVideoBlock
+import com.nononsenseapps.feeder.ui.compose.highlights.HighlightTextColor
+import com.nononsenseapps.feeder.ui.compose.highlights.LocalHighlightMarks
+import com.nononsenseapps.feeder.ui.compose.highlights.LocalUserHighlights
+import com.nononsenseapps.feeder.ui.compose.highlights.background
+import com.nononsenseapps.feeder.ui.compose.highlights.highlightLocator
+import com.nononsenseapps.feeder.ui.compose.highlights.highlightMarks
 import com.nononsenseapps.feeder.ui.compose.images.rememberImageViewer
 import com.nononsenseapps.feeder.ui.compose.layouts.Table
 import com.nononsenseapps.feeder.ui.compose.layouts.TableCell
@@ -221,6 +228,14 @@ fun ColumnArticleContent(
         remember(speechIndex, speechHighlight) {
             speechHighlight?.takeIf { it.followSpokenText }?.let { speechIndex?.focusTarget(it.segment, it.focusRequestId) }
         }
+    // The reader's own highlights (colors and notes), found in the text shown
+    val userHighlights = LocalUserHighlights.current
+    val locator = remember(articleContent) { highlightLocator(articleContent) }
+    SideEffect { userHighlights?.locator = locator }
+    val marks =
+        remember(articleContent, locator, userHighlights?.list) {
+            userHighlights?.let { highlightMarks(articleContent, locator, it.list) } ?: emptyMap()
+        }
     val currentOnReadAloudFrom by rememberUpdatedState(onReadAloudFrom)
     val tapHandler =
         remember(articleContent, isReadingAloud, onReadAloudFrom != null) {
@@ -234,6 +249,7 @@ fun ColumnArticleContent(
         }
     CompositionLocalProvider(
         LocalSpeechHighlights provides highlights,
+        LocalHighlightMarks provides marks,
         LocalSpeechWordHighlights provides wordHighlights,
         LocalSpeechFocusTarget provides focusTarget,
         LocalReadAloudTapHandler provides tapHandler,
@@ -734,6 +750,8 @@ fun LinearTextContent(
             val interactionSource = remember { MutableInteractionSource() }
             val original = linearText.toAnnotatedString(idToIndex = idToIndex, onLinkClick = onLinkClick)
             val range = LocalSpeechHighlights.current[linearText]
+            val marks = LocalHighlightMarks.current[linearText].orEmpty()
+            val userHighlights = LocalUserHighlights.current
             val wordRange = LocalSpeechWordHighlights.current[linearText]
             val following = LocalSpeechFocusTarget.current
             val focusTarget = following?.takeIf { it.text === linearText }
@@ -784,13 +802,23 @@ fun LinearTextContent(
                     if (fastReading) fastReadingRanges(linearText.text) else emptyList()
                 }
             val annotatedString =
-                remember(original, range, wordRange, highlightColor, wordBackground, wordForeground, tappedWord, fastReadingRanges) {
-                    if (range == null && wordRange == null && tappedWord == null && fastReadingRanges.isEmpty()) {
+                remember(original, range, wordRange, highlightColor, wordBackground, wordForeground, tappedWord, fastReadingRanges, marks) {
+                    if (range == null && wordRange == null && tappedWord == null && fastReadingRanges.isEmpty() && marks.isEmpty()) {
                         original
                     } else {
                         AnnotatedString
                             .Builder(original)
                             .apply {
+                                // Highlights first, so reading aloud shows on top of them
+                                marks.forEach {
+                                    if (it.range.first < original.length) {
+                                        addStyle(
+                                            SpanStyle(background = it.color.background(), color = HighlightTextColor),
+                                            it.range.first,
+                                            (it.range.last + 1).coerceAtMost(original.length),
+                                        )
+                                    }
+                                }
                                 fastReadingRanges.forEach {
                                     if (it.last < original.length) {
                                         addStyle(SpanStyle(fontWeight = FontWeight.Bold), it.first, it.last + 1)
@@ -822,7 +850,16 @@ fun LinearTextContent(
             val onTextTap by rememberUpdatedState { position: Offset ->
                 val layout = layoutHolder[0]
                 val handler = tapHandler
-                if (layout != null && handler != null) {
+                // Tapping a highlight opens it (color, note, share, delete)
+                val tappedMark =
+                    layout?.let { l ->
+                        val offset = l.getOffsetForPosition(position)
+                        marks.lastOrNull { offset in it.range }
+                    }
+                val tappedHighlight = tappedMark?.let { m -> userHighlights?.list?.firstOrNull { it.id == m.id } }
+                if (tappedHighlight != null && handler?.isReading != true) {
+                    userHighlights?.onTap?.invoke(tappedHighlight)
+                } else if (layout != null && handler != null) {
                     val offset = layout.getOffsetForPosition(position)
                     if (handler.isReading) {
                         handler.onReadFrom(linearText, offset)
@@ -868,7 +905,7 @@ fun LinearTextContent(
                             .indication(interactionSource, LocalIndication.current)
                             .focusableInNonTouchMode(interactionSource = interactionSource)
                             .then(
-                                if (tapHandler == null) {
+                                if (tapHandler == null && marks.isEmpty()) {
                                     Modifier
                                 } else {
                                     Modifier.readAloudTap { onTextTap(it) }

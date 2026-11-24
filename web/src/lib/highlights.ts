@@ -167,7 +167,7 @@ export function newHighlight(item: Item, feed: Feed | undefined, anchor: { start
 }
 
 export const saveHighlight = (h: Highlight) => db.highlights.put(h)
-export const updateHighlight = (id: string, patch: Partial<Pick<Highlight, 'color' | 'note'>>) => db.highlights.update(id, patch)
+export const updateHighlight = (id: string, patch: Partial<Pick<Highlight, 'color' | 'note'>>) => db.highlights.update(id, { ...patch, modifiedAt: Date.now() })
 export const deleteHighlight = (id: string) => db.highlights.delete(id)
 
 /** What goes on the clipboard (and in a share's text): the quote, where it's from, and the link. */

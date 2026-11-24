@@ -165,6 +165,7 @@ import com.nononsenseapps.feeder.ui.compose.navigation.ArticleDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.DownloadsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.EditFeedDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.FeedDestination
+import com.nononsenseapps.feeder.ui.compose.navigation.HighlightsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.HomeDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.PlaylistsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.SearchFeedDestination
@@ -367,6 +368,7 @@ fun FeedScreen(
             downloadsCount = downloadsCount + downloadJobs.size,
             onDownloadsClick = { DownloadsDestination.navigate(navController) },
             onPlaylistsClick = { PlaylistsDestination.navigate(navController) },
+            onHighlightsClick = { HighlightsDestination.navigate(navController) },
             onHomeClick = { HomeDestination.navigate(navController) },
         ) {
             FeedScreen(
