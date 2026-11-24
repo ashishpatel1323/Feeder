@@ -9,6 +9,8 @@ import com.nononsenseapps.feeder.base.DIAwareViewModel
 import com.nononsenseapps.feeder.db.room.Feed
 import com.nononsenseapps.feeder.db.room.FeedDao
 import com.nononsenseapps.feeder.db.room.FeedItemDao
+import com.nononsenseapps.feeder.db.room.ID_ALL_FEEDS
+import com.nononsenseapps.feeder.db.room.ID_UNSET
 import com.nononsenseapps.feeder.sharedlinks.SHARED_FEED_URL_STRING
 import com.nononsenseapps.feeder.ui.compose.editfeed.FeedStats
 import com.nononsenseapps.feeder.ui.compose.editfeed.computeFeedStats
@@ -20,6 +22,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.kodein.di.DI
 import org.kodein.di.instance
 import java.time.Instant
@@ -64,6 +68,9 @@ class ManageFeedsViewModel(
     private val feedDao: FeedDao by instance()
     private val feedItemDao: FeedItemDao by instance()
     private val prefs: SharedPreferences by instance()
+
+    /** Each edit reads and saves whole feed rows, so edits run one at a time and never undo each other. */
+    private val saving = Mutex()
 
     private val ui =
         MutableStateFlow(
@@ -169,6 +176,7 @@ class ManageFeedsViewModel(
                 .filter { it.tag == from }
                 .map { it.id },
         ) { it.copy(tag = name) }
+        followFolder(from, name)
         if (from in ui.value.closed) saveClosed(ui.value.closed - from + name)
     }
 
@@ -187,6 +195,7 @@ class ManageFeedsViewModel(
         } else {
             updateFeedsNow(ids) { it.copy(tag = "") }
         }
+        followFolder(tag, null)
         saveClosed(ui.value.closed - tag)
     }
 
@@ -199,19 +208,31 @@ class ManageFeedsViewModel(
     private suspend fun updateFeedsNow(
         ids: Collection<Long>,
         change: (Feed) -> Feed,
-    ): Int {
-        var n = 0
-        for (id in ids) {
-            val feed = repository.getFeed(id) ?: continue
-            val updated = change(feed)
-            if (updated == feed) continue
-            // In case clocks between devices differ don't let this date go backwards
-            updated.whenModified = maxOf(Instant.now(), feed.whenModified.plusMillis(1))
-            repository.saveFeed(updated)
-            n++
+    ): Int =
+        saving.withLock {
+            var n = 0
+            for (id in ids) {
+                val feed = repository.getFeed(id) ?: continue
+                val updated = change(feed)
+                if (updated == feed) continue
+                // In case clocks between devices differ don't let this date go backwards
+                updated.whenModified = maxOf(Instant.now(), feed.whenModified.plusMillis(1))
+                repository.saveFeed(updated)
+                n++
+            }
+            if (n > 0) runOnceSyncChainSendRead(di)
+            n
         }
-        if (n > 0) runOnceSyncChainSendRead(di)
-        return n
+
+    /** The article list follows a folder that was renamed (to [to]) or emptied (null) here. */
+    private fun followFolder(
+        from: String,
+        to: String?,
+    ) {
+        val (feedId, tag) = repository.currentFeedAndTag.value
+        if (feedId == ID_UNSET && tag == from) {
+            if (to == null) repository.setCurrentFeedAndTag(ID_ALL_FEEDS, "") else repository.setCurrentFeedAndTag(ID_UNSET, to)
+        }
     }
 
     companion object {
@@ -225,7 +246,8 @@ private fun Feed.toManaged(stats: FeedStats) =
         id = id,
         title = displayTitle.ifBlank { url.toString() },
         url = url.toString(),
-        tag = tag,
+        // A blank tag such as " " from another device is No folder
+        tag = tag.trim(),
         imageUrl = imageUrl?.toString(),
         openArticlesWith = openArticlesWith,
         fullTextByDefault = fullTextByDefault,

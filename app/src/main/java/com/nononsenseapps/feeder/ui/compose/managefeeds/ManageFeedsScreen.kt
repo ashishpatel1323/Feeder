@@ -353,7 +353,7 @@ fun ManageFeedsScreen(
                 contentPadding = PaddingValues(bottom = 96.dp),
                 modifier = Modifier.fillMaxSize(),
             ) {
-            item(key = "tools") { Toolbar(state, viewModel::setSort) }
+                item(key = "tools") { Toolbar(state, viewModel::setSort) }
 
                 if (state.loaded) {
                     for (folder in state.folders) {
