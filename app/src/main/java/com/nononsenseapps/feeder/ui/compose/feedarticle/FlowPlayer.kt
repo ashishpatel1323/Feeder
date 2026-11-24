@@ -923,6 +923,8 @@ internal fun VideoInfo(
     positionLabel: String?,
     onOpenInYouTube: () -> Unit,
     modifier: Modifier = Modifier,
+    transcriptShown: Boolean = false,
+    onToggleTranscript: (() -> Unit)? = null,
 ) {
     val di = LocalDI.current
     val playback: YouTubePlayback by di.instance()
@@ -985,6 +987,10 @@ internal fun VideoInfo(
             details.likeCount?.let {
                 InfoButton(Icons.Outlined.ThumbUp, VideoDetails.compactCount(it), padding, enabled = false) {}
             }
+            // Up front so it is in view without scrolling the row
+            if (onToggleTranscript != null) {
+                TranscriptButton(transcriptShown, onToggleTranscript, padding)
+            }
             if (onToggleBookmark != null) {
                 InfoButton(
                     if (isBookmarked) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
@@ -1024,6 +1030,16 @@ internal fun VideoInfo(
             }
         }
     }
+}
+
+/** Shows or hides the video's transcript under it; filled while it is shown. */
+@Composable
+internal fun TranscriptButton(
+    shown: Boolean,
+    onToggle: () -> Unit,
+    padding: PaddingValues = ButtonDefaults.ContentPadding,
+) {
+    InfoButton(Icons.Outlined.ClosedCaption, stringResource(R.string.transcript), padding, selected = shown, onClick = onToggle)
 }
 
 /** Save video offline, with its progress: the same job as the panel under the video. */

@@ -5,6 +5,10 @@ import android.util.Log
 import com.nononsenseapps.feeder.ApplicationCoroutineScope
 import com.nononsenseapps.feeder.db.room.FeedItemDao
 import com.nononsenseapps.feeder.model.offline.OfflineFiles
+import com.nononsenseapps.feeder.model.offline.OfflineVideos
+import com.nononsenseapps.feeder.model.youtube.SubtitleTrack
+import com.nononsenseapps.feeder.model.youtube.youtubeVideoId
+import com.nononsenseapps.feeder.model.youtube.youtubeWatchUrl
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -30,7 +34,7 @@ import org.kodein.di.instance
 import java.io.File
 import kotlin.math.abs
 
-enum class TranscriptSource { FEED, PHONE }
+enum class TranscriptSource { FEED, PHONE, YOUTUBE }
 
 enum class TranscriptStatus {
     /** Not looked for yet. */
@@ -79,7 +83,9 @@ private data class StoredTranscript(
 /**
  * Podcast transcripts, shown as subtitles that follow playback.
  *
- * 1. The feed's own transcript (Podcasting 2.0 `podcast:transcript`: VTT, SRT or JSON).
+ * 1. The feed's own transcript (Podcasting 2.0 `podcast:transcript`: VTT, SRT or JSON). For a
+ *    YouTube video, its captions instead (the saved copy's, else from yt-dlp): the uploader's own
+ *    in English first, then YouTube's automatic ones.
  * 2. Otherwise, on request, speech to text on the phone with whisper.cpp: no account, nothing
  *    leaves the phone. The speech model downloads once (about 60 MB). Long episodes are done in
  *    five-minute pieces, each saved as it finishes, so subtitles appear while it runs and a stop
@@ -94,6 +100,7 @@ class Transcripts(
     private val dao: FeedItemDao by instance()
     private val okHttpClient: OkHttpClient by instance()
     private val offlineFiles: OfflineFiles by instance()
+    private val offlineVideos: OfflineVideos by instance()
     private val scope: ApplicationCoroutineScope by instance()
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -146,10 +153,12 @@ class Transcripts(
                         }
                         return@withLock
                     }
-                    val cues = fromFeed(itemId)
+                    val video = youtubeVideoId(dao.loadFeedItem(itemId)?.link)
+                    val source = if (video != null) TranscriptSource.YOUTUBE else TranscriptSource.FEED
+                    val cues = if (video != null) fromYouTube(itemId, video) else fromFeed(itemId)
                     if (cues.isNotEmpty()) {
-                        write(itemId, StoredTranscript(TranscriptSource.FEED, cues, complete = true))
-                        set(itemId) { it.copy(status = TranscriptStatus.READY, cues = cues, source = TranscriptSource.FEED) }
+                        write(itemId, StoredTranscript(source, cues, complete = true))
+                        set(itemId) { it.copy(status = TranscriptStatus.READY, cues = cues, source = source) }
                     } else {
                         set(itemId) { it.copy(status = TranscriptStatus.NONE) }
                     }
@@ -223,8 +232,36 @@ class Transcripts(
         return TranscriptFormats.parse(content, link.type, link.url)
     }
 
-    private fun fetchText(url: String): String? =
-        okHttpClient.newCall(Request.Builder().url(url).build()).execute().use { response ->
+    /** The video's captions: from the saved copy if there is one, else the ones yt-dlp lists. */
+    private suspend fun fromYouTube(
+        itemId: Long,
+        videoId: String,
+    ): List<TranscriptCue> {
+        offlineFiles
+            .savedVideo(itemId)
+            ?.subtitles
+            ?.sortedByDescending { it.name.contains(".en") }
+            ?.firstNotNullOfOrNull { file -> parseYouTube(file.readText()).takeIf { it.isNotEmpty() } }
+            ?.let { return it }
+        val details = offlineVideos.videoDetails(youtubeWatchUrl(videoId))
+        val track = bestCaptions(details.subtitles) ?: return emptyList()
+        val content = fetchText(track.url, details.userAgent) ?: return emptyList()
+        return parseYouTube(content)
+    }
+
+    private fun parseYouTube(vtt: String): List<TranscriptCue> =
+        // Automatic captions carry a time for each word and roll up line by line
+        if (WORD_TIMING.containsMatchIn(vtt)) {
+            TranscriptFormats.parseYouTubeAutoVtt(vtt)
+        } else {
+            TranscriptFormats.parse(vtt, "text/vtt")
+        }
+
+    private fun fetchText(
+        url: String,
+        userAgent: String? = null,
+    ): String? =
+        okHttpClient.newCall(Request.Builder().url(url).apply { userAgent?.let { header("User-Agent", it) } }.build()).execute().use { response ->
             if (!response.isSuccessful) null else response.body?.string()
         }
 
@@ -314,30 +351,41 @@ class Transcripts(
     /** The episode's audio: the downloaded episode, else a copy fetched for transcribing. */
     private suspend fun audioFile(itemId: Long): Pair<File, Boolean> {
         offlineFiles.savedAudio(itemId)?.let { return it to false }
+        offlineFiles.savedVideo(itemId)?.let { saved -> return (saved.audio ?: saved.video) to false }
         val target = File(audioCacheDir, "$itemId.audio")
         if (target.isFile && target.length() > 0) return target to true
+        val item = withContext(Dispatchers.IO) { dao.loadFeedItem(itemId) }
+        val videoId = youtubeVideoId(item?.link)
+        var userAgent: String? = null
         val url =
-            withContext(Dispatchers.IO) { dao.loadFeedItem(itemId)?.enclosureLink }
-                ?: error("This episode has no audio file")
+            if (videoId != null) {
+                // A YouTube video: its sound stream in the video's own language
+                val details = offlineVideos.videoDetails(youtubeWatchUrl(videoId))
+                userAgent = details.userAgent
+                details.audios.firstOrNull()?.url ?: error("This video has no sound stream")
+            } else {
+                item?.enclosureLink ?: error("This episode has no audio file")
+            }
         set(itemId) { it.copy(status = TranscriptStatus.DOWNLOADING_AUDIO, progress = 0f) }
-        download(url, target) { fraction -> set(itemId) { it.copy(status = TranscriptStatus.DOWNLOADING_AUDIO, progress = fraction) } }
+        download(url, target, userAgent) { fraction -> set(itemId) { it.copy(status = TranscriptStatus.DOWNLOADING_AUDIO, progress = fraction) } }
         return target to true
     }
 
     private suspend fun ensureModel(onProgress: (Float) -> Unit): File {
         val model = File(modelDir, MODEL_FILE)
         if (model.isFile && model.length() > MODEL_SIZE_MB * 900_000L) return model
-        download(MODEL_URL, model, onProgress)
+        download(MODEL_URL, model, onProgress = onProgress)
         return model
     }
 
     private suspend fun download(
         url: String,
         target: File,
+        userAgent: String? = null,
         onProgress: (Float) -> Unit,
     ) = withContext(Dispatchers.IO) {
         val part = File(target.parentFile, target.name + ".part")
-        downloadClient.newCall(Request.Builder().url(url).build()).execute().use { response ->
+        downloadClient.newCall(Request.Builder().url(url).apply { userAgent?.let { header("User-Agent", it) } }.build()).execute().use { response ->
             if (!response.isSuccessful) error("Download failed: HTTP ${response.code}")
             val body = response.body ?: error("Download failed: empty")
             val total = body.contentLength()
@@ -400,6 +448,17 @@ class Transcripts(
         private const val MODEL_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$MODEL_FILE"
         private const val MODEL_SIZE_MB = 57
         private const val LANGUAGE = "en"
+
+        private val WORD_TIMING = Regex("<\\d{2}:\\d{2}:\\d{2}\\.\\d{3}>")
+
+        /** The uploader's English captions, else YouTube's automatic ones, else any the uploader made. */
+        internal fun bestCaptions(tracks: List<SubtitleTrack>): SubtitleTrack? {
+            fun english(t: SubtitleTrack) = t.language.removeSuffix("-orig").let { it == "en" || it.startsWith("en-") }
+            return tracks.firstOrNull { !it.automatic && english(it) }
+                ?: tracks.firstOrNull { it.automatic && english(it) }
+                ?: tracks.firstOrNull { it.automatic }
+                ?: tracks.firstOrNull()
+        }
 
         private const val FIRST_CHUNK_SAMPLES = 30 * Resampler.TARGET_RATE
         private const val CHUNK_SAMPLES = 5 * 60 * Resampler.TARGET_RATE

@@ -412,7 +412,8 @@ fun ArticleScreen(
             onToggleRead = onToggleRead,
             onPlaylist = { addToPlaylist(viewState.articleId, viewState.articleTitle) },
             transcriptShown = showTranscript,
-            onToggleTranscript = if (itemKindHere == ItemKind.PODCAST) ({ showTranscript = !showTranscript }) else null,
+            onToggleTranscript =
+                if (itemKindHere == ItemKind.PODCAST || itemKindHere == ItemKind.YOUTUBE) ({ showTranscript = !showTranscript }) else null,
             fullText = showingFullText,
             onToggleFullText = if (isArticle) onToggleFullText else null,
             webPage = showOriginalPage,
@@ -592,6 +593,7 @@ fun ArticleScreen(
                         onTranslate = onTranslate,
                         onToggleRead = onToggleRead,
                         showTranscript = showTranscript,
+                        onToggleTranscript = { showTranscript = !showTranscript },
                         onToggleFullText = onToggleFullText,
                         onShowWebPage = if (hasLink) onToggleOriginalPage else null,
                         onRetryFullText = onRetryFullText,
@@ -740,6 +742,7 @@ fun ArticleContent(
     onToggleRead: () -> Unit = onMarkAsUnread,
     // Hoisted to the screen: the ⋮ menu's Transcript entry toggles it
     showTranscript: Boolean = false,
+    onToggleTranscript: (() -> Unit)? = null,
     onToggleFullText: () -> Unit = {},
     onShowWebPage: (() -> Unit)? = null,
     onRetryFullText: () -> Unit = {},
@@ -871,6 +874,8 @@ fun ArticleContent(
                         link = viewState.articleLink,
                         isBookmarked = viewState.isBookmarked,
                         onToggleBookmark = onBookmark,
+                        showTranscript = showTranscript,
+                        onToggleTranscript = onToggleTranscript,
                     )
                 }
             } else {

@@ -6,6 +6,61 @@ import org.junit.Test
 
 class TranscriptFormatsTest {
     @Test
+    fun youTubeAutoCaptionsGiveEachLineOnce() {
+        val vtt =
+            """
+            WEBVTT
+            Kind: captions
+            Language: en
+
+            00:00:13.280 --> 00:00:15.590 align:start position:0%
+             
+            a<00:00:13.360><c> few</c><00:00:13.599><c> years</c><00:00:13.839><c> ago</c>
+
+            00:00:15.590 --> 00:00:15.600 align:start position:0%
+            a few years ago
+             
+
+            00:00:15.600 --> 00:00:18.470 align:start position:0%
+            a few years ago
+            I<00:00:16.600><c> had</c><00:00:17.000><c> just</c><00:00:17.120><c> driven</c><00:00:17.320><c> home</c>
+
+            00:00:18.470 --> 00:00:18.480 align:start position:0%
+            I had just driven home
+             
+
+            00:00:18.480 --> 00:00:20.190 align:start position:0%
+            I had just driven home
+            around<00:00:18.760><c> midnight</c>
+            """.trimIndent()
+        val cues = TranscriptFormats.parseYouTubeAutoVtt(vtt)
+        assertEquals(
+            listOf(
+                TranscriptCue(13_280, 15_590, "a few years ago"),
+                TranscriptCue(15_600, 18_470, "I had just driven home"),
+                TranscriptCue(18_480, 20_190, "around midnight"),
+            ),
+            cues,
+        )
+    }
+
+    @Test
+    fun picksUploadersEnglishCaptionsFirst() {
+        fun track(
+            lang: String,
+            auto: Boolean,
+        ) = com.nononsenseapps.feeder.model.youtube
+            .SubtitleTrack(lang, lang, "https://x/$lang", auto)
+        val manualEn = track("en-GB", false)
+        val autoEn = track("en-orig", true)
+        val manualDe = track("de", false)
+        assertEquals(manualEn, Transcripts.bestCaptions(listOf(manualDe, autoEn, manualEn)))
+        assertEquals(autoEn, Transcripts.bestCaptions(listOf(manualDe, autoEn)))
+        assertEquals(manualDe, Transcripts.bestCaptions(listOf(manualDe)))
+        assertNull(Transcripts.bestCaptions(emptyList()))
+    }
+
+    @Test
     fun parsesVttWithVoicesAndTags() {
         val vtt =
             """
