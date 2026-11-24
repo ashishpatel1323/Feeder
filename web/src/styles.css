@@ -4816,6 +4816,19 @@ label.check.inline {
   color: var(--text-3);
   font-weight: 600;
 }
+.pl-rule.on {
+  background: var(--accent-soft, var(--surface-2));
+  border-color: transparent;
+}
+.pl-rule-text {
+  max-width: min(60vw, 520px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pl-rules {
+  flex-wrap: nowrap;
+}
 .pl-rule.add {
   color: var(--accent);
   border-style: dashed;

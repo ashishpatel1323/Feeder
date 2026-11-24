@@ -306,6 +306,17 @@ interface FeedItemDao {
     )
     fun widgetPreviewsSaved(): Flow<List<PreviewItem>>
 
+    /** Previews of [ids], kept up to date (a playlist in flip view). In no set order. */
+    @Query(
+        """
+        SELECT $PREVIEW_COLUMNS
+        FROM feed_items
+        LEFT JOIN feeds ON feed_items.feed_id = feeds.id
+        WHERE feed_items.id IN (:ids)
+        """,
+    )
+    fun previewsByIds(ids: List<Long>): Flow<List<PreviewItem>>
+
     @Query(
         """
         SELECT $PREVIEW_COLUMNS

@@ -30,6 +30,8 @@ Feeder follows Material 3 (and Material 3 Expressive on Android). These rules re
    shortcuts shown in the menu.
 4. **Filters fit one line**: a Show chip with a menu (Unread/All/Saved/Downloaded) instead of
    segmented tabs, then Today and Sort. Modes like Offline live in ⋮ and show a chip only while on.
+   Playlist pages: Play all (filled) + Shuffle icon, top bar Flip + ⋮ (Edit rules, Download, Delete),
+   and one chip row: the rules summed up in one chip (tap to edit) and a Sort chip with a menu.
 5. **One primary (filled/tonal) action per view.** Everything else is an icon button or menu entry.
    Web list rows: one round Play for media, then a ⋮ (`MoreMenu`) with Save, Playlist, Mark read, Delete.
 6. Keyboard hints stay in tooltips and, on wide screens, as `.btn-kbd` next to the label (web).
