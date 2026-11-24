@@ -7,6 +7,7 @@ import { getSettings, offlineNow, updateSettings, useSettings } from './lib/sett
 import { addFeed, refreshFeeds } from './lib/refresh'
 import { addSharedLink, findLink, SHARED_FEED, SHARED_FEED_URL, undoSharedLink } from './lib/share'
 import { getSyncState, syncNow } from './lib/sync2'
+import { PLAYLISTS_KEY } from './lib/playlists'
 import { fetchOgImages } from './lib/extras'
 import { readAloud } from './lib/readaloud'
 import { cleanupOffline, isOnline, setForcedOffline } from './lib/offline'
@@ -451,6 +452,49 @@ export default function App() {
     const t = window.setTimeout(() => syncNow().catch(() => undefined), 5000)
     return () => clearTimeout(t)
   }, [pendingMarks, syncState])
+
+  // Playlists and where episodes and videos were left: sent a few seconds after they change (so
+  // pausing sends the spot right away), and at least every minute while something keeps playing,
+  // so another device can carry on from here
+  const playbackSig = useLiveQuery(async () => {
+    const lists = await db.kv.get(PLAYLISTS_KEY)
+    let last = 0
+    await db.videoPos.each((p) => void (last = Math.max(last, p.ts)))
+    return `${last}|${JSON.stringify(lists?.value ?? null)}`
+  }, [])
+  const firstUnsent = useRef(0)
+  useEffect(() => {
+    if (!playbackSig || !syncState || !isOnline()) return
+    const now = Date.now()
+    if (!firstUnsent.current) firstUnsent.current = now
+    const send = () => {
+      firstUnsent.current = 0
+      void syncNow().catch(() => undefined)
+    }
+    if (now - firstUnsent.current > 60_000) return send()
+    const t = window.setTimeout(send, 4000)
+    return () => clearTimeout(t)
+  }, [playbackSig, syncState])
+
+  // Back to this window: pick up what other devices did meanwhile (where an episode was left,
+  // playlist edits), without waiting for the next refresh
+  useEffect(() => {
+    let awaySince = 0
+    const away = () => void (awaySince = awaySince || Date.now())
+    const back = () => {
+      if (awaySince && Date.now() - awaySince > 15_000 && isOnline()) void syncNow().catch(() => undefined)
+      awaySince = 0
+    }
+    const onVis = () => (document.hidden ? away() : back())
+    document.addEventListener('visibilitychange', onVis)
+    window.addEventListener('blur', away)
+    window.addEventListener('focus', back)
+    return () => {
+      document.removeEventListener('visibilitychange', onVis)
+      window.removeEventListener('blur', away)
+      window.removeEventListener('focus', back)
+    }
+  }, [])
 
   // og:images for the visible list
   useEffect(() => {

@@ -160,6 +160,9 @@ class PlayQueue {
     if (kind === 'article') {
       // QueuePlayer sees the new article, attaches its text and starts reading it aloud
       if (readAloud.state.status !== 'idle') readAloud.stop()
+      // Starting to read an article counts as reading it. The queue keeps its order, so an
+      // Unread playlist that drops it doesn't skip the next one.
+      if (!item.read) void db.items.update(id, { read: 1, readTime: Date.now(), readSynced: 0 })
       return
     }
     if (readAloud.state.status !== 'idle') readAloud.stop()

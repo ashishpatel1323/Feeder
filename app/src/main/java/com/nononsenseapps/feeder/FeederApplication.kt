@@ -234,6 +234,10 @@ class FeederApplication :
         podcastPlayerStateHolder.positionSink = { itemId, seconds, length ->
             di.direct.instance<com.nononsenseapps.feeder.model.playlists.PlaylistStore>().savePosition(itemId, seconds, length)
         }
+        // Paused here, played further on another device: Play carries on from there
+        podcastPlayerStateHolder.otherDevicePosition = { itemId ->
+            di.direct.instance<com.nononsenseapps.feeder.model.playlists.PlaylistStore>().takeOtherDevicePosition(itemId)
+        }
     }
 
     override fun onTerminate() {

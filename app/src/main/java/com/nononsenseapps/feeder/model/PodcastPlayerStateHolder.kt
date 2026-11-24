@@ -38,6 +38,12 @@ class PodcastPlayerStateHolder(
     var positionSink: ((Long, Long, Long) -> Unit)? = null
 
     /**
+     * Where to carry on with an episode that was played further on another device since it was
+     * paused here (seconds), or null.
+     */
+    var otherDevicePosition: ((Long) -> Long?)? = null
+
+    /**
      * Plays [link]; [itemId] is the article it belongs to (for its transcript and its saved
      * position). Starts [startAtSeconds] in (Resume).
      */
@@ -68,6 +74,9 @@ class PodcastPlayerStateHolder(
 
     fun play() {
         val player = mediaPlayer ?: return
+        _playerState.value.itemId?.let { id ->
+            otherDevicePosition?.invoke(id)?.let { seconds -> runCatching { player.seekTo((seconds * 1000).toInt()) } }
+        }
         player.start()
         applySpeed(player)
         startProgressUpdates()

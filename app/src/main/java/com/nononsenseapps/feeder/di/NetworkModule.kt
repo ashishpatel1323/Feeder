@@ -11,6 +11,7 @@ import com.nononsenseapps.feeder.model.offline.OfflineVideos
 import com.nononsenseapps.feeder.model.transcript.Transcripts
 import com.nononsenseapps.feeder.sync.SyncRestClient
 import com.nononsenseapps.feeder.sync2.Sync2Client
+import com.nononsenseapps.feeder.sync2.SyncNudge
 import com.nononsenseapps.jsonfeed.Feed
 import com.nononsenseapps.jsonfeed.JsonFeedParser
 import com.nononsenseapps.jsonfeed.feedAdapter
@@ -38,10 +39,13 @@ val networkModule =
         bind<OfflineVideos>() with singleton { OfflineVideos(di) }
         bind<DownloadsPlaylist>() with singleton { DownloadsPlaylist(instance()) }
         bind<DownloadsPlayback>() with singleton { DownloadsPlayback(di) }
+        bind<SyncNudge>() with singleton { SyncNudge(di) }
         bind<com.nononsenseapps.feeder.model.playlists.PlaylistStore>() with
             singleton {
+                val nudge = instance<SyncNudge>()
                 com.nononsenseapps.feeder.model.playlists
                     .PlaylistStore(instance())
+                    .also { store -> store.onChanged = { positionOnly -> nudge.changed(positionOnly) } }
             }
         bind<com.nononsenseapps.feeder.model.playlists.PlaylistPlayer>() with
             singleton {

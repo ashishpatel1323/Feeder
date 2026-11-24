@@ -58,6 +58,8 @@ export interface Playlist {
   itemIds: string[]
   sort: PlaylistSort
   createdAt: number
+  /** Last change made on this device (epoch millis): the sync time of its record. 0 = never edited. */
+  modifiedAt?: number
 }
 
 export const PLAYLISTS_KEY = 'playlists'
@@ -259,8 +261,22 @@ export function newPlaylist(p: Partial<Playlist> & Pick<Playlist, 'name' | 'smar
   }
 }
 
+/**
+ * Fixed ids of the starter playlists, by name, the same on every device and in the Android app,
+ * so syncing two devices doesn't give two of each.
+ */
+export const STARTER_IDS: Record<string, string> = {
+  'Morning drive': 'starter-morning-drive',
+  'New podcast episodes': 'starter-new-podcast-episodes',
+  'Short reads': 'starter-short-reads',
+}
+
 /** The three playlists a new user starts with, so the page isn't empty. */
 export function starterPlaylists(): Playlist[] {
+  return starterPlaylistsRandomIds().map((p) => ({ ...p, id: STARTER_IDS[p.name] ?? p.id, createdAt: 0 }))
+}
+
+function starterPlaylistsRandomIds(): Playlist[] {
   const list: Playlist[] = []
   list.push(
     newPlaylist(
@@ -294,9 +310,16 @@ export async function seedPlaylists(): Promise<void> {
   })
 }
 
+/** Marks the playlists [fn] changed with the time, which is what sync goes by. */
+export function stampChanged(before: Playlist[], next: Playlist[], now = Date.now()): Playlist[] {
+  const old = new Map(before.map((p) => [p.id, JSON.stringify({ ...p, modifiedAt: 0 })]))
+  return next.map((p) => (old.get(p.id) === JSON.stringify({ ...p, modifiedAt: 0 }) ? p : { ...p, modifiedAt: now }))
+}
+
 async function change(fn: (list: Playlist[]) => Playlist[]): Promise<Playlist[]> {
   return db.transaction('rw', db.kv, async () => {
-    const next = fn(await loadPlaylists())
+    const before = await loadPlaylists()
+    const next = stampChanged(before, fn(before))
     await setKv(PLAYLISTS_KEY, next)
     await setKv(SEEDED_KEY, true)
     return next

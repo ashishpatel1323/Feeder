@@ -10,7 +10,8 @@
  *   saved    feedUrl \n guid      true / false (with a small copy of the article in `a`)
  *   hidden   feedUrl \n guid      true = deleted for good on every device
  *   layout   "main"               { feedOrder, folderOrder, emptyFolders } (web only so far)
- *   video    feedUrl \n guid      { t, d }: where a YouTube video was left, in seconds (web only so far)
+ *   video    feedUrl \n guid      { t, d }: where a video or podcast episode was left, in seconds
+ *   playlist playlist id          PlaylistValue, or { deleted: true } after deleting it
  *
  * New kinds (Read later links, …) can be added later: devices keep records of kinds they
  * don't know and the server never looks inside.
@@ -21,6 +22,7 @@
 import { offlineNow } from './settings'
 import { apiHeaders, HttpError } from './api'
 import { b64encode, decodeKey, decryptString, encryptString, type SecretKeys } from './crypto'
+import { PLAYLISTS_KEY, STARTER_IDS, loadPlaylists, type Playlist } from './playlists'
 import {
   db,
   EMPTY_FOLDERS_KEY,
@@ -47,7 +49,7 @@ export interface SyncState {
   lastError?: string | null
 }
 
-export type Kind = 'feed' | 'read' | 'saved' | 'hidden' | 'layout' | 'video'
+export type Kind = 'feed' | 'read' | 'saved' | 'hidden' | 'layout' | 'video' | 'playlist'
 
 /** The plaintext inside a record. */
 export interface Payload {
@@ -85,6 +87,103 @@ export interface VideoValue {
   t: number
   /** Video length in seconds, 0 when not known */
   d: number
+}
+
+/**
+ * A playlist as synced. The Android app writes the same fields in the same order: articles by
+ * "feedUrl \n guid", feeds by URL, and colours as "#rrggbb".
+ */
+export interface PlaylistValue {
+  name: string
+  icon: string
+  color: string
+  smart: boolean
+  rules: {
+    folders: string[]
+    feeds: string[]
+    kinds: string[]
+    statuses: string[]
+    savedOnly: boolean
+    downloadedOnly: boolean
+    withinDays: number | null
+    minMinutes: number | null
+    maxMinutes: number | null
+  }
+  items: string[]
+  sort: string
+  createdAt: number
+}
+
+/** Items of a manual playlist that fit in one record (the server takes up to 64 KB). */
+export const MAX_SYNCED_PLAYLIST_ITEMS = 300
+
+export function playlistValue(p: Playlist): PlaylistValue {
+  const r = p.rules
+  return {
+    name: p.name,
+    icon: p.icon,
+    color: p.color.toLowerCase(),
+    smart: p.smart,
+    rules: {
+      folders: [...r.folders],
+      feeds: [...r.feeds],
+      kinds: [...r.kinds],
+      statuses: [...r.statuses],
+      savedOnly: !!r.savedOnly,
+      downloadedOnly: !!r.downloadedOnly,
+      withinDays: r.withinDays ?? null,
+      minMinutes: r.minMinutes ?? null,
+      maxMinutes: r.maxMinutes ?? null,
+    },
+    items: p.smart ? [] : p.itemIds.slice(0, MAX_SYNCED_PLAYLIST_ITEMS),
+    sort: p.sort,
+    createdAt: p.createdAt || 0,
+  }
+}
+
+const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
+const numOrNull = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+
+/** A playlist from a synced value; fields an older or newer device left out get defaults. */
+export function playlistFromValue(id: string, v: Partial<PlaylistValue>, ts: number): Playlist {
+  const r = (v.rules ?? {}) as Partial<PlaylistValue['rules']>
+  const sorts = ['newest', 'oldest', 'shortest', 'longest']
+  return {
+    id,
+    name: typeof v.name === 'string' ? v.name : 'Playlist',
+    icon: typeof v.icon === 'string' ? v.icon : '★',
+    color: typeof v.color === 'string' ? v.color.toLowerCase() : '#1d4ed8',
+    smart: v.smart === true,
+    rules: {
+      folders: strings(r.folders),
+      feeds: strings(r.feeds),
+      kinds: strings(r.kinds).filter((k) => k === 'podcast' || k === 'youtube' || k === 'article') as Playlist['rules']['kinds'],
+      statuses: strings(r.statuses).filter((k) => k === 'unread' || k === 'inprogress' || k === 'read') as Playlist['rules']['statuses'],
+      savedOnly: r.savedOnly === true,
+      downloadedOnly: r.downloadedOnly === true,
+      withinDays: numOrNull(r.withinDays),
+      minMinutes: numOrNull(r.minMinutes),
+      maxMinutes: numOrNull(r.maxMinutes),
+    },
+    itemIds: strings(v.items),
+    sort: (sorts.includes(v.sort as string) ? v.sort : 'newest') as Playlist['sort'],
+    createdAt: typeof v.createdAt === 'number' ? v.createdAt : 0,
+    modifiedAt: ts,
+  }
+}
+
+/**
+ * Starter playlists made before they had fixed ids get them, unless already synced under their
+ * old id, so two devices end up with one "Morning drive" between them.
+ */
+export function adoptStarterIds(list: Playlist[], synced: Set<string>): Playlist[] {
+  const taken = new Set(list.map((p) => p.id))
+  return list.map((p) => {
+    const fixed = STARTER_IDS[p.name]
+    if (!fixed || !p.smart || p.id === fixed || synced.has(p.id) || taken.has(fixed)) return p
+    taken.add(fixed)
+    return { ...p, id: fixed }
+  })
 }
 
 export interface LayoutValue {
@@ -251,7 +350,22 @@ export async function collectChanges(now = Date.now()): Promise<Pending[]> {
     out.push({ k: 'layout', key: LAYOUT_KEY, v: layout, ts: Math.max(now, (kl?.ts ?? 0) + 1) })
   }
 
-  // Video positions saved here since they were last exchanged
+  // Playlists: new, edited (newest edit wins) and deleted ones
+  const knownLists = new Map((await db.syncKnown.where('k').startsWith('playlist\n').toArray()).map((r) => [r.k.slice('playlist\n'.length), r]))
+  const before = await loadPlaylists()
+  const lists = adoptStarterIds(before, new Set(knownLists.keys()))
+  if (lists.some((p, n) => p.id !== before[n].id)) await setKv(PLAYLISTS_KEY, lists)
+  for (const pl of lists) {
+    const v = playlistValue(pl)
+    const kn = knownLists.get(pl.id)
+    if (!kn || !same(kn.v, v)) out.push({ k: 'playlist', key: pl.id, v, ts: Math.max(pl.modifiedAt || pl.createdAt || 1, (kn?.ts ?? 0) + 1) })
+  }
+  const localLists = new Set(lists.map((p) => p.id))
+  for (const [id, kn] of knownLists) {
+    if (!localLists.has(id) && !isDeleted(kn.v)) out.push({ k: 'playlist', key: id, v: { deleted: true }, ts: Math.max(now, kn.ts + 1) })
+  }
+
+  // Video and episode positions saved here since they were last exchanged
   const videos = await db.videoPos.toArray()
   const knownVideos = await db.syncKnown.bulkGet(videos.map((v) => knownKey('video', v.id)))
   videos.forEach((v, n) => {
@@ -339,6 +453,18 @@ export async function applyRemote(p: Payload, ts: number, result: ApplyResult): 
           if (!local || local.ts <= ts) {
             await db.videoPos.put({ id: p.key, t: v.t, d: typeof v.d === 'number' && Number.isFinite(v.d) ? v.d : 0, ts })
           }
+        }
+        break
+      }
+      case 'playlist': {
+        const list = await loadPlaylists()
+        if (isDeleted(p.v)) {
+          if (list.some((x) => x.id === p.key)) await setKv(PLAYLISTS_KEY, list.filter((x) => x.id !== p.key))
+        } else if (p.v && typeof p.v === 'object') {
+          const pl = playlistFromValue(p.key, p.v as Partial<PlaylistValue>, ts)
+          await setKv(PLAYLISTS_KEY, list.some((x) => x.id === p.key) ? list.map((x) => (x.id === p.key ? pl : x)) : [...list, pl])
+          // Remember it as stored here, so fields another device wrote differently don't look like edits
+          await db.syncKnown.put({ k, v: playlistValue(pl), ts })
         }
         break
       }

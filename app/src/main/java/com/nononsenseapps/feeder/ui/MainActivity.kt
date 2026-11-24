@@ -108,15 +108,16 @@ class MainActivity : DIAwareComponentActivity() {
 
     private fun maybeRequestSync() =
         lifecycleScope.launch {
+            if (!mainActivityViewModel.isOkToSyncAutomatically()) return@launch
+            // Always pick up what other devices did meanwhile (where an episode was left, playlist
+            // edits, read marks): one quick exchange, so switching devices carries on from there
+            runOnceSyncChainGetUpdates(di)
             if (mainActivityViewModel.shouldSyncOnResume) {
-                if (mainActivityViewModel.isOkToSyncAutomatically()) {
-                    runOnceSyncChainGetUpdates(di)
-                    runOnceRssSync(
-                        di = di,
-                        forceNetwork = false,
-                        triggeredByUser = false,
-                    )
-                }
+                runOnceRssSync(
+                    di = di,
+                    forceNetwork = false,
+                    triggeredByUser = false,
+                )
             }
         }
 

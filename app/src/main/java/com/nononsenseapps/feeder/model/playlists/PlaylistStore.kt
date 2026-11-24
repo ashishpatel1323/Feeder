@@ -24,10 +24,22 @@ class PlaylistStore(
     private val _playlists = MutableStateFlow(load())
     val playlists: StateFlow<List<Playlist>> = _playlists.asStateFlow()
 
-    private val _positions = MutableStateFlow(loadPositions())
+    // Item id to (seconds played, length, when saved in epoch millis; 0 before positions synced)
+    private var stamped: Map<Long, Triple<Long, Long, Long>> = loadPositions()
+    private val _positions = MutableStateFlow(stamped.mapValues { (_, v) -> v.first to v.second })
 
     /** Item id to (seconds played, length). */
     val positions: StateFlow<Map<Long, Pair<Long, Long>>> = _positions.asStateFlow()
+
+    /**
+     * Told after every change: true when only a playing position moved (saved every few seconds
+     * while playing), false for playlist edits. Sync uses it to send changes to other devices.
+     */
+    @Volatile
+    var onChanged: ((positionOnly: Boolean) -> Unit)? = null
+
+    // Items whose position came from another device after this device last saved one
+    private val fromOtherDevice = mutableSetOf<Long>()
 
     private fun load(): List<Playlist> {
         val raw = prefs.getString(PREF_PLAYLISTS, null)
@@ -42,16 +54,27 @@ class PlaylistStore(
         return runCatching { json.decodeFromString(listSerializer, raw.orEmpty()) }.getOrDefault(emptyList())
     }
 
-    private fun loadPositions(): Map<Long, Pair<Long, Long>> =
+    private fun loadPositions(): Map<Long, Triple<Long, Long, Long>> =
         runCatching {
             json
                 .decodeFromString(positionsSerializer, prefs.getString(PREF_POSITIONS, null) ?: "{}")
-                .mapValues { (_, v) -> (v.getOrNull(0) ?: 0L) to (v.getOrNull(1) ?: 0L) }
+                .mapValues { (_, v) -> Triple(v.getOrNull(0) ?: 0L, v.getOrNull(1) ?: 0L, v.getOrNull(2) ?: 0L) }
         }.getOrDefault(emptyMap())
 
+    /** Changes the playlists; the ones [fn] changed are stamped with the time, which sync goes by. */
     @Synchronized
     fun change(fn: (List<Playlist>) -> List<Playlist>) {
-        val next = fn(_playlists.value)
+        val before = _playlists.value
+        val next = stampChanged(before, fn(before), System.currentTimeMillis())
+        write(next)
+        onChanged?.invoke(false)
+    }
+
+    /** Playlists as another device left them (sync): stored as they are, not stamped or sent back. */
+    @Synchronized
+    fun replaceFromSync(fn: (List<Playlist>) -> List<Playlist>) = write(fn(_playlists.value))
+
+    private fun write(next: List<Playlist>) {
         _playlists.value = next
         prefs.edit {
             putString(PREF_PLAYLISTS, json.encodeToString(listSerializer, next))
@@ -101,16 +124,56 @@ class PlaylistStore(
         seconds: Long,
         length: Long,
     ) {
-        val old = _positions.value[itemId]
+        val old = stamped[itemId]
         if (old == null && seconds < 5) return
+        val len = if (length > 0) length else old?.second ?: 0L
+        if (old != null && old.first == seconds && old.second == len) return
+        fromOtherDevice -= itemId
+        putPosition(itemId, Triple(seconds, len, maxOf(System.currentTimeMillis(), (old?.third ?: 0L) + 1)))
+        onChanged?.invoke(true)
+    }
+
+    /** Where another device left [itemId], saved at [ts]: kept unless this device's is newer. */
+    @Synchronized
+    fun applyRemotePosition(
+        itemId: Long,
+        seconds: Long,
+        length: Long,
+        ts: Long,
+    ) {
+        val old = stamped[itemId]
+        if (old != null && old.third >= ts) return
+        if (old != null && old.first == seconds) return
+        fromOtherDevice += itemId
+        putPosition(itemId, Triple(seconds, if (length > 0) length else old?.second ?: 0L, ts))
+    }
+
+    /**
+     * Where to carry on with [itemId] when it was paused here and then played further on another
+     * device: the resume point (a few seconds back), once. Null when nothing changed elsewhere.
+     */
+    @Synchronized
+    fun takeOtherDevicePosition(itemId: Long): Long? {
+        if (!fromOtherDevice.remove(itemId)) return null
+        return resumeAt(itemId)
+    }
+
+    /** Every position with when it was saved, for sync. */
+    fun stampedPositions(): Map<Long, Triple<Long, Long, Long>> = stamped
+
+    private fun putPosition(
+        itemId: Long,
+        value: Triple<Long, Long, Long>,
+    ) {
         val next =
-            (_positions.value + (itemId to (seconds to (if (length > 0) length else old?.second ?: 0L))))
+            ((stamped - itemId) + (itemId to value))
                 .entries
                 .toList()
                 .takeLast(MAX_POSITIONS)
                 .associate { it.key to it.value }
-        _positions.value = next
-        prefs.edit { putString(PREF_POSITIONS, json.encodeToString(positionsSerializer, next.mapValues { (_, v) -> listOf(v.first, v.second) })) }
+        stamped = next
+        _positions.value = next.mapValues { (_, v) -> v.first to v.second }
+        prefs.edit { putString(PREF_POSITIONS, json.encodeToString(positionsSerializer, next.mapValues { (_, v) -> listOf(v.first, v.second, v.third) })) }
     }
 
     /** Where to start [itemId]: a few seconds before where it was left, or 0. */
@@ -127,4 +190,14 @@ class PlaylistStore(
         private const val PREF_AUDIO_SPEED = "playlists_audio_speed"
         private const val MAX_POSITIONS = 500
     }
+}
+
+/** [next] with the playlists that differ from [before] stamped with [now]. */
+internal fun stampChanged(
+    before: List<Playlist>,
+    next: List<Playlist>,
+    now: Long,
+): List<Playlist> {
+    val old = before.associate { it.id to it.copy(modifiedAt = 0L) }
+    return next.map { if (old[it.id] == it.copy(modifiedAt = 0L)) it else it.copy(modifiedAt = now) }
 }
