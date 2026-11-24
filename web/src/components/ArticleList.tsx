@@ -31,6 +31,8 @@ interface Props {
   onOpenFeed: (url: string) => void
   /** On Saved: the always-visible "Paste a link" box. Resolves true when the link was added. */
   onAddLink?: (text: string) => Promise<boolean>
+  /** Opens global search; a button only on narrow screens (wide ones have the sidebar's search bar). */
+  onSearch?: () => void
 }
 
 type SavedKind = 'all' | 'links' | 'videos'
@@ -357,6 +359,11 @@ export function ArticleList(p: Props) {
             No connection
           </span>
         )}
+        {p.onSearch ? (
+          <span className="only-narrow">
+            <IconButton icon="search" label="Search everything" onClick={p.onSearch} />
+          </span>
+        ) : null}
         <IconButton icon="flip" label="Flip mode (F)" text="Flip" kbd="F" onClick={p.onFlip} />
         <MoreMenu
           entries={[

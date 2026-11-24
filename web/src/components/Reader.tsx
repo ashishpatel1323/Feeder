@@ -19,6 +19,7 @@ import { MoreMenu } from './MoreMenu'
 import { Player } from './Player'
 import { articleVideoId, iinaUrl, isMac, youtubeVideoId, youtubeWatchUrl } from '../lib/youtube'
 import { YouTubeFrame } from './YouTubeFrame'
+import { fold } from '../lib/search'
 import { TypeBadge, useItemFacts } from './ItemRow'
 import { LocalVideo, VideoOfflineControls } from './Offline'
 import { preferSavedImages, useOnline } from '../lib/offline'
@@ -43,6 +44,8 @@ interface Props {
   onFocusConsumed: () => void
   /** Opens the feed's own page (stats and settings). */
   onOpenFeed: (url: string) => void
+  /** Opened from global search: mark the words in the text, and for episodes open the transcript at the match. */
+  searchFocus?: { terms: string[]; query: string; atMs: number | null } | null
 }
 
 type Anchor = { start: number; text: string; prefix: string }
@@ -188,6 +191,25 @@ export function Reader(p: Props) {
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p.focusHighlight, highlights, html])
+
+  // From global search: mark every searched word in the text and bring the first one into view
+  const focusTerms = p.searchFocus?.terms.join('\n') ?? ''
+  const focusInTranscript = p.searchFocus?.atMs != null
+  useEffect(() => {
+    if (!pendingHighlightsSupported || !focusTerms) return
+    const t = window.setTimeout(() => {
+      const body = bodyRef.current
+      if (!body) return
+      const ranges = searchRanges(body, focusTerms.split('\n'))
+      if (!ranges.length) return
+      CSS.highlights.set('feeder-search', new window.Highlight(...ranges))
+      if (!focusInTranscript) ranges[0].startContainer.parentElement?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 250)
+    return () => {
+      clearTimeout(t)
+      CSS.highlights.delete('feeder-search')
+    }
+  }, [focusTerms, focusInTranscript, html, item.id])
 
   const picture = useMemo(() => articlePicture(item.imageUrl, html), [item.imageUrl, html])
   const subjectOf = (h: Pick<Highlight, 'text' | 'note' | 'color'>): ShareSubject => ({
@@ -504,7 +526,12 @@ export function Reader(p: Props) {
             ) : item.imageUrl && !html.includes(item.imageUrl) ? (
               <img className="lead-image" src={item.imageUrl} alt="" referrerPolicy="no-referrer" onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
             ) : null}
-            {!videoId && hasEpisode(item) ? <PodcastEpisode key={item.id} item={item} feedTitle={feedDisplayTitle(feed)} /> : null}
+            {!videoId && hasEpisode(item) ? <PodcastEpisode
+                key={item.id}
+                item={item}
+                feedTitle={feedDisplayTitle(feed)}
+                searchFocus={p.searchFocus && p.searchFocus.atMs != null ? { query: p.searchFocus.query, atMs: p.searchFocus.atMs } : null}
+              /> : null}
             {item.summary ? (
               <aside className="summary">
                 <div className="summary-head">
@@ -607,4 +634,25 @@ export function Reader(p: Props) {
       ) : null}
     </section>
   )
+}
+
+/** Ranges of every searched word in the article's text (case and accents ignored), for the search marks. */
+function searchRanges(root: HTMLElement, terms: string[]): Range[] {
+  const ranges: Range[] = []
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  for (let node = walker.nextNode() as Text | null; node && ranges.length < 500; node = walker.nextNode() as Text | null) {
+    const text = node.data
+    if (!text.trim()) continue
+    const folded = fold(text)
+    if (folded.length !== text.length) continue
+    for (const t of terms) {
+      for (let at = folded.indexOf(t); at >= 0; at = folded.indexOf(t, at + t.length)) {
+        const r = document.createRange()
+        r.setStart(node, at)
+        r.setEnd(node, at + t.length)
+        ranges.push(r)
+      }
+    }
+  }
+  return ranges
 }

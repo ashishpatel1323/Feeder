@@ -28,10 +28,25 @@ function formatTime(ms: number): string {
  * same one playlists use), so where you got to, the speed and the lock-screen controls are the
  * same everywhere. The transcript follows playback (Transcript button).
  */
-export function PodcastEpisode({ item, feedTitle = '', compact = false }: { item: Item; feedTitle?: string; compact?: boolean }) {
+export function PodcastEpisode({
+  item,
+  feedTitle = '',
+  compact = false,
+  searchFocus = null,
+}: {
+  item: Item
+  feedTitle?: string
+  compact?: boolean
+  /** From global search: open the transcript searching for this, at the match nearest atMs. */
+  searchFocus?: { query: string; atMs: number | null } | null
+}) {
   const q = useQueue()
   const saved = useLiveQuery(() => db.videoPos.get(item.id), [item.id])
-  const [showTranscript, setShowTranscript] = useState(false)
+  const [showTranscript, setShowTranscript] = useState(!!searchFocus)
+  const focusKey = searchFocus ? `${searchFocus.query}@${searchFocus.atMs}` : ''
+  useEffect(() => {
+    if (focusKey) setShowTranscript(true)
+  }, [focusKey])
   const current = q.ids[q.index] === item.id && q.kind !== null
   const playing = current && (q.status === 'playing' || q.status === 'loading')
   const position = current ? q.position : (saved?.t ?? 0)
@@ -96,15 +111,29 @@ export function PodcastEpisode({ item, feedTitle = '', compact = false }: { item
           </button>
         )}
       </div>
-      {showTranscript ? <TranscriptPanel item={item} positionMs={Math.round(position * 1000)} onSeek={seek} /> : null}
+      {showTranscript ? (
+        <TranscriptPanel key={focusKey || 'plain'} item={item} positionMs={Math.round(position * 1000)} onSeek={seek} focus={searchFocus} />
+      ) : null}
     </section>
   )
 }
 
-function TranscriptPanel({ item, positionMs, onSeek }: { item: Item; positionMs: number; onSeek: (ms: number) => void }) {
+function TranscriptPanel({
+  item,
+  positionMs,
+  onSeek,
+  focus = null,
+}: {
+  item: Item
+  positionMs: number
+  onSeek: (ms: number) => void
+  focus?: { query: string; atMs: number | null } | null
+}) {
   const state = useTranscript(item.id)
-  const [searchOpen, setSearchOpen] = useState(false)
-  const [query, setQuery] = useState('')
+  const [searchOpen, setSearchOpen] = useState(!!focus)
+  const [query, setQuery] = useState(focus?.query ?? '')
+  // A search from global search starts at its match, not where the episode is now
+  const startAt = useRef<number | null>(focus?.atMs ?? null)
   const [active, setActive] = useState(0)
   const matches = useMemo(() => (searchOpen ? findMatches(state.cues, query) : []), [searchOpen, state.cues, query])
   useEffect(() => {
@@ -112,10 +141,13 @@ function TranscriptPanel({ item, positionMs, onSeek }: { item: Item; positionMs:
   }, [item])
   // A new search starts at the first match from where the episode is now
   useEffect(() => {
-    const now = cueIndexAt(state.cues, positionMs)
+    if (!matches.length) return
+    const now = cueIndexAt(state.cues, startAt.current ?? positionMs)
+    startAt.current = null
     const next = matches.findIndex((m) => m.cue >= now)
     setActive(next >= 0 ? next : 0)
-  }, [query])
+    // The cues may arrive after the query (a search opened before the transcript loaded)
+  }, [query, matches.length > 0])
   const [copied, setCopied] = useState(false)
   const copyAll = async () => {
     const text = transcriptPlainText(state.cues, item.title)
