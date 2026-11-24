@@ -18,3 +18,9 @@ data class FeedItemForStats(
     @ColumnInfo(name = COL_WORD_COUNT) val wordCount: Int,
     @ColumnInfo(name = COL_WORD_COUNT_FULL) val wordCountFull: Int,
 )
+
+/** [FeedItemForStats] with the feed it belongs to, for the stats of every feed at once (Manage feeds). */
+data class FeedItemForStatsWithFeed(
+    @ColumnInfo(name = "feed_id") val feedId: Long,
+    @androidx.room.Embedded val item: FeedItemForStats,
+)

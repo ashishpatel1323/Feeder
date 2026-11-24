@@ -114,7 +114,11 @@ fun computeFeedStats(
         if (lastArticle == null || t > lastArticle) lastArticle = t
         val seen = row.firstSyncedTime.toEpochMilli()
         if (seen > 0 && (firstSeen == null || seen < firstSeen)) firstSeen = seen
-        byWeekday[row.primarySortTime.atZone(zone).dayOfWeek.value - 1]++
+        byWeekday[
+            row.primarySortTime
+                .atZone(zone)
+                .dayOfWeek.value - 1,
+        ]++
         if (t in start until end) {
             perDay[((t - start) / DAY_MS).toInt()]++
             recent++
@@ -146,7 +150,7 @@ fun computeFeedStats(
 }
 
 @Composable
-private fun formatRate(perDay: Double): String =
+internal fun formatRate(perDay: Double): String =
     when {
         perDay >= 10 -> stringResource(R.string.feed_stats_per_day, perDay.roundToInt().toString())
         perDay >= 1 -> stringResource(R.string.feed_stats_per_day, String.format(Locale.getDefault(), "%.1f", perDay))
@@ -154,7 +158,7 @@ private fun formatRate(perDay: Double): String =
         else -> stringResource(R.string.feed_stats_per_week, String.format(Locale.getDefault(), "%.1f", perDay * 7))
     }
 
-private fun timeAgo(
+internal fun timeAgo(
     t: Instant?,
     never: String,
 ): String =
@@ -228,6 +232,21 @@ fun FeedStatsSection(
             color = MaterialTheme.colorScheme.primary,
         )
 
+        FeedStatsPanel(stats)
+    }
+}
+
+/** The six stat tiles and the two charts, shared by the feed page and the Manage feeds sheet. */
+@Composable
+fun FeedStatsPanel(
+    stats: FeedStats,
+    modifier: Modifier = Modifier,
+) {
+    val never = stringResource(R.string.feed_stats_never)
+    Column(
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = modifier.fillMaxWidth(),
+    ) {
         val readPct = if (stats.recent > 0) (stats.recentRead * 100.0 / stats.recent).roundToInt() else null
         val since =
             stats.firstSeen?.let {
@@ -342,7 +361,7 @@ private fun StatTile(
 }
 
 @Composable
-private fun Bars(
+internal fun Bars(
     values: List<Int>,
     gap: androidx.compose.ui.unit.Dp,
     modifier: Modifier = Modifier,
