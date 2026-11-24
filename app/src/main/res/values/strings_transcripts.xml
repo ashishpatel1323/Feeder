@@ -5,11 +5,13 @@
   <string name="transcript_hide">Hide transcript</string>
   <string name="transcript_looking">Looking for a transcript…</string>
   <string name="transcript_none_in_feed">This episode\'s feed has no transcript.</string>
+  <string name="transcript_none_video">This video has no captions.</string>
   <string name="transcript_make_on_phone">Make one on this phone</string>
   <string name="transcript_make_on_phone_note">Speech to text runs on the phone and nothing is uploaded. The first time, it downloads a %1$d MB speech model. English only.</string>
   <string name="transcript_not_supported">Making transcripts is not available on this phone.</string>
   <string name="transcript_downloading_model">Downloading the speech model… %1$d%%</string>
   <string name="transcript_downloading_audio">Getting the episode audio… %1$d%%</string>
+  <string name="transcript_downloading_video_audio">Getting the video\'s sound… %1$d%%</string>
   <string name="transcript_transcribing">Making transcript… %1$d%% (up to %2$s)</string>
   <string name="transcript_paused">Transcript made up to %1$s</string>
   <string name="transcript_continue">Continue</string>
@@ -18,6 +20,7 @@
   <string name="transcript_stop">Stop</string>
   <string name="transcript_source_feed">Transcript from the podcast</string>
   <string name="transcript_source_phone">Transcript made on this phone</string>
+  <string name="transcript_source_youtube">Captions from YouTube</string>
   <string name="transcript_redo">Make again</string>
   <string name="transcript_follow">Follow playback</string>
   <string name="transcript_notification_channel">Podcast transcripts</string>

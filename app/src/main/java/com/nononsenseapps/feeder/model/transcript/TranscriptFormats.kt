@@ -189,6 +189,40 @@ object TranscriptFormats {
         return cues
     }
 
+    /**
+     * YouTube's automatic captions as WebVTT: each cue repeats the line before it (the captions
+     * roll up) with word timings inside, and 10 ms cues hold the finished line. Gives each spoken
+     * line once, at the time it starts.
+     */
+    fun parseYouTubeAutoVtt(content: String): List<TranscriptCue> {
+        // Split at timing lines, not blank lines: each cue's text starts with a line of one space
+        val blocks = mutableListOf<Pair<MatchResult, MutableList<String>>>()
+        for (line in content.replace("\r\n", "\n").replace('\r', '\n').lines()) {
+            val match = TIMING.find(line)
+            if (match != null) {
+                blocks += match to mutableListOf()
+            } else {
+                blocks.lastOrNull()?.second?.add(line)
+            }
+        }
+        val cues = mutableListOf<TranscriptCue>()
+        var previous = emptyList<String>()
+        for ((match, lines) in blocks) {
+            val start = timeMs(match.groupValues[1])
+            val end = timeMs(match.groupValues[2])
+            val texts =
+                lines
+                    .map { decodeEntities(TAG.replace(it, "")).replace(Regex("\\s+"), " ").trim() }
+                    .filter { it.isNotEmpty() }
+            if (end - start < 50 || texts.isEmpty()) continue
+            for (text in texts) {
+                if (text !in previous && text != cues.lastOrNull()?.text) cues += TranscriptCue(start, end, text)
+            }
+            previous = texts
+        }
+        return cues
+    }
+
     private fun timeMs(value: String): Long {
         val parts = value.replace(',', '.').split(':')
         val seconds = parts.last().toDouble()
