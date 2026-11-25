@@ -2,7 +2,6 @@ package com.nononsenseapps.feeder.ui.compose.history
 
 import android.text.format.DateFormat
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,14 +9,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -36,6 +33,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
@@ -140,7 +145,7 @@ private fun actionText(a: String): String =
         else -> a
     }
 
-/** The day headers and event rows, for a list that has other things in it too. */
+/** The day headers and timeline cards, for a list that has other things in it too. */
 fun LazyListScope.historyItems(
     days: List<HistoryDay>,
     emptyText: Int,
@@ -163,17 +168,40 @@ fun LazyListScope.historyItems(
                 d.label,
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(start = FeederTokens.Space.md, top = FeederTokens.Space.lg, bottom = FeederTokens.Space.xs),
+                modifier = Modifier.padding(start = FeederTokens.Space.md, top = FeederTokens.Space.lg, bottom = FeederTokens.Space.sm),
             )
         }
-        items(d.events, key = { it.id }) { e -> HistoryRow(e, onJump) }
+        item(key = "card-${d.label}") {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(FeederTokens.Radius.xl))
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .padding(vertical = FeederTokens.Space.sm),
+            ) {
+                d.events.forEachIndexed { k, e ->
+                    // The line down to the older event: solid while it was playing (or open), dotted while paused
+                    val older = d.events.getOrNull(k + 1)
+                    val line =
+                        when {
+                            older == null -> null
+                            older.a == ItemHistory.PLAY || older.a == ItemHistory.OPEN -> true
+                            else -> false
+                        }
+                    HistoryRow(e, onJump, line)
+                }
+            }
+        }
     }
 }
 
+/** One event: time, icon on the timeline, what happened and why, the place as a chip, the device. */
 @Composable
 fun HistoryRow(
     e: HistoryEvent,
     onJump: ((HistoryEvent) -> Unit)?,
+    /** The line below the icon: null none, true solid, false dotted */
+    line: Boolean? = null,
 ) {
     val context = LocalContext.current
     val reason = reasonText(e.r)
@@ -181,66 +209,109 @@ fun HistoryRow(
     val active = e.a == ItemHistory.PLAY || e.a == ItemHistory.OPEN
     val jump = onJump?.takeIf { e.x.isNotEmpty() }
     val goBack = stringResource(R.string.history_go_back)
+    val lineColor = MaterialTheme.colorScheme.primary
+    val dotColor = MaterialTheme.colorScheme.outline
     Row(
-        verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(FeederTokens.Space.md),
         modifier =
             Modifier
                 .fillMaxWidth()
-                .heightIn(min = 56.dp)
-                .clip(RoundedCornerShape(FeederTokens.Radius.md))
+                .height(IntrinsicSize.Min)
                 .then(if (jump != null) Modifier.clickable(onClickLabel = goBack, role = Role.Button) { jump(e) } else Modifier)
-                .padding(horizontal = FeederTokens.Space.md, vertical = FeederTokens.Space.sm),
+                .padding(horizontal = FeederTokens.Space.lg),
     ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier =
-                Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(if (active) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest),
-        ) {
-            Icon(
-                when (e.a) {
-                    ItemHistory.PLAY -> Icons.Outlined.PlayArrow
-                    ItemHistory.PAUSE -> Icons.Outlined.Pause
-                    ItemHistory.OPEN -> Icons.AutoMirrored.Outlined.MenuBook
-                    else -> Icons.Outlined.Close
-                },
-                contentDescription = null,
-                tint = if (active) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp),
-            )
+        Text(
+            time,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            modifier = Modifier.width(64.dp).padding(top = 9.dp),
+        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxHeight()) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier =
+                    Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest),
+            ) {
+                Icon(
+                    when (e.a) {
+                        ItemHistory.PLAY -> Icons.Outlined.PlayArrow
+                        ItemHistory.PAUSE -> Icons.Outlined.Pause
+                        ItemHistory.OPEN -> Icons.AutoMirrored.Outlined.MenuBook
+                        else -> Icons.Outlined.Close
+                    },
+                    contentDescription = null,
+                    tint = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            if (line != null) {
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .width(2.dp)
+                        .drawBehind {
+                            if (line) {
+                                drawLine(lineColor, Offset(size.width / 2, 0f), Offset(size.width / 2, size.height), strokeWidth = size.width)
+                            } else {
+                                drawLine(
+                                    dotColor,
+                                    Offset(size.width / 2, 0f),
+                                    Offset(size.width / 2, size.height),
+                                    strokeWidth = size.width,
+                                    cap = StrokeCap.Round,
+                                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(0.1f, 6.dp.toPx())),
+                                )
+                            }
+                        },
+                )
+            }
         }
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f).padding(top = 6.dp, bottom = FeederTokens.Space.lg)) {
             Text(
                 actionText(e.a) + (reason?.let { " · $it" } ?: ""),
                 style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(
-                listOf(time, e.dn, e.s).filter { it.isNotBlank() }.joinToString(" · "),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        if (e.p.isNotEmpty()) {
-            Text(
-                e.p,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier =
-                    Modifier
-                        .widthIn(max = 140.dp)
-                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(FeederTokens.Radius.sm))
-                        .padding(horizontal = FeederTokens.Space.sm, vertical = FeederTokens.Space.xs),
-            )
+            if (e.p.isNotEmpty() || e.dn.isNotEmpty()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(FeederTokens.Space.sm),
+                    modifier = Modifier.padding(top = FeederTokens.Space.sm),
+                ) {
+                    if (e.p.isNotEmpty()) {
+                        Text(
+                            e.p,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier =
+                                Modifier
+                                    .widthIn(max = 180.dp)
+                                    .clip(RoundedCornerShape(50))
+                                    .background(MaterialTheme.colorScheme.secondaryContainer)
+                                    .padding(horizontal = FeederTokens.Space.md, vertical = 6.dp),
+                        )
+                    }
+                    if (e.dn.isNotEmpty()) {
+                        Text(
+                            e.dn,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+            if (e.s.isNotEmpty() && e.p.isEmpty()) {
+                Text(e.s, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
     }
 }

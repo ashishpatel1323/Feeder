@@ -19,37 +19,42 @@ export function HistoryList({ c, i, onJump }: { c: HistoryKind; i: string; onJum
       {byDay(events).map((g) => (
         <section key={g.day} aria-label={g.day}>
           <h3 className="hist-day">{g.day}</h3>
-          <ol>
-            {g.events.map((e) => {
+          <ol className="hist-card">
+            {g.events.map((e, k) => {
               const reason = reasonText(e.r)
-              const device = e.dn ?? ''
+              // The line down to the older event: solid while it was playing (or open), dotted while paused
+              const older = g.events[k + 1]
+              const line = !older ? '' : older.a === 'play' || older.a === 'open' ? ' line' : ' dots'
               const body = (
                 <>
-                  <span className={`hist-icon ${e.a}`} aria-hidden="true">
-                    <Icon name={ICONS[e.a] ?? 'history'} size={18} />
+                  <span className="hist-time">{timeText(e.at)}</span>
+                  <span className={`hist-rail${line}`}>
+                    <span className={`hist-icon ${e.a}`} aria-hidden="true">
+                      <Icon name={ICONS[e.a] ?? 'history'} size={18} />
+                    </span>
                   </span>
                   <span className="hist-text">
                     <span className="hist-what">
                       {actionText(e.a)}
                       {reason ? <span className="hist-why"> · {reason}</span> : null}
                     </span>
-                    <span className="hist-when">
-                      {timeText(e.at)}
-                      {device ? ` · ${device}` : ''}
-                      {e.s ? ` · ${e.s}` : ''}
+                    <span className="hist-where">
+                      {e.p ? <span className="hist-chip">{e.p}</span> : null}
+                      {e.dn ? <span className="hist-device">{e.dn}</span> : null}
                     </span>
                   </span>
-                  {e.p ? <span className="hist-chip">{e.p}</span> : null}
                 </>
               )
               return (
                 <li key={e.id}>
                   {onJump && e.x ? (
-                    <button type="button" className="hist-row" onClick={() => onJump(e)} title="Go back here">
+                    <button type="button" className="hist-row" onClick={() => onJump(e)} title={e.s ? `${e.s}: go back here` : 'Go back here'}>
                       {body}
                     </button>
                   ) : (
-                    <div className="hist-row">{body}</div>
+                    <div className="hist-row" title={e.s || undefined}>
+                      {body}
+                    </div>
                   )}
                 </li>
               )
