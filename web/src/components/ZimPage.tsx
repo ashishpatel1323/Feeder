@@ -91,8 +91,6 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
       live = false
     }
   }, [])
-  const signedIn = useRef(false)
-  signedIn.current = dbx.signedIn
 
   const refreshRemote = useCallback(() => {
     listDropboxZims().then(setRemote, (e) => {
@@ -143,7 +141,7 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
     [toast],
   )
 
-  /** Puts a book that just arrived on this device into Dropbox too, for the other devices. */
+  /** Puts a book on this device into Dropbox too, for the other devices (only when asked). */
   const upload = useCallback(
     (file: string, label: string) =>
       run(`Uploading ${label} to Dropbox`, (prog, signal) => uploadToDropbox(file, prog, signal), () => {
@@ -152,10 +150,7 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
       }),
     [run, toast, refreshRemote],
   )
-  const added = (label: string) => (file: string) => {
-    toast(`${label} is ready to read`)
-    if (signedIn.current) upload(file, label)
-  }
+  const added = (label: string) => () => toast(`${label} is ready to read on this device`)
 
   const onFiles = (files: FileList | null) => {
     for (const f of files ?? []) run(f.name, (prog, signal) => importFile(f, prog, signal), added(f.name))

@@ -1,7 +1,7 @@
 /**
- * The Ebooks tab's library. Dropbox (/Ebooks in the app folder) is where books live for every
- * device; this browser keeps copies of the ones opened here in its private file system (OPFS), so
- * they open offline. A book's id is its Dropbox content hash, the same on every device, which is
+ * The Ebooks tab's library. Dropbox (/Ebooks in the app folder) is where books shared by every
+ * device live; this browser keeps copies of the ones opened here in its private file system
+ * (OPFS), so they open offline, and books added from this device stay only here until uploaded. A book's id is its Dropbox content hash, the same on every device, which is
  * what reading positions (kind "bookpos") and highlights are synced by.
  */
 import { contentHash, deleteFile, downloadStream, EBOOKS_FOLDER, getDropbox, listFolder, uploadFile, type DropboxFile, type Progress } from '../dropbox'
@@ -146,7 +146,7 @@ export function mergeDropbox(books: Book[], files: DropboxFile[], now = Date.now
 
 let refreshing: Promise<void> | null = null
 
-/** Reads the Dropbox folder again; uploads books only this device has. */
+/** Reads the Dropbox folder again. Books only on this device stay there (Upload to Dropbox shares one). */
 export function refreshFromDropbox(): Promise<void> {
   refreshing ??= (async () => {
     if (!(await getDropbox())) return
@@ -156,46 +156,34 @@ export function refreshFromDropbox(): Promise<void> {
       await db.books.bulkPut(put)
       await db.books.bulkDelete(remove)
     })
-    await uploadLocalOnly()
   })().finally(() => {
     refreshing = null
   })
   return refreshing
 }
 
-const uploading = new Set<string>()
-
-/** Books added here before Dropbox was signed in go up now. */
-async function uploadLocalOnly() {
-  for (const b of await db.books.filter((b) => b.local && !b.dropboxPath).toArray()) {
-    if (uploading.has(b.id)) continue
-    uploading.add(b.id)
-    try {
-      await upload(b)
-    } catch (e) {
-      console.warn('Could not upload book to Dropbox', b.title, e)
-    } finally {
-      uploading.delete(b.id)
-    }
-  }
+/** Uploads a book only on this device to Dropbox, so other devices have it too. */
+export async function uploadBook(id: string, onProgress?: Progress): Promise<void> {
+  const b = await db.books.get(id)
+  if (b && !b.dropboxPath) await upload(b, onProgress)
 }
 
 async function upload(b: Book, onProgress?: Progress) {
   const file = await localFile(b)
-  if (!file) return
+  if (!file) throw new Error(`${b.title} is not on this device`)
   const safe = `${b.title}${b.author ? ` - ${b.author}` : ''}`.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 150)
   const up = await uploadFile(`${EBOOKS_FOLDER}/${safe}.${b.ext}`, file, onProgress)
   await db.books.update(b.id, { dropboxPath: up.path })
 }
 
-/** Adds a book file from this device: kept here, and uploaded to Dropbox when signed in. */
+/** Adds a book file from this device: kept here only (Upload to Dropbox shares it). */
 export async function importBook(file: File, onProgress?: Progress): Promise<Book> {
   const ext = extOf(file.name)
   if (!BOOK_EXTENSIONS.includes(ext)) throw new Error(`${file.name}: Feeder reads EPUB, MOBI, AZW3, FB2, CBZ and PDF books`)
   const id = await contentHash(file)
   const existing = await db.books.get(id)
   const meta = await describeFile(file)
-  if (!existing?.local) await writeLocal({ id, ext }, file, file.size)
+  if (!existing?.local) await writeLocal({ id, ext }, file, file.size, onProgress)
   const book: Book = {
     id,
     ext,
@@ -208,17 +196,7 @@ export async function importBook(file: File, onProgress?: Progress): Promise<Boo
     lastOpenedAt: existing?.lastOpenedAt ?? 0,
   }
   await db.books.put(book)
-  if (!book.dropboxPath && (await getDropbox())) {
-    uploading.add(id)
-    try {
-      await upload(book, onProgress)
-    } catch (e) {
-      console.warn('Could not upload book to Dropbox', e)
-    } finally {
-      uploading.delete(id)
-    }
-  }
-  return (await db.books.get(id))!
+  return book
 }
 
 /** The book's file, downloading it from Dropbox first when it isn't on this device. */

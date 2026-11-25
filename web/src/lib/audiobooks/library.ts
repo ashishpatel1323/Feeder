@@ -2,12 +2,14 @@
  * The Audiobooks tab's library. Books live in Dropbox's /Audiobooks folder (in the app folder):
  * a file there is a book, and a folder there is a book whose audio files play in name order
  * ("2" before "10", files before subfolders, as the Voice audiobook player does). Books stream
- * from Dropbox; nothing is copied to this device.
+ * from Dropbox. Books can also be on this device only: files or a folder picked here are kept
+ * in the browser's private storage (OPFS) and never uploaded unless asked; a Dropbox book can be
+ * downloaded there too, to play offline.
  *
  * A one-file book's id is the file's Dropbox content hash; a folder's is a hash of its files'
  * hashes in play order. Positions (kind "audiopos") sync by that id, the same on every device.
  */
-import { AUDIOBOOKS_FOLDER, downloadRange, downloadStream, getDropbox, listTree, temporaryLink, uploadFile, type DropboxFile, type Progress } from '../dropbox'
+import { AUDIOBOOKS_FOLDER, contentHash, downloadRange, downloadStream, getDropbox, listTree, temporaryLink, uploadFile, type DropboxFile, type Progress } from '../dropbox'
 import { db, type AudioPos, type AudioTrack, type Audiobook } from '../db'
 import { thisDevice } from '../device'
 import { readTags, type FileTags, type RangeReader } from './tags'
@@ -131,9 +133,16 @@ export function mergeBooks(have: Audiobook[], drafts: BookDraft[]): { put: Audio
     const known = new Map(old.tracks.map((t) => [t.hash, t]))
     const tracks = d.tracks.map((t) => ({ ...(known.get(t.hash) ?? t), path: t.path, name: t.name }))
     const moved = old.dropboxPath !== d.dropboxPath || tracks.some((t, i) => t.path !== old.tracks[i]?.path)
+    // A book first added from this device keeps the title read from its files
     if (moved) put.push({ ...old, dropboxPath: d.dropboxPath, tracks, title: old.described ? old.title : d.title })
   }
-  const remove = have.filter((b) => !seen.has(b.id)).map((b) => b.id)
+  const remove: string[] = []
+  for (const b of have) {
+    if (seen.has(b.id) || !b.dropboxPath) continue
+    // Gone from Dropbox: forget it unless this device has its files, which stay as a local book
+    if (onDevice(b)) put.push({ ...b, dropboxPath: null })
+    else remove.push(b.id)
+  }
   return { put, remove }
 }
 
@@ -221,12 +230,12 @@ function measure(url: string): Promise<number | null> {
 async function scanTrack(t: AudioTrack): Promise<{ track: AudioTrack; tags: FileTags | null }> {
   let tags: FileTags | null = null
   try {
-    tags = await readTags(t.name, dropboxReader(t.path, t.size))
+    tags = await readTags(t.name, await trackReader(t))
   } catch (e) {
     console.warn('Could not read tags', t.name, e)
   }
   let duration = tags?.duration ?? null
-  if (!duration) duration = await measure(await temporaryLink(t.path)).catch(() => null)
+  if (!duration) duration = await measure(await trackUrl(t)).catch(() => null)
   return { track: { ...t, duration, title: tags?.title ?? null, marks: tags?.chapters ?? [], scanned: true }, tags }
 }
 
@@ -275,9 +284,11 @@ export function scanBook(id: string, onProgress?: Progress): Promise<Audiobook |
 
 /** Title, author and cover from the first file's tags or the folder's picture. */
 async function describe(b: Audiobook, first: FileTags | null) {
-  if (!first && b.tracks[0]) first = await readTags(b.tracks[0].name, dropboxReader(b.tracks[0].path, b.tracks[0].size)).catch(() => null)
+  if (!first && b.tracks[0]) first = await trackReader(b.tracks[0]).then((r) => readTags(b.tracks[0].name, r)).catch(() => null)
   let cover: string | null = null
   if (first?.cover) cover = await smallCover(new Blob([first.cover.data.slice().buffer as ArrayBuffer], { type: first.cover.type }))
+  const picture = localCovers.get(b.id)
+  if (!cover && picture) cover = await smallCover(picture)
   const coverPath = coverPaths.get(b.id)
   if (!cover && coverPath) {
     try {
@@ -303,19 +314,256 @@ async function describeSome() {
   }
 }
 
-/** Uploads files from this device as a book: one file as is, several into a folder named [title]. */
-export async function uploadAudiobook(files: File[], title: string, onProgress?: Progress): Promise<void> {
-  const list = files.filter((f) => isAudioName(f.name)).sort((a, b) => comparePaths(a.name, b.name))
-  if (!list.length) throw new Error('Pick audio files: M4B, M4A, MP3, OGG, Opus or FLAC')
-  const safe = (s: string) => s.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 150) || 'Audiobook'
-  const total = list.reduce((s, f) => s + f.size, 0)
+const safe = (s: string) => s.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 150) || 'Audiobook'
+
+/** Uploads a book on this device to Dropbox: one file as is, several into a folder named after the book. */
+export async function uploadAudiobook(id: string, onProgress?: Progress): Promise<void> {
+  const b = await db.audiobooks.get(id)
+  if (!b) return
+  const files: { path: string; file: File }[] = []
+  for (const t of b.tracks) {
+    const file = await localTrackFile(t)
+    if (!file) throw new Error(`${t.name} is not on this device`)
+    const rel = t.path.startsWith(LOCAL) ? t.path.slice(LOCAL.length) : t.name
+    const parts = rel.split('/').map(safe)
+    files.push({ path: b.tracks.length === 1 && !b.folder ? `${AUDIOBOOKS_FOLDER}/${safe(t.name)}` : `${AUDIOBOOKS_FOLDER}/${safe(b.title)}/${parts.join('/')}`, file })
+  }
+  const total = files.reduce((s, f) => s + f.file.size, 0)
   let before = 0
-  for (const f of list) {
-    const path = list.length === 1 ? `${AUDIOBOOKS_FOLDER}/${safe(f.name)}` : `${AUDIOBOOKS_FOLDER}/${safe(title)}/${safe(f.name)}`
-    await uploadFile(path, f, (done) => onProgress?.(before + done, total))
-    before += f.size
+  for (const f of files) {
+    await uploadFile(f.path, f.file, (done) => onProgress?.(before + done, total))
+    before += f.file.size
   }
   await refreshAudiobooks()
+}
+
+// ---- On this device ----
+
+/** Paths of tracks only on this device start with this, followed by the path in what was picked. */
+export const LOCAL = 'local:'
+
+/** Whether every file of the book is on this device. */
+export const onDevice = (b: Pick<Audiobook, 'tracks'>) => b.tracks.length > 0 && b.tracks.every((t) => t.local)
+
+export function localSupported(): boolean {
+  return typeof navigator !== 'undefined' && !!navigator.storage?.getDirectory
+}
+
+async function abDir(): Promise<FileSystemDirectoryHandle> {
+  const root = await navigator.storage.getDirectory()
+  return root.getDirectoryHandle('audiobooks', { create: true })
+}
+
+/** A file is kept once, by content, whichever books share it. */
+const localName = (t: Pick<AudioTrack, 'hash' | 'name'>) => `${t.hash}.${extOf(t.name) || 'audio'}`
+
+/** This device's copy of a track, or null. */
+export async function localTrackFile(t: AudioTrack): Promise<File | null> {
+  if (!t.local) return null
+  try {
+    return await (await (await abDir()).getFileHandle(localName(t))).getFile()
+  } catch {
+    return null
+  }
+}
+
+async function writeLocal(name: string, data: Blob | ReadableStream<Uint8Array>, onBytes?: (n: number) => void, signal?: AbortSignal) {
+  navigator.storage.persist?.().catch(() => undefined)
+  const d = await abDir()
+  const tmp = `${name}.part`
+  const h = await d.getFileHandle(tmp, { create: true })
+  try {
+    const w = await h.createWritable()
+    const counter = new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, c) {
+        onBytes?.(chunk.length)
+        c.enqueue(chunk)
+      },
+    })
+    await (data instanceof Blob ? data.stream() : data).pipeThrough(counter, { signal }).pipeTo(w, { signal })
+    const moved = h as FileSystemFileHandle & { move?: (name: string) => Promise<void> }
+    if (moved.move) await moved.move(name)
+    else {
+      const out = await (await d.getFileHandle(name, { create: true })).createWritable()
+      await (await h.getFile()).stream().pipeTo(out)
+      await d.removeEntry(tmp)
+    }
+  } catch (e) {
+    await d.removeEntry(tmp).catch(() => undefined)
+    throw e
+  }
+}
+
+const objectUrls = new Map<string, string>()
+
+/** Where the player loads a track from: this device's copy, else a Dropbox streaming link. */
+export async function trackUrl(t: AudioTrack, fresh = false): Promise<string> {
+  const file = await localTrackFile(t)
+  if (file) {
+    const key = localName(t)
+    let url = objectUrls.get(key)
+    if (!url) objectUrls.set(key, (url = URL.createObjectURL(file)))
+    return url
+  }
+  if (t.path.startsWith(LOCAL)) throw new Error(`${t.name} is no longer on this device`)
+  return temporaryLink(t.path, fresh)
+}
+
+async function trackReader(t: AudioTrack): Promise<RangeReader> {
+  const file = await localTrackFile(t)
+  if (file) return { size: file.size, read: async (offset, length) => new Uint8Array(await file.slice(offset, offset + length).arrayBuffer()) }
+  return dropboxReader(t.path, t.size)
+}
+
+/** Pictures found next to local books' files, for their covers. */
+const localCovers = new Map<string, Blob>()
+
+/** A file picked on this device, with its path inside the picked folder (just its name for loose files). */
+export interface Picked {
+  rel: string
+  file: File
+}
+
+/** Files from a folder picker (input webkitdirectory), with the picked folder's own name cut off. */
+export function pickedFromFolder(files: File[]): { name: string; files: Picked[] } {
+  const rels = files.map((f) => (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name)
+  const name = rels[0]?.includes('/') ? rels[0].split('/')[0] : ''
+  return { name, files: files.map((file, k) => ({ file, rel: name && rels[k].startsWith(`${name}/`) ? rels[k].slice(name.length + 1) : rels[k] })) }
+}
+
+/**
+ * How picked files make books. Loose files, or a folder of files only: one book named [title]
+ * (a folder of several .m4b files, each a whole book, makes one book each). A folder with
+ * subfolders of audio: the same rule as Dropbox's /Audiobooks, each file and subfolder there is
+ * one book.
+ */
+export function groupPicked(picked: Picked[], title: string): { title: string; folder: boolean; files: Picked[]; cover: Picked | null }[] {
+  const audio = picked.filter((p) => isAudioName(p.file.name))
+  const images = picked.filter((p) => IMAGE.test(p.file.name))
+  const nested = audio.some((p) => p.rel.includes('/'))
+  const allM4b = audio.length > 1 && audio.every((p) => extOf(p.file.name) === 'm4b')
+  const coverOf = (list: Picked[], prefix: string) => {
+    const top = list.filter((x) => x.rel.startsWith(prefix) && !x.rel.slice(prefix.length).includes('/'))
+    return top.find((x) => /^(cover|folder|front)\./i.test(x.file.name)) ?? top[0] ?? null
+  }
+  if (!nested && !allM4b) {
+    if (!audio.length) return []
+    const sorted = [...audio].sort((a, b) => comparePaths(a.rel, b.rel))
+    return [{ title: audio.length === 1 ? nameWithoutExt(audio[0].file.name) : title, folder: audio.length > 1, files: sorted, cover: coverOf(images, '') }]
+  }
+  const out: { title: string; folder: boolean; files: Picked[]; cover: Picked | null }[] = []
+  const folders = new Map<string, Picked[]>()
+  for (const p of audio) {
+    const cut = p.rel.indexOf('/')
+    if (cut < 0) out.push({ title: nameWithoutExt(p.file.name), folder: false, files: [p], cover: null })
+    else {
+      const name = p.rel.slice(0, cut)
+      folders.set(name, [...(folders.get(name) ?? []), p])
+    }
+  }
+  for (const [name, list] of folders) {
+    const inner = list.map((p) => ({ ...p, rel: p.rel.slice(name.length + 1) })).sort((a, b) => comparePaths(a.rel, b.rel))
+    const pics = images.filter((x) => x.rel.startsWith(`${name}/`)).map((x) => ({ ...x, rel: x.rel.slice(name.length + 1) }))
+    out.push({ title: name.replace(/_/g, ' ').trim() || name, folder: true, files: inner, cover: coverOf(pics, '') ?? pics[0] ?? null })
+  }
+  return out
+}
+
+/**
+ * Keeps picked files on this device as books (nothing goes to Dropbox). A book with the same
+ * files as one in Dropbox becomes the same book, so its place syncs with other devices.
+ * [onProgress] gets bytes done of all the bytes. Returns how many books were added.
+ */
+export async function addLocal(picked: Picked[], title: string, onProgress?: Progress, signal?: AbortSignal): Promise<number> {
+  const groups = groupPicked(picked, title)
+  if (!groups.length) throw new Error('Pick audio files: M4B, M4A, MP3, OGG, Opus or FLAC')
+  const total = groups.reduce((s, g) => s + g.files.reduce((n, p) => n + p.file.size, 0), 0) * 2
+  let done = 0
+  const bytes = (n: number) => onProgress?.((done += n), total)
+  for (const g of groups) {
+    const tracks: AudioTrack[] = []
+    for (const p of g.files) {
+      const hash = await contentHash(p.file)
+      bytes(p.file.size)
+      tracks.push({ path: `${LOCAL}${p.rel}`, name: p.file.name, hash, size: p.file.size, duration: null, title: null, marks: [], scanned: false, local: true })
+    }
+    const id = g.folder ? await folderBookId(tracks.map((t) => t.hash)) : tracks[0].hash
+    const d = await abDir()
+    for (const [k, t] of tracks.entries()) {
+      const exists = await d
+        .getFileHandle(localName(t))
+        .then((h) => h.getFile())
+        .then((f) => f.size === t.size)
+        .catch(() => false)
+      if (!exists) await writeLocal(localName(t), g.files[k].file, bytes, signal)
+      else bytes(t.size)
+    }
+    if (g.cover) localCovers.set(id, g.cover.file)
+    const old = await db.audiobooks.get(id)
+    if (old) {
+      const byHash = new Map(tracks.map((t) => [t.hash, t]))
+      await db.audiobooks.update(id, { tracks: old.tracks.map((t) => (byHash.has(t.hash) ? { ...t, local: true } : t)) })
+      if (!old.cover && g.cover) await db.audiobooks.update(id, { cover: await smallCover(g.cover.file) })
+    } else {
+      await db.audiobooks.put({
+        id,
+        title: g.title,
+        author: '',
+        cover: null,
+        dropboxPath: null,
+        folder: g.folder,
+        tracks,
+        size: tracks.reduce((s, t) => s + t.size, 0),
+        described: false,
+        addedAt: Date.now(),
+        lastOpenedAt: 0,
+      })
+      const b = await db.audiobooks.get(id)
+      if (b) await describe(b, null).catch((e) => console.warn('Could not describe audiobook', g.title, e))
+    }
+  }
+  return groups.length
+}
+
+/** Downloads a Dropbox book's files to this device, to play offline. */
+export async function downloadAudiobook(id: string, onProgress?: Progress, signal?: AbortSignal): Promise<void> {
+  const b = await db.audiobooks.get(id)
+  if (!b) return
+  let done = 0
+  const total = b.size
+  for (const t of b.tracks) {
+    if (await localTrackFile(t)) {
+      onProgress?.((done += t.size), total)
+      continue
+    }
+    const { body } = await downloadStream(t.path, signal)
+    await writeLocal(localName(t), body, (n) => onProgress?.((done += n), total), signal)
+    await db.transaction('rw', db.audiobooks, async () => {
+      const cur = await db.audiobooks.get(id)
+      if (cur) await db.audiobooks.update(id, { tracks: cur.tracks.map((x) => (x.hash === t.hash ? { ...x, local: true } : x)) })
+    })
+  }
+}
+
+/**
+ * Frees this device's copies. A book that is in Dropbox stays (it streams from there); one only
+ * on this device is gone. Files another book still uses stay.
+ */
+export async function removeFromDevice(id: string): Promise<void> {
+  const b = await db.audiobooks.get(id)
+  if (!b) return
+  const others = (await db.audiobooks.toArray()).filter((x) => x.id !== id)
+  const shared = new Set(others.flatMap((x) => x.tracks.filter((t) => t.local).map((t) => t.hash)))
+  const d = await abDir()
+  for (const t of b.tracks) {
+    if (!t.local || shared.has(t.hash)) continue
+    await d.removeEntry(localName(t)).catch(() => undefined)
+    const url = objectUrls.get(localName(t))
+    if (url) URL.revokeObjectURL(url)
+    objectUrls.delete(localName(t))
+  }
+  if (b.dropboxPath) await db.audiobooks.update(id, { tracks: b.tracks.map((t) => ({ ...t, local: false })) })
+  else await db.audiobooks.delete(id)
 }
 
 /** Saves where a book is (and who saved it). */

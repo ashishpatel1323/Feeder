@@ -8458,3 +8458,87 @@ mark.sr-mark {
     font-size: var(--fs-2xs);
   }
 }
+
+/* Shelf: square covers (Audiobooks), generated covers, progress along the cover, Play on the cover */
+.shelf-square-cover {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+.book-open:hover .shelf-square-cover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.26);
+}
+.shelf-thumb.shelf-square {
+  width: 48px;
+  height: 48px;
+  overflow: hidden;
+}
+.gen-cover {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  width: 100%;
+  height: 100%;
+  padding: var(--sp-3);
+  background: linear-gradient(155deg, hsl(var(--gen-h) 42% 46%), hsl(calc(var(--gen-h) + 40) 46% 26%));
+  color: #fff;
+  font-weight: 650;
+  text-align: center;
+  line-height: 1.25;
+  overflow: hidden;
+}
+.gen-cover.small {
+  padding: 0;
+}
+.gen-cover span {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+.shelf-progress {
+  display: block;
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--text) 14%, transparent);
+  overflow: hidden;
+}
+.shelf-progress i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.shelf-cover-wrap .shelf-progress {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 6px;
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+}
+.shelf-cover-wrap.has-progress .avail {
+  bottom: 16px;
+}
+.shelf-row .shelf-progress {
+  margin-top: 6px;
+  max-width: 240px;
+}
+.shelf-quick {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+}
+.shelf-quick > button {
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  border-radius: 50%;
+}
+.shelf-row-quick {
+  flex-shrink: 0;
+}

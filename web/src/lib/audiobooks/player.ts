@@ -1,15 +1,15 @@
 /**
- * Plays one audiobook at a time, streaming its files from Dropbox one after another. Keeps the
+ * Plays one audiobook at a time, its files one after another (this device's copies, else streamed
+ * from Dropbox). Keeps the
  * position (saved every 15 s, on pause and on every jump, and synced as "audiopos"), a speed per
  * book, a sleep timer (minutes, or to the end of the chapter, fading out at the end) and the
  * media session (lock screen, headphone buttons: back 10 s, ahead 30 s, chapter back/next).
  */
 import { useEffect, useState } from 'react'
 import { db, getKv, setKv, type Audiobook } from '../db'
-import { temporaryLink } from '../dropbox'
 import { audioFocus, playQueue } from '../playqueue'
 import { readAloud } from '../readaloud'
-import { saveAudioPos, scanBook } from './library'
+import { saveAudioPos, scanBook, trackUrl } from './library'
 import { bookLengthMs, chapterAt, chaptersOf, fractionAt, resumePoint, trackStartMs, type Chapter } from './timeline'
 
 export type BookStatus = 'idle' | 'loading' | 'playing' | 'paused'
@@ -174,11 +174,11 @@ class AudiobookPlayer {
     this.set({ i, ms, bookMs: trackStartMs(b, i) + ms, chapter: chapterAt(this.state.chapters, i, ms), status: play ? 'loading' : 'paused' })
     let url: string
     try {
-      url = await temporaryLink(t.path, freshLink)
+      url = await trackUrl(t, freshLink)
     } catch (e) {
       if (gen !== this.generation) return
       this.set({ status: 'paused', error: e instanceof Error ? e.message : String(e) })
-      this.onMessage?.(`Could not reach Dropbox: ${e instanceof Error ? e.message : e}`)
+      this.onMessage?.(t.local ? `Could not open ${t.name}` : `Could not reach Dropbox: ${e instanceof Error ? e.message : e}`)
       return
     }
     if (gen !== this.generation) return

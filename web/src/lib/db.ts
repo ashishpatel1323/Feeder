@@ -165,7 +165,7 @@ export interface BookPos {
 
 /** One audio file of an audiobook (audiobooks/library.ts). */
 export interface AudioTrack {
-  /** Where it is in Dropbox */
+  /** Where it is in Dropbox, or "local:<path in the picked folder>" for a file only on this device */
   path: string
   /** File name, for the chapter name when the file has no title */
   name: string
@@ -180,6 +180,8 @@ export interface AudioTrack {
   marks: { startMs: number; title: string }[]
   /** Whether the tags have been read (they are read once, on the first play) */
   scanned: boolean
+  /** Whether this browser keeps a copy (in its private storage), so it plays without Dropbox */
+  local?: boolean
 }
 
 /** An audiobook in the Audiobooks tab: one file, or a folder of files played in name order. */
@@ -189,8 +191,8 @@ export interface Audiobook {
   title: string
   author: string
   cover: string | null
-  /** The file, or the folder, in Dropbox */
-  dropboxPath: string
+  /** The file, or the folder, in Dropbox; null when the book is only on this device */
+  dropboxPath: string | null
   folder: boolean
   tracks: AudioTrack[]
   size: number
