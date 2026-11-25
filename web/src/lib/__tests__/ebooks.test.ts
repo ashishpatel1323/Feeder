@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { contentHash, headerArg } from '../dropbox'
 import { authorString, bookIdOfItem, bookItemId, extOf, isBookName, langString, mergeDropbox, titleFromName } from '../ebooks/library'
 import { injectCsp } from '../ebooks/reader'
+import { pageNumbers } from '../ebooks/nav'
 import type { Book } from '../db'
 
 /** Dropbox's documented algorithm, written separately with Node's crypto. */
@@ -82,5 +83,13 @@ describe('book page safety', () => {
     expect(injectCsp('<html><head><title>x</title></head><body/></html>')).toMatch(/^<html><head><meta http-equiv="Content-Security-Policy" content="script-src 'none'/)
     expect(injectCsp('<html xmlns="x"><body>b</body></html>')).toContain('<html xmlns="x"><head><meta http-equiv="Content-Security-Policy"')
     expect(injectCsp('<p>bare</p>')).toMatch(/^<meta http-equiv/)
+  })
+})
+
+describe('pageNumbers', () => {
+  it('counts locations for reflowable books and pages for PDFs', () => {
+    expect(pageNumbers({ location: { current: 44, next: 45, total: 312 }, section: { current: 3, total: 20 } }, false)).toEqual({ page: 45, pages: 312 })
+    expect(pageNumbers({ location: { current: 44, next: 45, total: 312 }, section: { current: 3, total: 20 } }, true)).toEqual({ page: 4, pages: 20 })
+    expect(pageNumbers({}, false)).toBeNull()
   })
 })

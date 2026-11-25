@@ -503,7 +503,7 @@ class Sync2Client(
         for ((id, pos) in bookPositions.all.value) {
             val kn = knownBooks[id]
             if (kn == null || pos.ts > kn.ts) {
-                out += Pending("bookpos", id, linkedMapOf<String, Any?>("cfi" to pos.cfi, "f" to pos.f).putStamp(pos.by), maxOf(pos.ts, (kn?.ts ?: 0) + 1))
+                out += Pending("bookpos", id, linkedMapOf<String, Any?>("cfi" to pos.cfi, "f" to pos.f).apply { if (pos.n > 0) putAll(listOf("p" to pos.p, "n" to pos.n)) }.putStamp(pos.by), maxOf(pos.ts, (kn?.ts ?: 0) + 1))
             }
         }
 
@@ -682,7 +682,7 @@ class Sync2Client(
                 "bookpos" -> {
                     if (v is Map<*, *>) {
                         val cfi = v["cfi"] as? String
-                        if (!cfi.isNullOrBlank()) bookPositions.applyRemote(key, cfi, (v["f"] as? Number)?.toDouble() ?: 0.0, ts, DeviceStamp.fromMap(v))
+                        if (!cfi.isNullOrBlank()) bookPositions.applyRemote(key, cfi, (v["f"] as? Number)?.toDouble() ?: 0.0, ts, DeviceStamp.fromMap(v), (v["p"] as? Number)?.toInt() ?: 0, (v["n"] as? Number)?.toInt() ?: 0)
                     }
                 }
 

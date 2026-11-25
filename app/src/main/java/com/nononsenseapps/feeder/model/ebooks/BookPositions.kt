@@ -16,6 +16,9 @@ data class BookPos(
     val cfi: String,
     val f: Double,
     val ts: Long,
+    /** Page [p] of [n] (0 = not known), the same on every device */
+    val p: Int = 0,
+    val n: Int = 0,
     /** Device that saved it (ThisDevice), empty when not known */
     val dv: String = "",
     val dn: String = "",
@@ -50,13 +53,15 @@ class BookPositions private constructor(
         id: String,
         cfi: String,
         fraction: Double,
+        page: Int = 0,
+        pages: Int = 0,
         now: Long = System.currentTimeMillis(),
     ) {
         if (cfi.isBlank()) return
         val f = Math.round(fraction.coerceIn(0.0, 1.0) * 10000) / 10000.0
         val old = _all.value[id]
         if (old != null && old.cfi == cfi) return
-        device.stamp().let { me -> put(id, BookPos(cfi, f, maxOf(now, (old?.ts ?: 0) + 1), me.id, me.name)) }
+        device.stamp().let { me -> put(id, BookPos(cfi, f, maxOf(now, (old?.ts ?: 0) + 1), page.coerceAtLeast(0), pages.coerceAtLeast(0), me.id, me.name)) }
         onChanged?.invoke()
     }
 
@@ -68,11 +73,13 @@ class BookPositions private constructor(
         f: Double,
         ts: Long,
         by: DeviceStamp = DeviceStamp.NONE,
+        page: Int = 0,
+        pages: Int = 0,
     ) {
         if (cfi.isBlank()) return
         val local = _all.value[id]
         if (local != null && local.ts > ts) return
-        put(id, BookPos(cfi, if (f.isFinite()) f else 0.0, ts, by.id, by.name))
+        put(id, BookPos(cfi, if (f.isFinite()) f else 0.0, ts, page, pages, by.id, by.name))
     }
 
     private fun put(

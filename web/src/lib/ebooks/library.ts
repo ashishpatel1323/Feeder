@@ -266,7 +266,7 @@ export async function deleteBook(id: string): Promise<void> {
   await db.books.delete(id)
 }
 
-/** Where a book was left, as saved here or synced from another device. */
-export async function savePosition(id: string, cfi: string, f: number): Promise<void> {
-  await db.bookPos.put({ id, cfi, f: Math.round(f * 10000) / 10000, ts: Date.now(), ...thisDevice() })
+/** Where a book was left, as saved here or synced from another device, with its page when known. */
+export async function savePosition(id: string, cfi: string, f: number, pages?: { page: number; pages: number } | null): Promise<void> {
+  await db.bookPos.put({ id, cfi, f: Math.round(f * 10000) / 10000, ...(pages ? { p: pages.page, n: pages.pages } : {}), ts: Date.now(), ...thisDevice() })
 }

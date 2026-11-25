@@ -105,6 +105,7 @@ import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.int
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -139,6 +140,9 @@ private data class Relocation(
     val cfi: String = "",
     val fraction: Float = 0f,
     val chapter: String = "",
+    // Page x of y, the same on every device (web lib/ebooks/nav.ts pageNumbers); 0 = not known
+    val page: Int = 0,
+    val pages: Int = 0,
     val atStart: Boolean = true,
     val atEnd: Boolean = false,
 )
@@ -258,12 +262,14 @@ fun EbookReaderScreen(
                                 cfi = o["cfi"]?.jsonPrimitive?.contentOrNull ?: "",
                                 fraction = (o["fraction"]?.jsonPrimitive?.double ?: 0.0).toFloat(),
                                 chapter = o["chapter"]?.jsonPrimitive?.contentOrNull ?: "",
+                                page = o["page"]?.jsonPrimitive?.intOrNull ?: 0,
+                                pages = o["pages"]?.jsonPrimitive?.intOrNull ?: 0,
                                 atStart = o["atStart"]?.jsonPrimitive?.boolean ?: false,
                                 atEnd = o["atEnd"]?.jsonPrimitive?.boolean ?: false,
                             )
                         if (r == loc) return@post
                         loc = r
-                        if (r.cfi.isNotBlank()) positions.save(bookId, r.cfi, r.fraction.toDouble())
+                        if (r.cfi.isNotBlank()) positions.save(bookId, r.cfi, r.fraction.toDouble(), r.page, r.pages)
                     }
 
                 @JavascriptInterface
@@ -477,7 +483,9 @@ fun EbookReaderScreen(
                                 modifier = Modifier.weight(1f),
                             )
                             Spacer(Modifier.width(12.dp))
-                            Text("${((sliding ?: loc.fraction) * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
+                            // "45 / 312 · 14%" (pages hidden while dragging, where only the % is known)
+                            val pct = "${((sliding ?: loc.fraction) * 100).toInt()}%"
+                            Text(if (sliding == null && loc.pages > 0) "${loc.page} / ${loc.pages} · $pct" else pct, style = MaterialTheme.typography.bodySmall)
                         }
                 }
                 HideableCompactTTSPlayer(

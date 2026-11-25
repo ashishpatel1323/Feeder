@@ -152,7 +152,7 @@ fun EbooksScreen(
                 key = b.id,
                 title = b.title,
                 subtitle = b.author,
-                detail = listOf(f?.let { "${(it * 100).roundToInt()}%" + (byOther?.let { w -> " $w" } ?: "") } ?: newLabel, b.ext.uppercase(), Formatter.formatShortFileSize(context, b.size)).joinToString(" · "),
+                detail = listOf(f?.let { (if (p.n > 0) "${p.p} of ${p.n} pages" else "${(it * 100).roundToInt()}%") + (byOther?.let { w -> " $w" } ?: "") } ?: newLabel, b.ext.uppercase(), Formatter.formatShortFileSize(context, b.size)).joinToString(" · "),
                 cover = covers[b.id],
                 fallback = Icons.AutoMirrored.Outlined.MenuBook,
                 where = if (!b.local) Where.CLOUD else if (b.dropboxPath != null) Where.BOTH else Where.DEVICE,

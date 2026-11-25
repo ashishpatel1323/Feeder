@@ -71,6 +71,18 @@ describe('ebook sync', () => {
     expect((await db.bookPos.get('book1'))?.f).toBe(0.5)
   })
 
+  it('syncs the page number with the position', async () => {
+    await joinSync(CODE, KEY)
+    await savePosition('book2', 'epubcfi(/6/4!/4)', 0.14, { page: 45, pages: 312 })
+    await syncNow()
+    const other = await otherDevice()
+    expect((await other.all()).find((p) => p.k === 'bookpos' && p.key === 'book2')?.v).toMatchObject({ p: 45, n: 312 })
+    await other.push({ k: 'bookpos', key: 'book2', v: { cfi: 'epubcfi(/6/8!/4)', f: 0.5, p: 156, n: 312 }, ts: Date.now() + 5000 })
+    await syncNow()
+    expect(await db.bookPos.get('book2')).toMatchObject({ p: 156, n: 312 })
+    expect((await syncNow())?.sent).toBe(0)
+  })
+
   it('syncs ebook highlights with their CFI', async () => {
     await joinSync(CODE, KEY)
     await saveHighlight({

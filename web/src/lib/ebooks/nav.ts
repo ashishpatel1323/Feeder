@@ -2,7 +2,7 @@
  * The two foliate-js renderers don't offer the same methods: reflowable books (paginator) have
  * styles, chapters and scrolling to a range; fixed-layout ones (PDF, comics) only turn pages.
  */
-import type { FoliateView } from '../../vendor/foliate-js/view.js'
+import type { FoliateView, Location } from '../../vendor/foliate-js/view.js'
 
 export const isFixed = (v: FoliateView | null | undefined) => !!v?.isFixedLayout
 
@@ -97,4 +97,14 @@ export function redrawFixedHighlights(v: FoliateView | null | undefined, highlig
 export function readableContent(v: FoliateView | null | undefined): { doc: Document } | undefined {
   const all = v?.renderer.getContents() ?? []
   return all.find((c) => c.doc?.body && (c.doc.body.textContent ?? '').trim()) ?? all[0]
+}
+
+/**
+ * Page numbers the same on every device and text size: a PDF's own pages, else foliate's
+ * locations (1500 characters each, like Kindle locations). Null when not known yet.
+ */
+export function pageNumbers(l: Pick<Location, 'location' | 'section'> | null | undefined, fixedLayout: boolean): { page: number; pages: number } | null {
+  const src = fixedLayout ? l?.section : l?.location
+  if (!src || !(src.total > 0)) return null
+  return { page: Math.min(src.total, Math.max(1, src.current + 1)), pages: src.total }
 }

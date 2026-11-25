@@ -154,6 +154,9 @@ export interface BookPos {
   cfi: string
   /** 0–1 through the book */
   f: number
+  /** Page and pages (library.ts pageNumbers), when known */
+  p?: number
+  n?: number
   ts: number
   /** Device that saved it (device.ts): id and name */
   dv?: string

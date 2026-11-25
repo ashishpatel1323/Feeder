@@ -94,6 +94,9 @@ export interface BookPosValue {
   cfi: string
   /** 0–1 through the book */
   f: number
+  /** Page and pages, when known (library.ts pageNumbers) */
+  p?: number
+  n?: number
   /** Device that saved it (device.ts), left out by older versions */
   dv?: string
   dn?: string
@@ -367,6 +370,11 @@ async function layoutValue(): Promise<LayoutValue> {
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
+/** A book position's page fields, only when both are there. */
+function pagesOf(p: { p?: unknown; n?: unknown }): { p?: number; n?: number } {
+  return typeof p.p === 'number' && typeof p.n === 'number' && p.n > 0 ? { p: p.p, n: p.n } : {}
+}
+
 /** The device fields of a position, only when both are there (older versions send neither). */
 function stampOf(p: { dv?: unknown; dn?: unknown }): DeviceStamp {
   return typeof p.dv === 'string' && p.dv && typeof p.dn === 'string' && p.dn ? { dv: p.dv, dn: p.dn } : {}
@@ -497,7 +505,7 @@ export async function collectChanges(now = Date.now()): Promise<Pending[]> {
   const knownPos = await db.syncKnown.bulkGet(positions.map((p) => knownKey('bookpos', p.id)))
   positions.forEach((p, n) => {
     const kn = knownPos[n]
-    const value: BookPosValue = { cfi: p.cfi, f: p.f, ...stampOf(p) }
+    const value: BookPosValue = { cfi: p.cfi, f: p.f, ...pagesOf(p), ...stampOf(p) }
     if (!kn || (p.ts > kn.ts && !same(kn.v, value))) out.push({ k: 'bookpos', key: p.id, v: value, ts: Math.max(p.ts, (kn?.ts ?? 0) + 1) })
   })
 
@@ -622,7 +630,7 @@ export async function applyRemote(p: Payload, ts: number, result: ApplyResult): 
         if (v && typeof v.cfi === 'string' && v.cfi) {
           const local = await db.bookPos.get(p.key)
           if (!local || local.ts <= ts) {
-            await db.bookPos.put({ id: p.key, cfi: v.cfi, f: typeof v.f === 'number' && Number.isFinite(v.f) ? v.f : 0, ts, ...stampOf(v) })
+            await db.bookPos.put({ id: p.key, cfi: v.cfi, f: typeof v.f === 'number' && Number.isFinite(v.f) ? v.f : 0, ts, ...pagesOf(v), ...stampOf(v) })
           }
         }
         break
