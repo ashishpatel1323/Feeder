@@ -207,7 +207,14 @@ export function headerArg(arg: unknown): string {
 async function call(url: string, init: (token: string) => RequestInit, signal?: AbortSignal): Promise<Response> {
   for (let attempt = 0; ; attempt++) {
     const token = await accessToken(attempt > 0)
-    const res = await fetch(url, { ...init(token), signal })
+    let res: Response
+    try {
+      res = await fetch(url, { ...init(token), signal })
+    } catch (e) {
+      // The browser gives only "Failed to fetch": say which Dropbox request it was
+      if (signal?.aborted) throw e
+      throw new DropboxError(0, `could not reach ${url.replace(/^https:\/\/[^/]+\/2\//, '')} (${e instanceof Error ? e.message : String(e)})`)
+    }
     if (res.status === 401 && attempt === 0) continue
     if (res.status === 429 && attempt < 3) {
       await new Promise((r) => setTimeout(r, (Number(res.headers.get('retry-after')) || 2) * 1000))
@@ -282,20 +289,45 @@ export async function listFolder(path: string, signal?: AbortSignal): Promise<Dr
   return out
 }
 
-/** Every file under a folder, subfolders included. A missing folder is empty. */
-export async function listTree(path: string, signal?: AbortSignal): Promise<DropboxFile[]> {
-  const out: DropboxFile[] = []
+/** One page-through listing of a folder: its files, and with [folders] its subfolders' paths too. */
+async function listEntries(path: string, recursive: boolean, signal?: AbortSignal): Promise<{ files: DropboxFile[]; folders: string[] }> {
+  const files: DropboxFile[] = []
+  const folders: string[] = []
   let res: { entries: RawEntry[]; cursor: string; has_more: boolean }
   try {
-    res = await rpc('files/list_folder', { path, recursive: true, include_deleted: false }, signal)
+    res = await rpc('files/list_folder', { path, recursive, include_deleted: false }, signal)
   } catch (e) {
-    if (e instanceof DropboxError && e.status === 409 && e.summary.includes('not_found')) return []
+    if (e instanceof DropboxError && e.status === 409 && e.summary.includes('not_found')) return { files, folders }
     throw e
   }
   for (;;) {
-    out.push(...res.entries.filter((e) => e['.tag'] === 'file').map(toFile))
+    for (const e of res.entries) {
+      if (e['.tag'] === 'file') files.push(toFile(e))
+      else if (e['.tag'] === 'folder') folders.push(e.path_display)
+    }
     if (!res.has_more) break
     res = await rpc('files/list_folder/continue', { cursor: res.cursor }, signal)
+  }
+  return { files, folders }
+}
+
+/**
+ * Every file under a folder, subfolders included. A missing folder is empty. When the one
+ * recursive listing fails (some networks drop it), it lists folder by folder instead.
+ */
+export async function listTree(path: string, signal?: AbortSignal): Promise<DropboxFile[]> {
+  try {
+    return (await listEntries(path, true, signal)).files
+  } catch (e) {
+    if (!(e instanceof DropboxError) || e.status !== 0) throw e
+    console.warn('Recursive Dropbox listing failed, listing folder by folder', e)
+  }
+  const out: DropboxFile[] = []
+  const todo = [path]
+  for (let n = 0; todo.length && n < 500; n++) {
+    const { files, folders } = await listEntries(todo.shift()!, false, signal)
+    out.push(...files)
+    todo.push(...folders)
   }
   return out
 }
