@@ -32,6 +32,8 @@ interface Props {
   onOpenFeed: (url: string) => void
   onMenu: () => void
   toast: (m: string) => void
+  /** Latest | By feed | Discover: Discover is part of the Feeds tab */
+  feedsSwitch?: ReactNode
 }
 
 const TAB_KEY = 'feeder.discover.tab'
@@ -429,7 +431,8 @@ export function DiscoverPage(p: Props) {
               <Icon name="menu" size={22} />
             </button>
           </span>
-          <h1>Discover</h1>
+          <h1>Feeds</h1>
+          {p.feedsSwitch}
           <form
             className="dc-search"
             role="search"

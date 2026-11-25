@@ -45,6 +45,9 @@ const initial: QueueState = { playlistId: null, name: '', ids: [], index: 0, sta
 
 type Listener = (s: QueueState) => void
 
+/** Set by the audiobook player, so starting the queue pauses an audiobook (one player at a time). */
+export const audioFocus: { pauseAudiobook: (() => void) | null } = { pauseAudiobook: null }
+
 class PlayQueue {
   state: QueueState = { ...initial, audioRate: readRate() }
   private listeners = new Set<Listener>()
@@ -142,6 +145,7 @@ class PlayQueue {
     this.stopAudio()
     const id = this.currentId
     if (!id) return this.stop()
+    audioFocus.pauseAudiobook?.()
     const item = await db.items.get(id)
     if (gen !== this.generation) return
     if (!item) {

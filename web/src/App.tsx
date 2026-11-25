@@ -36,9 +36,11 @@ import { kindOf } from './lib/playlists'
 import { ZimPage, type ZimJump } from './components/ZimPage'
 import { rememberPath as rememberZimPath } from './lib/zim/library'
 import { EbooksPage } from './components/EbooksPage'
+import { AudiobooksPage, AudiobookBar } from './components/AudiobooksPage'
+import { useAudiobookPlayer } from './lib/audiobooks/player'
 import { bookIdOfItem } from './lib/ebooks/library'
 import { DROPBOX_TS_KEY } from './lib/dropbox'
-import { feedsViewIsLatest, FeedsSwitch, LibraryPage, rememberFeedsView, TabBar, useTabShortcuts, type Tab } from './components/Tabs'
+import { feedsViewIsLatest, FeedsSwitch, type FeedsView, LibraryPage, rememberFeedsView, TabBar, useTabShortcuts, type Tab } from './components/Tabs'
 import { useVideoJobs, useVideoSavingAvailable } from './lib/offline'
 import { createItemReuser } from './lib/itemreuse'
 
@@ -82,6 +84,18 @@ const bookFromHash = (): { id: string; at: string | null } | null => {
     return cut < 0 ? { id: rest, at: null } : { id: rest.slice(0, cut), at: rest.slice(cut + 1) || null }
   } catch {
     return { id: '', at: null }
+  }
+}
+/** Audiobooks: #/audiobooks for the library, #/audiobooks/<id> for one book's player. */
+const AUDIOBOOKS_HASH = '#/audiobooks'
+const audiobookFromHash = (): string | null => {
+  const h = window.location.hash
+  if (h === AUDIOBOOKS_HASH) return ''
+  if (!h.startsWith(AUDIOBOOKS_HASH + '/')) return null
+  try {
+    return decodeURIComponent(h.slice(AUDIOBOOKS_HASH.length + 1))
+  } catch {
+    return ''
   }
 }
 const DOWNLOADS_HASH = '#/downloads'
@@ -173,6 +187,8 @@ export default function App() {
   const [zimJump, setZimJump] = useState<ZimJump | null>(null)
   /** null = not on the Ebooks tab; id '' = the library; else the book being read. */
   const [bookPage, setBookPage] = useState<{ id: string; at: string | null } | null>(bookFromHash)
+  /** null = not on the Audiobooks tab; '' = the library; else the book whose player is open. */
+  const [audiobookPage, setAudiobookPage] = useState<string | null>(audiobookFromHash)
   // Start on Home: give it its own address, so Back from the article list returns to it
   useEffect(() => {
     if (!window.location.hash && !feedsViewIsLatest()) history.replaceState(null, '', window.location.pathname + window.location.search + HOME_HASH)
@@ -181,6 +197,7 @@ export default function App() {
   /** null = not on Playlists; '' = all playlists; else one playlist's id. */
   const [playlistPage, setPlaylistPage] = useState<string | null>(playlistFromHash)
   const queue = useQueue()
+  const audiobook = useAudiobookPlayer()
   // Whether the feed page was opened from inside the app, so its Back button can go back there
   const feedPageFromApp = useRef(false)
   const [focusHighlight, setFocusHighlight] = useState<string | null>(null)
@@ -202,6 +219,7 @@ export default function App() {
       setLibraryPage(isLibraryHash())
       setZimPage(zimFromHash())
       setBookPage(bookFromHash())
+      setAudiobookPage(audiobookFromHash())
       setPlaylistPage(playlistFromHash())
     }
     window.addEventListener('hashchange', onHash)
@@ -229,6 +247,7 @@ export default function App() {
     if (on) setLibraryPage(false)
     if (on) setZimPage(null)
     if (on) setBookPage(null)
+    if (on) setAudiobookPage(null)
   }, [])
   const showHighlights = useCallback((on: boolean) => {
     if (on !== isHighlightsHash()) {
@@ -248,6 +267,7 @@ export default function App() {
     if (on) setLibraryPage(false)
     if (on) setZimPage(null)
     if (on) setBookPage(null)
+    if (on) setAudiobookPage(null)
   }, [])
   const showDownloads = useCallback((on: boolean) => {
     if (on !== isDownloadsHash()) {
@@ -267,6 +287,7 @@ export default function App() {
     if (on) setLibraryPage(false)
     if (on) setZimPage(null)
     if (on) setBookPage(null)
+    if (on) setAudiobookPage(null)
   }, [])
   const showHome = useCallback((on: boolean) => {
     if (on !== isHomeHash()) {
@@ -286,6 +307,7 @@ export default function App() {
     if (on) setLibraryPage(false)
     if (on) setZimPage(null)
     if (on) setBookPage(null)
+    if (on) setAudiobookPage(null)
   }, [])
   const showDiscover = useCallback((on: boolean) => {
     if (on !== isDiscoverHash()) {
@@ -304,6 +326,7 @@ export default function App() {
       setLibraryPage(false)
       setZimPage(null)
       setBookPage(null)
+      setAudiobookPage(null)
     }
   }, [])
   const showLibrary = useCallback((on: boolean) => {
@@ -315,6 +338,7 @@ export default function App() {
     if (on) {
       setZimPage(null)
       setBookPage(null)
+      setAudiobookPage(null)
       setHomePage(false)
       setManaging(false)
       setHighlightsPage(false)
@@ -333,6 +357,7 @@ export default function App() {
     setZimPage(id)
     if (id !== null) {
       setBookPage(null)
+      setAudiobookPage(null)
       setHomePage(false)
       setDiscoverPage(false)
       setManaging(false)
@@ -351,6 +376,27 @@ export default function App() {
     else if (!want && bookFromHash() !== null) history.pushState(null, '', window.location.pathname + window.location.search)
     setBookPage(id === null ? null : { id, at: at ?? null })
     if (id !== null) {
+      setZimPage(null)
+      setAudiobookPage(null)
+      setHomePage(false)
+      setDiscoverPage(false)
+      setManaging(false)
+      setHighlightsPage(false)
+      setDownloadsPage(false)
+      setLibraryPage(false)
+      setPlaylistPage(null)
+      setFeedPage(null)
+      feedPageFromApp.current = false
+    }
+  }, [])
+  /** Opens the Audiobooks library ('') or one book's player; null leaves it. */
+  const showAudiobooks = useCallback((id: string | null) => {
+    const want = id === null ? null : id ? `${AUDIOBOOKS_HASH}/${encodeURIComponent(id)}` : AUDIOBOOKS_HASH
+    if (want && window.location.hash !== want) window.location.hash = want
+    else if (!want && audiobookFromHash() !== null) history.pushState(null, '', window.location.pathname + window.location.search)
+    setAudiobookPage(id)
+    if (id !== null) {
+      setBookPage(null)
       setZimPage(null)
       setHomePage(false)
       setDiscoverPage(false)
@@ -378,6 +424,7 @@ export default function App() {
       setLibraryPage(false)
       setZimPage(null)
       setBookPage(null)
+      setAudiobookPage(null)
       setFeedPage(null)
       feedPageFromApp.current = false
     }
@@ -399,6 +446,7 @@ export default function App() {
     setLibraryPage(false)
     setZimPage(null)
     setBookPage(null)
+    setAudiobookPage(null)
   }, [])
   /** Leaves the feed page for the article list. */
   const leaveFeedPage = useCallback(() => {
@@ -890,6 +938,7 @@ export default function App() {
     showLibrary(false)
     showZim(null)
     showBooks(null)
+    showAudiobooks(null)
     if (feedPage) leaveFeedPage()
     setFlip(null)
   }
@@ -915,7 +964,7 @@ export default function App() {
   const searchData = useSearchData(items, feeds, allHighlights, settings.readAloudRate, searchActive)
 
   // Opening another page closes the results view
-  const anyPage = managing || highlightsPage || !!feedPage || downloadsPage || homePage || discoverPage || libraryPage || zimPage !== null || bookPage !== null || playlistPage !== null
+  const anyPage = managing || highlightsPage || !!feedPage || downloadsPage || homePage || discoverPage || libraryPage || zimPage !== null || bookPage !== null || audiobookPage !== null || playlistPage !== null
   useEffect(() => {
     if (anyPage) setSearchView(null)
   }, [anyPage])
@@ -992,8 +1041,9 @@ export default function App() {
     },
     { id: 'theme', label: darkNow ? 'Switch to light theme' : 'Switch to dark theme', icon: darkNow ? 'lightMode' : 'darkMode', keywords: 'theme dark light mode appearance night', run: () => void updateSettings({ theme: darkNow ? 'light' : 'dark' }) },
     { id: 'offline', label: settings.offlineMode ? 'Go back online' : 'Go offline', icon: 'offline', keywords: 'offline mode online airplane downloaded', run: () => void updateSettings({ offlineMode: !settings.offlineMode }) },
-    { id: 'home', label: 'Go to Feeds: By feed', icon: 'gridView', keywords: 'home start tiles feeds g f', run: () => showFeedsView(false) },
-    { id: 'all', label: 'Go to Feeds: Latest', icon: 'viewAgenda', keywords: 'all articles unread list everything', run: () => showFeedsView(true) },
+    { id: 'home', label: 'Go to Feeds: By feed', icon: 'gridView', keywords: 'home start tiles feeds g f', run: () => showFeedsView('byFeed') },
+    { id: 'all', label: 'Go to Feeds: Latest', icon: 'viewAgenda', keywords: 'all articles unread list everything', run: () => showFeedsView('latest') },
+    { id: 'audiobooks', label: 'Go to Audiobooks', icon: 'headphones', keywords: 'audiobooks listen m4b dropbox g a', run: () => openTab('audiobooks') },
     { id: 'library', label: 'Go to Library', icon: 'library', keywords: 'saved highlights downloads g l', run: () => openTab('library') },
     { id: 'saved', label: 'Go to Saved', icon: 'bookmark', keywords: 'bookmarks read later', run: () => selectList({ kind: 'saved' }) },
     { id: 'playlists', label: 'Go to Playlists', icon: 'queue', keywords: 'queue listen', run: () => showPlaylists('') },
@@ -1029,16 +1079,24 @@ export default function App() {
       ? 'zim'
     : bookPage !== null
       ? 'books'
-    : discoverPage && !feedPage
-      ? 'discover'
+    : audiobookPage !== null
+      ? 'audiobooks'
       : libraryPage || highlightsPage || downloadsPage || (selection.kind === 'saved' && !anyPage && !searchView)
         ? 'library'
         : searchView && !anyPage
           ? null
           : 'feeds'
   const feedsLatest = currentTab === 'feeds' && !homePage && !managing && !feedPage && selection.kind === 'all'
-  /** Latest | By feed: the article list of every feed, or the tiles. Remembered for the Feeds tab. */
-  const showFeedsView = (latest: boolean) => {
+  /** Latest | By feed | Discover: every feed's articles, the tiles (both remembered for the Feeds tab), or Discover. */
+  const showFeedsView = (view: FeedsView) => {
+    if (view === 'discover') {
+      leavePages()
+      setSearchView(null)
+      setDrawer(false)
+      showDiscover(true)
+      return
+    }
+    const latest = view === 'latest'
     rememberFeedsView(latest)
     if (latest) selectList({ kind: 'all' })
     else {
@@ -1051,12 +1109,13 @@ export default function App() {
   const openTab = (t: Tab) => {
     setDrawer(false)
     setSearchView(null)
-    if (t === 'feeds') return showFeedsView(feedsViewIsLatest())
+    if (t === 'feeds') return showFeedsView(feedsViewIsLatest() ? 'latest' : 'byFeed')
     leavePages()
     if (t === 'discover') showDiscover(true)
     else if (t === 'playlists') showPlaylists('')
     else if (t === 'zim') showZim('')
     else if (t === 'books') showBooks('')
+    else if (t === 'audiobooks') showAudiobooks('')
     else showLibrary(true)
   }
   const openTabRef = useRef(openTab)
@@ -1076,7 +1135,7 @@ export default function App() {
     : 'Not syncing'
 
   return (
-    <div className={`app pane-${pane}${drawer ? ' drawer-open' : ''}${navCollapsed ? ' nav-collapsed' : ''}${managing || highlightsPage || feedPage || downloadsPage || homePage || discoverPage || libraryPage || zimPage !== null || bookPage !== null || onPlaylists ? ' page-feeds' : ''}${queue.kind ? ' has-queue' : ''}`}>
+    <div className={`app pane-${pane}${drawer ? ' drawer-open' : ''}${navCollapsed ? ' nav-collapsed' : ''}${managing || highlightsPage || feedPage || downloadsPage || homePage || discoverPage || libraryPage || zimPage !== null || bookPage !== null || audiobookPage !== null || onPlaylists ? ' page-feeds' : ''}${queue.kind || (audiobook.bookId && audiobookPage !== audiobook.bookId) ? ' has-queue' : ''}`}>
       <div className="drawer-scrim" onClick={() => setDrawer(false)} />
       <Sidebar
         feeds={feedList}
@@ -1197,6 +1256,8 @@ export default function App() {
         />
       ) : bookPage !== null ? (
         <EbooksPage book={bookPage.id || null} at={bookPage.at} settings={settings} onOpen={(id, at) => showBooks(id ?? '', at)} onMenu={() => setDrawer(true)} toast={toast} />
+      ) : audiobookPage !== null ? (
+        <AudiobooksPage book={audiobookPage || null} onOpen={(id) => showAudiobooks(id ?? '')} onMenu={() => setDrawer(true)} toast={toast} />
       ) : zimPage !== null ? (
         <ZimPage book={zimPage || null} jump={zimJump} onOpen={(id) => showZim(id ?? '')} onMenu={() => setDrawer(true)} toast={toast} />
       ) : libraryPage ? (
@@ -1214,7 +1275,7 @@ export default function App() {
           onMenu={() => setDrawer(true)}
         />
       ) : discoverPage ? (
-        <DiscoverPage feeds={feedList} onOpenFeed={openFeedPage} onMenu={() => setDrawer(true)} toast={toast} />
+        <DiscoverPage feeds={feedList} onOpenFeed={openFeedPage} onMenu={() => setDrawer(true)} toast={toast} feedsSwitch={<FeedsSwitch view="discover" onChange={showFeedsView} />} />
       ) : homePage ? (
         <HomePage
           feeds={feedList}
@@ -1233,7 +1294,7 @@ export default function App() {
           onDiscover={() => showDiscover(true)}
           onMenu={() => setDrawer(true)}
           onSearch={() => setPaletteOpen(true)}
-          feedsSwitch={<FeedsSwitch latest={false} onChange={showFeedsView} />}
+          feedsSwitch={<FeedsSwitch view="byFeed" onChange={showFeedsView} />}
           toast={toast}
         />
       ) : (
@@ -1254,10 +1315,10 @@ export default function App() {
         onOpenFeed={openFeedPage}
         onAddLink={selection.kind === 'saved' ? addLink : undefined}
         onSearch={() => setPaletteOpen(true)}
-        feedsSwitch={feedsLatest ? <FeedsSwitch latest onChange={showFeedsView} /> : null}
+        feedsSwitch={feedsLatest ? <FeedsSwitch view="latest" onChange={showFeedsView} /> : null}
         />
       )}
-      {managing || highlightsPage || feedPage || downloadsPage || homePage || discoverPage || libraryPage || zimPage !== null || bookPage !== null || onPlaylists || flip ? null : openItem ? (
+      {managing || highlightsPage || feedPage || downloadsPage || homePage || discoverPage || libraryPage || zimPage !== null || bookPage !== null || audiobookPage !== null || onPlaylists || flip ? null : openItem ? (
         <Reader
           item={openItem}
           feed={feeds.get(openItem.feedUrl)}
@@ -1328,6 +1389,7 @@ export default function App() {
           open(id, queue.ids)
         }}
       />
+      {!queue.kind && audiobook.bookId && audiobookPage !== audiobook.bookId ? <AudiobookBar onOpen={(id) => { leavePages(); setSearchView(null); showAudiobooks(id) }} /> : null}
       {flip ? null : <TabBar current={currentTab} onTab={openTab} />}
       <AddToPlaylistMenu toast={toast} />
       {paletteOpen ? (

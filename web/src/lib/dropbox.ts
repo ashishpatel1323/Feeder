@@ -1,5 +1,6 @@
 /**
- * Dropbox as the shared place for big files: ebooks (/Ebooks) and ZIM books (/ZIM) live in the
+ * Dropbox as the shared place for big files: ebooks (/Ebooks), ZIM books (/ZIM) and audiobooks
+ * (/Audiobooks) live in the
  * app's own folder (Apps/<app name>/), so every device sees the same library. Reading positions
  * and highlights don't go here; they travel in Feeder's own encrypted sync (sync2.ts).
  *
@@ -20,6 +21,7 @@ export const DROPBOX_SCOPES = 'account_info.read files.metadata.read files.metad
 
 export const EBOOKS_FOLDER = '/Ebooks'
 export const ZIM_FOLDER = '/ZIM'
+export const AUDIOBOOKS_FOLDER = '/Audiobooks'
 
 /** What sync2 carries between devices (kind "dropbox", key "main"). */
 export interface DropboxLink {
@@ -278,6 +280,51 @@ export async function listFolder(path: string, signal?: AbortSignal): Promise<Dr
     res = await rpc('files/list_folder/continue', { cursor: res.cursor }, signal)
   }
   return out
+}
+
+/** Every file under a folder, subfolders included. A missing folder is empty. */
+export async function listTree(path: string, signal?: AbortSignal): Promise<DropboxFile[]> {
+  const out: DropboxFile[] = []
+  let res: { entries: RawEntry[]; cursor: string; has_more: boolean }
+  try {
+    res = await rpc('files/list_folder', { path, recursive: true, include_deleted: false }, signal)
+  } catch (e) {
+    if (e instanceof DropboxError && e.status === 409 && e.summary.includes('not_found')) return []
+    throw e
+  }
+  for (;;) {
+    out.push(...res.entries.filter((e) => e['.tag'] === 'file').map(toFile))
+    if (!res.has_more) break
+    res = await rpc('files/list_folder/continue', { cursor: res.cursor }, signal)
+  }
+  return out
+}
+
+const links = new Map<string, { link: string; until: number }>()
+
+/**
+ * A direct link to a file that an <audio> element can stream (with seeking). Dropbox keeps it
+ * working for 4 hours; it is reused for 3, and [fresh] asks for a new one (after a playback error).
+ */
+export async function temporaryLink(path: string, fresh = false): Promise<string> {
+  const known = links.get(path)
+  if (!fresh && known && known.until > Date.now()) return known.link
+  const { link } = await rpc<{ link: string }>('files/get_temporary_link', { path })
+  links.set(path, { link, until: Date.now() + 3 * 60 * 60 * 1000 })
+  return link
+}
+
+/** Bytes [offset, offset + length) of a file, for reading tags without downloading the audio. */
+export async function downloadRange(path: string, offset: number, length: number, signal?: AbortSignal): Promise<Uint8Array> {
+  if (length <= 0) return new Uint8Array(0)
+  const res = await call(
+    'https://content.dropboxapi.com/2/files/download',
+    (token) => ({ method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Dropbox-API-Arg': headerArg({ path }), Range: `bytes=${offset}-${offset + length - 1}` } }),
+    signal,
+  )
+  const all = new Uint8Array(await res.arrayBuffer())
+  // A server that ignored the range sent the whole file
+  return res.status === 206 ? all : all.subarray(offset, offset + length)
 }
 
 export type Progress = (done: number, total: number) => void

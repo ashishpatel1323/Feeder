@@ -2,21 +2,25 @@ import { useEffect } from 'react'
 import { Icon, IconButton, type IconName } from './Icon'
 
 /**
- * The places, as on Android: Feeds (Latest or By feed), Discover, Playlists, Library, Ebooks and ZIM.
- * Search is not a tab: ⌘K, /, and the "Search everything" bars open it.
+ * The places, as on Android: Feeds (Latest, By feed or Discover), Playlists, Library, Ebooks,
+ * Audiobooks and ZIM. Search is not a tab: ⌘K, /, and the "Search everything" bars open it.
+ * Discover lives inside Feeds; it is a Tab value only for its G then D shortcut.
  */
-export type Tab = 'feeds' | 'discover' | 'playlists' | 'library' | 'books' | 'zim'
+export type Tab = 'feeds' | 'discover' | 'playlists' | 'library' | 'books' | 'audiobooks' | 'zim'
 
 export const TABS: { tab: Tab; label: string; icon: IconName; key: string; hint: string }[] = [
-  { tab: 'feeds', label: 'Feeds', icon: 'dynamicFeed', key: 'f', hint: 'Latest and By feed' },
-  { tab: 'discover', label: 'Discover', icon: 'explore', key: 'd', hint: 'Find new feeds, podcasts and channels' },
+  { tab: 'feeds', label: 'Feeds', icon: 'dynamicFeed', key: 'f', hint: 'Latest, By feed and Discover' },
   { tab: 'playlists', label: 'Playlists', icon: 'queue', key: 'p', hint: 'Smart and hand-made playlists' },
   { tab: 'library', label: 'Library', icon: 'library', key: 'l', hint: 'Saved, Highlights and Downloads' },
   { tab: 'books', label: 'Ebooks', icon: 'book', key: 'b', hint: 'Books from Dropbox and this device' },
+  { tab: 'audiobooks', label: 'Audiobooks', icon: 'headphones', key: 'a', hint: 'Audiobooks from Dropbox' },
   { tab: 'zim', label: 'ZIM', icon: 'public', key: 'z', hint: 'Offline websites such as Wikipedia' },
 ]
 
-export const tabKeys = (t: Tab) => `G then ${TABS.find((x) => x.tab === t)!.key.toUpperCase()}`
+/** Shortcuts to places that are not tabs of their own. */
+const EXTRA_KEYS: { tab: Tab; key: string }[] = [{ tab: 'discover', key: 'd' }]
+
+export const tabKeys = (t: Tab) => `G then ${([...TABS, ...EXTRA_KEYS].find((x) => x.tab === t)?.key ?? '').toUpperCase()}`
 
 const FEEDS_VIEW_KEY = 'feeder.feedsView'
 
@@ -60,18 +64,21 @@ export function TabBar({ current, onTab }: { current: Tab | null; onTab: (t: Tab
   )
 }
 
-/** Latest | By feed, at the top of the Feeds tab. */
-export function FeedsSwitch({ latest, onChange }: { latest: boolean; onChange: (latest: boolean) => void }) {
+export type FeedsView = 'latest' | 'byFeed' | 'discover'
+
+/** Latest | By feed | Discover, at the top of the Feeds tab. */
+export function FeedsSwitch({ view, onChange }: { view: FeedsView; onChange: (view: FeedsView) => void }) {
+  const opt = (v: FeedsView, icon: IconName, label: string, hint: string) => (
+    <button type="button" role="radio" aria-checked={view === v} className={view === v ? 'on' : ''} title={hint} onClick={() => view !== v && onChange(v)}>
+      <Icon name={icon} size={16} />
+      <span className="fs-label">{label}</span>
+    </button>
+  )
   return (
     <span className="feeds-switch" role="radiogroup" aria-label="Feeds view">
-      <button type="button" role="radio" aria-checked={latest} className={latest ? 'on' : ''} onClick={() => !latest && onChange(true)}>
-        <Icon name="viewAgenda" size={16} />
-        Latest
-      </button>
-      <button type="button" role="radio" aria-checked={!latest} className={!latest ? 'on' : ''} onClick={() => latest && onChange(false)}>
-        <Icon name="gridView" size={16} />
-        By feed
-      </button>
+      {opt('latest', 'viewAgenda', 'Latest', 'Every new article')}
+      {opt('byFeed', 'gridView', 'By feed', 'Your feeds as tiles')}
+      {opt('discover', 'explore', 'Discover', `Find new feeds, podcasts and channels (${tabKeys('discover')})`)}
     </span>
   )
 }
@@ -88,7 +95,7 @@ export function SearchEverything({ onSearch }: { onSearch: () => void }) {
   )
 }
 
-/** G then F / D / P / L / B / Z switches tabs, when not typing (as in Gmail). */
+/** G then F / D / P / L / B / A / Z switches tabs, when not typing (as in Gmail). */
 export function useTabShortcuts(onTab: (t: Tab) => void, disabled: boolean) {
   useEffect(() => {
     if (disabled) return
@@ -100,7 +107,7 @@ export function useTabShortcuts(onTab: (t: Tab) => void, disabled: boolean) {
       const k = e.key.toLowerCase()
       if (Date.now() < armedUntil) {
         armedUntil = 0
-        const hit = TABS.find((x) => x.key === k)
+        const hit = [...TABS, ...EXTRA_KEYS].find((x) => x.key === k)
         if (hit) {
           e.preventDefault()
           e.stopImmediatePropagation()

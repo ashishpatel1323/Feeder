@@ -14,6 +14,8 @@
  *   playlist playlist id          PlaylistValue, or { deleted: true } after deleting it
  *   highlight highlight id        HighlightValue, or { deleted: true } after deleting it
  *   bookpos  ebook id             { cfi, f }: where an ebook was left (f = 0–1 through the book)
+ *   audiopos audiobook id         { i, h, ms, f }: where an audiobook was left (file index and
+ *                                 content hash, ms into that file, f = 0–1 through the book)
  *   dropbox  "main"               DropboxLink (the Dropbox sign-in), or { deleted: true } after signing out
  *
  * New kinds (Read later links, …) can be added later: devices keep records of kinds they
@@ -56,7 +58,7 @@ export interface SyncState {
   lastError?: string | null
 }
 
-export type Kind = 'feed' | 'read' | 'saved' | 'hidden' | 'layout' | 'video' | 'playlist' | 'highlight' | 'bookpos' | 'dropbox'
+export type Kind = 'feed' | 'read' | 'saved' | 'hidden' | 'layout' | 'video' | 'playlist' | 'highlight' | 'bookpos' | 'audiopos' | 'dropbox'
 
 /** The plaintext inside a record. */
 export interface Payload {
@@ -98,6 +100,20 @@ export interface BookPosValue {
   p?: number
   n?: number
   /** Device that saved it (device.ts), left out by older versions */
+  dv?: string
+  dn?: string
+}
+
+export interface AudioPosValue {
+  /** File index in play order */
+  i: number
+  /** That file's Dropbox content hash */
+  h: string
+  /** Milliseconds into that file */
+  ms: number
+  /** 0–1 through the book, 0 when the length isn't known */
+  f: number
+  /** Device that saved it (device.ts) */
   dv?: string
   dn?: string
 }
@@ -509,6 +525,15 @@ export async function collectChanges(now = Date.now()): Promise<Pending[]> {
     if (!kn || (p.ts > kn.ts && !same(kn.v, value))) out.push({ k: 'bookpos', key: p.id, v: value, ts: Math.max(p.ts, (kn?.ts ?? 0) + 1) })
   })
 
+  // Audiobook positions saved here since they were last exchanged
+  const audio = await db.audioPos.toArray()
+  const knownAudio = await db.syncKnown.bulkGet(audio.map((p) => knownKey('audiopos', p.id)))
+  audio.forEach((p, n) => {
+    const kn = knownAudio[n]
+    const value: AudioPosValue = { i: p.i, h: p.h, ms: p.ms, f: p.f, ...stampOf(p) }
+    if (!kn || (p.ts > kn.ts && !same(kn.v, value))) out.push({ k: 'audiopos', key: p.id, v: value, ts: Math.max(p.ts, (kn?.ts ?? 0) + 1) })
+  })
+
   // The Dropbox sign-in, so other devices use the same Dropbox without signing in
   const link = await dropboxLink()
   const kd = await db.syncKnown.get(knownKey('dropbox', DROPBOX_RECORD_KEY))
@@ -536,7 +561,7 @@ export interface ApplyResult {
 export async function applyRemote(p: Payload, ts: number, result: ApplyResult): Promise<void> {
   const k = knownKey(p.k, p.key)
   let dropbox: { link: DropboxLink | null } | null = null
-  await db.transaction('rw', [db.feeds, db.items, db.syncKnown, db.hidden, db.kv, db.videoPos, db.highlights, db.bookPos], async () => {
+  await db.transaction('rw', [db.feeds, db.items, db.syncKnown, db.hidden, db.kv, db.videoPos, db.highlights, db.bookPos, db.audioPos], async () => {
     const kn = await db.syncKnown.get(k)
     if (kn && kn.ts > ts) return
     if (kn && kn.ts === ts && same(kn.v, p.v)) return
@@ -631,6 +656,24 @@ export async function applyRemote(p: Payload, ts: number, result: ApplyResult): 
           const local = await db.bookPos.get(p.key)
           if (!local || local.ts <= ts) {
             await db.bookPos.put({ id: p.key, cfi: v.cfi, f: typeof v.f === 'number' && Number.isFinite(v.f) ? v.f : 0, ts, ...pagesOf(v), ...stampOf(v) })
+          }
+        }
+        break
+      }
+      case 'audiopos': {
+        const v = p.v as Partial<AudioPosValue> | null
+        if (v && typeof v.ms === 'number' && Number.isFinite(v.ms)) {
+          const local = await db.audioPos.get(p.key)
+          if (!local || local.ts <= ts) {
+            await db.audioPos.put({
+              id: p.key,
+              i: typeof v.i === 'number' && v.i >= 0 ? Math.floor(v.i) : 0,
+              h: typeof v.h === 'string' ? v.h : '',
+              ms: Math.max(0, v.ms),
+              f: typeof v.f === 'number' && Number.isFinite(v.f) ? Math.max(0, Math.min(1, v.f)) : 0,
+              ts,
+              ...stampOf(v),
+            })
           }
         }
         break
