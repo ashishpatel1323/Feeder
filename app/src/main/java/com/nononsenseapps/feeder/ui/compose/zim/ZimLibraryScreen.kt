@@ -61,6 +61,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -76,6 +77,17 @@ import com.nononsenseapps.feeder.model.zim.ZimJob
 import com.nononsenseapps.feeder.model.zim.ZimLibrary
 import com.nononsenseapps.feeder.model.zim.ZimNative
 import com.nononsenseapps.feeder.sync2.SyncNudge
+import com.nononsenseapps.feeder.ui.compose.shelf.CoverShape
+import com.nononsenseapps.feeder.ui.compose.shelf.ShelfAction
+import com.nononsenseapps.feeder.ui.compose.shelf.ShelfControls
+import com.nononsenseapps.feeder.ui.compose.shelf.ShelfItem
+import com.nononsenseapps.feeder.ui.compose.shelf.Where
+import com.nononsenseapps.feeder.ui.compose.shelf.rememberShelfPrefs
+import com.nononsenseapps.feeder.ui.compose.shelf.shelf
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.runtime.produceState
 import com.nononsenseapps.feeder.ui.compose.ebooks.DropboxCard
 import com.nononsenseapps.feeder.ui.compose.theme.SensibleTopAppBar
 import org.kodein.di.compose.LocalDI
@@ -106,6 +118,16 @@ fun ZimLibraryScreen(
         rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
             uris.forEach { library.import(it) }
         }
+    val shelfPrefs = rememberShelfPrefs("zim", defaultCards = false)
+    val uploadLabel = stringResource(R.string.upload_to_dropbox)
+    val deleteDropboxLabel = stringResource(R.string.delete_from_dropbox)
+    val removeLabel = stringResource(R.string.ebook_remove_from_phone)
+    val deleteLabel = stringResource(R.string.zim_delete)
+    val downloadLabel = stringResource(R.string.shelf_download)
+    val noZimsHere = stringResource(R.string.shelf_no_zims_here)
+    val pagesLabel: (Int) -> String = { n -> context.resources.getString(R.string.zim_pages, n) }
+    val uploading: (Int) -> String = { p -> context.getString(R.string.shelf_uploading, p) }
+    val downloading: (Int) -> String = { p -> context.getString(R.string.shelf_downloading, p) }
 
     LifecycleResumeEffect(Unit) {
         library.refresh()
@@ -153,66 +175,91 @@ fun ZimLibraryScreen(
             )
             return@Scaffold
         }
-        LazyColumn(
-            Modifier.padding(padding).fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 24.dp),
+        val list = books
+        val onlyInDropbox = remote.orEmpty().filter { f -> list.orEmpty().none { library.sameZim(it, f) } }
+        val icons by produceState(emptyMap<String, String?>(), onlyInDropbox.map { it.name }) {
+            value = onlyInDropbox.associate { it.name to library.catalogIcon(it.name) }
+        }
+        val localIcons by produceState(emptyMap<String, ImageBitmap>(), list) {
+            value = list.orEmpty().mapNotNull { b -> b.icon?.let { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() }?.let { b.id to it } }.toMap()
+        }
+        fun pct(j: ZimJob?) = j?.let { if (it.total > 0) (it.done * 100 / it.total).toInt() else 0 }
+        val shelfItems =
+            list.orEmpty().map { book ->
+                val copy = remote?.firstOrNull { library.sameZim(book, it) }
+                val up = jobs.firstOrNull { it.key == "up:${book.file.name}" }
+                ShelfItem(
+                    key = "local:${book.id}",
+                    title = book.title,
+                    subtitle = book.description,
+                    detail =
+                        listOfNotNull(
+                            Formatter.formatShortFileSize(context, book.size),
+                            book.flavour.ifBlank { null },
+                            if (book.articleCount > 0) pagesLabel(book.articleCount) else null,
+                            book.date.ifBlank { null },
+                        ).joinToString(" · "),
+                    cover = localIcons[book.id],
+                    fallback = Icons.Outlined.Public,
+                    where = if (copy != null) Where.BOTH else Where.DEVICE,
+                    size = book.size,
+                    busy = pct(up)?.let { uploading(it) },
+                    onOpen = { onOpenBook(book.id) },
+                    actions =
+                        buildList {
+                            if (link != null && remote != null && copy == null) add(ShelfAction(uploadLabel) { library.uploadToDropbox(book) })
+                            if (copy != null) add(ShelfAction(deleteDropboxLabel) { deletingRemote = copy to true })
+                            add(ShelfAction(if (copy != null) removeLabel else deleteLabel) { deleting = book })
+                        },
+                )
+            } +
+                onlyInDropbox.map { f ->
+                    val down = jobs.firstOrNull { it.label == f.name }
+                    ShelfItem(
+                        key = "dbx:${f.id}",
+                        title = f.name.removeSuffix(".zim").replace('_', ' '),
+                        detail = Formatter.formatShortFileSize(context, f.size),
+                        coverUrl = icons[f.name],
+                        fallback = Icons.Outlined.Public,
+                        where = Where.CLOUD,
+                        size = f.size,
+                        busy = pct(down)?.let { downloading(it) },
+                        onOpen = { if (down == null) library.downloadFromDropbox(f) },
+                        actions =
+                            buildList {
+                                if (down == null) add(ShelfAction(downloadLabel) { library.downloadFromDropbox(f) })
+                                add(ShelfAction(deleteDropboxLabel) { deletingRemote = f to false })
+                            },
+                    )
+                }
+        LazyVerticalGrid(
+            columns = shelfPrefs.columns,
+            modifier = Modifier.padding(padding).fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(if (shelfPrefs.cards) 18.dp else 0.dp),
         ) {
-            item {
+            item(span = { GridItemSpan(maxLineSpan) }) {
                 Text(
                     stringResource(R.string.zim_intro),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 )
             }
-            item { DropboxCard(what = stringResource(R.string.zim_books_what), onSignedOut = { nudge.changed(false) }) }
-            items(jobs, key = { "job:${it.key}" }) { job -> JobRow(job, onCancel = { library.cancel(job) }) }
-            val list = books
-            val onlyInDropbox = remote.orEmpty().filter { f -> list.orEmpty().none { library.sameZim(it, f) } }
+            item(span = { GridItemSpan(maxLineSpan) }) { DropboxCard(what = stringResource(R.string.zim_books_what), onSignedOut = { nudge.changed(false) }, horizontalPadding = 0.dp) }
+            items(jobs.filterNot { it.key.startsWith("up:") || onlyInDropbox.any { f -> f.name == it.label } }, key = { "job:${it.key}" }, span = { GridItemSpan(maxLineSpan) }) { job ->
+                JobRow(job, onCancel = { library.cancel(job) })
+            }
             if (list != null && list.isEmpty() && jobs.isEmpty() && onlyInDropbox.isEmpty()) {
-                item { EmptyLibrary(onGet = { catalogOpen = true }, onAdd = { pick.launch(arrayOf("*/*")) }) }
-            }
-            items(list.orEmpty(), key = { it.id }) { book ->
-                val inDropbox = remote?.any { library.sameZim(book, it) }
-                BookRow(
-                    book,
-                    onOpen = { onOpenBook(book.id) },
-                    onDelete = { deleting = book },
-                    inDropbox = if (link == null) null else inDropbox,
-                    onUpload = { library.uploadToDropbox(book) },
-                    onDeleteFromDropbox = { remote?.firstOrNull { library.sameZim(book, it) }?.let { deletingRemote = it to true } },
-                )
-            }
-            if (onlyInDropbox.isNotEmpty()) {
-                item {
-                    Text(
-                        stringResource(R.string.in_dropbox),
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp),
-                    )
+                item(span = { GridItemSpan(maxLineSpan) }) { EmptyLibrary(onGet = { catalogOpen = true }, onAdd = { pick.launch(arrayOf("*/*")) }) }
+            } else if (shelfItems.isNotEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    ShelfControls(shelfPrefs, all = shelfItems.size, device = shelfItems.count { it.where != Where.CLOUD }, cloud = shelfItems.count { it.where == Where.CLOUD })
                 }
-                items(onlyInDropbox, key = { "dbx:${it.id}" }) { f ->
-                    ListItem(
-                        headlineContent = { Text(f.name.removeSuffix(".zim").replace('_', ' '), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        supportingContent = { Text(stringResource(R.string.not_on_phone_yet, Formatter.formatShortFileSize(context, f.size))) },
-                        leadingContent = { Icon(Icons.Outlined.Cloud, contentDescription = null, modifier = Modifier.size(40.dp)) },
-                        trailingContent = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                TextButton(onClick = { library.downloadFromDropbox(f) }, enabled = jobs.none { it.label == f.name }) {
-                                    Icon(Icons.Outlined.Download, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.size(4.dp))
-                                    Text(stringResource(R.string.download))
-                                }
-                                IconButton(onClick = { deletingRemote = f to false }) {
-                                    Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.delete_from_dropbox))
-                                }
-                            }
-                        },
-                    )
-                }
+                shelf(shelfItems, shelfPrefs, CoverShape.TILE, emptyDevice = noZimsHere)
             }
-            item {
+            item(span = { GridItemSpan(maxLineSpan) }) {
                 val used = list.orEmpty().sumOf { it.size }
                 if (used > 0) {
                     Text(
@@ -223,7 +270,7 @@ fun ZimLibraryScreen(
                         ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(16.dp),
+                        modifier = Modifier.padding(vertical = 16.dp),
                     )
                 }
             }

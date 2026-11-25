@@ -234,6 +234,8 @@ export interface CatalogEntry {
 }
 
 const CATALOG = 'https://library.kiwix.org'
+/** The catalog's own address (library.kiwix.org redirects here). */
+const OPDS = 'https://opds.library.kiwix.org'
 
 export async function searchCatalog(query: string, lang: string, signal?: AbortSignal): Promise<CatalogEntry[]> {
   const params = new URLSearchParams({ count: '40' })
@@ -265,6 +267,54 @@ export async function searchCatalog(query: string, lang: string, signal?: AbortS
       },
     ]
   })
+}
+
+/** "wikipedia_en_all_maxi_2025-01.zim" → "wikipedia_en_all_maxi", the Kiwix catalog's name. */
+export const catalogName = (file: string) => file.replace(/\.zim$/i, '').replace(/_\d{4}-\d{2}(-\d{2})?$/, '')
+
+const ICONS_KEY = 'feeder.zimCatalogIcons'
+const iconLookups = new Map<string, Promise<string | null>>()
+
+/**
+ * The Kiwix catalog's icon for a ZIM file by its name, for books only in Dropbox (their own icon
+ * is inside the file). Remembered, including "none", so the catalog is asked once per name.
+ */
+export function catalogIcon(file: string): Promise<string | null> {
+  const name = catalogName(file)
+  let p = iconLookups.get(name)
+  if (p) return p
+  p = (async () => {
+    let cache: Record<string, string> = {}
+    try {
+      cache = JSON.parse(localStorage.getItem(ICONS_KEY) || '{}') as Record<string, string>
+    } catch {
+      /* private mode */
+    }
+    if (name in cache) return cache[name] || null
+    try {
+      // The catalog names books without their flavour (wikipedia_en_100, not wikipedia_en_100_mini)
+      let url = ''
+      const parts = name.split('_')
+      for (let drop = 0; drop <= 2 && !url && parts.length - drop >= 2; drop++) {
+        const res = await fetch(`${OPDS}/catalog/v2/entries?${new URLSearchParams({ name: parts.slice(0, parts.length - drop).join('_'), count: '1' })}`)
+        if (!res.ok) break
+        const doc = new DOMParser().parseFromString(await res.text(), 'application/xml')
+        const id = doc.getElementsByTagName('entry')[0]?.getElementsByTagName('id')[0]?.textContent?.replace('urn:uuid:', '').trim()
+        if (id) url = `${OPDS}/catalog/v2/illustration/${encodeURIComponent(id)}/?size=48`
+      }
+      cache[name] = url
+      try {
+        localStorage.setItem(ICONS_KEY, JSON.stringify(cache))
+      } catch {
+        /* private mode */
+      }
+      return url || null
+    } catch {
+      return null
+    }
+  })()
+  iconLookups.set(name, p)
+  return p
 }
 
 /** The last page read in each book, so it opens where you left off. */

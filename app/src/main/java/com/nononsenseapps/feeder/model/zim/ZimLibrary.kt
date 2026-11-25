@@ -144,6 +144,35 @@ class ZimLibrary private constructor(
         }
     }
 
+    /**
+     * The Kiwix catalog's icon for a ZIM file, by name without date or flavour, for books only in
+     * Dropbox (their own icon is inside the file). Remembered, including "none". Same as the web app.
+     */
+    suspend fun catalogIcon(file: String): String? =
+        withContext(Dispatchers.IO) {
+            val name = file.removeSuffix(".zim").replace(Regex("_\\d{4}-\\d{2}(-\\d{2})?$"), "")
+            val key = "icon:$name"
+            if (prefs.contains(key)) return@withContext prefs.getString(key, "")?.ifEmpty { null }
+            var url = ""
+            val parts = name.split('_')
+            try {
+                for (drop in 0..2) {
+                    if (parts.size - drop < 2 || url.isNotEmpty()) break
+                    val q = URLEncoder.encode(parts.subList(0, parts.size - drop).joinToString("_"), "UTF-8")
+                    val conn = URL("$OPDS/catalog/v2/entries?name=$q&count=1").openConnection() as HttpURLConnection
+                    conn.connectTimeout = 10_000
+                    conn.readTimeout = 10_000
+                    val xml = conn.inputStream.use { it.readBytes().decodeToString() }
+                    val id = Regex("<entry>.*?<id>urn:uuid:([^<]+)</id>", RegexOption.DOT_MATCHES_ALL).find(xml)?.groupValues?.get(1)?.trim()
+                    if (id != null) url = "$OPDS/catalog/v2/illustration/$id/?size=48"
+                }
+                prefs.edit { putString(key, url) }
+            } catch (e: Exception) {
+                Log.w(LOG_TAG, "No catalog icon for $name", e)
+            }
+            url.ifEmpty { null }
+        }
+
     /** Whether a book here is the same file as one in Dropbox (same name and size). */
     fun sameZim(
         book: ZimBook,
@@ -519,6 +548,7 @@ class ZimLibrary private constructor(
         private const val LOG_TAG = "FEEDER_ZIM"
         private const val KEY_DOWNLOADS = "downloads"
         private const val ZIM_MAGIC = 72173914
+        private const val OPDS = "https://opds.library.kiwix.org"
 
         @Volatile
         private var instance: ZimLibrary? = null

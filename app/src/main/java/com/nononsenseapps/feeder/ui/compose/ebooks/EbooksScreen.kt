@@ -72,6 +72,14 @@ import com.nononsenseapps.feeder.model.ebooks.Book
 import com.nononsenseapps.feeder.model.ebooks.BookPositions
 import com.nononsenseapps.feeder.model.ebooks.EbookLibrary
 import com.nononsenseapps.feeder.sync2.SyncNudge
+import com.nononsenseapps.feeder.ui.compose.shelf.CoverShape
+import com.nononsenseapps.feeder.ui.compose.shelf.ShelfAction
+import com.nononsenseapps.feeder.ui.compose.shelf.ShelfControls
+import com.nononsenseapps.feeder.ui.compose.shelf.ShelfItem
+import com.nononsenseapps.feeder.ui.compose.shelf.Where
+import com.nononsenseapps.feeder.ui.compose.shelf.rememberShelfPrefs
+import com.nononsenseapps.feeder.ui.compose.shelf.shelf
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import com.nononsenseapps.feeder.ui.compose.theme.SensibleTopAppBar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -116,7 +124,44 @@ fun EbooksScreen(
         }
     }
 
+    val shelfPrefs = rememberShelfPrefs("ebooks", defaultCards = true)
+    val covers by produceState(emptyMap<String, ImageBitmap>(), books, coverVersion) {
+        value =
+            withContext(Dispatchers.IO) {
+                books.mapNotNull { b -> library.coverFile(b.id).takeIf { it.exists() }?.let { f -> BitmapFactory.decodeFile(f.absolutePath)?.asImageBitmap()?.let { b.id to it } } }.toMap()
+            }
+    }
     val sorted = remember(books) { books.sortedWith(compareByDescending<Book> { it.lastOpenedAt }.thenByDescending { it.addedAt }.thenBy { it.title.lowercase() }) }
+
+    val downloadLabel = stringResource(R.string.shelf_download)
+    val removeLabel = stringResource(R.string.ebook_remove_from_phone)
+    val deleteLabel = stringResource(R.string.ebook_delete)
+    val deleteDropboxLabel = stringResource(R.string.ebook_delete_dropbox)
+    val newLabel = stringResource(R.string.ebook_new)
+    val noBooksHere = stringResource(R.string.shelf_no_books_here)
+    val items =
+        sorted.map { b ->
+            val f = pos[b.id]?.f
+            val job = jobs.firstOrNull { it.key == "down:${b.id}" }
+            ShelfItem(
+                key = b.id,
+                title = b.title,
+                subtitle = b.author,
+                detail = listOf(f?.let { "${(it * 100).roundToInt()}%" } ?: newLabel, b.ext.uppercase(), Formatter.formatShortFileSize(context, b.size)).joinToString(" · "),
+                cover = covers[b.id],
+                fallback = Icons.AutoMirrored.Outlined.MenuBook,
+                where = if (!b.local) Where.CLOUD else if (b.dropboxPath != null) Where.BOTH else Where.DEVICE,
+                size = b.size,
+                busy = job?.let { context.getString(R.string.shelf_downloading, if (it.total > 0) (it.done * 100 / it.total).toInt() else 0) },
+                onOpen = { onOpenBook(b.id) },
+                actions =
+                    buildList {
+                        if (!b.local) add(ShelfAction(downloadLabel) { library.download(b.id) })
+                        if (b.local) add(ShelfAction(if (b.dropboxPath != null) removeLabel else deleteLabel) { library.removeFromDevice(b.id) })
+                        if (b.dropboxPath != null) add(ShelfAction(deleteDropboxLabel) { deleting = b })
+                    },
+            )
+        }
 
     Scaffold(
         modifier = modifier.windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal)),
@@ -142,7 +187,7 @@ fun EbooksScreen(
         },
     ) { padding ->
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(112.dp),
+            columns = shelfPrefs.columns,
             modifier = Modifier.padding(padding).fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -151,7 +196,7 @@ fun EbooksScreen(
             item(span = { GridItemSpan(maxLineSpan) }) {
                 DropboxCard(what = stringResource(R.string.ebooks_what), onSignedOut = { nudge.changed(false) }, horizontalPadding = 0.dp)
             }
-            items(jobs, key = { "job:${it.key}" }, span = { GridItemSpan(maxLineSpan) }) { job ->
+            items(jobs.filterNot { it.key.startsWith("down:") }, key = { "job:${it.key}" }, span = { GridItemSpan(maxLineSpan) }) { job ->
                 Column(Modifier.fillMaxWidth()) {
                     Text(job.label, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (job.total > 0) {
@@ -175,17 +220,11 @@ fun EbooksScreen(
                         modifier = Modifier.fillMaxWidth().padding(32.dp),
                     )
                 }
-            }
-            items(sorted, key = { it.id }) { book ->
-                BookCard(
-                    book = book,
-                    fraction = pos[book.id]?.f,
-                    coverVersion = coverVersion,
-                    library = library,
-                    onOpen = { onOpenBook(book.id) },
-                    onRemoveFromPhone = { library.removeFromDevice(book.id) },
-                    onDelete = { deleting = book },
-                )
+            } else if (sorted.isNotEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    ShelfControls(shelfPrefs, all = sorted.size, device = sorted.count { it.local }, cloud = sorted.count { !it.local })
+                }
+                shelf(items, shelfPrefs, CoverShape.BOOK, emptyDevice = noBooksHere)
             }
         }
     }
@@ -220,96 +259,4 @@ fun rememberCover(
             }
     }
     return cover
-}
-
-@Composable
-private fun BookCard(
-    book: Book,
-    fraction: Double?,
-    coverVersion: Int,
-    library: EbookLibrary,
-    onOpen: () -> Unit,
-    onRemoveFromPhone: () -> Unit,
-    onDelete: () -> Unit,
-) {
-    val context = LocalContext.current
-    val cover = rememberCover(library, book.id, coverVersion)
-    var menu by remember { mutableStateOf(false) }
-    Column(Modifier.clickable(onClick = onOpen)) {
-        Box {
-            if (cover != null) {
-                Image(
-                    cover,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(6.dp)),
-                )
-            } else {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(2f / 3f)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                        .padding(10.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        book.title,
-                        style = MaterialTheme.typography.titleSmall,
-                        textAlign = TextAlign.Center,
-                        maxLines = 5,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            Box(Modifier.align(Alignment.TopEnd)) {
-                IconButton(onClick = { menu = true }, modifier = Modifier.size(40.dp)) {
-                    Icon(
-                        Icons.Outlined.MoreVert,
-                        contentDescription = book.title,
-                        modifier = Modifier.background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f), RoundedCornerShape(50)).padding(2.dp),
-                    )
-                }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    if (book.local) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(if (book.dropboxPath != null) R.string.ebook_remove_from_phone else R.string.ebook_delete)) },
-                            onClick = {
-                                menu = false
-                                onRemoveFromPhone()
-                            },
-                        )
-                    }
-                    if (book.dropboxPath != null) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.ebook_delete_dropbox)) },
-                            onClick = {
-                                menu = false
-                                onDelete()
-                            },
-                        )
-                    }
-                    DropdownMenuItem(
-                        text = { Text("${book.ext.uppercase()} · ${Formatter.formatShortFileSize(context, book.size)}", style = MaterialTheme.typography.bodySmall) },
-                        onClick = { menu = false },
-                        enabled = false,
-                    )
-                }
-            }
-        }
-        Spacer(Modifier.height(6.dp))
-        Text(book.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        if (book.author.isNotBlank()) {
-            Text(book.author, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        val where =
-            listOfNotNull(
-                fraction?.let { "${(it * 100).roundToInt()}%" } ?: stringResource(R.string.ebook_new),
-                if (!book.local) stringResource(R.string.ebook_in_dropbox) else null,
-                if (book.dropboxPath == null) stringResource(R.string.ebook_phone_only) else null,
-            ).joinToString(" · ")
-        Text(where, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
 }

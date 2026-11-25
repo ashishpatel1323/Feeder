@@ -206,6 +206,24 @@ class EbookLibrary private constructor(
             f
         }
 
+    /** Downloads a book from Dropbox without opening it. */
+    fun download(id: String) {
+        val b = get(id) ?: return
+        val key = "down:$id"
+        if (_jobs.value.any { it.key == key }) return
+        _jobs.update { it + BookJob(key, b.title, 0, b.size) }
+        scope.launch {
+            try {
+                ensureLocal(id) { done, total -> _jobs.update { jobs -> jobs.map { if (it.key == key) it.copy(done = done, total = total) else it } } }
+                _messages.value = context.getString(com.nononsenseapps.feeder.R.string.ebook_downloaded_toast, b.title)
+            } catch (e: Exception) {
+                _messages.value = e.message ?: "Download failed"
+            } finally {
+                _jobs.update { jobs -> jobs.filterNot { it.key == key } }
+            }
+        }
+    }
+
     /** Title, author and cover the reader found in the book. */
     fun describe(
         id: String,

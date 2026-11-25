@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { formatBytes } from '../lib/offline'
 import { onDropboxChange, type DropboxFile } from '../lib/dropbox'
 import {
+  catalogIcon,
   deleteBook,
   deleteFromDropbox,
   downloadFromDropbox,
@@ -24,6 +25,7 @@ import {
   type ZimBook,
 } from '../lib/zim/library'
 import { DropboxPanel, useDropbox } from './DropboxPanel'
+import { Shelf, ShelfControls, useShelfPrefs, type ShelfItem } from './Shelf'
 import { Icon, IconButton } from './Icon'
 
 /**
@@ -68,6 +70,8 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
   const [remote, setRemote] = useState<DropboxFile[] | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   const dbx = useDropbox()
+  const prefs = useShelfPrefs('zim', 'list')
+  const [icons, setIcons] = useState<Record<string, string>>({})
   const signedIn = useRef(false)
   signedIn.current = dbx.signedIn
 
@@ -155,6 +159,18 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
   const fromDropbox = (f: DropboxFile) => run(f.name, (prog, signal) => downloadFromDropbox(f, prog, signal))
   const inDropbox = (b: ZimBook) => !!remote?.some((f) => sameZim(b, f))
   const onlyInDropbox = (remote ?? []).filter((f) => !books?.some((b) => sameZim(b, f)))
+  // Covers for books only in Dropbox, from the Kiwix catalog
+  const missingIcons = onlyInDropbox.filter((f) => !(f.name in icons)).map((f) => f.name).join('\n')
+  useEffect(() => {
+    if (!missingIcons) return
+    let live = true
+    for (const name of missingIcons.split('\n')) {
+      void catalogIcon(name).then((url) => live && setIcons((m) => ({ ...m, [name]: url ?? '' })))
+    }
+    return () => {
+      live = false
+    }
+  }, [missingIcons])
 
   const removeFromDropbox = async (f: DropboxFile, onDevice: boolean) => {
     const name = f.name.replace(/\.zim$/i, '').replace(/_/g, ' ')
@@ -173,6 +189,50 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
     await deleteBook(b.file)
     toast(`Deleted ${b.title}`)
   }
+
+  const jobFor = (label: string) => jobs.find((j) => j.label === label)
+  const percent = (j: Job | undefined, verb: string) => (j ? `${verb} ${j.total ? `${Math.round((j.done / j.total) * 100)}%` : '…'}` : undefined)
+  const items: ShelfItem[] = [
+    ...(books ?? []).map((b): ShelfItem => {
+      const remoteCopy = remote?.find((f) => sameZim(b, f))
+      const actions: ShelfItem['actions'] = []
+      if (dbx.signedIn && remote && !remoteCopy) actions.push({ label: 'Upload to Dropbox', run: () => upload(b.file, b.title) })
+      if (remoteCopy) actions.push({ label: 'Delete from Dropbox', run: () => void removeFromDropbox(remoteCopy, true) })
+      actions.push({ label: remoteCopy ? 'Remove from this device' : 'Delete', run: () => void remove(b) })
+      return {
+        key: `local:${b.file}`,
+        title: b.title,
+        subtitle: b.description,
+        detail: [formatBytes(b.size), b.flavour, b.articleCount ? `${b.articleCount.toLocaleString()} pages` : '', b.date].filter(Boolean).join(' · '),
+        cover: b.icon,
+        coverIcon: 'public',
+        where: remoteCopy ? 'both' : 'device',
+        size: b.size,
+        busy: percent(jobs.find((j) => j.label === `Uploading ${b.title} to Dropbox`), 'Uploading'),
+        onOpen: () => onOpen(b.id),
+        actions,
+      }
+    }),
+    ...onlyInDropbox.map(
+      (f): ShelfItem => ({
+        key: `dbx:${f.id}`,
+        title: f.name.replace(/\.zim$/i, '').replace(/_/g, ' '),
+        detail: formatBytes(f.size),
+        cover: icons[f.name] ?? null,
+        coverIcon: 'public',
+        where: 'cloud',
+        size: f.size,
+        busy: percent(jobFor(f.name), 'Downloading'),
+        onOpen: () => {
+          if (!jobFor(f.name)) fromDropbox(f)
+        },
+        actions: [
+          ...(jobFor(f.name) ? [] : [{ label: 'Download to this device', run: () => fromDropbox(f) }]),
+          { label: 'Delete from Dropbox', run: () => void removeFromDropbox(f, false) },
+        ],
+      }),
+    ),
+  ]
 
   return (
     <section
@@ -243,55 +303,12 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
             <Icon name="public" size={40} />
             <p>No books yet. Get one from the Kiwix library, or add a .zim file you already have (you can also drop it here).</p>
           </div>
-        ) : books.length === 0 ? null : (
-          <div className="lib-list">
-            {books.map((b) => (
-              <div key={b.file} className="lib-row zim-book" role="button" tabIndex={0} onClick={() => onOpen(b.id)} onKeyDown={(e) => e.key === 'Enter' && onOpen(b.id)}>
-                {b.icon ? <img className="zim-icon" src={b.icon} alt="" /> : <Icon name="public" size={32} />}
-                <span className="lib-text">
-                  <span className="lib-title">{b.title}</span>
-                  <span className="lib-desc">{b.description}</span>
-                  <span className="lib-desc">
-                    {[formatBytes(b.size), b.flavour, b.articleCount ? `${b.articleCount.toLocaleString()} pages` : '', b.date, b.language].filter(Boolean).join(' · ')}
-                  </span>
-                </span>
-                <span className="zim-row-actions" onClick={(e) => e.stopPropagation()}>
-                  {dbx.signedIn && remote ? (
-                    inDropbox(b) ? (
-                      <span className="zim-cloud">
-                        <IconButton icon="cloud" label={`In Dropbox. Delete ${b.title} from Dropbox`} onClick={() => void removeFromDropbox(remote.find((f) => sameZim(b, f))!, true)} />
-                      </span>
-                    ) : jobs.some((j) => j.label.startsWith(`Uploading ${b.title}`) || j.label.startsWith(`Uploading ${b.file}`)) ? null : (
-                      <IconButton icon="upload" label={`Upload ${b.title} to Dropbox`} onClick={() => upload(b.file, b.title)} />
-                    )
-                  ) : null}
-                  <IconButton icon="delete" label={`Delete ${b.title} from this device`} onClick={() => void remove(b)} />
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-        {onlyInDropbox.length ? (
+        ) : (
           <>
-            <h2 className="lib-section">In Dropbox</h2>
-            <div className="lib-list">
-              {onlyInDropbox.map((f) => (
-                <div key={f.id} className="lib-row zim-book">
-                  <Icon name="cloud" size={32} />
-                  <span className="lib-text">
-                    <span className="lib-title">{f.name.replace(/\.zim$/i, '').replace(/_/g, ' ')}</span>
-                    <span className="lib-desc">{formatBytes(f.size)} · not on this device yet</span>
-                  </span>
-                  <button type="button" className="mf-btn" onClick={() => fromDropbox(f)} disabled={jobs.some((j) => j.label === f.name)}>
-                    <Icon name="download" size={18} />
-                    Download
-                  </button>
-                  <IconButton icon="delete" label={`Delete ${f.name} from Dropbox`} onClick={() => void removeFromDropbox(f, false)} />
-                </div>
-              ))}
-            </div>
+            <ShelfControls {...prefs} counts={{ all: items.length, device: items.filter((i) => i.where !== 'cloud').length, cloud: items.filter((i) => i.where === 'cloud').length }} />
+            <Shelf items={items} show={prefs.show} view={prefs.view} shape="tile" emptyDevice="No ZIM books on this device yet. Download one from the In Dropbox list." />
           </>
-        ) : null}
+        )}
         {broken.length ? <p className="muted">Could not open: {broken.join(', ')}</p> : null}
         {usage ? (
           <p className="zim-usage muted">
