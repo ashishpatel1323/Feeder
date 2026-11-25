@@ -19,6 +19,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.nononsenseapps.feeder.ApplicationCoroutineScope
 import com.nononsenseapps.feeder.dropbox.DropboxClient
+import com.nononsenseapps.feeder.model.history.HistoryWhere
+import com.nononsenseapps.feeder.model.history.ItemHistory
 import com.nononsenseapps.feeder.model.playlists.PlaylistPlaybackService
 import com.nononsenseapps.feeder.model.playlists.PlaylistPlayer
 import kotlinx.coroutines.Dispatchers
@@ -85,6 +87,7 @@ class AudiobookPlayer(
     private val scope: ApplicationCoroutineScope by instance()
     private val playlistPlayer: PlaylistPlayer by instance()
     private val positions: AudioPositions by instance()
+    private val history: ItemHistory by instance()
     private val library by lazy { AudiobookLibrary.get(app) }
     private val dropbox by lazy { DropboxClient.get(app) }
     private val prefs by lazy { app.getSharedPreferences("audiobook_player", android.content.Context.MODE_PRIVATE) }
@@ -100,8 +103,40 @@ class AudiobookPlayer(
     private var lastSaved = 0L
     private var retried = false
 
+    // History: whether a "play" was noted and no "pause" since, and why the next play happens
+    private var noted = false
+    private var playReason = REASON_APP
+
     init {
-        AudioFocusHooks.pauseAudiobook = { if (_state.value.isPlaying || _state.value.loading) pause() }
+        AudioFocusHooks.pauseAudiobook = { if (_state.value.isPlaying || _state.value.loading) pause(REASON_FOCUS) }
+    }
+
+    /** Notes a play or pause in the book's history, with the chapter and time into it. */
+    private fun note(
+        action: String,
+        reason: String,
+    ) {
+        val b = book ?: return
+        val s = _state.value
+        val ch = s.currentChapter
+        history.record(
+            ItemHistory.AUDIOBOOK,
+            b.id,
+            action,
+            HistoryWhere(
+                p = if (ch != null) "Ch. ${s.chapter + 1} · ${ItemHistory.clockText(s.inChapterMs)}" else ItemHistory.clockText(s.bookMs),
+                s = ch?.title.orEmpty(),
+                f = AudiobookRules.fractionAt(b, s.i, s.ms),
+                x = "${s.i}:${s.ms}",
+            ),
+            reason,
+        )
+    }
+
+    private fun notePause(reason: String) {
+        if (!noted) return
+        noted = false
+        note(ItemHistory.PAUSE, reason)
     }
 
     private fun createPlayer(): ExoPlayer {
@@ -133,6 +168,31 @@ class AudiobookPlayer(
                         override fun onIsPlayingChanged(isPlaying: Boolean) {
                             _state.value = _state.value.copy(isPlaying = isPlaying, loading = if (isPlaying) false else _state.value.loading)
                             if (isPlaying) retried = false else save()
+                            if (isPlaying && !noted) {
+                                tick()
+                                noted = true
+                                note(ItemHistory.PLAY, playReason)
+                                playReason = REASON_APP
+                            } else if (!isPlaying && playWhenReady && playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_TRANSIENT_AUDIO_FOCUS_LOSS) {
+                                // A call or a navigation prompt: it carries on afterwards
+                                tick()
+                                notePause(REASON_FOCUS)
+                                playReason = REASON_FOCUS
+                            }
+                        }
+
+                        override fun onPlayWhenReadyChanged(
+                            playWhenReady: Boolean,
+                            reason: Int,
+                        ) {
+                            if (playWhenReady) return
+                            tick()
+                            when (reason) {
+                                Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY -> notePause(REASON_BLUETOOTH)
+                                Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS -> notePause(REASON_FOCUS)
+                                Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM -> notePause(REASON_END)
+                                else -> Unit
+                            }
                         }
 
                         override fun onPlaybackStateChanged(playbackState: Int) {
@@ -165,6 +225,7 @@ class AudiobookPlayer(
                                 return
                             }
                             val name = book?.tracks?.getOrNull(p.currentMediaItemIndex)?.name ?: "this file"
+                            notePause(REASON_SYSTEM)
                             _state.value = _state.value.copy(isPlaying = false, loading = false, error = "Could not play $name")
                             _messages.tryEmit("Could not play $name: ${error.errorCodeName}")
                         }
@@ -202,12 +263,16 @@ class AudiobookPlayer(
         id: String,
         play: Boolean = true,
         at: Pair<Int, Long>? = null,
+        reason: String = REASON_APP,
     ) {
         if (_state.value.bookId == id && at == null) {
-            if (play) play()
+            if (play) play(reason)
             return
         }
         val b = library.get(id) ?: return
+        tick()
+        notePause(REASON_APP)
+        playReason = reason
         save()
         player?.stop()
         book = b
@@ -279,21 +344,27 @@ class AudiobookPlayer(
         startService()
     }
 
-    fun play() {
+    fun play(reason: String = REASON_APP) {
         val id = _state.value.bookId ?: return
-        if (player == null) return open(id)
+        if (player == null) return open(id, reason = reason)
+        if (!noted) playReason = reason
         startPlaying()
     }
 
-    fun pause() {
+    fun pause(reason: String = REASON_APP) {
+        tick()
+        notePause(reason)
         player?.playWhenReady = false
         _state.value = _state.value.copy(loading = false)
         save()
     }
 
-    fun toggle(play: Boolean? = null) {
+    fun toggle(
+        play: Boolean? = null,
+        reason: String = REASON_APP,
+    ) {
         val playing = _state.value.isPlaying || _state.value.loading
-        if (play == false || (play == null && playing)) pause() else play()
+        if (play == false || (play == null && playing)) pause(reason) else play(reason)
     }
 
     /** Jumps [ms] back or ahead, across files when needed. */
@@ -403,7 +474,7 @@ class AudiobookPlayer(
         _state.value = _state.value.copy(i = i, ms = ms, bookMs = AudiobookRules.trackStartMs(book!!, i) + ms, chapter = chapter)
         if (chapter != old.chapter && old.sleepEndOfChapter && old.isPlaying) {
             cancelSleep()
-            pause()
+            pause(REASON_SLEEP)
             _messages.tryEmit("Sleep timer: paused at the end of the chapter")
             return
         }
@@ -412,7 +483,7 @@ class AudiobookPlayer(
             val left = s.sleepEndsAt - System.currentTimeMillis()
             if (left <= 0) {
                 cancelSleep()
-                pause()
+                pause(REASON_SLEEP)
                 // Back a little, so the last words before falling asleep are heard again
                 seekBy(-10_000)
                 _messages.tryEmit("Sleep timer: paused")
@@ -439,6 +510,7 @@ class AudiobookPlayer(
         val b = book ?: return
         val last = b.tracks.lastOrNull() ?: return
         positions.save(b.id, b.tracks.size - 1, last.hash, last.lengthMs, 1.0)
+        notePause(REASON_END)
         cancelSleep()
         _state.value = _state.value.copy(isPlaying = false, loading = false)
         _messages.tryEmit("Finished ${b.title}")
@@ -446,6 +518,8 @@ class AudiobookPlayer(
 
     /** Stops and closes the player (the position is kept). */
     fun close() {
+        tick()
+        notePause(REASON_CLOSED)
         save()
         tickJob?.cancel()
         player?.release()
@@ -471,6 +545,19 @@ class AudiobookPlayer(
         private const val SCHEME = "dropbox"
         private const val LAST_SPEED = "speed"
         private const val FADE_MS = 10_000L
+
+        // Why it played or paused, for its history (the same words as the web app's lib/history.ts)
+        const val REASON_APP = "app"
+        const val REASON_NOTIFICATION = "notification"
+        const val REASON_HEADSET = "headset"
+        const val REASON_BLUETOOTH = "bluetooth"
+        const val REASON_CAR = "car"
+        const val REASON_WATCH = "watch"
+        const val REASON_SLEEP = "sleep"
+        const val REASON_END = "end"
+        const val REASON_FOCUS = "focus"
+        const val REASON_CLOSED = "closed"
+        const val REASON_SYSTEM = "system"
     }
 }
 

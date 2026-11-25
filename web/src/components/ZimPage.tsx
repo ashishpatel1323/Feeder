@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { db, type Highlight, type HighlightColor } from '../lib/db'
 import { deleteHighlight, quoteText, saveHighlight, updateHighlight } from '../lib/highlights'
+import { trackOpen } from '../lib/history'
 import { readAloud, type ReadAloudState } from '../lib/readaloud'
 import type { Settings } from '../lib/settings'
 import { firstVisibleText, highlightAt, injectMarkStyles, keepInView, paintHighlights, parseZimItemId, readableRoot, scrollToRange, selectionAnchor, zimItemId } from '../lib/zim/marks'
@@ -33,6 +34,7 @@ import {
 import { DropboxPanel, useDropbox } from './DropboxPanel'
 import { Shelf, ShelfControls, useShelfPrefs, type ShelfItem } from './Shelf'
 import { HighlightBar } from './Highlights'
+import { HistoryList } from './History'
 import { Icon, IconButton } from './Icon'
 import { Player } from './Player'
 
@@ -419,8 +421,11 @@ function ZimReader({ id, jump, settings, onBack, toast }: { id: string; jump: Zi
   const [loads, setLoads] = useState(0)
   const [pending, setPending] = useState<{ start: number; text: string; prefix: string } | null>(null)
   const [editing, setEditing] = useState<Highlight | null>(null)
-  const [panel, setPanel] = useState(false)
+  const [panel, setPanel] = useState<false | 'highlights' | 'history'>(false)
   const [ra, setRa] = useState<ReadAloudState>(readAloud.state)
+  /** History: the page shown now, and when the book was opened and closed */
+  const here = useRef<{ path: string; title: string } | null>(null)
+  const opened = useRef<ReturnType<typeof trackOpen> | null>(null)
   useEffect(() => readAloud.subscribe(setRa), [])
 
   const itemId = path === null ? null : zimItemId(id, path)
@@ -443,6 +448,9 @@ function ZimReader({ id, jump, settings, onBack, toast }: { id: string; jump: Zi
 
   useEffect(() => {
     let live = true
+    here.current = null
+    const tracker = trackOpen('zim', id, () => (here.current ? { p: here.current.title || here.current.path || 'Main page', x: here.current.path } : null))
+    opened.current = tracker
     openBook(id)
       .then(async (z) => {
         const t = await z.metadata('Title')
@@ -453,6 +461,7 @@ function ZimReader({ id, jump, settings, onBack, toast }: { id: string; jump: Zi
     navigator.serviceWorker?.ready.then(() => live && setReady(true))
     return () => {
       live = false
+      tracker.stop()
       if (readAloud.state.itemId?.startsWith(zimItemId(id, ''))) readAloud.stop()
       readAloud.revealHook = null
     }
@@ -526,6 +535,10 @@ function ZimReader({ id, jump, settings, onBack, toast }: { id: string; jump: Zi
       setPath(at?.id === id ? at.path : null)
       setLoads((n) => n + 1)
       setPageTitle(w.document.title)
+      if (at?.id === id) {
+        here.current = { path: at.path, title: w.document.title }
+        opened.current?.touch()
+      }
       const d = w.document
       injectMarkStyles(d)
       // Links out of the book open in a new tab
@@ -652,12 +665,28 @@ function ZimReader({ id, jump, settings, onBack, toast }: { id: string; jump: Zi
           ) : null}
         </div>
         <IconButton icon="home" label="Main page" onClick={() => go('')} />
-        <IconButton icon="highlight" label={`Highlights in this book (${bookHighlights.length})`} onClick={() => setPanel((x) => !x)} />
+        <IconButton icon="highlight" label={`Highlights in this book (${bookHighlights.length})`} onClick={() => setPanel((x) => (x === 'highlights' ? false : 'highlights'))} />
+        <IconButton icon="history" label="History" onClick={() => setPanel((x) => (x === 'history' ? false : 'history'))} />
         <IconButton icon="headphones" label="Listen: read aloud" text="Listen" onClick={() => (listening ? readAloud.toggle() : startListening())} disabled={!itemId} className="bar-primary" />
       </header>
       <div className="zim-body">
         {error ? <p className="muted zim-error">{error}</p> : ready ? <iframe ref={frame} className="zim-frame" src={src} title={title} onLoad={onLoad} /> : null}
-        {panel ? (
+        {panel === 'history' ? (
+          <aside className="book-panel" aria-label="History">
+            <div className="book-panel-head">
+              <h2>History</h2>
+              <IconButton icon="close" label="Close" onClick={() => setPanel(false)} />
+            </div>
+            <HistoryList
+              c="zim"
+              i={id}
+              onJump={(e) => {
+                if (e.x !== undefined) go(e.x)
+                if (window.innerWidth < 900) setPanel(false)
+              }}
+            />
+          </aside>
+        ) : panel ? (
           <aside className="book-panel" aria-label="Highlights">
             <div className="book-panel-head">
               <h2>Highlights</h2>

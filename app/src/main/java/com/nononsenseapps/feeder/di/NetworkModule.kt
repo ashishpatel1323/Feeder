@@ -68,6 +68,13 @@ val networkModule =
                     .get(instance<android.app.Application>())
                     .also { store -> store.onChanged = { nudge.changed(true) } }
             }
+        bind<com.nononsenseapps.feeder.model.history.ItemHistory>() with
+            singleton {
+                val nudge = instance<SyncNudge>()
+                com.nononsenseapps.feeder.model.history.ItemHistory
+                    .get(instance<android.app.Application>())
+                    .also { store -> store.onChanged = { nudge.changed(true) } }
+            }
         bind<com.nononsenseapps.feeder.model.audiobooks.AudiobookPlayer>() with
             singleton {
                 com.nononsenseapps.feeder.model.audiobooks

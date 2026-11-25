@@ -65,6 +65,9 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderState
 import androidx.compose.material3.Surface
@@ -79,6 +82,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -102,11 +106,14 @@ import com.nononsenseapps.feeder.model.audiobooks.AudiobookLibrary
 import com.nononsenseapps.feeder.model.audiobooks.AudiobookPlayer
 import com.nononsenseapps.feeder.model.audiobooks.AudiobookRules
 import com.nononsenseapps.feeder.model.audiobooks.AudiobookState
+import com.nononsenseapps.feeder.model.history.ItemHistory
 import com.nononsenseapps.feeder.sync2.SyncNudge
 import com.nononsenseapps.feeder.sync2.ThisDevice
 import com.nononsenseapps.feeder.sync2.otherDeviceText
 import com.nononsenseapps.feeder.ui.compose.ebooks.DropboxCard
 import com.nononsenseapps.feeder.ui.compose.feed.PlainTooltipBox
+import com.nononsenseapps.feeder.ui.compose.history.historyItems
+import com.nononsenseapps.feeder.ui.compose.history.rememberHistory
 import com.nononsenseapps.feeder.ui.compose.theme.FeederTokens
 import com.nononsenseapps.feeder.ui.compose.theme.SensibleTopAppBar
 import kotlinx.coroutines.Dispatchers
@@ -422,10 +429,12 @@ fun AudiobookPlayerScreen(
         }
         val chapters = if (mine) s.chapters else remember(book) { AudiobookRules.chaptersOf(book) }
         val listState = rememberLazyListState()
+        var showHistory by rememberSaveable { mutableStateOf(false) }
+        val history = rememberHistory(ItemHistory.AUDIOBOOK, bookId)
         // Keep the chapter playing in view when it changes (not when the page opens)
         var lastChapter by remember { mutableStateOf(-1) }
         LaunchedEffect(mine, s.chapter) {
-            if (!mine || s.chapters.isEmpty()) return@LaunchedEffect
+            if (!mine || s.chapters.isEmpty() || showHistory) return@LaunchedEffect
             val row = s.chapter + 2
             if (lastChapter >= 0 && listState.layoutInfo.visibleItemsInfo.none { it.index == row }) listState.animateScrollToItem(row)
             lastChapter = s.chapter
@@ -439,14 +448,27 @@ fun AudiobookPlayerScreen(
                 NowPlaying(book, cover, s, mine, player)
             }
             item {
-                Text(
-                    "${stringResource(R.string.audiobook_chapters)} · ${chapters.size}",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(top = FeederTokens.Space.xl, bottom = FeederTokens.Space.sm),
-                )
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(top = FeederTokens.Space.xl, bottom = FeederTokens.Space.sm)) {
+                    SegmentedButton(
+                        selected = !showHistory,
+                        onClick = { showHistory = false },
+                        shape = SegmentedButtonDefaults.itemShape(0, 2),
+                    ) { Text("${stringResource(R.string.audiobook_chapters)} · ${chapters.size}") }
+                    SegmentedButton(
+                        selected = showHistory,
+                        onClick = { showHistory = true },
+                        shape = SegmentedButtonDefaults.itemShape(1, 2),
+                    ) { Text(stringResource(R.string.history)) }
+                }
             }
-            itemsIndexed(chapters, key = { _, c -> "${c.i}:${c.startMs}" }) { k, c ->
+            if (showHistory) {
+                historyItems(history, R.string.history_empty_audio) { e ->
+                    val parts = e.x.split(':')
+                    val i = parts.getOrNull(0)?.toIntOrNull()
+                    val ms = parts.getOrNull(1)?.toLongOrNull()
+                    if (i != null && ms != null) player.open(bookId, play = mine && (s.isPlaying || s.loading), at = i to ms)
+                }
+            } else itemsIndexed(chapters, key = { _, c -> "${c.i}:${c.startMs}" }) { k, c ->
                 val current = mine && k == s.chapter
                 Row(
                     verticalAlignment = Alignment.CenterVertically,

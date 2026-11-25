@@ -8,6 +8,7 @@ import { ACCEPT_AUDIO, refreshAudiobooks, uploadAudiobook } from '../lib/audiobo
 import { audiobookPlayer, useAudiobookPlayer, type BookPlayerState } from '../lib/audiobooks/player'
 import { bookLengthMs, chaptersOf, clock, lengthText } from '../lib/audiobooks/timeline'
 import { DropboxPanel, useDropbox } from './DropboxPanel'
+import { HistoryList } from './History'
 import { Icon, IconButton } from './Icon'
 import { formatSpeed } from './Player'
 
@@ -307,6 +308,7 @@ function BookPlayer({ id, onBack }: { id: string; onBack: () => void }) {
   const s = useAudiobookPlayer()
   const mine = s.bookId === id
   const listRef = useRef<HTMLOListElement>(null)
+  const [view, setView] = useState<'chapters' | 'history'>('chapters')
 
   // Opening the page loads the book where it was left, without playing it yet
   useEffect(() => {
@@ -399,9 +401,24 @@ function BookPlayer({ id, onBack }: { id: string; onBack: () => void }) {
         </div>
 
         <div className="ab-chapters">
-          <h2 className="lib-section">
-            Chapters <span className="muted">· {chapters.length}</span>
-          </h2>
+          <span className="segmented" role="tablist" aria-label="Chapters or history">
+            <button type="button" role="tab" aria-selected={view === 'chapters'} className={`seg${view === 'chapters' ? ' on' : ''}`} onClick={() => setView('chapters')}>
+              Chapters <span className="seg-count">{chapters.length}</span>
+            </button>
+            <button type="button" role="tab" aria-selected={view === 'history'} className={`seg${view === 'history' ? ' on' : ''}`} onClick={() => setView('history')}>
+              History
+            </button>
+          </span>
+          {view === 'history' ? (
+            <HistoryList
+              c="audiobook"
+              i={id}
+              onJump={(e) => {
+                const [i, ms] = (e.x ?? '').split(':').map(Number)
+                if (Number.isFinite(i) && Number.isFinite(ms)) void audiobookPlayer.open(id, { at: { i, ms }, play: playing })
+              }}
+            />
+          ) : (
           <ol ref={listRef}>
             {chapters.map((c, k) => (
               <li key={`${c.i}:${c.startMs}`} className={mine && k === s.chapter ? 'current' : ''}>
@@ -419,6 +436,7 @@ function BookPlayer({ id, onBack }: { id: string; onBack: () => void }) {
               </li>
             ))}
           </ol>
+          )}
         </div>
       </div>
     </section>
