@@ -47,4 +47,8 @@
   <string name="in_dropbox">In Dropbox</string>
   <string name="not_on_phone_yet">%1$s · not on this phone yet</string>
   <string name="upload_to_dropbox">Upload to Dropbox</string>
+  <string name="delete_from_dropbox">Delete from Dropbox</string>
+  <string name="delete_from_dropbox_title">Delete %1$s from Dropbox?</string>
+  <string name="delete_from_dropbox_text">%1$s. Your devices can no longer download it from Dropbox.</string>
+  <string name="delete_from_dropbox_keep_phone">%1$s. Your other devices can no longer download it; the copy on this phone stays.</string>
 </resources>

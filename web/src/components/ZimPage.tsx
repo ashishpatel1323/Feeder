@@ -3,6 +3,7 @@ import { formatBytes } from '../lib/offline'
 import { onDropboxChange, type DropboxFile } from '../lib/dropbox'
 import {
   deleteBook,
+  deleteFromDropbox,
   downloadFromDropbox,
   downloadUrl,
   listDropboxZims,
@@ -149,6 +150,18 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
   const inDropbox = (b: ZimBook) => !!remote?.some((f) => sameZim(b, f))
   const onlyInDropbox = (remote ?? []).filter((f) => !books?.some((b) => sameZim(b, f)))
 
+  const removeFromDropbox = async (f: DropboxFile, onDevice: boolean) => {
+    const name = f.name.replace(/\.zim$/i, '').replace(/_/g, ' ')
+    if (!confirm(`Delete ${name} (${formatBytes(f.size)}) from Dropbox? Your other devices can no longer download it.${onDevice ? ' The copy on this device stays.' : ''}`)) return
+    try {
+      await deleteFromDropbox(f)
+      toast(`Deleted ${name} from Dropbox`)
+    } catch (e) {
+      toast(e instanceof Error ? e.message : String(e))
+    }
+    refreshRemote()
+  }
+
   const remove = async (b: ZimBook) => {
     if (!confirm(`Delete ${b.title} (${formatBytes(b.size)}) from this device?${inDropbox(b) ? ' It stays in Dropbox.' : ''}`)) return
     await deleteBook(b.file)
@@ -239,8 +252,8 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
                 <span className="zim-row-actions" onClick={(e) => e.stopPropagation()}>
                   {dbx.signedIn && remote ? (
                     inDropbox(b) ? (
-                      <span className="zim-cloud" title="Also in Dropbox">
-                        <Icon name="cloud" size={18} />
+                      <span className="zim-cloud">
+                        <IconButton icon="cloud" label={`In Dropbox. Delete ${b.title} from Dropbox`} onClick={() => void removeFromDropbox(remote.find((f) => sameZim(b, f))!, true)} />
                       </span>
                     ) : jobs.some((j) => j.label.startsWith(`Uploading ${b.title}`) || j.label.startsWith(`Uploading ${b.file}`)) ? null : (
                       <IconButton icon="upload" label={`Upload ${b.title} to Dropbox`} onClick={() => upload(b.file, b.title)} />
@@ -267,6 +280,7 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
                     <Icon name="download" size={18} />
                     Download
                   </button>
+                  <IconButton icon="delete" label={`Delete ${f.name} from Dropbox`} onClick={() => void removeFromDropbox(f, false)} />
                 </div>
               ))}
             </div>
