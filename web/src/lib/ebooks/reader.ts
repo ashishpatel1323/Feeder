@@ -84,3 +84,19 @@ export function injectCsp(html: string): string {
   if (htmlTag) return html.slice(0, htmlTag.index! + htmlTag[0].length) + `<head>${CSP}</head>` + html.slice(htmlTag.index! + htmlTag[0].length)
   return CSP + html
 }
+
+export function langString(x: unknown): string {
+  if (!x) return ''
+  if (typeof x === 'string') return x
+  if (typeof x === 'object') {
+    const o = x as Record<string, string>
+    return o.en ?? Object.values(o)[0] ?? ''
+  }
+  return ''
+}
+
+export function authorString(x: unknown): string {
+  const one = (a: unknown): string => (typeof a === 'string' ? a : a && typeof a === 'object' && 'name' in a ? langString((a as { name: unknown }).name) : langString(a))
+  return (Array.isArray(x) ? x.map(one) : [one(x)]).filter(Boolean).join(', ')
+}
+

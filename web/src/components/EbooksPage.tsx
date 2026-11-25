@@ -335,9 +335,11 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
         doc.addEventListener('click', (c) => {
           if (doc.getSelection()?.isCollapsed === false) return
           if ((c.target as Element | null)?.closest?.('a[href]')) return
-          const w = doc.defaultView?.innerWidth ?? 0
-          const x = c.clientX - (doc.defaultView?.scrollX ?? 0)
-          const frac = w ? (x % w) / w : 0.5
+// The page's iframe is as wide as the whole chapter: measure the tap on the screen instead
+          const frame = doc.defaultView?.frameElement?.getBoundingClientRect()
+          const x = (frame?.left ?? 0) + c.clientX
+          const box = view.getBoundingClientRect()
+          const frac = box.width ? (x - box.left) / box.width : 0.5
           if (frac < 0.22) void view.goLeft()
           else if (frac > 0.78) void view.goRight()
         })

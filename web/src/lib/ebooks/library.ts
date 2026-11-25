@@ -6,6 +6,9 @@
  */
 import { contentHash, deleteFile, downloadStream, EBOOKS_FOLDER, getDropbox, listFolder, uploadFile, type DropboxFile, type Progress } from '../dropbox'
 import { db, type Book } from '../db'
+import { authorString, langString } from './reader'
+
+export { authorString, langString }
 
 /** Formats foliate-js reads (PDF is left out: see vendor/foliate-js/README.md). */
 export const BOOK_EXTENSIONS = ['epub', 'mobi', 'azw3', 'azw', 'kf8', 'fb2', 'fbz', 'cbz']
@@ -98,21 +101,6 @@ export async function describeFile(file: File): Promise<{ title: string; author:
     // no cover
   }
   return { title, author, cover }
-}
-
-export function langString(x: unknown): string {
-  if (!x) return ''
-  if (typeof x === 'string') return x
-  if (typeof x === 'object') {
-    const o = x as Record<string, string>
-    return o.en ?? Object.values(o)[0] ?? ''
-  }
-  return ''
-}
-
-export function authorString(x: unknown): string {
-  const one = (a: unknown): string => (typeof a === 'string' ? a : a && typeof a === 'object' && 'name' in a ? langString((a as { name: unknown }).name) : langString(a))
-  return (Array.isArray(x) ? x.map(one) : [one(x)]).filter(Boolean).join(', ')
 }
 
 /** A cover scaled down to 240 px tall, as a JPEG data URL (small enough for the database). */
