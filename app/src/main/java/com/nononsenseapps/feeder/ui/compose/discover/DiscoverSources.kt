@@ -341,3 +341,30 @@ fun isFollowed(
     val ch = youtubeChannelId(r.feedUrl)
     return followed.any { norm(it) == want || (ch != null && youtubeChannelId(it) == ch) }
 }
+
+// --- Display helpers -------------------------------------------------------------------------
+
+/** "India: Business" → "India business", so quick-pick chips read like the other topics. */
+fun topicLabel(name: String): String =
+    if (name.startsWith("India: ")) {
+        "India " + name.removePrefix("India: ").replaceFirstChar { it.lowercase() }
+    } else {
+        name
+    }
+
+/** Topics offered as one-tap chips next to the topic picker (when the bundled list has them). */
+val QUICK_TOPICS = listOf("India: Business", "India: News", "Tech", "Programming", "Science", "Personal finance", "Startups")
+
+/**
+ * The small square icon for a result row: its own image (podcast art, channel avatar, Feedly icon),
+ * else the site's favicon from DuckDuckGo's icon service (no cookies, no tracking).
+ */
+fun iconUrl(r: DiscoverResult): String? {
+    r.image?.let { return it }
+    val host = siteOf(r.site?.takeIf { it.startsWith("http") } ?: r.feedUrl) ?: return null
+    val site = host.removePrefix("feeds.").removePrefix("rss.").removePrefix("feeds2.")
+    return "https://icons.duckduckgo.com/ip3/$site.ico"
+}
+
+/** One supporting line for a row: meta and description, either may be missing. */
+fun supportingLine(r: DiscoverResult): String = listOfNotNull(r.meta?.ifBlank { null }, r.description?.ifBlank { null }).joinToString(" · ")

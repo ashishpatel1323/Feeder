@@ -367,3 +367,31 @@ export function isFollowed(r: DiscoverResult, followed: Set<string>): boolean {
   }
   return false
 }
+
+// --- Display helpers (same as the Android app's DiscoverSources.kt) ---------------------------
+
+/** "India: Business" → "India business", so quick-pick chips read like the other topics. */
+export function topicLabel(name: string): string {
+  if (!name.startsWith('India: ')) return name
+  const rest = name.slice('India: '.length)
+  return `India ${rest.charAt(0).toLowerCase()}${rest.slice(1)}`
+}
+
+/** Topics offered as one-tap chips next to the topic picker (when the bundled list has them). */
+export const QUICK_TOPICS = ['India: Business', 'India: News', 'Tech', 'Programming', 'Science', 'Personal finance', 'Startups']
+
+/**
+ * The small square icon for a result row: its own image (podcast art, channel avatar, Feedly icon),
+ * else the site's favicon from DuckDuckGo's icon service (no cookies, no tracking).
+ */
+export function iconUrl(r: DiscoverResult): string | undefined {
+  if (r.image) return r.image
+  const host = siteOf(r.site && /^https?:/.test(r.site) ? r.site : r.feedUrl)
+  if (!host) return undefined
+  return `https://icons.duckduckgo.com/ip3/${host.replace(/^(feeds2?|rss)\./, '')}.ico`
+}
+
+/** One supporting line for a row: meta and description, either may be missing. */
+export function supportingLine(r: DiscoverResult): string {
+  return [r.meta, r.description].filter((s) => s && s.trim()).join(' · ')
+}
