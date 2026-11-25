@@ -18,6 +18,7 @@ import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,6 +44,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.FormatSize
 import androidx.compose.material.icons.outlined.Headphones
 import androidx.compose.material.icons.outlined.Highlight
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -90,9 +92,14 @@ import com.nononsenseapps.feeder.model.TTSStateHolder
 import com.nononsenseapps.feeder.model.ebooks.BookPositions
 import com.nononsenseapps.feeder.model.ebooks.EbookLibrary
 import com.nononsenseapps.feeder.model.highlights.Highlight
+import com.nononsenseapps.feeder.model.history.HistoryWhere
+import com.nononsenseapps.feeder.model.history.ItemHistory
 import com.nononsenseapps.feeder.model.highlights.HighlightColor
 import com.nononsenseapps.feeder.model.highlights.HighlightStore
 import com.nononsenseapps.feeder.model.ReadAloudNeighbors
+import com.nononsenseapps.feeder.ui.compose.history.historyItems
+import com.nononsenseapps.feeder.ui.compose.history.rememberHistory
+import com.nononsenseapps.feeder.ui.compose.history.rememberOpenTracker
 import com.nononsenseapps.feeder.ui.compose.navigation.HideMainBar
 import com.nononsenseapps.feeder.ui.compose.readaloud.HideableCompactTTSPlayer
 import com.nononsenseapps.feeder.ui.compose.utils.ImmutableHolder
@@ -209,6 +216,12 @@ fun EbookReaderScreen(
 
     fun js(code: String) = webView?.evaluateJavascript(code, null)
 
+    // History: opened once the first page shows, closed with the reader
+    val opening =
+        rememberOpenTracker(ItemHistory.EBOOK, bookId) {
+            loc.takeIf { it.cfi.isNotBlank() }?.let { HistoryWhere(p = ItemHistory.bookChip(it.fraction.toDouble(), it.page, it.pages), s = it.chapter, f = it.fraction.toDouble(), x = it.cfi) }
+        }
+
     fun q(s: String?) = if (s == null) "null" else JsonPrimitive(s).toString()
 
     fun highlightsJson() =
@@ -269,6 +282,7 @@ fun EbookReaderScreen(
                             )
                         if (r == loc) return@post
                         loc = r
+                        opening.touch()
                         if (r.cfi.isNotBlank()) positions.save(bookId, r.cfi, r.fraction.toDouble(), r.page, r.pages)
                     }
 
@@ -620,7 +634,16 @@ fun EbookReaderScreen(
             when (sheet) {
                 "toc" ->
                     LazyColumn(Modifier.fillMaxWidth()) {
-                        item { SheetTitle(stringResource(R.string.ebook_contents)) }
+                        item {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.weight(1f)) { SheetTitle(stringResource(R.string.ebook_contents)) }
+                                TextButton(onClick = { sheet = "history" }, modifier = Modifier.padding(end = 8.dp)) {
+                                    Icon(Icons.Outlined.History, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(stringResource(R.string.history))
+                                }
+                            }
+                        }
                         items(toc) { t ->
                             ListItem(
                                 headlineContent = { Text(t.label, maxLines = 2, overflow = TextOverflow.Ellipsis, color = if (t.label == loc.chapter) MaterialTheme.colorScheme.primary else Color.Unspecified) },
@@ -652,6 +675,17 @@ fun EbookReaderScreen(
                             )
                         }
                     }
+
+                "history" -> {
+                    val days = rememberHistory(ItemHistory.EBOOK, bookId)
+                    LazyColumn(Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = 8.dp)) {
+                        item { SheetTitle(stringResource(R.string.history)) }
+                        historyItems(days, R.string.history_empty_read) { e ->
+                            js("feeder.goTo(${q(e.x)})")
+                            sheet = null
+                        }
+                    }
+                }
 
                 else -> LookSheet(prefs = prefs, onChange = { prefs = it })
             }

@@ -1,6 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import type { HistoryEvent } from '../lib/db'
-import { deviceId } from '../lib/device'
 import { actionText, byDay, historyOf, reasonText, timeText, type HistoryKind } from '../lib/history'
 import { Icon } from './Icon'
 
@@ -15,7 +14,6 @@ export function HistoryList({ c, i, onJump }: { c: HistoryKind; i: string; onJum
   const events = useLiveQuery(() => historyOf(c, i), [c, i])
   if (!events) return null
   if (!events.length) return <p className="muted hist-empty">{c === 'audiobook' ? 'Plays and pauses show up here.' : 'Each time it is opened and closed shows up here.'}</p>
-  const me = deviceId()
   return (
     <div className="hist">
       {byDay(events).map((g) => (
@@ -24,7 +22,7 @@ export function HistoryList({ c, i, onJump }: { c: HistoryKind; i: string; onJum
           <ol>
             {g.events.map((e) => {
               const reason = reasonText(e.r)
-              const device = e.dn ? (e.dv === me ? `${e.dn} (this device)` : e.dn) : ''
+              const device = e.dn ?? ''
               const body = (
                 <>
                   <span className={`hist-icon ${e.a}`} aria-hidden="true">

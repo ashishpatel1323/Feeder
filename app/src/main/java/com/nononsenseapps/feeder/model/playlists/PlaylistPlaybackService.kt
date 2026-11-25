@@ -27,6 +27,7 @@ import com.nononsenseapps.feeder.FeederApplication
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.db.room.FeedItemDao
 import com.nononsenseapps.feeder.db.room.PlaylistCandidate
+import com.nononsenseapps.feeder.model.audiobooks.AudiobookPlayer
 import com.nononsenseapps.feeder.model.offline.OfflineFiles
 import com.nononsenseapps.feeder.model.offline.OfflineVideos
 import com.nononsenseapps.feeder.ui.MainActivity
@@ -103,6 +104,7 @@ class PlaylistPlaybackService : MediaLibraryService() {
                 onPick = ::play,
                 audiobook = audiobookPlayer,
                 audiobookCover = ::audiobookCover,
+                requestReason = ::requestReason,
             )
         session =
             MediaLibrarySession
@@ -149,6 +151,22 @@ class PlaylistPlaybackService : MediaLibraryService() {
         }
         scope.launch {
             audiobooks.version.collect { covers.clear() }
+        }
+    }
+
+    /** Who sent the play or pause being handled now, for the audiobook's history. */
+    private fun requestReason(): String {
+        val s = session ?: return AudiobookPlayer.REASON_NOTIFICATION
+        val c = s.controllerForCurrentRequest ?: return AudiobookPlayer.REASON_NOTIFICATION
+        val pkg = c.packageName
+        return when {
+            s.isMediaNotificationController(c) -> AudiobookPlayer.REASON_NOTIFICATION
+            s.isAutoCompanionController(c) || s.isAutomotiveController(c) || pkg == "com.google.android.projection.gearhead" -> AudiobookPlayer.REASON_CAR
+            pkg.contains("bluetooth") || pkg == "android" -> AudiobookPlayer.REASON_HEADSET
+            pkg.contains("wearable") || pkg.contains(".wear") -> AudiobookPlayer.REASON_WATCH
+            pkg == "com.android.systemui" -> AudiobookPlayer.REASON_NOTIFICATION
+            pkg == packageName -> AudiobookPlayer.REASON_APP
+            else -> AudiobookPlayer.REASON_SYSTEM
         }
     }
 
@@ -217,7 +235,7 @@ class PlaylistPlaybackService : MediaLibraryService() {
                         ?.takeIf { it >= 0 } ?: 0
                 playlistPlayer.start(items.map { it.id }, items.firstOrNull()?.feedTitle ?: "Podcast", null, start)
             }
-            "ab" -> parts.getOrNull(1)?.let { audiobookPlayer.open(it) }
+            "ab" -> parts.getOrNull(1)?.let { audiobookPlayer.open(it, reason = requestReason()) }
             "abch" -> parts.getOrNull(1)?.toIntOrNull()?.let(audiobookPlayer::jumpToChapter)
             "dl" -> {
                 val items = downloads()

@@ -36,6 +36,8 @@ class CarQueuePlayer(
     private val audiobook: com.nononsenseapps.feeder.model.audiobooks.AudiobookPlayer? = null,
     /** The audiobook's cover, for the car and the notification. */
     private val audiobookCover: (String) -> ByteArray? = { null },
+    /** Who pressed play or pause (notification, headset, car…), for the audiobook's history. */
+    private val requestReason: () -> String = { "notification" },
 ) : SimpleBasePlayer(looper) {
     private val onAudiobook: Boolean
         get() = !playlist.state.value.active && audiobook?.state?.value?.active == true
@@ -180,7 +182,7 @@ class CarQueuePlayer(
 
     override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> {
         if (onAudiobook) {
-            audiobook!!.toggle(play = playWhenReady)
+            audiobook!!.toggle(play = playWhenReady, reason = requestReason())
             return Futures.immediateVoidFuture()
         }
         playlist.toggle(play = playWhenReady)
@@ -191,7 +193,7 @@ class CarQueuePlayer(
 
     override fun handleStop(): ListenableFuture<*> {
         if (onAudiobook) {
-            audiobook!!.pause()
+            audiobook!!.pause(requestReason())
             return Futures.immediateVoidFuture()
         }
         playlist.toggle(play = false)

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- History of audiobooks, ebooks and ZIM sites (fork only, English) -->
+<resources>
+    <string name="history">History</string>
+    <string name="history_empty_audio">Plays and pauses show up here.</string>
+    <string name="history_empty_read">Each time it is opened and closed shows up here.</string>
+    <string name="history_today">Today</string>
+    <string name="history_yesterday">Yesterday</string>
+    <string name="history_played">Played</string>
+    <string name="history_paused">Paused</string>
+    <string name="history_opened">Opened</string>
+    <string name="history_closed">Closed</string>
+    <string name="history_go_back">Go back here</string>
+    <string name="history_reason_app">In app</string>
+    <string name="history_reason_notification">Notification</string>
+    <string name="history_reason_media">Media keys</string>
+    <string name="history_reason_headset">Headset button</string>
+    <string name="history_reason_bluetooth">Headphones disconnected</string>
+    <string name="history_reason_car">Android Auto</string>
+    <string name="history_reason_watch">Watch</string>
+    <string name="history_reason_sleep">Sleep timer</string>
+    <string name="history_reason_end">Finished</string>
+    <string name="history_reason_focus">Other audio</string>
+    <string name="history_reason_closed">Player closed</string>
+    <string name="history_reason_background">Left the app</string>
+    <string name="history_reason_system">System</string>
+</resources>

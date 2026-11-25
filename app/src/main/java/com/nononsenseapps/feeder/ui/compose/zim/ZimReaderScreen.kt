@@ -33,6 +33,14 @@ import com.nononsenseapps.feeder.ui.compose.ebooks.HighlightBar
 import com.nononsenseapps.feeder.ui.compose.ebooks.ttsIdOf
 import com.nononsenseapps.feeder.ui.compose.readaloud.HideableCompactTTSPlayer
 import com.nononsenseapps.feeder.ui.compose.utils.ImmutableHolder
+import com.nononsenseapps.feeder.ui.compose.history.rememberOpenTracker
+import com.nononsenseapps.feeder.ui.compose.history.HistorySheet
+import com.nononsenseapps.feeder.model.history.ItemHistory
+import com.nononsenseapps.feeder.model.history.HistoryWhere
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.outlined.History
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -156,6 +164,7 @@ fun ZimReaderScreen(
     var selection by remember { mutableStateOf<ZimSelection?>(null) }
     var editing by remember { mutableStateOf<Highlight?>(null) }
     var highlightsSheet by remember { mutableStateOf(false) }
+    var historySheet by remember { mutableStateOf(false) }
     val allHighlights by highlightStore.highlights.collectAsState()
     val bookPrefix = remember(bookId) { ZimLibrary.highlightKey(bookId, "") }
     val bookHighlights = remember(allHighlights, bookPrefix) { allHighlights.filter { it.itemKey.startsWith(bookPrefix) } }
@@ -165,6 +174,12 @@ fun ZimReaderScreen(
     val script = remember { runCatching { context.assets.open("zim/feeder-zim.js").bufferedReader().use { it.readText() } }.getOrNull() }
 
     fun js(code: String) = webView?.evaluateJavascript(code, null)
+
+    // History: opened once the first page shows, closed with the reader
+    val opening =
+        rememberOpenTracker(ItemHistory.ZIM, bookId) {
+            pagePath?.let { HistoryWhere(p = pageTitle.ifBlank { it.ifBlank { bookTitle } }, x = it) }
+        }
 
     fun q(s: String?) = if (s == null) "null" else JsonPrimitive(s).toString()
 
@@ -529,6 +544,7 @@ fun ZimReaderScreen(
                                             val at = ZimWebContent.parse(url.toUri())?.takeIf { it.first == bookId }
                                             at?.let { (_, path) -> if (path.isNotEmpty()) library.rememberPath(bookId, path) }
                                             pagePath = at?.second
+                                            if (at != null) opening.touch()
                                             if (at != null && script != null) {
                                                 view.evaluateJavascript(script, null)
                                                 library.pendingHighlight?.let {
@@ -558,7 +574,19 @@ fun ZimReaderScreen(
     }
 
     if (highlightsSheet) {
-        ZimHighlightsSheet(highlights = bookHighlights, bookTitle = bookTitle, onOpen = { openHighlight(it) }, onDismiss = { highlightsSheet = false })
+        ZimHighlightsSheet(
+            highlights = bookHighlights,
+            bookTitle = bookTitle,
+            onOpen = { openHighlight(it) },
+            onHistory = {
+                highlightsSheet = false
+                historySheet = true
+            },
+            onDismiss = { highlightsSheet = false },
+        )
+    }
+    if (historySheet) {
+        HistorySheet(ItemHistory.ZIM, bookId, onJump = { open(it.x) }, onDismiss = { historySheet = false })
     }
 }
 
@@ -568,11 +596,25 @@ private fun ZimHighlightsSheet(
     highlights: List<Highlight>,
     bookTitle: String,
     onOpen: (Highlight) -> Unit,
+    onHistory: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         LazyColumn(Modifier.fillMaxWidth()) {
-            item { Text(stringResource(R.string.ebook_highlights), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
+            item {
+                androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        stringResource(R.string.ebook_highlights),
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.weight(1f).padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                    TextButton(onClick = onHistory, modifier = Modifier.padding(end = 8.dp)) {
+                        Icon(Icons.Outlined.History, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.history))
+                    }
+                }
+            }
             if (highlights.isEmpty()) {
                 item { Text(stringResource(R.string.zim_no_highlights), modifier = Modifier.padding(16.dp)) }
             }
