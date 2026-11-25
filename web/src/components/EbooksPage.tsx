@@ -25,6 +25,7 @@ import { DropboxPanel, useDropbox } from './DropboxPanel'
 import { HighlightBar } from './Highlights'
 import { Icon, IconButton } from './Icon'
 import { Player } from './Player'
+import { Shelf, ShelfControls, useShelfPrefs, type ShelfItem } from './Shelf'
 
 /**
  * The Ebooks tab: books from Dropbox (/Ebooks) and this device, read with foliate-js.
@@ -68,7 +69,8 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
   const positions = useLiveQuery(() => db.bookPos.toArray(), []) ?? []
   const [jobs, setJobs] = useState<Job[]>([])
   const [busy, setBusy] = useState(false)
-  const [menu, setMenu] = useState<string | null>(null)
+  const [downloading, setDownloading] = useState<Set<string>>(new Set())
+  const prefs = useShelfPrefs('ebooks', 'cards')
   const fileInput = useRef<HTMLInputElement>(null)
   const dbx = useDropbox()
 
@@ -106,7 +108,6 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
   }
 
   const act = async (b: Book, what: 'device' | 'everywhere') => {
-    setMenu(null)
     if (what === 'device') {
       await removeFromDevice(b.id)
       toast(b.dropboxPath ? `Removed ${b.title} from this device; it stays in Dropbox` : `Deleted ${b.title}`)
@@ -120,6 +121,43 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
       }
     }
   }
+
+  const download = async (b: Book) => {
+    setDownloading((d) => new Set(d).add(b.id))
+    try {
+      await bookFile(b.id)
+      toast(`${b.title} is on this device`)
+    } catch (e) {
+      toast(e instanceof Error ? e.message : String(e))
+    } finally {
+      setDownloading((d) => {
+        const n = new Set(d)
+        n.delete(b.id)
+        return n
+      })
+    }
+  }
+
+  const items: ShelfItem[] = sorted.map((b) => {
+    const f = progressOf.get(b.id)
+    const actions: ShelfItem['actions'] = []
+    if (!b.local) actions.push({ label: 'Download to this device', run: () => void download(b) })
+    if (b.local) actions.push({ label: b.dropboxPath ? 'Remove from this device' : 'Delete', run: () => void act(b, 'device') })
+    if (b.dropboxPath) actions.push({ label: 'Delete from Dropbox', run: () => void act(b, 'everywhere') })
+    return {
+      key: b.id,
+      title: b.title,
+      subtitle: b.author,
+      detail: [f ? `${Math.round(f * 100)}% read` : 'Not started', b.ext.toUpperCase(), formatBytes(b.size)].join(' · '),
+      cover: b.cover,
+      coverIcon: 'book',
+      where: b.local ? (b.dropboxPath ? 'both' : 'device') : 'cloud',
+      size: b.size,
+      busy: downloading.has(b.id) ? 'Downloading…' : undefined,
+      onOpen: () => onOpen(b.id),
+      actions,
+    }
+  })
 
   return (
     <section
@@ -184,51 +222,10 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
             </p>
           </div>
         ) : (
-          <div className="books-grid">
-            {sorted.map((b) => {
-              const f = progressOf.get(b.id)
-              return (
-                <div key={b.id} className="book-card">
-                  <button type="button" className="book-open" onClick={() => onOpen(b.id)} title={`Read ${b.title}`}>
-                    {b.cover ? (
-                      <img className="book-cover" src={b.cover} alt="" />
-                    ) : (
-                      <span className="book-cover book-cover-blank">
-                        <span>{b.title}</span>
-                      </span>
-                    )}
-                    <span className="book-title">{b.title}</span>
-                    <span className="book-meta">
-                      {b.author ? <span className="book-author">{b.author}</span> : null}
-                      <span className="book-where">
-                        {f ? `${Math.round(f * 100)}%` : 'New'}
-                        {b.local ? '' : ' · in Dropbox'}
-                        {!b.dropboxPath ? ' · this device only' : ''}
-                      </span>
-                    </span>
-                  </button>
-                  <span className="book-more">
-                    <IconButton icon="moreVert" label={`More for ${b.title}`} onClick={() => setMenu(menu === b.id ? null : b.id)} />
-                    {menu === b.id ? (
-                      <span className="book-menu" role="menu">
-                        {b.local ? (
-                          <button type="button" role="menuitem" onClick={() => void act(b, 'device')}>
-                            {b.dropboxPath ? 'Remove from this device' : 'Delete'}
-                          </button>
-                        ) : null}
-                        {b.dropboxPath ? (
-                          <button type="button" role="menuitem" onClick={() => void act(b, 'everywhere')}>
-                            Delete from Dropbox
-                          </button>
-                        ) : null}
-                        <span className="book-menu-info muted">{[b.ext.toUpperCase(), formatBytes(b.size)].join(' · ')}</span>
-                      </span>
-                    ) : null}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
+          <>
+            <ShelfControls {...prefs} counts={{ all: sorted.length, device: sorted.filter((b) => b.local).length, cloud: sorted.filter((b) => !b.local).length }} />
+            <Shelf items={items} show={prefs.show} view={prefs.view} shape="book" emptyDevice="No books on this device yet. Books in Dropbox download when you open them." />
+          </>
         )}
       </div>
     </section>
