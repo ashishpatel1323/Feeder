@@ -54,6 +54,18 @@ val networkModule =
                     .HighlightStore(instance())
                     .also { store -> store.onChanged = { nudge.changed(false) } }
             }
+        bind<com.nononsenseapps.feeder.model.ebooks.BookPositions>() with
+            singleton {
+                val nudge = instance<SyncNudge>()
+                com.nononsenseapps.feeder.model.ebooks.BookPositions
+                    .get(instance<android.app.Application>())
+                    .also { store -> store.onChanged = { nudge.changed(true) } }
+            }
+        bind<com.nononsenseapps.feeder.dropbox.DropboxClient>() with
+            singleton {
+                com.nononsenseapps.feeder.dropbox.DropboxClient
+                    .get(instance<android.app.Application>())
+            }
         bind<com.nononsenseapps.feeder.model.playlists.PlaylistPlayer>() with
             singleton {
                 com.nononsenseapps.feeder.model.playlists

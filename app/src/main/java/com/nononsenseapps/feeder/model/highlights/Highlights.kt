@@ -52,6 +52,8 @@ data class Highlight(
     val createdAt: Long,
     /** Last color or note change; sync goes by it (newest wins). */
     val modifiedAt: Long = createdAt,
+    /** Ebook highlights (item "ebook:\n<book id>"): where the text is, as an EPUB CFI. */
+    val cfi: String? = null,
 ) {
     val highlightColor: HighlightColor get() = HighlightColor.of(color)
 }

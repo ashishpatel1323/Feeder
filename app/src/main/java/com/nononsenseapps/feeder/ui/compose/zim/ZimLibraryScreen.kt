@@ -28,6 +28,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Explore
@@ -66,12 +68,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.nononsenseapps.feeder.R
+import com.nononsenseapps.feeder.dropbox.DropboxClient
 import com.nononsenseapps.feeder.model.zim.ZimBook
 import com.nononsenseapps.feeder.model.zim.ZimCatalogEntry
 import com.nononsenseapps.feeder.model.zim.ZimJob
 import com.nononsenseapps.feeder.model.zim.ZimLibrary
 import com.nononsenseapps.feeder.model.zim.ZimNative
+import com.nononsenseapps.feeder.sync2.SyncNudge
+import com.nononsenseapps.feeder.ui.compose.ebooks.DropboxCard
 import com.nononsenseapps.feeder.ui.compose.theme.SensibleTopAppBar
+import org.kodein.di.compose.LocalDI
+import org.kodein.di.instance
 import kotlinx.coroutines.delay
 
 /** The ZIM tab: offline websites (Wikipedia, Stack Exchange, zimit copies…) kept on this phone. */
@@ -86,6 +93,11 @@ fun ZimLibraryScreen(
     val books by library.books.collectAsState()
     val jobs by library.jobs.collectAsState()
     val message by library.messages.collectAsState()
+    val remote by library.remote.collectAsState()
+    val dropbox = remember { DropboxClient.get(context) }
+    val link by dropbox.link.collectAsState()
+    val di = LocalDI.current
+    val nudge: SyncNudge by di.instance()
     var catalogOpen by rememberSaveable { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<ZimBook?>(null) }
     val pick =
@@ -97,6 +109,7 @@ fun ZimLibraryScreen(
         library.refresh()
         onPauseOrDispose { }
     }
+    LaunchedEffect(link) { library.refreshRemote() }
     // Download progress comes from the system download manager: check it while a download runs
     LaunchedEffect(jobs.any { it.downloadId != null }) {
         while (jobs.any { it.downloadId != null }) {
@@ -150,13 +163,46 @@ fun ZimLibraryScreen(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
             }
+            item { DropboxCard(what = stringResource(R.string.zim_books_what), onSignedOut = { nudge.changed(false) }) }
             items(jobs, key = { "job:${it.key}" }) { job -> JobRow(job, onCancel = { library.cancel(job) }) }
             val list = books
-            if (list != null && list.isEmpty() && jobs.isEmpty()) {
+            val onlyInDropbox = remote.orEmpty().filter { f -> list.orEmpty().none { library.sameZim(it, f) } }
+            if (list != null && list.isEmpty() && jobs.isEmpty() && onlyInDropbox.isEmpty()) {
                 item { EmptyLibrary(onGet = { catalogOpen = true }, onAdd = { pick.launch(arrayOf("*/*")) }) }
             }
             items(list.orEmpty(), key = { it.id }) { book ->
-                BookRow(book, onOpen = { onOpenBook(book.id) }, onDelete = { deleting = book })
+                val inDropbox = remote?.any { library.sameZim(book, it) }
+                BookRow(
+                    book,
+                    onOpen = { onOpenBook(book.id) },
+                    onDelete = { deleting = book },
+                    inDropbox = if (link == null) null else inDropbox,
+                    onUpload = { library.uploadToDropbox(book) },
+                )
+            }
+            if (onlyInDropbox.isNotEmpty()) {
+                item {
+                    Text(
+                        stringResource(R.string.in_dropbox),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp),
+                    )
+                }
+                items(onlyInDropbox, key = { "dbx:${it.id}" }) { f ->
+                    ListItem(
+                        headlineContent = { Text(f.name.removeSuffix(".zim").replace('_', ' '), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        supportingContent = { Text(stringResource(R.string.not_on_phone_yet, Formatter.formatShortFileSize(context, f.size))) },
+                        leadingContent = { Icon(Icons.Outlined.Cloud, contentDescription = null, modifier = Modifier.size(40.dp)) },
+                        trailingContent = {
+                            TextButton(onClick = { library.downloadFromDropbox(f) }, enabled = jobs.none { it.label == f.name }) {
+                                Icon(Icons.Outlined.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.size(4.dp))
+                                Text(stringResource(R.string.download))
+                            }
+                        },
+                    )
+                }
             }
             item {
                 val used = list.orEmpty().sumOf { it.size }
@@ -222,6 +268,8 @@ private fun BookRow(
     book: ZimBook,
     onOpen: () -> Unit,
     onDelete: () -> Unit,
+    inDropbox: Boolean?,
+    onUpload: () -> Unit,
 ) {
     val context = LocalContext.current
     val meta =
@@ -241,8 +289,18 @@ private fun BookRow(
         },
         leadingContent = { BookIcon(book.icon) },
         trailingContent = {
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.zim_delete_title, book.title))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                when (inDropbox) {
+                    true -> Icon(Icons.Outlined.Cloud, contentDescription = stringResource(R.string.in_dropbox), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(8.dp))
+                    false ->
+                        IconButton(onClick = onUpload) {
+                            Icon(Icons.Outlined.CloudUpload, contentDescription = stringResource(R.string.upload_to_dropbox))
+                        }
+                    null -> Unit
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.zim_delete_title, book.title))
+                }
             }
         },
         modifier = Modifier.clickable(onClick = onOpen),

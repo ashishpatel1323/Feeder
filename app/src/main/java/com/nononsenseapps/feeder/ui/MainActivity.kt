@@ -228,6 +228,10 @@ class MainActivity : DIAwareComponentActivity() {
                 HighlightsDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
                 LibraryDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
                 ZimDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
+                com.nononsenseapps.feeder.ui.compose.navigation.EbooksDestination
+                    .register(this, navController, navDrawerListState, mainActivityViewModel)
+                com.nononsenseapps.feeder.ui.compose.navigation.EbookReaderDestination
+                    .register(this, navController, navDrawerListState, mainActivityViewModel)
                 ZimReaderDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
             }
         }

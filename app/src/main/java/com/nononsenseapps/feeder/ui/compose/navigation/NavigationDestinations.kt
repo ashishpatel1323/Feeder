@@ -344,6 +344,7 @@ data object HighlightsDestination : NavigationDestination(
         com.nononsenseapps.feeder.ui.compose.highlights.HighlightsScreen(
             onNavigateUp = { navController.popBackStack() },
             onOpenArticle = { id -> ArticleDestination.navigate(navController, itemId = id) },
+            onOpenBook = { book, cfi -> EbookReaderDestination.navigate(navController, book, cfi) },
         )
     }
 }
@@ -429,6 +430,66 @@ data object LibraryDestination : NavigationDestination(
             onDownloads = { DownloadsDestination.navigate(navController) },
             onSettings = { SettingsDestination.navigate(navController) },
             onSync = { SyncScreenDestination.navigate(navController, syncCode = "", secretKey = "") },
+        )
+    }
+}
+
+/** The Ebooks tab: books from Dropbox and the phone, read with foliate-js like on the web. */
+data object EbooksDestination : NavigationDestination(
+    path = "ebooks",
+    navArguments = emptyList(),
+    deepLinks = emptyList(),
+) {
+    @Composable
+    override fun RegisterScreen(
+        navController: NavController,
+        backStackEntry: NavBackStackEntry,
+        navDrawerListState: LazyListState,
+        mainActivityViewModel: MainActivityViewModel,
+    ) {
+        com.nononsenseapps.feeder.ui.compose.ebooks.EbooksScreen(
+            onOpenBook = { EbookReaderDestination.navigate(navController, it, null) },
+        )
+    }
+}
+
+/** Reads one ebook, optionally at a place (an EPUB CFI, from a highlight). */
+data object EbookReaderDestination : NavigationDestination(
+    path = "ebooks/read",
+    navArguments =
+        listOf(
+            QueryParamArgument("book") {
+                type = NavType.StringType
+                defaultValue = ""
+            },
+            QueryParamArgument("at") {
+                type = NavType.StringType
+                defaultValue = ""
+            },
+        ),
+    deepLinks = emptyList(),
+) {
+    fun navigate(
+        navController: NavController,
+        book: String,
+        at: String?,
+    ) {
+        navController.navigate("$path?book=${Uri.encode(book)}&at=${Uri.encode(at.orEmpty())}") {
+            launchSingleTop = true
+        }
+    }
+
+    @Composable
+    override fun RegisterScreen(
+        navController: NavController,
+        backStackEntry: NavBackStackEntry,
+        navDrawerListState: LazyListState,
+        mainActivityViewModel: MainActivityViewModel,
+    ) {
+        com.nononsenseapps.feeder.ui.compose.ebooks.EbookReaderScreen(
+            bookId = backStackEntry.arguments?.getString("book").orEmpty(),
+            at = backStackEntry.arguments?.getString("at")?.ifBlank { null },
+            onNavigateUp = { navController.popBackStack() },
         )
     }
 }

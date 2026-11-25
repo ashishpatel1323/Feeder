@@ -9,7 +9,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:android-reader": "vite build --config vite.android-reader.config.ts"
   },
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",
