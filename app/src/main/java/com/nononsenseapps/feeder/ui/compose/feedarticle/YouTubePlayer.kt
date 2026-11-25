@@ -76,6 +76,7 @@ import com.nononsenseapps.feeder.model.youtube.VideoPositions
 import com.nononsenseapps.feeder.model.youtube.YouTubePlayback
 import com.nononsenseapps.feeder.model.youtube.youtubeWatchUrl
 import com.nononsenseapps.feeder.ui.compose.theme.FeedListItemDateStyle
+import com.nononsenseapps.feeder.model.transcript.Transcripts
 import com.nononsenseapps.feeder.ui.compose.transcript.TranscriptPanel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -130,6 +131,9 @@ fun YouTubeVideoBlock(
         openInYouTubeApp(context, youtubeWatchUrl(videoId, at))
     }
     val positionLabel = pos?.let { VideoPositions.positionLabel(it, stringResource(R.string.video_watched)) }
+    // Found while the video loads, so it is ready when Transcript is tapped
+    val transcripts: Transcripts by di.instance()
+    LaunchedEffect(itemId) { if (itemId > 0) transcripts.load(itemId) }
     var transcriptHere by rememberSaveable(playerKey) { mutableStateOf(false) }
     val transcriptShown = itemId > 0 && (showTranscript ?: transcriptHere)
     val toggleTranscript: (() -> Unit)? =

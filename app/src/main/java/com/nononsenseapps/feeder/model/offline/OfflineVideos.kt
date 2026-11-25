@@ -9,7 +9,10 @@ import com.nononsenseapps.feeder.model.youtube.VideoDetails
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -263,11 +266,16 @@ class OfflineVideos(
                 initialized = true
             }
             if (!updated) {
-                // YouTube changes often; the yt-dlp inside the app ages quickly
-                try {
-                    YoutubeDL.getInstance().updateYoutubeDL(application)
-                } catch (e: Exception) {
-                    Log.w(LOG_TAG, "Could not update yt-dlp: ${e.message}")
+                // YouTube changes often; the yt-dlp inside the app ages quickly. Checked once a
+                // day, not on every app start: the check delays the first video by seconds
+                val now = System.currentTimeMillis()
+                if (now - prefs.getLong(PREF_YTDLP_CHECKED, 0L) >= UPDATE_CHECK_EVERY_MS) {
+                    try {
+                        YoutubeDL.getInstance().updateYoutubeDL(application)
+                        prefs.edit().putLong(PREF_YTDLP_CHECKED, now).apply()
+                    } catch (e: Exception) {
+                        Log.w(LOG_TAG, "Could not update yt-dlp: ${e.message}")
+                    }
                 }
                 updated = true
             }
@@ -415,28 +423,40 @@ class OfflineVideos(
 
     private val detailsCache = ConcurrentHashMap<String, Pair<Long, VideoDetails>>()
 
+    /** Asked for at once by the player and the transcript: yt-dlp runs once for both. */
+    private val detailsInFlight = ConcurrentHashMap<String, Deferred<VideoDetails>>()
+
     /**
      * Everything the app's player needs about a video, from yt-dlp: its own streams (every
      * quality and audio track), subtitles, chapters and info. Playing these streams instead of
      * YouTube's embed means no ads, like NewPipe-based apps (Flow, LibreTube). Stream addresses
      * expire after some hours, so details are kept for a while only.
      */
-    suspend fun videoDetails(link: String): VideoDetails =
-        withContext(Dispatchers.IO) {
-            detailsCache[link]?.let { (at, details) ->
-                if (System.currentTimeMillis() - at < STREAM_URLS_FOR_MS) return@withContext details
-            }
-            ensureReady()
-            val response =
-                YoutubeDL.getInstance().execute(
-                    YoutubeDLRequest(link)
-                        .addOption("--no-playlist")
-                        .addOption("-J"),
-                )
-            val details = VideoDetails.parse(response.out)
-            check(details.hasStreams) { "yt-dlp found no stream" }
-            details.also { detailsCache[link] = System.currentTimeMillis() to it }
+    suspend fun videoDetails(link: String): VideoDetails {
+        detailsCache[link]?.let { (at, details) ->
+            if (System.currentTimeMillis() - at < STREAM_URLS_FOR_MS) return details
         }
+        val running =
+            detailsInFlight.computeIfAbsent(link) {
+                applicationCoroutineScope.async(Dispatchers.IO, start = CoroutineStart.LAZY) {
+                    try {
+                        ensureReady()
+                        val response =
+                            YoutubeDL.getInstance().execute(
+                                YoutubeDLRequest(link)
+                                    .addOption("--no-playlist")
+                                    .addOption("-J"),
+                            )
+                        val details = VideoDetails.parse(response.out)
+                        check(details.hasStreams) { "yt-dlp found no stream" }
+                        details.also { detailsCache[link] = System.currentTimeMillis() to it }
+                    } finally {
+                        detailsInFlight.remove(link)
+                    }
+                }
+            }
+        return running.await()
+    }
 
     /** Drops cached details whose streams stopped working. */
     fun forgetDetails(link: String) {
@@ -494,6 +514,8 @@ class OfflineVideos(
     companion object {
         private const val LOG_TAG = "FEEDER_OFFLINE_VIDEO"
         private const val PREF_PENDING = "offline_videos_pending"
+        private const val PREF_YTDLP_CHECKED = "ytdlp_update_checked_at"
+        private const val UPDATE_CHECK_EVERY_MS = 24 * 60 * 60 * 1000L
 
         /** Marks a podcast episode's link among the video links of unfinished downloads. */
         private const val AUDIO_PREFIX = "audio:"

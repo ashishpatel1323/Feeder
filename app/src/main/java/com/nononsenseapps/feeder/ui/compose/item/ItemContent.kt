@@ -1,5 +1,9 @@
 package com.nononsenseapps.feeder.ui.compose.item
 
+import androidx.compose.runtime.LaunchedEffect
+import com.nononsenseapps.feeder.model.transcript.Transcripts
+import org.kodein.di.compose.LocalDI
+import org.kodein.di.instance
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -219,6 +223,9 @@ fun PodcastMediaBlock(
     showTranscript: Boolean = false,
     player: ItemPlayer = rememberItemPlayer(),
 ) {
+    // Found while the episode page is open, so it is ready when Transcript is tapped
+    val transcripts: Transcripts by LocalDI.current.instance()
+    LaunchedEffect(itemId) { transcripts.load(itemId) }
     val loaded = player.isLoaded(itemId)
     val state = player.playerState
     val playing = player.isPlaying(itemId)
