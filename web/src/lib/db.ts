@@ -163,6 +163,59 @@ export interface BookPos {
   dn?: string
 }
 
+/** One audio file of an audiobook (audiobooks/library.ts). */
+export interface AudioTrack {
+  /** Where it is in Dropbox */
+  path: string
+  /** File name, for the chapter name when the file has no title */
+  name: string
+  /** Dropbox content hash */
+  hash: string
+  size: number
+  /** Length in seconds, null until measured */
+  duration: number | null
+  /** Title from the file's tags */
+  title: string | null
+  /** Chapter marks inside the file (m4b chapters, ID3 CHAP), in ms */
+  marks: { startMs: number; title: string }[]
+  /** Whether the tags have been read (they are read once, on the first play) */
+  scanned: boolean
+}
+
+/** An audiobook in the Audiobooks tab: one file, or a folder of files played in name order. */
+export interface Audiobook {
+  /** One file: its Dropbox content hash. A folder: a hash of its files' hashes, in play order. */
+  id: string
+  title: string
+  author: string
+  cover: string | null
+  /** The file, or the folder, in Dropbox */
+  dropboxPath: string
+  folder: boolean
+  tracks: AudioTrack[]
+  size: number
+  /** Whether title, author and cover came from the files' tags (not just the name) */
+  described: boolean
+  addedAt: number
+  lastOpenedAt: number
+}
+
+/** Where an audiobook was left (synced as kind "audiopos"). */
+export interface AudioPos {
+  id: string
+  /** Which file (index in play order) and its content hash, in case the folder was re-sorted */
+  i: number
+  h: string
+  /** Milliseconds into that file */
+  ms: number
+  /** 0–1 through the book (0 while the length is unknown) */
+  f: number
+  ts: number
+  /** Device that saved it (device.ts): id and name */
+  dv?: string
+  dn?: string
+}
+
 export interface KeyValue {
   key: string
   value: unknown
@@ -182,6 +235,8 @@ class FeederDb extends Dexie {
   videoPos!: EntityTable<VideoPos, 'id'>
   books!: EntityTable<Book, 'id'>
   bookPos!: EntityTable<BookPos, 'id'>
+  audiobooks!: EntityTable<Audiobook, 'id'>
+  audioPos!: EntityTable<AudioPos, 'id'>
 
   constructor() {
     super('feeder-web')
@@ -217,6 +272,8 @@ class FeederDb extends Dexie {
     this.version(5).stores({ videoPos: '&id' })
     // The Ebooks tab: books and where each was left
     this.version(6).stores({ books: '&id, lastOpenedAt', bookPos: '&id' })
+    // The Audiobooks tab: books and where each was left
+    this.version(7).stores({ audiobooks: '&id, lastOpenedAt', audioPos: '&id' })
   }
 }
 

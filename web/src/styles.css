@@ -8145,3 +8145,316 @@ mark.sr-mark {
     color: #c4dbfb;
   }
 }
+
+/* ---------- Audiobooks (AudiobooksPage.tsx) ---------- */
+@media (max-width: 600px) {
+  /* Latest | By feed | Discover: icons only, except the one chosen */
+  .feeds-switch button {
+    padding: 0 10px;
+  }
+  .feeds-switch button:not(.on) .fs-label {
+    display: none;
+  }
+}
+.ab-grid {
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+}
+.ab-cover,
+.ab-art {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+.ab-cover-blank {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  background: linear-gradient(160deg, var(--accent-soft), var(--surface-3));
+  color: var(--text-2);
+  font-weight: 600;
+  text-align: center;
+  overflow: hidden;
+}
+.ab-cover-blank span {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ab-progress {
+  position: absolute;
+  left: var(--sp-2);
+  right: var(--sp-2);
+  bottom: var(--sp-2);
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  overflow: hidden;
+}
+.ab-progress i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.ab-card-play {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+}
+.ab-card-play > button {
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  border-radius: 50%;
+}
+.ab-player {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+}
+.ab-top {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.ab-top-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.ab-body {
+  display: grid;
+  grid-template-columns: minmax(280px, 420px) minmax(0, 1fr);
+  gap: var(--sp-6);
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: var(--sp-5) var(--sp-4) var(--sp-6);
+}
+.ab-now {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.ab-art {
+  width: min(100%, 320px);
+  border-radius: var(--r-xl);
+}
+.ab-title {
+  margin: var(--sp-4) 0 0;
+  font-size: var(--fs-xl);
+  font-weight: 700;
+}
+.ab-author {
+  margin: var(--sp-1) 0 0;
+  color: var(--text-2);
+}
+.ab-chapter {
+  margin: var(--sp-3) 0 0;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--text);
+}
+.ab-seek {
+  width: 100%;
+  margin-top: var(--sp-3);
+}
+.ab-seek input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.ab-times {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+.ab-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
+}
+.ab-play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  border: 0;
+  border-radius: var(--r-xl);
+  background: var(--accent);
+  color: var(--accent-ink);
+  cursor: pointer;
+  transition: border-radius 0.2s;
+}
+.ab-play.playing {
+  border-radius: var(--r-lg);
+}
+.ab-play.small {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+}
+.ab-extras {
+  display: flex;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+}
+.ab-menu-wrap {
+  position: relative;
+}
+.ab-menu {
+  top: calc(100% + 4px);
+  left: 0;
+  right: auto;
+  min-width: 170px;
+  max-height: 320px;
+  overflow: auto;
+}
+.ab-menu button {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.ab-menu-pad {
+  display: inline-block;
+  width: 16px;
+}
+.ab-book-time {
+  margin: var(--sp-3) 0 0;
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+.ab-error {
+  margin: var(--sp-2) 0 0;
+  color: var(--danger);
+  font-size: var(--fs-sm);
+}
+.ab-chapters {
+  min-width: 0;
+}
+.ab-chapters .lib-section {
+  margin-top: 0;
+}
+.ab-chapters ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ab-chapters li button {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: 48px;
+  padding: var(--sp-2) var(--sp-3);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ab-chapters li button:hover {
+  background: var(--surface-2);
+}
+.ab-chapters li.current button {
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+.ab-ch-n {
+  width: 2.2em;
+  flex: none;
+  color: var(--text-3);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+.ab-chapters li.current .ab-ch-n {
+  color: var(--text-2);
+}
+.ab-ch-title {
+  flex: 1;
+  min-width: 0;
+}
+.ab-ch-len {
+  flex: none;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+.ab-bar .ab-bar-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  border-radius: 0;
+}
+.ab-bar .qp-info {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+.ab-bar-controls,
+.ab-bar-wide {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: none;
+}
+@media (max-width: 860px) {
+  .ab-body {
+    grid-template-columns: 1fr;
+    gap: var(--sp-5);
+  }
+}
+@media (max-width: 720px) {
+  .ab-bar .qp-bar {
+    flex-wrap: nowrap;
+    height: 64px;
+  }
+  .ab-bar-wide {
+    display: none;
+  }
+}
+@media (max-width: 1100px) {
+  /* Six tabs share the width evenly, even with a long label (Audiobooks) */
+  .tabbar-item {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0 2px;
+  }
+  .tabbar-label {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+@media (max-width: 420px) {
+  .tabbar-pill {
+    width: 48px;
+  }
+  .tabbar-label {
+    font-size: var(--fs-2xs);
+  }
+}
