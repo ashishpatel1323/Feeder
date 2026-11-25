@@ -34,7 +34,8 @@ import { queryTerms, type SearchHit, type SearchScope } from './lib/search'
 import { RESUME_BACK, saveVideoPos } from './lib/videopos'
 import { kindOf } from './lib/playlists'
 import { ZimPage, type ZimJump } from './components/ZimPage'
-import { rememberPath as rememberZimPath } from './lib/zim/library'
+import { listBooks as listZimBooks, rememberPath as rememberZimPath } from './lib/zim/library'
+import { parseZimItemId } from './lib/zim/marks'
 import { EbooksPage } from './components/EbooksPage'
 import { bookIdOfItem } from './lib/ebooks/library'
 import { DROPBOX_TS_KEY } from './lib/dropbox'
@@ -860,6 +861,17 @@ export default function App() {
 
   /** From the Highlights page: open the article and scroll to the highlight. */
   const openHighlight = async (h: Highlight) => {
+    const zimAt = parseZimItemId(h.itemId)
+    if (zimAt) {
+      if (!(await listZimBooks().then((r) => r.books.some((b) => b.id === zimAt.book), () => false))) {
+        toast('That ZIM book is not on this device')
+        return
+      }
+      rememberZimPath(zimAt.book, zimAt.path)
+      setZimJump({ path: zimAt.path, n: Date.now(), highlight: h.id })
+      showZim(zimAt.book)
+      return
+    }
     const bookId = bookIdOfItem(h.itemId)
     if (bookId) {
       if (!(await db.books.get(bookId))) {
@@ -1198,7 +1210,7 @@ export default function App() {
       ) : bookPage !== null ? (
         <EbooksPage book={bookPage.id || null} at={bookPage.at} settings={settings} onOpen={(id, at) => showBooks(id ?? '', at)} onMenu={() => setDrawer(true)} toast={toast} />
       ) : zimPage !== null ? (
-        <ZimPage book={zimPage || null} jump={zimJump} onOpen={(id) => showZim(id ?? '')} onMenu={() => setDrawer(true)} toast={toast} />
+        <ZimPage book={zimPage || null} jump={zimJump} settings={settings} onOpen={(id) => showZim(id ?? '')} onMenu={() => setDrawer(true)} toast={toast} />
       ) : libraryPage ? (
         <LibraryPage
           savedCount={savedCount}

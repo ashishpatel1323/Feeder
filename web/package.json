@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "build:android-reader": "vite build --config vite.android-reader.config.ts"
+    "build:android-reader": "vite build --config vite.android-reader.config.ts",
+    "build:android-zim": "vite build --config vite.android-zim.config.ts"
   },
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",

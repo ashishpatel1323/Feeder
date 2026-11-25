@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.model.ebooks.EbookLibrary
+import com.nononsenseapps.feeder.model.zim.ZimLibrary
 import com.nononsenseapps.feeder.db.room.Sync2Dao
 import com.nononsenseapps.feeder.model.highlights.Highlight
 import com.nononsenseapps.feeder.model.highlights.HighlightColor
@@ -89,6 +90,7 @@ fun HighlightsScreen(
     onOpenArticle: (Long) -> Unit,
     modifier: Modifier = Modifier,
     onOpenBook: (bookId: String, cfi: String?) -> Unit = { _, _ -> },
+    onOpenZim: (bookId: String) -> Unit = {},
 ) {
     val di = LocalDI.current
     val store: HighlightStore by di.instance()
@@ -117,6 +119,16 @@ fun HighlightsScreen(
     val groups = remember(shown) { shown.groupBy { it.itemKey }.values.toList() }
 
     fun open(h: Highlight) {
+        ZimLibrary.pageOfHighlight(h.itemKey)?.let { (bookId, path) ->
+            val zims = ZimLibrary.get(context)
+            if (zims.file(bookId).exists()) {
+                zims.openAtHighlight(bookId, path, h.id)
+                onOpenZim(bookId)
+            } else {
+                toast(context, R.string.zim_highlight_book_missing)
+            }
+            return
+        }
         EbookLibrary.bookIdOfItem(h.itemKey)?.let { bookId ->
             if (EbookLibrary.get(context).get(bookId) != null) onOpenBook(bookId, h.cfi) else toast(context, R.string.ebook_not_found)
             return

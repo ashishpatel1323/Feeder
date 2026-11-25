@@ -7532,6 +7532,12 @@ mark.sr-mark {
 .zim-hits .muted {
   padding: var(--sp-2) var(--sp-3);
 }
+.zim-body {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
 .zim-frame {
   flex: 1;
   width: 100%;

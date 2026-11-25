@@ -476,6 +476,20 @@ class ZimLibrary private constructor(
 
     fun lastPath(id: String): String? = prefs.getString("last:$id", null)
 
+    /** A highlight to scroll to when its book next shows its page (from the Highlights screen or search). */
+    @Volatile
+    var pendingHighlight: String? = null
+
+    /** Opens a highlight's page the next time its book opens, scrolled to the highlight. */
+    fun openAtHighlight(
+        bookId: String,
+        path: String,
+        highlightId: String,
+    ) {
+        rememberPath(bookId, path)
+        pendingHighlight = highlightId
+    }
+
     fun rememberPath(
         id: String,
         path: String,
@@ -557,6 +571,22 @@ class ZimLibrary private constructor(
         private const val KEY_DOWNLOADS = "downloads"
         private const val ZIM_MAGIC = 72173914
         private const val OPDS = "https://opds.library.kiwix.org"
+
+        /** ZIM page highlights are article highlights under item "zim:\n<book id>\n<path>" (book id = file name without .zim), as on the web app. */
+        const val HIGHLIGHT_PREFIX = "zim:\n"
+
+        fun highlightKey(
+            bookId: String,
+            path: String,
+        ) = "$HIGHLIGHT_PREFIX$bookId\n$path"
+
+        /** The book and page of a highlight's item, or null when it isn't a ZIM page. */
+        fun pageOfHighlight(itemKey: String): Pair<String, String>? {
+            if (!itemKey.startsWith(HIGHLIGHT_PREFIX)) return null
+            val rest = itemKey.removePrefix(HIGHLIGHT_PREFIX)
+            val nl = rest.indexOf('\n')
+            return if (nl < 0) rest to "" else rest.substring(0, nl) to rest.substring(nl + 1)
+        }
 
         @Volatile
         private var instance: ZimLibrary? = null

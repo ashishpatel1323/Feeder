@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { db, type Highlight, type HighlightColor } from '../lib/db'
+import { deleteHighlight, quoteText, saveHighlight, updateHighlight } from '../lib/highlights'
+import { readAloud, type ReadAloudState } from '../lib/readaloud'
+import type { Settings } from '../lib/settings'
+import { firstVisibleText, highlightAt, injectMarkStyles, keepInView, paintHighlights, parseZimItemId, readableRoot, scrollToRange, selectionAnchor, zimItemId } from '../lib/zim/marks'
 import { formatBytes } from '../lib/offline'
 import { onDropboxChange, type DropboxFile } from '../lib/dropbox'
 import {
@@ -26,7 +32,9 @@ import {
 } from '../lib/zim/library'
 import { DropboxPanel, useDropbox } from './DropboxPanel'
 import { Shelf, ShelfControls, useShelfPrefs, type ShelfItem } from './Shelf'
+import { HighlightBar } from './Highlights'
 import { Icon, IconButton } from './Icon'
+import { Player } from './Player'
 
 /**
  * The ZIM tab: offline websites (Wikipedia, Stack Exchange, docs made with zimit…) kept on this
@@ -36,9 +44,11 @@ import { Icon, IconButton } from './Icon'
 export interface ZimJump {
   path: string
   n: number
+  /** A highlight on that page to scroll to. */
+  highlight?: string
 }
 
-export function ZimPage(p: { book: string | null; jump?: ZimJump | null; onOpen: (id: string | null) => void; onMenu: () => void; toast: (m: string) => void }) {
+export function ZimPage(p: { book: string | null; jump?: ZimJump | null; settings: Settings; onOpen: (id: string | null) => void; onMenu: () => void; toast: (m: string) => void }) {
   if (!zimSupported())
     return (
       <section className="manage-pane zim-page" aria-label="ZIM library">
@@ -50,7 +60,7 @@ export function ZimPage(p: { book: string | null; jump?: ZimJump | null; onOpen:
         </div>
       </section>
     )
-  return p.book ? <ZimReader key={p.book} id={p.book} jump={p.jump ?? null} onBack={() => p.onOpen(null)} /> : <ZimLibrary onOpen={p.onOpen} onMenu={p.onMenu} toast={p.toast} />
+  return p.book ? <ZimReader key={p.book} id={p.book} jump={p.jump ?? null} settings={p.settings} onBack={() => p.onOpen(null)} toast={p.toast} /> : <ZimLibrary onOpen={p.onOpen} onMenu={p.onMenu} toast={p.toast} />
 }
 
 interface Job {
@@ -393,7 +403,7 @@ function Catalog({ onDownload }: { onDownload: (e: CatalogEntry) => void }) {
   )
 }
 
-function ZimReader({ id, jump, onBack }: { id: string; jump: ZimJump | null; onBack: () => void }) {
+function ZimReader({ id, jump, settings, onBack, toast }: { id: string; jump: ZimJump | null; settings: Settings; onBack: () => void; toast: (m: string) => void }) {
   const frame = useRef<HTMLIFrameElement>(null)
   const [ready, setReady] = useState(false)
   const [title, setTitle] = useState(id)
@@ -403,6 +413,33 @@ function ZimReader({ id, jump, onBack }: { id: string; jump: ZimJump | null; onB
   const [hits, setHits] = useState<{ title: string; path: string }[]>([])
   const [active, setActive] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  /** The page shown, as its path in the book (null until a page of the book loads). */
+  const [path, setPath] = useState<string | null>(null)
+  /** Bumped on each page load, so marks are painted on the new page. */
+  const [loads, setLoads] = useState(0)
+  const [pending, setPending] = useState<{ start: number; text: string; prefix: string } | null>(null)
+  const [editing, setEditing] = useState<Highlight | null>(null)
+  const [panel, setPanel] = useState(false)
+  const [ra, setRa] = useState<ReadAloudState>(readAloud.state)
+  useEffect(() => readAloud.subscribe(setRa), [])
+
+  const itemId = path === null ? null : zimItemId(id, path)
+  const bookHighlights = useLiveQuery(() => db.highlights.where('itemId').startsWith(zimItemId(id, '')).toArray(), [id]) ?? []
+  const highlights = useMemo(() => bookHighlights.filter((h) => h.itemId === itemId), [bookHighlights, itemId])
+  const highlightsRef = useRef<Highlight[]>([])
+  highlightsRef.current = highlights
+  const painted = useRef(new Map<string, Range>())
+  /** A highlight to scroll to once its page shows (from the Highlights page, search or the panel). */
+  const scrollTo = useRef<string | null>(jump?.highlight ?? null)
+  const listening = !!itemId && ra.itemId === itemId && (ra.status !== 'idle' || ra.muted)
+
+  const doc = () => {
+    try {
+      return frame.current?.contentDocument ?? null
+    } catch {
+      return null
+    }
+  }
 
   useEffect(() => {
     let live = true
@@ -416,6 +453,8 @@ function ZimReader({ id, jump, onBack }: { id: string; jump: ZimJump | null; onB
     navigator.serviceWorker?.ready.then(() => live && setReady(true))
     return () => {
       live = false
+      if (readAloud.state.itemId?.startsWith(zimItemId(id, ''))) readAloud.stop()
+      readAloud.revealHook = null
     }
   }, [id])
 
@@ -454,30 +493,122 @@ function ZimReader({ id, jump, onBack }: { id: string; jump: ZimJump | null; onB
   useEffect(() => {
     if (!jump || jump.n === seenJump.current) return
     seenJump.current = jump.n
-    go(jump.path)
+    scrollTo.current = jump.highlight ?? null
+    if (jump.path === path && jump.highlight) {
+      const r = painted.current.get(jump.highlight)
+      const d = doc()
+      if (r && d) scrollToRange(d, r)
+      scrollTo.current = null
+    } else go(jump.path)
   }, [jump])
+
+  // Highlights painted on the page, again when they change (here, synced or on the Highlights page)
+  useEffect(() => {
+    const d = doc()
+    if (!d || path === null) return
+    painted.current = paintHighlights(d, highlights)
+    const want = scrollTo.current
+    if (want && painted.current.has(want)) {
+      scrollTo.current = null
+      scrollToRange(d, painted.current.get(want)!)
+    }
+  }, [highlights, loads, path])
 
   const onLoad = () => {
     const w = frame.current?.contentWindow
     if (!w) return
+    setPending(null)
+    setEditing(null)
+    if (readAloud.state.itemId?.startsWith(zimItemId(id, ''))) readAloud.stop()
     try {
       const at = parseZimUrl(w.location.pathname)
       if (at?.id === id && at.path) rememberPath(id, at.path)
+      setPath(at?.id === id ? at.path : null)
+      setLoads((n) => n + 1)
       setPageTitle(w.document.title)
+      const d = w.document
+      injectMarkStyles(d)
       // Links out of the book open in a new tab
-      w.document.addEventListener('click', (e) => {
+      d.addEventListener('click', (e) => {
         const a = (e.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null
-        if (!a) return
+        if (!a) {
+          // A tap on a highlight opens it
+          if (d.getSelection()?.isCollapsed === false) return
+          const hit = highlightAt(d, e.clientX, e.clientY, painted.current)
+          const h = hit ? highlightsRef.current.find((x) => x.id === hit) : null
+          if (h) {
+            setPending(null)
+            setEditing(h)
+          }
+          return
+        }
         const url = new URL(a.href, w.location.href)
         if (url.origin !== location.origin || !url.pathname.startsWith('/zim/')) {
           e.preventDefault()
           window.open(url.href, '_blank', 'noopener')
         }
       })
+      // Selecting text offers to highlight it
+      const checkSelection = () =>
+        window.setTimeout(() => {
+          const a = selectionAnchor(d)
+          if (!a) return
+          setEditing(null)
+          setPending(a)
+        }, 10)
+      d.addEventListener('pointerup', checkSelection)
+      d.addEventListener('keyup', (k) => k.shiftKey && checkSelection())
+      // Scrolling the page yourself stops read aloud from scrolling it
+      const userScroll = () => readAloud.userScrolled()
+      d.addEventListener('wheel', userScroll, { passive: true })
+      d.addEventListener('touchmove', userScroll, { passive: true })
     } catch {
       /* a page outside the book */
+      setPath(null)
     }
   }
+
+  /** Reads the page aloud from the top of what's on screen (or the start). */
+  const startListening = () => {
+    const d = doc()
+    const root = d && readableRoot(d)
+    if (!d || !root || !itemId) return
+    readAloud.title = pageTitle || title
+    readAloud.artist = title
+    readAloud.attach(root, itemId, d.documentElement.lang || undefined)
+    readAloud.revealHook = (r) => {
+      const dd = r.startContainer.ownerDocument
+      if (dd) keepInView(dd, r)
+      return true
+    }
+    readAloud.onFinished = null
+    const top = firstVisibleText(d)
+    readAloud.play(top ? Math.max(0, readAloud.offsetOf(top.node, top.offset)) : 0)
+  }
+
+  const saveNew = async (color: HighlightColor, note: string) => {
+    if (!pending || !itemId) return
+    await saveHighlight({
+      id: crypto.randomUUID(),
+      itemId,
+      itemTitle: pageTitle || title,
+      itemLink: null,
+      feedTitle: title,
+      imageUrl: null,
+      text: pending.text,
+      start: pending.start,
+      prefix: pending.prefix,
+      color,
+      note: note.trim(),
+      createdAt: Date.now(),
+    })
+    doc()?.getSelection()?.removeAllRanges()
+    setPending(null)
+    toast('Highlighted')
+  }
+  const quote = (text: string, note?: string) => quoteText({ text, itemTitle: pageTitle || title, feedTitle: pageTitle && pageTitle !== title ? title : '', itemLink: null }, note)
+
+  const sortedBookHighlights = useMemo(() => [...bookHighlights].sort((a, b) => a.itemTitle.localeCompare(b.itemTitle) || a.start - b.start), [bookHighlights])
 
   return (
     <section className="zim-reader" aria-label={title}>
@@ -521,8 +652,91 @@ function ZimReader({ id, jump, onBack }: { id: string; jump: ZimJump | null; onB
           ) : null}
         </div>
         <IconButton icon="home" label="Main page" onClick={() => go('')} />
+        <IconButton icon="highlight" label={`Highlights in this book (${bookHighlights.length})`} onClick={() => setPanel((x) => !x)} />
+        <IconButton icon="headphones" label="Listen: read aloud" text="Listen" onClick={() => (listening ? readAloud.toggle() : startListening())} disabled={!itemId} className="bar-primary" />
       </header>
-      {error ? <p className="muted zim-error">{error}</p> : ready ? <iframe ref={frame} className="zim-frame" src={src} title={title} onLoad={onLoad} /> : null}
+      <div className="zim-body">
+        {error ? <p className="muted zim-error">{error}</p> : ready ? <iframe ref={frame} className="zim-frame" src={src} title={title} onLoad={onLoad} /> : null}
+        {panel ? (
+          <aside className="book-panel" aria-label="Highlights">
+            <div className="book-panel-head">
+              <h2>Highlights</h2>
+              <IconButton icon="close" label="Close" onClick={() => setPanel(false)} />
+            </div>
+            {sortedBookHighlights.length ? (
+              <div className="book-hls">
+                {sortedBookHighlights.map((h) => (
+                  <button
+                    key={h.id}
+                    type="button"
+                    className="book-hl"
+                    onClick={() => {
+                      const at = parseZimItemId(h.itemId)
+                      if (at) {
+                        scrollTo.current = h.id
+                        if (at.path === path) {
+                          const r = painted.current.get(h.id)
+                          const d = doc()
+                          if (r && d) scrollToRange(d, r)
+                          scrollTo.current = null
+                        } else go(at.path)
+                      }
+                      if (window.innerWidth < 900) setPanel(false)
+                    }}
+                  >
+                    <span className={`book-hl-swatch hl-${h.color}`} />
+                    <span className="book-hl-text">
+                      {h.itemTitle && h.itemTitle !== title ? <span className="book-hl-note">{h.itemTitle}</span> : null}
+                      {h.text}
+                      {h.note ? <span className="book-hl-note">{h.note}</span> : null}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="muted">Select text on a page to highlight it.</p>
+            )}
+          </aside>
+        ) : null}
+      </div>
+
+      {pending || editing ? (
+        <HighlightBar
+          text={pending?.text ?? editing!.text}
+          existing={editing}
+          onSave={async (color, note) => {
+            if (editing) {
+              await updateHighlight(editing.id, { color, note: note.trim() })
+              setEditing({ ...editing, color, note: note.trim() })
+            } else await saveNew(color, note)
+          }}
+          onShare={async (color, note) => {
+            const text = quote(pending?.text ?? editing!.text, note)
+            if (!editing) await saveNew(color, note)
+            if (navigator.share) await navigator.share({ text }).catch(() => undefined)
+            else {
+              await navigator.clipboard.writeText(text)
+              toast('Quote copied')
+            }
+          }}
+          onCopyText={async (note) => {
+            await navigator.clipboard.writeText(quote(pending?.text ?? editing!.text, note))
+            toast('Copied')
+          }}
+          onDelete={async () => {
+            if (!editing) return
+            await deleteHighlight(editing.id)
+            setEditing(null)
+            toast('Highlight deleted')
+          }}
+          onClose={() => {
+            setPending(null)
+            setEditing(null)
+          }}
+        />
+      ) : null}
+
+      {listening ? <Player state={ra} settings={settings} currentTitle={pageTitle || title} hasPrev={false} hasNext={false} nextTitle={null} onPrev={() => undefined} onNext={() => undefined} /> : null}
     </section>
   )
 }
