@@ -1,6 +1,7 @@
 package com.nononsenseapps.feeder.model.search
 
 import com.nononsenseapps.feeder.db.room.PlaylistCandidate
+import com.nononsenseapps.feeder.model.ebooks.Book
 import com.nononsenseapps.feeder.model.highlights.Highlight
 import com.nononsenseapps.feeder.model.playlists.ItemKind
 import com.nononsenseapps.feeder.model.playlists.Playlist
@@ -10,10 +11,13 @@ import java.text.Normalizer
 
 /**
  * Global search: one query over articles, episodes and videos (title, snippet, author, feed name),
- * saved podcast transcripts, highlights and their notes, feeds, folders and playlists. The same
- * matching and ranking as the web app's lib/search.ts, so both find the same things first.
+ * saved podcast transcripts, highlights and their notes (ebook highlights too), feeds, folders,
+ * playlists, ebook titles and authors, and articles in ZIM files (their titles and, when the file
+ * has an index, their text). The same matching and ranking as the web app's lib/search.ts, so both
+ * find the same things first. ZIM results are looked up in the files, so they're added a moment
+ * later ([addZimHits]).
  */
-enum class SearchScope { ALL, ARTICLE, PODCAST, YOUTUBE, HIGHLIGHT, LIBRARY }
+enum class SearchScope { ALL, ARTICLE, PODCAST, YOUTUBE, HIGHLIGHT, LIBRARY, BOOK, ZIM }
 
 /** Text with the matched words as [start, end) ranges. */
 data class Marked(
@@ -80,12 +84,45 @@ data class PlaylistHit(
     override val key: String get() = "playlist:${playlist.id}"
 }
 
+/** An ebook in the Ebooks tab, by its title or author. */
+data class BookHit(
+    val book: Book,
+    val title: Marked,
+    val author: Marked,
+    override val score: Int,
+) : SearchHit {
+    override val key: String get() = "book:${book.id}"
+}
+
+/** An article in a ZIM file on this phone: by its title, or by its text when [snippet] is set. */
+data class ZimHit(
+    val bookId: String,
+    val bookTitle: String,
+    val path: String,
+    val title: Marked,
+    val snippet: Marked?,
+    override val score: Int,
+) : SearchHit {
+    override val key: String get() = "zim:$bookId\n$path"
+}
+
+/** A ZIM match as libzim gives it: a title suggestion, or a full-text hit with its snippet. */
+data class ZimTitle(
+    val bookId: String,
+    val bookTitle: String,
+    val path: String,
+    val title: String,
+    val snippet: String? = null,
+)
+
 data class SearchResults(
     val query: String = "",
     val terms: List<String> = emptyList(),
     val items: List<ItemHit> = emptyList(),
     val highlights: List<HighlightHit> = emptyList(),
     val library: List<SearchHit> = emptyList(),
+    val books: List<BookHit> = emptyList(),
+    val zim: List<ZimHit> = emptyList(),
     val counts: Map<SearchScope, Int> = emptyMap(),
 ) {
     fun count(scope: SearchScope): Int = counts[scope] ?: 0
@@ -93,9 +130,11 @@ data class SearchResults(
     /** The results one scope shows, best first. */
     fun inScope(scope: SearchScope): List<SearchHit> =
         when (scope) {
-            SearchScope.ALL -> (items + highlights + library).sortedByDescending { it.score }
+            SearchScope.ALL -> (items + highlights + library + books + zim).sortedByDescending { it.score }
             SearchScope.HIGHLIGHT -> highlights
             SearchScope.LIBRARY -> library
+            SearchScope.BOOK -> books
+            SearchScope.ZIM -> zim
             SearchScope.ARTICLE -> items.filter { it.kind == ItemKind.ARTICLE }
             SearchScope.PODCAST -> items.filter { it.kind == ItemKind.PODCAST }
             SearchScope.YOUTUBE -> items.filter { it.kind == ItemKind.YOUTUBE }
@@ -118,6 +157,8 @@ data class SearchData(
     val texts: Map<Long, ItemText> = emptyMap(),
     val highlights: List<Highlight> = emptyList(),
     val playlists: List<Playlist> = emptyList(),
+    /** The Ebooks tab's books. */
+    val books: List<Book> = emptyList(),
     /** Saved transcripts by item id. */
     val transcripts: Map<Long, List<TranscriptLine>> = emptyMap(),
     val now: Long = System.currentTimeMillis(),
@@ -370,16 +411,68 @@ fun searchAll(
     }
     library.sortByDescending { it.score }
 
+    val books =
+        data.books
+            .mapNotNull { b ->
+                val titleFolded = fold(b.title)
+                val authorFolded = fold(b.author)
+                if (findTerms("$titleFolded $authorFolded", terms) == null) return@mapNotNull null
+                val score =
+                    when {
+                        findTerms(titleFolded, terms) != null -> titleScore(titleFolded, q, terms) + 22
+                        findTerms(authorFolded, terms) != null -> 75
+                        else -> 60
+                    }
+                BookHit(b, markTerms(b.title, terms, titleFolded), markTerms(b.author, terms, authorFolded), score)
+            }.sortedWith(compareByDescending<BookHit> { it.score }.thenByDescending { it.book.lastOpenedAt })
+
     val counts =
         mapOf(
-            SearchScope.ALL to items.size + highlights.size + library.size,
+            SearchScope.ALL to items.size + highlights.size + library.size + books.size,
             SearchScope.ARTICLE to items.count { it.kind == ItemKind.ARTICLE },
             SearchScope.PODCAST to items.count { it.kind == ItemKind.PODCAST },
             SearchScope.YOUTUBE to items.count { it.kind == ItemKind.YOUTUBE },
             SearchScope.HIGHLIGHT to highlights.size,
             SearchScope.LIBRARY to library.size,
+            SearchScope.BOOK to books.size,
+            SearchScope.ZIM to 0,
         )
-    return SearchResults(query, terms, items.take(MAX_ITEM_RESULTS), highlights, library, counts)
+    return SearchResults(query, terms, items.take(MAX_ITEM_RESULTS), highlights, library, books, emptyList(), counts)
+}
+
+/**
+ * Adds ZIM matches to a search. They rank below your own articles and books (a Wikipedia ZIM has a
+ * page for nearly every word) unless the title is exactly what was typed; text-only matches rank
+ * lowest. The first match for a page wins, so list title suggestions before full-text hits.
+ */
+private val WIKI_NAMESPACE = Regex("^(Category|Template|Portal|Help|Wikipedia|File|Module):")
+
+fun addZimHits(
+    r: SearchResults,
+    found: List<ZimTitle>,
+): SearchResults {
+    if (r.terms.isEmpty() || found.isEmpty()) return r
+    val q = r.terms.joinToString(" ")
+    val seen = HashSet<String>()
+    val zim =
+        found
+            .mapNotNull { t ->
+                if (!seen.add("${t.bookId}\n${t.path}")) return@mapNotNull null
+                val folded = fold(t.title)
+                if (t.snippet == null) {
+                    if (findTerms(folded, r.terms) == null) return@mapNotNull null
+                    // Wiki housekeeping pages ("Category:…", "Template:…") after real articles
+                    val housekeeping = if (WIKI_NAMESPACE.containsMatchIn(t.title)) 30 else 0
+                    val score = titleScore(folded, q, r.terms) - 25 + (if (folded == q) 30 else 0) - housekeeping
+                    ZimHit(t.bookId, t.bookTitle, t.path, markTerms(t.title, r.terms, folded), null, score)
+                } else {
+                    val snippetFolded = fold(t.snippet)
+                    val score = 20 + r.terms.count { folded.contains(it) } * 5
+                    ZimHit(t.bookId, t.bookTitle, t.path, markTerms(t.title, r.terms, folded), snippetAround(t.snippet, snippetFolded, r.terms, 40, 160), score)
+                }
+            }.sortedWith(compareByDescending<ZimHit> { it.score }.thenBy { it.title.text.length })
+    val counts = r.counts + mapOf(SearchScope.ZIM to zim.size, SearchScope.ALL to r.count(SearchScope.ALL) - r.count(SearchScope.ZIM) + zim.size)
+    return r.copy(zim = zim, counts = counts)
 }
 
 private fun hostOf(url: String): String = runCatching { URI(url).host?.removePrefix("www.") }.getOrNull().orEmpty()

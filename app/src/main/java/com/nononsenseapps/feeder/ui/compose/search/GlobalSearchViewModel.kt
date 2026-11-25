@@ -9,6 +9,7 @@ import com.nononsenseapps.feeder.db.room.FeedItemDao
 import com.nononsenseapps.feeder.db.room.PlaylistCandidate
 import com.nononsenseapps.feeder.model.PodcastPlayerStateHolder
 import com.nononsenseapps.feeder.model.TTSStateHolder
+import com.nononsenseapps.feeder.model.ebooks.EbookLibrary
 import com.nononsenseapps.feeder.model.highlights.Highlight
 import com.nononsenseapps.feeder.model.highlights.HighlightStore
 import com.nononsenseapps.feeder.model.playlists.ItemKind
@@ -22,10 +23,19 @@ import com.nononsenseapps.feeder.model.search.SearchData
 import com.nononsenseapps.feeder.model.search.SearchResults
 import com.nononsenseapps.feeder.model.search.SearchScope
 import com.nononsenseapps.feeder.model.search.TranscriptLine
+import com.nononsenseapps.feeder.model.search.ZimTitle
+import com.nononsenseapps.feeder.model.search.addZimHits
 import com.nononsenseapps.feeder.model.search.searchAll
+import com.nononsenseapps.feeder.model.zim.ZimLibrary
+import com.nononsenseapps.feeder.model.zim.ZimNative
+import com.nononsenseapps.feeder.model.zim.ZimWebContent
 import com.nononsenseapps.feeder.model.transcript.Transcripts
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -33,6 +43,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.builtins.ListSerializer
@@ -70,6 +81,8 @@ class GlobalSearchViewModel(
     private val podcast: PodcastPlayerStateHolder by instance()
     private val tts: TTSStateHolder by instance()
     private val prefs: SharedPreferences by instance()
+    private val ebooks by lazy { EbookLibrary.get(getApplication()) }
+    private val zims by lazy { ZimLibrary.get(getApplication()) }
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
@@ -89,6 +102,8 @@ class GlobalSearchViewModel(
                     .getOrDefault(emptyMap())
                     .mapValues { (_, cues) -> cues.map { TranscriptLine(it.startMs, it.text) } }
         }
+        // The ZIM list is read when the ZIM tab first opens; search may come first
+        if (zims.books.value == null) zims.refresh()
     }
 
     private val data =
@@ -106,15 +121,43 @@ class GlobalSearchViewModel(
                 playlists = pl,
                 transcripts = lines,
             )
-        }.flowOn(Dispatchers.Default)
+        }.combine(ebooks.books) { d, books -> d.copy(books = books) }
+            .flowOn(Dispatchers.Default)
+
+    /** ZIM matches for a query: title suggestions, then full-text hits in files that have an index. */
+    @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
+    private val zimFound =
+        combine(_query.debounce(250), zims.books) { q, books -> q to books.orEmpty() }
+            .mapLatest { (q, books) ->
+                val text = q.trim()
+                if (text.isEmpty() || books.isEmpty() || !ZimNative.available) return@mapLatest q to emptyList()
+                q to
+                    coroutineScope {
+                        books
+                            .map { b ->
+                                async(Dispatchers.IO) {
+                                    runCatching {
+                                        val archive = zims.archive(b.id)
+                                        val titles = ZimWebContent.suggest(archive, text, ZIM_TITLES_PER_BOOK)
+                                        val full = if (b.hasFulltext) ZimWebContent.search(archive, text, ZIM_TEXT_PER_BOOK) else emptyList()
+                                        titles.map { ZimTitle(b.id, b.title, it.path, it.title) } +
+                                            full.map { ZimTitle(b.id, b.title, it.path, it.title, it.snippet.orEmpty()) }
+                                    }.getOrDefault(emptyList())
+                                }
+                            }.awaitAll()
+                            .flatten()
+                    }
+            }
 
     @OptIn(FlowPreview::class)
     val state: StateFlow<GlobalSearchState> =
-        combine(data, _query.debounce(120), playlists.positions) { d, q, positions ->
+        combine(data, _query.debounce(120), playlists.positions, zimFound) { d, q, positions, (zimQuery, zim) ->
             val ctx = PlaylistContext(positions = positions)
+            val results = searchAll(q, d.copy(now = System.currentTimeMillis()))
             GlobalSearchState(
                 data = d,
-                results = searchAll(q, d.copy(now = System.currentTimeMillis())),
+                // ZIM matches come a moment later; until then the last query's are left out
+                results = if (zimQuery == q) addZimHits(results, zim) else results,
                 ctx = ctx,
                 inProgress = inProgress(d.items, positions),
                 loaded = true,
@@ -172,6 +215,15 @@ class GlobalSearchViewModel(
             ?.id
     }
 
+    /** A ZIM result: the book opens at that page (it opens where it was last left). */
+    fun openingZim(
+        bookId: String,
+        path: String,
+    ) {
+        remember()
+        zims.rememberPath(bookId, path)
+    }
+
     /** Keeps the query in Recent searches. */
     fun remember() {
         val q = _query.value.trim()
@@ -195,5 +247,7 @@ class GlobalSearchViewModel(
     companion object {
         private const val RECENT_KEY = "global_search_recent_v1"
         private const val RECENT_MAX = 6
+        private const val ZIM_TITLES_PER_BOOK = 8
+        private const val ZIM_TEXT_PER_BOOK = 10
     }
 }

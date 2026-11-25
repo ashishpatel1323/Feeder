@@ -1,16 +1,18 @@
 /**
  * Global search (⌘K palette and the all-results view): one query over everything in Feeder —
  * article, episode and video titles and text, saved podcast transcripts, highlights and their
- * notes, feeds, folders and playlists. Runs in memory on the data the app already holds; the
- * plain text of each article is worked out once and kept until the article changes.
+ * notes (ebook highlights too), feeds, folders, playlists, ebook titles and authors, and the titles
+ * of articles in ZIM files. Runs in memory on the data the app already holds; the plain text of
+ * each article is worked out once and kept until the article changes. ZIM titles are looked up in
+ * the files themselves, so they come in a moment later (addZimHits).
  */
-import type { Feed, Highlight, Item } from './db'
+import type { Book, Feed, Highlight, Item } from './db'
 import { feedDisplayTitle } from './db'
 import { kindOf, type ItemKind, type Playlist, type PlaylistContext } from './playlists'
 
 /** What the palette can be narrowed to with Tab. 'library' = feeds, folders and playlists. */
-export type SearchScope = 'all' | 'article' | 'podcast' | 'youtube' | 'highlight' | 'library'
-export const SCOPES: SearchScope[] = ['all', 'article', 'podcast', 'youtube', 'highlight', 'library']
+export type SearchScope = 'all' | 'article' | 'podcast' | 'youtube' | 'highlight' | 'library' | 'book' | 'zim'
+export const SCOPES: SearchScope[] = ['all', 'article', 'podcast', 'youtube', 'highlight', 'library', 'book', 'zim']
 export const SCOPE_LABELS: Record<SearchScope, string> = {
   all: 'All',
   article: 'Articles',
@@ -18,6 +20,8 @@ export const SCOPE_LABELS: Record<SearchScope, string> = {
   youtube: 'Videos',
   highlight: 'Highlights',
   library: 'Feeds & playlists',
+  book: 'Ebooks',
+  zim: 'ZIM',
 }
 
 /** A piece of text to show, with the parts that matched as [start, end) ranges. */
@@ -73,7 +77,34 @@ export interface PlaylistHit {
   score: number
   title: Snippet
 }
-export type SearchHit = ItemHit | HighlightHit | FeedHit | FolderHit | PlaylistHit
+/** An ebook in the Ebooks tab, by its title or author. */
+export interface BookHit {
+  type: 'book'
+  id: string
+  book: Book
+  score: number
+  title: Snippet
+  author: Snippet
+}
+/** An article in a ZIM file on this device, by its title. */
+export interface ZimHit {
+  type: 'zim'
+  /** "<ZIM book id>\n<path>" */
+  id: string
+  bookId: string
+  bookTitle: string
+  path: string
+  score: number
+  title: Snippet
+}
+/** A ZIM title match as the file gives it (lib/zim). */
+export interface ZimTitle {
+  bookId: string
+  bookTitle: string
+  path: string
+  title: string
+}
+export type SearchHit = ItemHit | HighlightHit | FeedHit | FolderHit | PlaylistHit | BookHit | ZimHit
 
 export interface SearchResults {
   query: string
@@ -81,6 +112,8 @@ export interface SearchResults {
   items: ItemHit[]
   highlights: HighlightHit[]
   library: (FeedHit | FolderHit | PlaylistHit)[]
+  books: BookHit[]
+  zim: ZimHit[]
   /** How many results each scope has. */
   counts: Record<SearchScope, number>
 }
@@ -95,6 +128,8 @@ export interface SearchData {
   feeds: Map<string, Feed>
   highlights: Highlight[]
   playlists: Playlist[]
+  /** The Ebooks tab's books. */
+  books: Book[]
   /** Saved transcripts by item id. */
   transcripts: Map<string, TranscriptLine[]>
   ctx: PlaylistContext
@@ -306,8 +341,8 @@ export const MAX_ITEM_RESULTS = 300
 export function searchAll(query: string, data: SearchData): SearchResults {
   const terms = queryTerms(query)
   const q = terms.join(' ')
-  const counts: Record<SearchScope, number> = { all: 0, article: 0, podcast: 0, youtube: 0, highlight: 0, library: 0 }
-  const empty: SearchResults = { query, terms, items: [], highlights: [], library: [], counts }
+  const counts: Record<SearchScope, number> = { all: 0, article: 0, podcast: 0, youtube: 0, highlight: 0, library: 0, book: 0, zim: 0 }
+  const empty: SearchResults = { query, terms, items: [], highlights: [], library: [], books: [], zim: [], counts }
   if (!terms.length) return empty
   const now = data.now ?? Date.now()
 
@@ -357,9 +392,45 @@ export function searchAll(query: string, data: SearchData): SearchResults {
   }
   library.sort((a, b) => b.score - a.score)
   counts.library = library.length
-  counts.all = items.length + highlights.length + library.length
 
-  return { query, terms, items: items.slice(0, MAX_ITEM_RESULTS), highlights, library, counts }
+  const books: BookHit[] = []
+  for (const book of data.books ?? []) {
+    const titleFolded = fold(book.title)
+    const authorFolded = fold(book.author || '')
+    if (!findTerms(`${titleFolded} ${authorFolded}`, terms)) continue
+    const score = findTerms(titleFolded, terms) ? titleScore(titleFolded, q, terms) + 22 : findTerms(authorFolded, terms) ? 75 : 60
+    books.push({ type: 'book', id: book.id, book, score, title: markTerms(book.title, terms, titleFolded), author: markTerms(book.author || '', terms, authorFolded) })
+  }
+  books.sort((a, b) => b.score - a.score || b.book.lastOpenedAt - a.book.lastOpenedAt)
+  counts.book = books.length
+  counts.all = items.length + highlights.length + library.length + books.length
+
+  return { query, terms, items: items.slice(0, MAX_ITEM_RESULTS), highlights, library, books, zim: [], counts }
+}
+
+/**
+ * Adds ZIM title matches to a search. They rank below your own articles and books (a Wikipedia ZIM
+ * has a page for nearly every word), unless the title is exactly what was typed.
+ */
+const WIKI_NAMESPACE = /^(Category|Template|Portal|Help|Wikipedia|File|Module):/
+
+export function addZimHits(r: SearchResults, titles: ZimTitle[]): SearchResults {
+  if (!r.terms.length || !titles.length) return r
+  const q = r.terms.join(' ')
+  const zim: ZimHit[] = []
+  const seen = new Set<string>()
+  for (const t of titles) {
+    const id = `${t.bookId}\n${t.path}`
+    const folded = fold(t.title)
+    if (seen.has(id) || !findTerms(folded, r.terms)) continue
+    seen.add(id)
+    // Wiki housekeeping pages ("Category:…", "Template:…") after real articles
+    const housekeeping = WIKI_NAMESPACE.test(t.title) ? 30 : 0
+    const score = titleScore(folded, q, r.terms) - 25 + (folded === q ? 30 : 0) - housekeeping
+    zim.push({ type: 'zim', id, bookId: t.bookId, bookTitle: t.bookTitle, path: t.path, score, title: markTerms(t.title, r.terms, folded) })
+  }
+  zim.sort((a, b) => b.score - a.score || a.title.text.length - b.title.text.length)
+  return { ...r, zim, counts: { ...r.counts, zim: zim.length, all: r.counts.all - r.counts.zim + zim.length } }
 }
 
 function hostOf(url: string): string {
@@ -374,11 +445,15 @@ function hostOf(url: string): string {
 export function hitsInScope(r: SearchResults, scope: SearchScope): SearchHit[] {
   switch (scope) {
     case 'all':
-      return [...r.items, ...r.highlights, ...r.library].sort((a, b) => b.score - a.score)
+      return [...r.items, ...r.highlights, ...r.library, ...r.books, ...r.zim].sort((a, b) => b.score - a.score)
     case 'highlight':
       return r.highlights
     case 'library':
       return r.library
+    case 'book':
+      return r.books
+    case 'zim':
+      return r.zim
     default:
       return r.items.filter((h) => h.kind === scope)
   }

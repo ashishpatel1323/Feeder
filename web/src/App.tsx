@@ -33,7 +33,8 @@ import { CommandPalette, SearchView, useSearchData, type OpenOptions, type Palet
 import { queryTerms, type SearchHit, type SearchScope } from './lib/search'
 import { RESUME_BACK, saveVideoPos } from './lib/videopos'
 import { kindOf } from './lib/playlists'
-import { ZimPage } from './components/ZimPage'
+import { ZimPage, type ZimJump } from './components/ZimPage'
+import { rememberPath as rememberZimPath } from './lib/zim/library'
 import { EbooksPage } from './components/EbooksPage'
 import { bookIdOfItem } from './lib/ebooks/library'
 import { DROPBOX_TS_KEY } from './lib/dropbox'
@@ -169,6 +170,7 @@ export default function App() {
   const [libraryPage, setLibraryPage] = useState(isLibraryHash)
   /** null = not on the ZIM tab; '' = the ZIM library; else the book being read. */
   const [zimPage, setZimPage] = useState<string | null>(zimFromHash)
+  const [zimJump, setZimJump] = useState<ZimJump | null>(null)
   /** null = not on the Ebooks tab; id '' = the library; else the book being read. */
   const [bookPage, setBookPage] = useState<{ id: string; at: string | null } | null>(bookFromHash)
   // Start on Home: give it its own address, so Back from the article list returns to it
@@ -939,6 +941,17 @@ export default function App() {
       leavePages()
       setSearchFocus(null)
       void openHighlight(hit.highlight)
+    } else if (hit.type === 'book') {
+      leavePages()
+      setSearchFocus(null)
+      showBooks(hit.book.id)
+    } else if (hit.type === 'zim') {
+      leavePages()
+      setSearchFocus(null)
+      // A book that isn't open yet opens at its last page: make that this one
+      rememberZimPath(hit.bookId, hit.path)
+      setZimJump({ path: hit.path, n: Date.now() })
+      showZim(hit.bookId)
     } else if (hit.type === 'feed') selectList({ kind: 'feed', url: hit.feed.url })
     else if (hit.type === 'folder') selectList({ kind: 'tag', tag: hit.tag })
     else {
@@ -1185,7 +1198,7 @@ export default function App() {
       ) : bookPage !== null ? (
         <EbooksPage book={bookPage.id || null} at={bookPage.at} settings={settings} onOpen={(id, at) => showBooks(id ?? '', at)} onMenu={() => setDrawer(true)} toast={toast} />
       ) : zimPage !== null ? (
-        <ZimPage book={zimPage || null} onOpen={(id) => showZim(id ?? '')} onMenu={() => setDrawer(true)} toast={toast} />
+        <ZimPage book={zimPage || null} jump={zimJump} onOpen={(id) => showZim(id ?? '')} onMenu={() => setDrawer(true)} toast={toast} />
       ) : libraryPage ? (
         <LibraryPage
           savedCount={savedCount}

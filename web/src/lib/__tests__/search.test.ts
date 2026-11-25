@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Feed, Highlight, Item } from '../db'
 import { makeContext, newPlaylist } from '../playlists'
-import { findTerms, fold, hitsInScope, htmlText, markTerms, queryTerms, searchAll, snippetAround, type SearchData } from '../search'
+import { addZimHits, findTerms, fold, hitsInScope, htmlText, markTerms, queryTerms, searchAll, snippetAround, type SearchData } from '../search'
 
 const NOW = Date.UTC(2026, 10, 24)
 
@@ -36,7 +36,7 @@ function data(p: Partial<SearchData> = {}): SearchData {
     ['https://a.example/feed', feed('https://a.example/feed', 'The Verge', 'Tech')],
     ['https://pod.example/feed', feed('https://pod.example/feed', 'Planet Money', 'Economics')],
   ])
-  return { items: [], feeds, highlights: [], playlists: [], transcripts: new Map(), ctx: makeContext({ feeds }), now: NOW, ...p }
+  return { items: [], feeds, highlights: [], playlists: [], books: [], transcripts: new Map(), ctx: makeContext({ feeds }), now: NOW, ...p }
 }
 
 describe('text helpers', () => {
@@ -169,5 +169,28 @@ describe('searchAll', () => {
   it('finds accented titles without accents typed', () => {
     const r = searchAll('cafe', data({ items: [item('1', { title: 'Le Café du Coin' })] }))
     expect(r.items[0].title.ranges).toEqual([[3, 7]])
+  })
+
+  it('finds ebooks by title or author', () => {
+    const book = (id: string, title: string, author: string) => ({ id, title, author, ext: 'epub', size: 1, cover: null, dropboxPath: null, local: true, described: true, addedAt: 0, lastOpenedAt: 0 })
+    const d = data({ books: [book('b1', 'The Time Machine', 'H. G. Wells'), book('b2', 'Dune', 'Frank Herbert')] })
+    expect(searchAll('time machine', d).books.map((h) => h.id)).toEqual(['b1'])
+    expect(searchAll('herbert', d).books.map((h) => h.id)).toEqual(['b2'])
+    const r = searchAll('wells', d)
+    expect(r.counts).toMatchObject({ book: 1, all: 1 })
+    expect(hitsInScope(r, 'book')[0]).toMatchObject({ type: 'book', id: 'b1' })
+  })
+
+  it('adds ZIM titles below your own things', () => {
+    const r = searchAll('python', data({ items: [item('1', { title: 'Python 3.14 is out' })] }))
+    const z = addZimHits(r, [
+      { bookId: 'wiki', bookTitle: 'Wikipedia', path: 'Python_(language)', title: 'Python (language)' },
+      { bookId: 'wiki', bookTitle: 'Wikipedia', path: 'Python_(language)', title: 'Python (language)' },
+      { bookId: 'wiki', bookTitle: 'Wikipedia', path: 'Monty', title: 'Monty Python' },
+    ])
+    expect(z.zim.map((h) => h.path)).toEqual(['Python_(language)', 'Monty'])
+    expect(z.counts).toMatchObject({ zim: 2, all: 3 })
+    expect(hitsInScope(z, 'all')[0].type).toBe('item')
+    expect(hitsInScope(z, 'zim')[0]).toMatchObject({ type: 'zim', bookId: 'wiki', id: 'wiki\nPython_(language)' })
   })
 })

@@ -25,13 +25,16 @@ import {
   SCOPE_LABELS,
   SCOPES,
   searchAll,
+  addZimHits,
   type ItemHit,
   type SearchData,
   type SearchHit,
   type SearchResults,
   type SearchScope,
   type Snippet,
+  type ZimTitle,
 } from '../lib/search'
+import { listBooks as listZimBooks, openBook as openZimBook, zimSupported } from '../lib/zim/library'
 import { storedTranscriptLines } from '../lib/transcripts'
 import { isWatched } from '../lib/videopos'
 import { Icon, IconButton, type IconName } from './Icon'
@@ -58,13 +61,93 @@ export function useSearchData(items: Item[], feeds: Map<string, Feed>, highlight
   useEffect(() => {
     if (!active) pruneTextCache(new Set(items.map((i) => i.id)))
   }, [active, items])
-  return useMemo(() => ({ items, feeds, highlights, playlists, transcripts, ctx }), [items, feeds, highlights, playlists, transcripts, ctx])
+  const books = useLiveQuery(() => db.books.toArray(), [])
+  return useMemo(() => ({ items, feeds, highlights, playlists, books: books ?? NO_BOOKS, transcripts, ctx }), [items, feeds, highlights, playlists, books, transcripts, ctx])
+}
+const NO_BOOKS: SearchData['books'] = []
+
+/** ZIM titles per book, at most this many each. */
+const ZIM_PER_BOOK = 8
+
+/**
+ * Titles starting with the query in each ZIM file on this device. They're read from the files, so
+ * they come a moment after the rest; the list of files is read once per search session.
+ */
+function useZimTitles(query: string): ZimTitle[] {
+  const [titles, setTitles] = useState<ZimTitle[]>([])
+  const books = useRef<Promise<{ id: string; title: string }[]> | null>(null)
+  useEffect(() => {
+    const q = query.trim()
+    if (!q || !zimSupported()) return setTitles([])
+    let live = true
+    const t = setTimeout(() => {
+      books.current ??= listZimBooks().then(
+        (r) => r.books.map((b) => ({ id: b.id, title: b.title })),
+        () => [],
+      )
+      void books.current.then(async (list) => {
+        const found = await Promise.all(
+          list.map((b) =>
+            openZimBook(b.id)
+              .then((z) => z.suggest(q, ZIM_PER_BOOK))
+              .then((hits) => hits.map((h) => ({ bookId: b.id, bookTitle: b.title, path: h.path, title: h.title })))
+              .catch(() => [] as ZimTitle[]),
+          ),
+        )
+        if (live) setTitles(found.flat())
+      })
+    }, 150)
+    return () => {
+      live = false
+      clearTimeout(t)
+    }
+  }, [query])
+  return titles
 }
 
 /** Searching is quick, but not free on a big library: only while the query settles. */
 function useResults(query: string, data: SearchData): SearchResults {
   const deferred = useDeferredValue(query)
-  return useMemo(() => searchAll(deferred, data), [deferred, data])
+  const zim = useZimTitles(deferred)
+  const base = useMemo(() => searchAll(deferred, data), [deferred, data])
+  return useMemo(() => addZimHits(base, zim), [base, zim])
+}
+
+/** The icon, title and line under it for an ebook or ZIM result (palette and results view). */
+function bookOrZimRow(h: SearchHit): { icon: ReactNode; title: ReactNode; meta: ReactNode } | null {
+  if (h.type === 'book') {
+    return {
+      icon: h.book.cover ? (
+        <span className="cp-ic" aria-hidden="true">
+          <img src={h.book.cover} alt="" />
+        </span>
+      ) : (
+        <span className="cp-ic plain">
+          <Icon name="book" size={18} />
+        </span>
+      ),
+      title: <Marked s={h.title} />,
+      meta: h.author.text ? (
+        <>
+          Ebook · <Marked s={h.author} />
+        </>
+      ) : (
+        'Ebook'
+      ),
+    }
+  }
+  if (h.type === 'zim') {
+    return {
+      icon: (
+        <span className="cp-ic plain">
+          <Icon name="public" size={18} />
+        </span>
+      ),
+      title: <Marked s={h.title} />,
+      meta: `ZIM · ${h.bookTitle}`,
+    }
+  }
+  return null
 }
 
 /** Text with the matched words marked. */
@@ -214,6 +297,8 @@ export function CommandPalette(p: PaletteProps) {
     const media = results.items.filter((h) => h.kind !== 'article' && notTop(h))
     const highlights = results.highlights.filter(notTop)
     const library = results.library.filter(notTop)
+    const books = results.books.filter(notTop)
+    const zim = results.zim.filter(notTop)
     const actions = p.actions.filter((a) => matchesAction(a, terms))
     const out: Group[] = []
     if (top) out.push({ label: 'Top hit', rows: [hitRow(top)] })
@@ -224,6 +309,8 @@ export function CommandPalette(p: PaletteProps) {
     add('Videos and episodes', media, 3)
     add('Highlights', highlights, 2)
     add('Feeds, folders and playlists', library, 3)
+    add('Ebooks', books, 3)
+    add('In your ZIM files', zim, 3)
     if (actions.length) out.push({ label: 'Actions', rows: actions.slice(0, 3).map((a) => ({ key: `action:${a.id}`, kind: 'action', action: a })) })
     const shown = out.reduce((n, g) => n + g.rows.filter((r) => r.kind === 'hit').length, 0)
     if (results.counts.all > shown) out.push({ label: '', rows: [{ key: 'all', kind: 'all', label: `Show all ${results.counts.all} results in the list`, scope: 'all' }] })
@@ -315,6 +402,7 @@ export function CommandPalette(p: PaletteProps) {
     const h = row.hit
     if (h.type === 'item') return h.field === 'transcript' && h.atMs != null ? `Play from ${clock(h.atMs)}` : h.kind === 'article' ? 'Read' : 'Open'
     if (h.type === 'feed' || h.type === 'folder') return 'Show articles'
+    if (h.type === 'book') return 'Read'
     return 'Open'
   }
 
@@ -343,7 +431,9 @@ export function CommandPalette(p: PaletteProps) {
       meta = [kind === 'youtube' ? 'Video' : 'Episode', feedDisplayTitle(p.data.feeds.get(row.item.feedUrl)), row.percent].filter(Boolean).join(' · ')
     } else {
       const h = row.hit
-      if (h.type === 'item') {
+      const bz = bookOrZimRow(h)
+      if (bz) ({ icon, title, meta } = bz)
+      else if (h.type === 'item') {
         icon = <Thumb item={h.item} kind={h.kind} />
         title = <Marked s={h.title} />
         meta = itemMeta(h, p.data.ctx)
@@ -385,7 +475,7 @@ export function CommandPalette(p: PaletteProps) {
         )
         title = <Marked s={h.title} />
         meta = `Folder · ${h.feeds} feed${h.feeds === 1 ? '' : 's'}`
-      } else {
+      } else if (h.type === 'playlist') {
         icon = (
           <span className="cp-ic tile" style={{ background: h.playlist.color }}>
             {h.playlist.icon}
@@ -434,7 +524,7 @@ export function CommandPalette(p: PaletteProps) {
             aria-expanded
             aria-controls="cp-list"
             aria-activedescendant={current ? `cp-row-${rows.indexOf(current)}` : undefined}
-            aria-label="Search articles, episodes, videos, feeds, playlists and highlights"
+            aria-label="Search articles, episodes, videos, feeds, playlists, highlights, ebooks and ZIM files"
             placeholder="Search articles, episodes, videos, feeds…"
             value={query}
             spellCheck={false}
@@ -607,7 +697,7 @@ export function SearchView(p: ViewProps) {
           if (el.scrollTop + el.clientHeight > el.scrollHeight - 400 && limit < hits.length) setLimit((l) => l + 60)
         }}
       >
-        {!hasQuery ? <p className="empty">Search titles, article text, podcast transcripts, highlights, feeds and playlists.</p> : null}
+        {!hasQuery ? <p className="empty">Search titles, article text, podcast transcripts, highlights, feeds, playlists, ebooks and ZIM files.</p> : null}
         {hasQuery && !hits.length ? <p className="empty">No matches for “{p.query.trim()}”.</p> : null}
         {hits.slice(0, limit).map((h) => (
           <ResultRow key={`${h.type}:${h.id}`} hit={h} data={p.data} selected={h.type === 'item' && h.id === p.selectedId} onOpen={() => open(h)} onDelete={p.onDelete} onOpenFeed={p.onOpenFeed} />
@@ -651,10 +741,12 @@ function ResultRow({ hit, data, selected, onOpen, onDelete, onOpenFeed }: { hit:
       />
     )
   }
-  let icon: ReactNode
-  let title: ReactNode
-  let meta: ReactNode
-  if (hit.type === 'highlight') {
+  let icon: ReactNode = null
+  let title: ReactNode = null
+  let meta: ReactNode = null
+  const bz = bookOrZimRow(hit)
+  if (bz) ({ icon, title, meta } = bz)
+  else if (hit.type === 'highlight') {
     icon = (
       <span className={`cp-ic plain hl-${hit.highlight.color}`}>
         <Icon name="highlight" size={18} />
@@ -692,7 +784,7 @@ function ResultRow({ hit, data, selected, onOpen, onDelete, onOpenFeed }: { hit:
     )
     title = <Marked s={hit.title} />
     meta = `Folder · ${hit.feeds} feed${hit.feeds === 1 ? '' : 's'}`
-  } else {
+  } else if (hit.type === 'playlist') {
     icon = (
       <span className="cp-ic tile" style={{ background: hit.playlist.color }}>
         {hit.playlist.icon}

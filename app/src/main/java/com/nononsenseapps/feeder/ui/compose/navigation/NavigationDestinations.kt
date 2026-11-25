@@ -313,6 +313,8 @@ data object GlobalSearchDestination : NavigationDestination(
                     onOpenFolder = { tag -> FeedDestination.navigate(navController, tag = tag, keepBackStack = true) },
                     onOpenPlaylist = { id -> PlaylistsDestination.navigate(navController, open = id) },
                     onOpenLink = { link -> runCatching { uriHandler.openUri(link) } },
+                    onOpenBook = { book, cfi -> EbookReaderDestination.navigate(navController, book, cfi) },
+                    onOpenZim = { book -> ZimReaderDestination.navigate(navController, book) },
                     onAddFeed = { SearchFeedDestination.navigate(navController) },
                     onDiscover = { DiscoverDestination.navigate(navController) },
                     onPlaylists = { PlaylistsDestination.navigate(navController) },
