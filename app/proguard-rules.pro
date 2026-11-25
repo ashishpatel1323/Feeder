@@ -106,3 +106,10 @@
 -keep class org.apache.commons.compress.archivers.zip.** { *; }
 -keep class com.fasterxml.jackson.databind.** { *; }
 -dontwarn com.fasterxml.jackson.databind.**
+
+# libkiwix/libzim: the native code finds these classes, fields (nativeHandle) and constructors by
+# name over JNI. Renamed or stripped by R8, opening any ZIM file aborts the app (SIGABRT,
+# "fid == null in call to SetLongField from Archive.setNativeArchive"), which crashed the ZIM tab
+# and global search in release builds only.
+-keep class org.kiwix.** { *; }
+-keepclasseswithmembernames,includedescriptorclasses class * { native <methods>; }
