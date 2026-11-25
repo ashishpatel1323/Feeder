@@ -150,6 +150,20 @@ class ZimLibrary private constructor(
         f: DropboxFile,
     ): Boolean = book.size == f.size && (book.file.name.equals(f.name, ignoreCase = true) || book.file.name == "${safeName(f.name)}.zim")
 
+    /** Deletes a book from Dropbox (the copy every device shares); copies on devices stay. */
+    fun deleteFromDropbox(f: DropboxFile) {
+        scope.launch {
+            try {
+                dropbox.delete(f.path)
+                _messages.value = "Deleted ${f.name} from Dropbox"
+            } catch (e: Exception) {
+                _messages.value = e.message ?: "Could not delete from Dropbox"
+            } finally {
+                refreshRemote()
+            }
+        }
+    }
+
     /** Puts a book that is on this phone into Dropbox too, for the other devices. */
     fun uploadToDropbox(book: ZimBook) = uploadFile(book.file, book.title)
 

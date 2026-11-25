@@ -7,7 +7,7 @@
  * added here are uploaded there, and books other devices put there can be downloaded here.
  * A book here and one in Dropbox are the same when they have the same file name and size.
  */
-import { downloadStream, getDropbox, listFolder, uploadFile, ZIM_FOLDER, type DropboxFile } from '../dropbox'
+import { deleteFile, downloadStream, getDropbox, listFolder, uploadFile, ZIM_FOLDER, type DropboxFile } from '../dropbox'
 import { blobSource, ZimArchive } from './zim'
 
 export interface ZimBook {
@@ -187,6 +187,12 @@ export const sameZim = (b: Pick<ZimBook, 'file' | 'size'>, f: Pick<DropboxFile, 
 export async function downloadFromDropbox(f: DropboxFile, onProgress: Progress, signal?: AbortSignal): Promise<string> {
   const { body, size } = await downloadStream(f.path, signal)
   return save(f.name, body, size || f.size, onProgress, signal)
+}
+
+/** Deletes a book from Dropbox (every device's shared copy); copies on devices stay. */
+export async function deleteFromDropbox(f: DropboxFile): Promise<void> {
+  await deleteFile(f.path)
+  changed()
 }
 
 /** Uploads a book on this device to Dropbox's /ZIM folder. */

@@ -7608,6 +7608,6 @@ mark.sr-mark {
 }
 .zim-cloud {
   display: inline-flex;
-  padding: 0 var(--sp-2);
+  padding: 0;
   color: var(--accent);
 }

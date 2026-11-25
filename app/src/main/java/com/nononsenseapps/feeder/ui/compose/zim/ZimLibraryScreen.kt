@@ -69,6 +69,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.dropbox.DropboxClient
+import com.nononsenseapps.feeder.dropbox.DropboxFile
 import com.nononsenseapps.feeder.model.zim.ZimBook
 import com.nononsenseapps.feeder.model.zim.ZimCatalogEntry
 import com.nononsenseapps.feeder.model.zim.ZimJob
@@ -100,6 +101,7 @@ fun ZimLibraryScreen(
     val nudge: SyncNudge by di.instance()
     var catalogOpen by rememberSaveable { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<ZimBook?>(null) }
+    var deletingRemote by remember { mutableStateOf<Pair<DropboxFile, Boolean>?>(null) }
     val pick =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
             uris.forEach { library.import(it) }
@@ -178,6 +180,7 @@ fun ZimLibraryScreen(
                     onDelete = { deleting = book },
                     inDropbox = if (link == null) null else inDropbox,
                     onUpload = { library.uploadToDropbox(book) },
+                    onDeleteFromDropbox = { remote?.firstOrNull { library.sameZim(book, it) }?.let { deletingRemote = it to true } },
                 )
             }
             if (onlyInDropbox.isNotEmpty()) {
@@ -195,10 +198,15 @@ fun ZimLibraryScreen(
                         supportingContent = { Text(stringResource(R.string.not_on_phone_yet, Formatter.formatShortFileSize(context, f.size))) },
                         leadingContent = { Icon(Icons.Outlined.Cloud, contentDescription = null, modifier = Modifier.size(40.dp)) },
                         trailingContent = {
-                            TextButton(onClick = { library.downloadFromDropbox(f) }, enabled = jobs.none { it.label == f.name }) {
-                                Icon(Icons.Outlined.Download, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.size(4.dp))
-                                Text(stringResource(R.string.download))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                TextButton(onClick = { library.downloadFromDropbox(f) }, enabled = jobs.none { it.label == f.name }) {
+                                    Icon(Icons.Outlined.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.size(4.dp))
+                                    Text(stringResource(R.string.download))
+                                }
+                                IconButton(onClick = { deletingRemote = f to false }) {
+                                    Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.delete_from_dropbox))
+                                }
                             }
                         },
                     )
@@ -237,6 +245,25 @@ fun ZimLibraryScreen(
         }
     }
 
+    deletingRemote?.let { (f, onPhone) ->
+        AlertDialog(
+            onDismissRequest = { deletingRemote = null },
+            title = { Text(stringResource(R.string.delete_from_dropbox_title, f.name.removeSuffix(".zim").replace('_', ' '))) },
+            text = {
+                Text(
+                    stringResource(if (onPhone) R.string.delete_from_dropbox_keep_phone else R.string.delete_from_dropbox_text, Formatter.formatShortFileSize(context, f.size)),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    library.deleteFromDropbox(f)
+                    deletingRemote = null
+                }) { Text(stringResource(R.string.zim_delete)) }
+            },
+            dismissButton = { TextButton(onClick = { deletingRemote = null }) { Text(stringResource(android.R.string.cancel)) } },
+        )
+    }
+
     deleting?.let { book ->
         AlertDialog(
             onDismissRequest = { deleting = null },
@@ -270,6 +297,7 @@ private fun BookRow(
     onDelete: () -> Unit,
     inDropbox: Boolean?,
     onUpload: () -> Unit,
+    onDeleteFromDropbox: () -> Unit,
 ) {
     val context = LocalContext.current
     val meta =
@@ -291,7 +319,10 @@ private fun BookRow(
         trailingContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 when (inDropbox) {
-                    true -> Icon(Icons.Outlined.Cloud, contentDescription = stringResource(R.string.in_dropbox), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(8.dp))
+                    true ->
+                        IconButton(onClick = onDeleteFromDropbox) {
+                            Icon(Icons.Outlined.Cloud, contentDescription = stringResource(R.string.delete_from_dropbox), tint = MaterialTheme.colorScheme.primary)
+                        }
                     false ->
                         IconButton(onClick = onUpload) {
                             Icon(Icons.Outlined.CloudUpload, contentDescription = stringResource(R.string.upload_to_dropbox))
