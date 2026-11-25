@@ -51,4 +51,21 @@
   <string name="delete_from_dropbox_title">Delete %1$s from Dropbox?</string>
   <string name="delete_from_dropbox_text">%1$s. Your devices can no longer download it from Dropbox.</string>
   <string name="delete_from_dropbox_keep_phone">%1$s. Your other devices can no longer download it; the copy on this phone stays.</string>
+  <string name="shelf_downloaded">Downloaded</string>
+  <string name="shelf_only_here">Not in Dropbox</string>
+  <string name="shelf_in_dropbox_size">In Dropbox · %1$s</string>
+  <string name="shelf_cards">Cards</string>
+  <string name="shelf_list">List</string>
+  <string name="shelf_all">All %1$d</string>
+  <string name="shelf_on_phone_count">On this phone %1$d</string>
+  <string name="shelf_in_dropbox_count">In Dropbox %1$d</string>
+  <string name="shelf_on_phone">On this phone</string>
+  <string name="shelf_on_phone_hint">Ready to read, also offline</string>
+  <string name="shelf_in_dropbox_hint">Not on this phone yet: downloads when you open it</string>
+  <string name="shelf_download">Download to this phone</string>
+  <string name="shelf_downloading">Downloading %1$d%%</string>
+  <string name="shelf_uploading">Uploading %1$d%%</string>
+  <string name="shelf_no_books_here">No books on this phone yet. Books in Dropbox download when you open them.</string>
+  <string name="shelf_no_zims_here">No ZIM books on this phone yet. Download one from the In Dropbox list.</string>
+  <string name="ebook_downloaded_toast">%1$s is on this phone</string>
 </resources>

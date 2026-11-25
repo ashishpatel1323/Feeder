@@ -81,9 +81,9 @@ export function Availability({ where, size, busy }: { where: Where; size: number
     )
   if (where === 'device')
     return (
-      <span className="avail avail-only" title="Not in Dropbox: only this device has it">
+      <span className="avail avail-only" title="On this device only: not backed up in Dropbox">
         <Icon name="check" size={14} />
-        Only on this device
+        Not in Dropbox
       </span>
     )
   return (
