@@ -154,6 +154,11 @@ fun DiscoverScreen(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             Column(Modifier.windowInsetsPadding(WindowInsets.statusBars)) {
+                // Discover is part of the Feeds tab: Latest | By feed | Discover
+                com.nononsenseapps.feeder.ui.compose.navigation.FeedsViewSwitch(
+                    view = com.nononsenseapps.feeder.ui.compose.navigation.FeedsView.DISCOVER,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
                 DiscoverSearchBar(
                     query = state.query,
                     placeholder =
@@ -197,7 +202,11 @@ fun DiscoverScreen(
                     when {
                         q.isNotEmpty() -> "Results for “$q”"
                         state.tab == DiscoverKind.TEXT -> {
-                            val n = viewModel.topics.firstOrNull { it.name == state.topic }?.feeds?.size ?: 0
+                            val n =
+                                viewModel.topics
+                                    .firstOrNull { it.name == state.topic }
+                                    ?.feeds
+                                    ?.size ?: 0
                             "${topicLabel(state.topic)} · $n feeds"
                         }
                         state.tab == DiscoverKind.PODCAST -> {

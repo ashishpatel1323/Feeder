@@ -90,9 +90,9 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -159,7 +159,7 @@ fun HomeScreen(
             } else {
                 Column {
                     GlobalSearchTopBar(actions = { HomeMenu(state, viewModel, onManageFeeds) })
-                    FeedsViewSwitch(latest = false)
+                    FeedsViewSwitch(view = com.nononsenseapps.feeder.ui.compose.navigation.FeedsView.BY_FEED)
                 }
             }
         },
@@ -463,6 +463,7 @@ private fun SortChip(
     onSort: (HomeSort) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
+
     fun label(s: HomeSort) =
         when (s) {
             HomeSort.LATEST -> R.string.home_sort_latest

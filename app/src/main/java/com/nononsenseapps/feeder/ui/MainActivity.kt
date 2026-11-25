@@ -232,6 +232,10 @@ class MainActivity : DIAwareComponentActivity() {
                     .register(this, navController, navDrawerListState, mainActivityViewModel)
                 com.nononsenseapps.feeder.ui.compose.navigation.EbookReaderDestination
                     .register(this, navController, navDrawerListState, mainActivityViewModel)
+                com.nononsenseapps.feeder.ui.compose.navigation.AudiobooksDestination
+                    .register(this, navController, navDrawerListState, mainActivityViewModel)
+                com.nononsenseapps.feeder.ui.compose.navigation.AudiobookPlayerDestination
+                    .register(this, navController, navDrawerListState, mainActivityViewModel)
                 ZimReaderDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
             }
         }

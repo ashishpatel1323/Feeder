@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="tab_audiobooks">Audiobooks</string>
+  <string name="audiobooks_what">Audiobooks</string>
+  <string name="audiobooks_empty">No audiobooks yet. Put them in Dropbox › Apps › Feeder › Audiobooks: a file there is one book (M4B, M4A, MP3…), and a folder there is one book whose files play in name order.</string>
+  <string name="audiobooks_refresh">Check Dropbox for new audiobooks</string>
+  <string name="audiobook_not_started">Not started</string>
+  <string name="audiobook_finished">Finished</string>
+  <string name="audiobook_listened">%1$d%% listened</string>
+  <string name="audiobook_file_of">File %1$d of %2$d</string>
+  <string name="audiobook_files">%1$d files</string>
+  <string name="audiobook_on_phone">On this phone</string>
+  <string name="audiobook_download">Download to this phone</string>
+  <string name="audiobook_remove_download">Remove from this phone</string>
+  <string name="audiobook_downloading">Downloading %1$s of %2$s</string>
+  <string name="audiobook_play">Play</string>
+  <string name="audiobook_resume">Resume</string>
+  <string name="audiobook_pause">Pause</string>
+  <string name="audiobook_prev_chapter">Previous chapter</string>
+  <string name="audiobook_next_chapter">Next chapter</string>
+  <string name="audiobook_back_10">Back 10 seconds</string>
+  <string name="audiobook_ahead_30">Ahead 30 seconds</string>
+  <string name="audiobook_speed">Speed</string>
+  <string name="audiobook_sleep">Sleep</string>
+  <string name="audiobook_sleep_minutes">%1$d minutes</string>
+  <string name="audiobook_sleep_chapter">End of chapter</string>
+  <string name="audiobook_sleep_add">Add 5 minutes</string>
+  <string name="audiobook_sleep_off">Turn off</string>
+  <string name="audiobook_chapters">Chapters</string>
+  <string name="audiobook_reading_chapters">Reading chapters, %1$d of %2$d files</string>
+  <string name="audiobook_left">%1$s of %2$s · %3$s left</string>
+  <string name="audiobook_gone">This book is no longer in Dropbox.</string>
+  <string name="audiobook_close">Close the audiobook player</string>
+  <string name="audiobook_open_player">Open the player</string>
+  <string name="audiobook_more_for">More for %1$s</string>
+</resources>

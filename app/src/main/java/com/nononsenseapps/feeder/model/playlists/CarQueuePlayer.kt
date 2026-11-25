@@ -32,7 +32,14 @@ class CarQueuePlayer(
     private val info: (Long) -> CarItemInfo?,
     /** Turns what the car picked (a media id from the browse tree) into a queue to play. */
     private val onPick: (mediaId: String) -> Unit,
+    /** Shown instead while no playlist plays and an audiobook is open. */
+    private val audiobook: com.nononsenseapps.feeder.model.audiobooks.AudiobookPlayer? = null,
+    /** The audiobook's cover, for the car and the notification. */
+    private val audiobookCover: (String) -> ByteArray? = { null },
 ) : SimpleBasePlayer(looper) {
+    private val onAudiobook: Boolean
+        get() = !playlist.state.value.active && audiobook?.state?.value?.active == true
+
     /** Call when [PlaylistPlayer]'s state or the item details changed. */
     fun refresh() = invalidateState()
 
@@ -67,6 +74,7 @@ class CarQueuePlayer(
                 .setAvailableCommands(commands)
                 .setSeekBackIncrementMs(if (s.kind == ItemKind.ARTICLE) 10_000 else 15_000)
                 .setSeekForwardIncrementMs(if (s.kind == ItemKind.ARTICLE) 10_000 else 30_000)
+        if (onAudiobook) return audiobookState(builder)
         if (!s.active) {
             return builder
                 .setPlaybackState(Player.STATE_IDLE)
@@ -121,7 +129,60 @@ class CarQueuePlayer(
 
     private fun safeUri(url: String): Uri? = runCatching { url.toUri() }.getOrNull()
 
+    /** The open audiobook, with its chapters as the queue. */
+    private fun audiobookState(builder: State.Builder): State {
+        val a = audiobook!!.state.value
+        val cover = a.bookId?.let(audiobookCover)
+        val chapters =
+            a.chapters.ifEmpty {
+                listOf(
+                    com.nononsenseapps.feeder.model.audiobooks
+                        .Chapter(0, 0, 0, 0, a.title),
+                )
+            }
+        val items =
+            chapters.mapIndexed { k, c ->
+                MediaItemData
+                    .Builder("ab:$k")
+                    .setMediaItem(
+                        MediaItem
+                            .Builder()
+                            .setMediaId("abch:$k")
+                            .setMediaMetadata(
+                                MediaMetadata
+                                    .Builder()
+                                    .setTitle(c.title)
+                                    .setArtist(a.author.ifBlank { a.title })
+                                    .setAlbumTitle(a.title)
+                                    .setSubtitle(a.title)
+                                    .apply { cover?.let { setArtworkData(it, MediaMetadata.PICTURE_TYPE_FRONT_COVER) } }
+                                    .setIsPlayable(true)
+                                    .setIsBrowsable(false)
+                                    .build(),
+                            ).build(),
+                    ).setDurationUs(if (c.lengthMs > 0) c.lengthMs * 1000 else androidx.media3.common.C.TIME_UNSET)
+                    .setIsSeekable(true)
+                    .build()
+            }
+        val index = a.chapter.coerceIn(0, items.size - 1)
+        val pos = if (a.chapters.isEmpty()) a.ms else a.inChapterMs
+        return builder
+            .setSeekBackIncrementMs(10_000)
+            .setSeekForwardIncrementMs(30_000)
+            .setPlaylist(items)
+            .setCurrentMediaItemIndex(index)
+            .setContentPositionMs(if (a.isPlaying) PositionSupplier.getExtrapolating(pos, a.speed) else PositionSupplier.getConstant(pos))
+            .setPlaybackParameters(PlaybackParameters(a.speed))
+            .setPlaybackState(if (a.loading && !a.isPlaying) Player.STATE_BUFFERING else Player.STATE_READY)
+            .setPlayWhenReady(a.isPlaying || a.loading, Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
+            .build()
+    }
+
     override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> {
+        if (onAudiobook) {
+            audiobook!!.toggle(play = playWhenReady)
+            return Futures.immediateVoidFuture()
+        }
         playlist.toggle(play = playWhenReady)
         return Futures.immediateVoidFuture()
     }
@@ -129,6 +190,10 @@ class CarQueuePlayer(
     override fun handlePrepare(): ListenableFuture<*> = Futures.immediateVoidFuture()
 
     override fun handleStop(): ListenableFuture<*> {
+        if (onAudiobook) {
+            audiobook!!.pause()
+            return Futures.immediateVoidFuture()
+        }
         playlist.toggle(play = false)
         return Futures.immediateVoidFuture()
     }
@@ -138,6 +203,22 @@ class CarQueuePlayer(
         positionMs: Long,
         seekCommand: Int,
     ): ListenableFuture<*> {
+        if (onAudiobook) {
+            val a = audiobook!!
+            val st = a.state.value
+            when (seekCommand) {
+                Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> a.nextChapter()
+                Player.COMMAND_SEEK_TO_PREVIOUS, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> a.previousChapter()
+                else ->
+                    if (st.chapters.isNotEmpty() && mediaItemIndex != st.chapter && mediaItemIndex in st.chapters.indices) {
+                        a.jumpToChapter(mediaItemIndex)
+                    } else if (positionMs >= 0) {
+                        val c = st.currentChapter
+                        if (c != null) a.seekToBookMs(c.bookMs + positionMs) else a.seekBy(positionMs - st.ms)
+                    }
+            }
+            return Futures.immediateVoidFuture()
+        }
         val s = playlist.state.value
         when (seekCommand) {
             Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> playlist.next()
@@ -171,6 +252,10 @@ class CarQueuePlayer(
     }
 
     override fun handleSetPlaybackParameters(playbackParameters: PlaybackParameters): ListenableFuture<*> {
+        if (onAudiobook) {
+            audiobook!!.setSpeed(playbackParameters.speed)
+            return Futures.immediateVoidFuture()
+        }
         playlist.setSpeed(playbackParameters.speed)
         return Futures.immediateVoidFuture()
     }

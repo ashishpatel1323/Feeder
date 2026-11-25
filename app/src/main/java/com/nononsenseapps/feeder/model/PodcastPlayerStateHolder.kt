@@ -72,8 +72,14 @@ class PodcastPlayerStateHolder(
         initializePlayer(link)
     }
 
+    init {
+        com.nononsenseapps.feeder.model.audiobooks.AudioFocusHooks.pausePodcast = { if (_playerState.value.isPlaying) pause() }
+    }
+
     fun play() {
         val player = mediaPlayer ?: return
+        com.nononsenseapps.feeder.model.audiobooks.AudioFocusHooks.pauseAudiobook
+            ?.invoke()
         _playerState.value.itemId?.let { id ->
             otherDevicePosition?.invoke(id)?.let { seconds -> runCatching { player.seekTo((seconds * 1000).toInt()) } }
         }
@@ -169,6 +175,8 @@ class PodcastPlayerStateHolder(
                     )
                     setOnPreparedListener { player ->
                         if (startAtMillis > 0 && startAtMillis < player.duration) player.seekTo(startAtMillis)
+                        com.nononsenseapps.feeder.model.audiobooks.AudioFocusHooks.pauseAudiobook
+                            ?.invoke()
                         player.start()
                         applySpeed(player)
                         _playerState.update {
