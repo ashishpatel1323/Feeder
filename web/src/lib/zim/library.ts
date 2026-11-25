@@ -67,13 +67,40 @@ export function openBook(id: string): Promise<ZimArchive> {
 
 const metaCache = new Map<string, ZimBook>()
 
+/** One colour all over (sampled on a 12×12 grid), or not an image at all. */
+export async function isBlankImage(bytes: Uint8Array): Promise<boolean> {
+  try {
+    const bmp = await createImageBitmap(new Blob([bytes as BlobPart]))
+    const c = new OffscreenCanvas(bmp.width, bmp.height)
+    const g = c.getContext('2d')
+    if (!g) return false
+    g.drawImage(bmp, 0, 0)
+    const d = g.getImageData(0, 0, bmp.width, bmp.height).data
+    const at = (x: number, y: number) => {
+      const i = (y * bmp.width + x) * 4
+      return (d[i] << 24) | (d[i + 1] << 16) | (d[i + 2] << 8) | d[i + 3]
+    }
+    const first = at(0, 0)
+    const sx = Math.max(1, Math.floor(bmp.width / 12))
+    const sy = Math.max(1, Math.floor(bmp.height / 12))
+    for (let y = 0; y < bmp.height; y += sy) for (let x = 0; x < bmp.width; x += sx) if (at(x, y) !== first) return false
+    return true
+  } catch {
+    // Not decodable here (e.g. no OffscreenCanvas): keep it as it was
+    return false
+  }
+}
+
 async function describe(file: string, size: number): Promise<ZimBook> {
   const id = bookIdOf(file)
   const key = `${file}:${size}`
   const hit = metaCache.get(key)
   if (hit) return hit
   const z = await openBook(id)
-  const icon = await z.illustration().catch(() => null)
+  const raw = await z.illustration().catch(() => null)
+  // zimit puts a plain one-colour icon in sites without a favicon: no icon is better (the shelf
+  // shows the landing page instead)
+  const icon = raw && !(await isBlankImage(raw)) ? raw : null
   const count = await z.metadata('Counter').catch(() => null)
   const articles = count?.match(/text\/html=(\d+)/)?.[1]
   const book: ZimBook = {

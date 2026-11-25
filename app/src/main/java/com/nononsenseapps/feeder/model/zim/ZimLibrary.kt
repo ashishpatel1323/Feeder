@@ -2,6 +2,7 @@ package com.nononsenseapps.feeder.model.zim
 
 import android.app.DownloadManager
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
@@ -287,7 +288,13 @@ class ZimLibrary private constructor(
             }
         val icon =
             try {
-                if (a.hasIllustration(48)) a.getIllustrationItem(48).data.data else null
+                if (a.hasIllustration(48)) {
+                    a.getIllustrationItem(48).data.data.takeUnless { bytes ->
+                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.let { blank(it) } ?: true
+                    }
+                } else {
+                    null
+                }
             } catch (_: Exception) {
                 null
             }
@@ -313,6 +320,7 @@ class ZimLibrary private constructor(
         scope.launch {
             synchronized(archives) { archives.remove(book.id)?.dispose() }
             book.file.delete()
+            ZimSnapshots.get(context).forget(book.id)
             prefs.edit { remove("last:${book.id}") }
             load()
         }
