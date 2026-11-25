@@ -12,6 +12,9 @@ enum class HomeSort { LATEST, AZ, UNREAD }
 
 enum class HomeSize { S, M, L }
 
+/** Feeds as artwork tiles (folders as sideways rows) or as a list of rows with their numbers. */
+enum class HomeLayout { TILES, LIST }
+
 data class HomeFeed(
     val id: Long,
     val title: String,
@@ -20,6 +23,11 @@ data class HomeFeed(
     val kind: FeedKind,
     val unread: Int,
     val latest: Long,
+    val url: String = "",
+    val total: Int = 0,
+    val saved: Int = 0,
+    /** Episodes or videos started and not finished. */
+    val inProgress: Int = 0,
 )
 
 data class HomeFolder(
@@ -64,6 +72,9 @@ fun HomeFeedRow.toHomeFeed(): HomeFeed =
         kind = detectKind(this),
         unread = unread,
         latest = latest,
+        url = url,
+        total = total,
+        saved = saved,
     )
 
 /** Site favicons (.ico) are tiny and look smudged on a tile: those get the generated tile instead. */
@@ -149,3 +160,25 @@ fun tileColors(title: String): Pair<Long, Long> {
     for (c in title) h = (h * 31 + c.code) and 0xFFFFFFFFL
     return TILE_COLORS[(h % TILE_COLORS.size).toInt()]
 }
+
+/** How long ago, short: "now", "12m", "3h", "2d", "5w", "8mo", "2y". Empty when [millis] is 0. */
+fun shortAge(
+    millis: Long,
+    now: Long = System.currentTimeMillis(),
+): String {
+    if (millis <= 0L) return ""
+    val min = ((now - millis) / 60_000L).coerceAtLeast(0L)
+    return when {
+        min < 1 -> "now"
+        min < 60 -> "${min}m"
+        min < 60 * 24 -> "${min / 60}h"
+        min < 60 * 24 * 7 -> "${min / (60 * 24)}d"
+        min < 60 * 24 * 30 -> "${min / (60 * 24 * 7)}w"
+        min < 60 * 24 * 365 -> "${min / (60 * 24 * 30)}mo"
+        else -> "${min / (60 * 24 * 365)}y"
+    }
+}
+
+/** Feeds a row of a folder shows before its "All N" tile or "Show all N" link. */
+const val LANE_MAX = 8
+const val LIST_FOLDER_MAX = 4

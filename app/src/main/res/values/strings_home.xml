@@ -26,4 +26,28 @@
   <string name="home_clear_filters">Clear filters</string>
   <string name="home_feed_tile">%1$s, %2$d unread</string>
   <string name="home_folder_tile">Folder %1$s, %2$d feeds, %3$d unread</string>
+  <plurals name="home_n_feeds">
+    <item quantity="one">%1$d feed</item>
+    <item quantity="other">%1$d feeds</item>
+  </plurals>
+  <string name="home_unread_n">%1$d unread</string>
+  <string name="home_new_n">%1$d new</string>
+  <string name="home_up_to_date">Up to date</string>
+  <string name="home_all_read">All read</string>
+  <string name="home_total_n">%1$d total</string>
+  <string name="home_saved_n">%1$d saved</string>
+  <string name="home_in_progress_n">%1$d in progress</string>
+  <string name="home_all_n">All %1$d</string>
+  <string name="home_show_all_n">Show all %1$d</string>
+  <string name="home_view_list">Show as list</string>
+  <string name="home_view_tiles">Show as tiles</string>
+  <string name="home_fold_all">Fold all folders</string>
+  <string name="home_unfold_all">Unfold all folders</string>
+  <string name="home_only_unread">Only feeds with unread</string>
+  <string name="home_tile_size">Tile size</string>
+  <string name="home_mark_folder_read">Mark all as read</string>
+  <string name="home_open_folder">Open folder %1$s</string>
+  <string name="home_fold_folder">Fold %1$s</string>
+  <string name="home_unfold_folder">Unfold %1$s</string>
+  <string name="home_feed_row">%1$s, %2$s</string>
 </resources>

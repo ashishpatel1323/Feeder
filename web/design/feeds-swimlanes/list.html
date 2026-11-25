@@ -1,0 +1,155 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0" rel="stylesheet">
+<style>
+:root{--bg:#F7FAF2;--surf:#EEF2E8;--surf2:#E5EADF;--surf3:#DDE3D6;--on:#1A1C18;--on2:#43483F;--on3:#6B7166;--sec:#D2E8D3;--pri:#006D37;--outline:#C3C8BC;--badge:#006D37}
+body{margin:0;background:#dfe3da;font-family:Roboto,sans-serif;color:var(--on);padding:28px}
+h1{font-size:22px;margin:0 0 4px}.sub{color:#444;margin:0 0 22px;font-size:14px;max-width:1500px;line-height:1.4}
+.row{display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap}
+.col{width:372px}.col h2{font-size:17px;margin:0 0 4px}.col p{font-size:13px;color:#444;margin:0 0 10px;min-height:90px;line-height:1.38}
+.phone{width:360px;height:780px;background:var(--bg);border-radius:28px;overflow:hidden;position:relative;box-shadow:0 2px 14px #0002;border:6px solid #222}
+.ms{font-family:'Material Symbols Rounded';font-size:24px;line-height:1;font-variation-settings:'FILL' 0}
+.fill{font-variation-settings:'FILL' 1}
+.status{height:24px;display:flex;justify-content:space-between;padding:4px 18px 0;font-size:12px;color:var(--on2)}
+.searchbar{margin:6px 16px 6px;height:48px;border-radius:24px;background:var(--surf2);display:flex;align-items:center;gap:12px;padding:0 14px;color:var(--on2);font-size:15px}
+.searchbar .r{margin-left:auto}
+.seg{display:flex;margin:6px 16px 8px;border:1px solid var(--outline);border-radius:20px;overflow:hidden;height:36px}
+.seg div{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;font-size:14px;font-weight:500;color:var(--on2)}
+.seg .on{background:var(--sec);color:var(--on)}
+.chips{display:flex;gap:8px;padding:0 16px 6px;align-items:center;white-space:nowrap}
+.chip{height:32px;border:1px solid var(--outline);border-radius:8px;padding:0 10px;display:flex;align-items:center;gap:4px;font-size:13px;color:var(--on2)}
+.chip.on{background:var(--sec);border-color:var(--sec);color:var(--on);font-weight:500}
+.chip .ms{font-size:18px}
+.chip.end{margin-left:auto}
+.scroll{position:absolute;left:0;right:0;top:186px;bottom:80px;overflow:hidden}
+/* lane header */
+.lh{display:flex;align-items:center;padding:14px 8px 8px 16px;gap:6px}
+.lh .nm{font-size:16px;font-weight:500;color:var(--on)}
+.lh .ct{font-size:12px;color:var(--on3)}
+.lh .un{margin-left:auto;font-size:12px;font-weight:500;color:var(--pri);background:var(--sec);border-radius:10px;padding:2px 8px}
+.lh .ms{color:var(--on2);font-size:22px}
+.lh .see{margin-left:auto;font-size:13px;font-weight:500;color:var(--pri);padding:4px 6px}
+.lane{display:flex;gap:12px;padding:6px 16px 0;overflow:hidden}
+/* artwork */
+.art{flex:none;border-radius:12px;position:relative;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;letter-spacing:-.5px}
+.art .k{position:absolute;left:4px;bottom:4px;background:#000a;border-radius:6px;width:18px;height:18px;display:flex;align-items:center;justify-content:center}
+.art .k .ms{font-size:13px;color:#fff}
+.art b{position:absolute;top:-5px;right:-5px;background:var(--badge);color:#fff;border-radius:10px;font-size:10px;font-weight:500;padding:2px 6px;border:2px solid var(--bg);min-width:8px;text-align:center}
+.art.round{border-radius:50%}
+.cell{flex:none;display:flex;flex-direction:column;gap:6px}
+.cell .t{font-size:12px;color:var(--on);line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.cell .m{font-size:11px;color:var(--on3);margin-top:-4px}
+.more{flex:none;border-radius:12px;border:1px dashed var(--outline);display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--pri);font-size:12px;font-weight:500;gap:2px}
+/* option C rows */
+.crow{display:flex;align-items:center;gap:12px;padding:10px 12px 10px 16px}
+.crow .tx{flex:1;min-width:0}
+.crow .tx .nm{font-size:16px;font-weight:500}
+.crow .tx .ct{font-size:12px;color:var(--on3);margin-top:2px}
+.crow .stack{display:flex;margin-top:8px}
+.crow .stack .art{margin-right:-8px;border:2px solid var(--bg)}
+.crow .stack .plus{width:28px;height:28px;border-radius:8px;background:var(--surf3);color:var(--on2);font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:500;border:2px solid var(--bg)}
+.crow .un{font-size:12px;font-weight:500;color:var(--pri);background:var(--sec);border-radius:10px;padding:2px 8px}
+.div{height:1px;background:var(--surf3);margin:0 16px}
+.fab{position:absolute;right:16px;bottom:96px;background:var(--sec);border-radius:16px;height:56px;width:56px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px #0003}
+.nav{position:absolute;left:0;right:0;bottom:0;height:80px;background:var(--surf);display:flex;justify-content:space-around;padding-top:12px;box-sizing:border-box}
+.nav div{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px;font-weight:500;color:var(--on2);width:64px}
+.nav i{width:56px;height:32px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-style:normal}
+.nav .on{color:var(--on)}.nav .on i{background:var(--sec)}
+.note{position:absolute;background:#FFF3B0;color:#333;font-size:11px;padding:5px 8px;border-radius:6px;box-shadow:0 1px 4px #0003;max-width:170px;line-height:1.3;z-index:5}
+.top{display:flex;align-items:center;padding:8px 8px 4px 4px;gap:4px}.top .t{font-size:22px;flex:1}
+.top .ms{color:var(--on2);padding:8px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px 12px;padding:8px 16px}
+.list .it{display:flex;gap:14px;padding:8px 16px;align-items:center}
+.list .it .tx{flex:1}.list .it .tx div{font-size:15px}.list .it .tx small{font-size:12px;color:var(--on3)}
+.list .it .n{font-size:12px;font-weight:500;color:var(--on2)}
+</style><style>
+.fr{display:flex;align-items:center;gap:14px;padding:8px 12px 8px 16px}
+.fr .tx{flex:1;min-width:0}
+.fr .nm{font-size:15px;color:var(--on);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fr .mt{font-size:12px;color:var(--on3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fr .mt .u{color:var(--pri);font-weight:500}
+.fr .lt{font-size:13px;color:var(--on2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fr .rt{display:flex;flex-direction:column;align-items:flex-end;gap:4px;font-size:11px;color:var(--on3)}
+.fr .pill{font-size:12px;font-weight:500;color:#fff;background:var(--badge);border-radius:10px;padding:2px 7px}
+.fr .pill.z{background:none;color:var(--on3);font-weight:400}
+.showall{font-size:13px;font-weight:500;color:var(--pri);padding:6px 16px 10px 78px}
+.vt{display:flex;border:1px solid var(--outline);border-radius:8px;overflow:hidden;height:32px}
+.vt span{width:36px;display:flex;align-items:center;justify-content:center;color:var(--on2)}
+.vt span.on{background:var(--sec);color:var(--on)}
+.vt .ms{font-size:18px}
+.lhc{display:flex;align-items:center;padding:12px 8px 6px 8px;gap:4px;background:var(--bg)}
+.lhc .nm{font-size:16px;font-weight:500}.lhc .ct{font-size:12px;color:var(--on3)}
+.lhc .un{margin-left:auto;font-size:12px;font-weight:500;color:var(--pri);background:var(--sec);border-radius:10px;padding:2px 8px;margin-right:8px}
+.collapsed{display:flex;align-items:center;gap:4px;padding:12px 8px 12px 8px;border-top:1px solid var(--surf3)}
+.collapsed .nm{font-size:16px;font-weight:500}.collapsed .ct{font-size:12px;color:var(--on3)}
+.collapsed .un{margin-left:auto;font-size:12px;font-weight:500;color:var(--pri);background:var(--sec);border-radius:10px;padding:2px 8px;margin-right:8px}
+.spark{display:flex;align-items:flex-end;gap:2px;height:16px}
+.spark i{width:3px;background:var(--pri);opacity:.7;border-radius:1px}
+</style></head><body>
+<h1>Feeder · Feeds home, list view (Android)</h1>
+<p class="sub">Same folders and headers as option B, but feeds stacked one under another with their numbers. One icon button at the end of the chip row switches Tiles / List and is remembered. The list is for reading: tapping a row opens the feed, swipe start = Mark all read. Editing (rename, move, unsubscribe, full article) stays on Manage feeds, so rows have no ⋮.</p>
+<div class="row" id="row"></div>
+<script>
+const P=['#2f6f5e','#8a4b2a','#3d4f8f','#b03a3a','#5b5b5b','#6b3f8a','#1f5f8b','#7a6a2a','#2a6a7a','#4a6a3a','#7a3a5a','#3a3a6a','#a0522d','#246b8f','#6d4c41','#455a64','#c2185b','#00796b'];
+const F={
+ 'Tech':[['The Verge','a',42],['Ars Technica','a',18],['Hard Fork','p',3],['Stratechery','a',1],['Decoder','p',2],['Hacker News','a',64],['MKBHD','y',4],['Platformer','a',0],['Acquired','p',2],['Linus Tech Tips','y',9],['Daring Fireball','a',5],['Lex Fridman','p',1]],
+ 'News':[['BBC News','a',96],['Reuters','a',15],['The Daily','p',4],['Up First','p',1],['Vox','y',0]],
+ 'Science':[['NASA','a',12],['Veritasium','y',7],['Radiolab','p',1],['Quanta','a',0],['Kurzgesagt','y',2],['Nature','a',9]],
+ 'Blogs':[['Kottke','a',40],['Seth Godin','a',30],['Paul Graham','a',0],['Austin Kleon','a',15]],
+ 'Comics':[['xkcd','a',3],['SMBC','a',18]],
+ 'Video':[['Tom Scott','y',5],['3Blue1Brown','y',2],['CGP Grey','y',0],['Vsauce','y',8]],
+ 'Fun':[['Laughing Squid','a',4]],
+};
+let ci=0;const col=n=>P[(n.length*7+n.charCodeAt(0))%P.length];
+const ini=n=>n.split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase();
+const kind={p:'headphones',y:'smart_display',a:''};
+function art([n,k,u],s,o={}){const fs=Math.round(s*.34);return `<div class="art ${k=='y'&&o.round?'round':''}" style="width:${s}px;height:${s}px;background:${col(n)};font-size:${fs}px">${ini(n)}${k!='a'&&o.kind!==false?`<span class="k"><span class="ms fill">${kind[k]}</span></span>`:''}${u&&o.badge!==false?`<b>${u>99?'99+':u}</b>`:''}</div>`}
+const sum=f=>f.reduce((a,x)=>a+x[2],0);
+const chrome=`<div class="status"><span>9:41</span><span>▾ ▴ ■</span></div>
+<div class="searchbar"><span class="ms">search</span>Search everything<span class="ms r">more_vert</span></div>
+<div class="seg"><div><span class="ms" style="font-size:18px">view_agenda</span>Latest</div><div class="on"><span class="ms" style="font-size:18px">check</span>By feed</div></div>
+<div class="chips"><span class="chip on">All 34</span><span class="chip"><span class="ms">headphones</span>9</span><span class="chip"><span class="ms">smart_display</span>8</span><span class="chip end"><span class="ms">sort</span>Most unread</span></div>`;
+const navItems=[['dynamic_feed','Feeds'],['explore','Discover'],['queue_music','Playlists'],['video_library','Library']];
+const nav=`<div class="nav">${navItems.map(([i,l],j)=>`<div class="${j==0?'on':''}"><i><span class="ms ${j==0?'fill':''}">${i}</span></i>${l}</div>`).join('')}</div>`;
+const fab=`<div class="fab"><span class="ms">add</span></div>`;
+
+function header(name,f,see){return `<div class="lh"><span class="nm">${name}</span><span class="ct">· ${f.length} feeds</span>${see?`<span class="see">See all</span>`:`<span class="un">${sum(f)} unread</span><span class="ms">chevron_right</span>`}</div>`}
+const row=document.getElementById('row');
+function colm(title,desc,inner){const c=document.createElement('div');c.className='col';c.innerHTML=`<h2>${title}</h2><p>${desc}</p><div class="phone">${inner}</div>`;row.appendChild(c)}
+const chromeV=(list)=>`<div class="status"><span>9:41</span><span>▾ ▴ ■</span></div>
+<div class="searchbar"><span class="ms">search</span>Search everything<span class="ms r">more_vert</span></div>
+<div class="seg"><div><span class="ms" style="font-size:18px">view_agenda</span>Latest</div><div class="on"><span class="ms" style="font-size:18px">check</span>By feed</div></div>
+<div class="chips"><span class="chip on">All 34</span><span class="chip"><span class="ms">headphones</span>9</span><span class="chip"><span class="ms">smart_display</span>8</span><span class="chip end"><span class="ms">sort</span>Unread</span><span class="ms" style="color:var(--on2);padding:4px">${list?'grid_view':'view_list'}</span></div>`;
+// fake stats
+const st=(x,i)=>{const h=x[0].length;return{tot:x[2]*3+h*7+20,saved:(h*3)%7,ago:['12m','1h','3h','5h','1d','2d','4d','1w'][(h+i)%8],per:((h%9)/2+0.5).toFixed(1),
+ latest:{a:['Why the M5 chip changes laptops','The quiet end of the startup boom','How passkeys finally went mainstream','A field guide to small web blogs','What we learned shipping in public'],p:['Ep. 212 · The AI price war','Ep. 88 · Inside a chip fab','Ep. 41 · Founders who stayed small'],y:['I tested every foldable','The math of sunflowers','Why trains are so hard to build']}[x[1]][(h+i)%({a:5,p:3,y:3}[x[1]])],
+ played:x[1]=='a'?'':['2 in progress','1 downloaded','42% of latest played'][h%3]}};
+const kindTxt={a:'',p:'Podcast',y:'YouTube'};
+function rowStats(x,i){const s=st(x,i);const meta=[x[2]?`<span class="u">${x[2]} unread</span>`:'All read',`${s.tot} total`,s.saved?`${s.saved} saved`:'',s.played].filter(Boolean).join(' · ');
+ return `<div class="fr">${art(x,48,{badge:false})}<div class="tx"><div class="nm">${x[0]}</div><div class="mt">${meta}</div></div><div class="rt">${s.ago}</div></div>`}
+function rowLatest(x,i){const s=st(x,i);
+ return `<div class="fr" style="padding-top:10px;padding-bottom:10px">${art(x,56,{badge:false})}<div class="tx"><div class="nm" style="font-weight:500">${x[0]}</div><div class="lt">${s.latest}</div><div class="mt">${s.ago} · ${s.tot} total${s.saved?' · '+s.saved+' saved':''}${kindTxt[x[1]]?' · '+kindTxt[x[1]]:''}</div></div><div class="rt">${x[2]?`<span class="pill">${x[2]}</span>`:`<span class="pill z">All read</span>`}</div></div>`}
+function sec(name,f,rowFn,max=4){const sh=f.slice(0,max);return `<div class="lhc"><span class="ms" style="color:var(--on2)">expand_more</span><span class="nm">${name}</span><span class="ct">· ${f.length} feeds</span><span class="un">${sum(f)} unread</span></div>${sh.map(rowFn).join('')}${f.length>max?`<div class="showall">Show all ${f.length}</div>`:''}`}
+function coll(name,f){return `<div class="collapsed"><span class="ms" style="color:var(--on2)">chevron_right</span><span class="nm">${name}</span><span class="ct">· ${f.length} feeds</span><span class="un">${sum(f)} unread</span></div>`}
+
+// 1. Tiles (B) with switch
+let b='';for(const [n,f] of Object.entries(F)){const show=f.slice(0,8);b+=header(n,f)+`<div class="lane">${show.map(x=>`<div class="cell" style="width:84px">${art(x,84)}<div class="t">${x[0]}</div><div class="m">${x[2]?x[2]+' new':'Up to date'}</div></div>`).join('')}${f.length>8?`<div class="more" style="width:84px;height:84px"><span class="ms">arrow_forward</span>All ${f.length}</div>`:''}</div>`}
+colm('B · Tiles (as picked)','Option B unchanged, plus one icon button at the end of the chip row that switches to List (the standard M3 view toggle). Your choice sticks per device.',
+ chromeV(false)+`<div class="scroll">${b}</div>`+fab+nav+`<div class="note" style="right:6px;top:196px">Tap to switch to List</div>`);
+
+// 2. List with stats
+let l1='';const ents=Object.entries(F);
+l1+=sec('Tech',F.Tech,rowStats)+sec('News',F.News,rowStats)+sec('Science',F.Science,rowStats);
+colm('L1 · List with numbers (recommended)','Each feed is one row: artwork, name, then unread (green), total, saved, and for podcasts/YouTube what is in progress or downloaded. Right side: when it last posted. Folders show 4 feeds, then "Show all 12". Tap a folder header to fold it.',
+ chromeV(true)+`<div class="scroll">${l1}</div>`+fab+nav);
+
+// 3. List with latest item
+let l2=sec('Tech',F.Tech,rowLatest,4)+sec('News',F.News,rowLatest,3);
+colm('L2 · List with latest item','Bigger rows that also show the newest title in each feed, so you can decide what to open without going in. Unread is a badge on the right. Fewer feeds per screen (about 7).',
+ chromeV(true)+`<div class="scroll">${l2}</div>`+fab+nav);
+
+// 4. Folded
+let l3=sec('Tech',F.Tech,rowStats,12).slice(0)+'';
+let l3b='';for(const [n,f] of ents){l3b+=coll(n,f)}
+colm('L1 · folders folded','With 25 folders, fold them all from ⋮ ("Fold all folders") and the list becomes a compact index; tap a folder to open it in place. Folded state is remembered per folder.',
+ chromeV(true)+`<div class="scroll">${coll('Tech',F.Tech).replace('chevron_right','expand_more').replace('border-top:1px','')}${F.Tech.slice(0,3).map(rowStats).join('')}<div class="showall">Show all 12</div>${ents.slice(1).map(([n,f])=>coll(n,f)).join('')}${coll('Podcasts to try',F.Science.slice(0,3))}${coll('Late night',F.Video)}${coll('Reading list',F.Blogs)}</div>`+fab+nav);
+</script></body></html>

@@ -103,6 +103,7 @@ interface FeedDao {
             COALESCE(SUM(CASE WHEN i.id IS NOT NULL AND i.read_time IS NULL THEN 1 ELSE 0 END), 0) AS unread,
             COALESCE(MAX(i.primary_sort_time), 0) AS latest,
             COUNT(i.id) AS total,
+            COALESCE(SUM(CASE WHEN i.bookmarked = 1 THEN 1 ELSE 0 END), 0) AS saved,
             COALESCE(SUM(CASE WHEN i.enclosure_type LIKE 'audio/%'
                 OR (i.enclosure_link IS NOT NULL AND (i.enclosure_link LIKE '%.mp3%' OR i.enclosure_link LIKE '%.m4a%' OR i.enclosure_link LIKE '%.aac%' OR i.enclosure_link LIKE '%.ogg%' OR i.enclosure_link LIKE '%.opus%'))
                 THEN 1 ELSE 0 END), 0) AS audio_items,
@@ -113,6 +114,10 @@ interface FeedDao {
         """,
     )
     fun loadHomeFeeds(): Flow<List<HomeFeedRow>>
+
+    /** The feed of each of these articles (for Home's "in progress" counts). */
+    @Query("SELECT id, feed_id FROM feed_items WHERE id IN (:ids) AND feed_id IS NOT NULL")
+    suspend fun loadItemFeedIds(ids: List<Long>): List<ItemFeedId>
 
     @Query(
         """

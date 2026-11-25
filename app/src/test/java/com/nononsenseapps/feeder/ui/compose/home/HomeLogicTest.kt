@@ -63,4 +63,15 @@ class HomeLogicTest {
         assertEquals("PG", initials("Paul Graham: Essays"))
         assertEquals(tileColors("Hacker News"), tileColors("Hacker News"))
     }
+
+    @Test
+    fun shortAges() {
+        val now = 1_000_000_000_000L
+        assertEquals("", shortAge(0L, now))
+        assertEquals("now", shortAge(now - 10_000L, now))
+        assertEquals("12m", shortAge(now - 12 * 60_000L, now))
+        assertEquals("3h", shortAge(now - 3 * 3_600_000L, now))
+        assertEquals("2d", shortAge(now - 2 * 86_400_000L, now))
+        assertEquals("2w", shortAge(now - 15 * 86_400_000L, now))
+    }
 }

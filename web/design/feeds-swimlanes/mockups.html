@@ -1,0 +1,125 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0" rel="stylesheet">
+<style>
+:root{--bg:#F7FAF2;--surf:#EEF2E8;--surf2:#E5EADF;--surf3:#DDE3D6;--on:#1A1C18;--on2:#43483F;--on3:#6B7166;--sec:#D2E8D3;--pri:#006D37;--outline:#C3C8BC;--badge:#006D37}
+body{margin:0;background:#dfe3da;font-family:Roboto,sans-serif;color:var(--on);padding:28px}
+h1{font-size:22px;margin:0 0 4px}.sub{color:#444;margin:0 0 22px;font-size:14px;max-width:1500px;line-height:1.4}
+.row{display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap}
+.col{width:372px}.col h2{font-size:17px;margin:0 0 4px}.col p{font-size:13px;color:#444;margin:0 0 10px;min-height:90px;line-height:1.38}
+.phone{width:360px;height:780px;background:var(--bg);border-radius:28px;overflow:hidden;position:relative;box-shadow:0 2px 14px #0002;border:6px solid #222}
+.ms{font-family:'Material Symbols Rounded';font-size:24px;line-height:1;font-variation-settings:'FILL' 0}
+.fill{font-variation-settings:'FILL' 1}
+.status{height:24px;display:flex;justify-content:space-between;padding:4px 18px 0;font-size:12px;color:var(--on2)}
+.searchbar{margin:6px 16px 6px;height:48px;border-radius:24px;background:var(--surf2);display:flex;align-items:center;gap:12px;padding:0 14px;color:var(--on2);font-size:15px}
+.searchbar .r{margin-left:auto}
+.seg{display:flex;margin:6px 16px 8px;border:1px solid var(--outline);border-radius:20px;overflow:hidden;height:36px}
+.seg div{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;font-size:14px;font-weight:500;color:var(--on2)}
+.seg .on{background:var(--sec);color:var(--on)}
+.chips{display:flex;gap:8px;padding:0 16px 6px;align-items:center;white-space:nowrap}
+.chip{height:32px;border:1px solid var(--outline);border-radius:8px;padding:0 10px;display:flex;align-items:center;gap:4px;font-size:13px;color:var(--on2)}
+.chip.on{background:var(--sec);border-color:var(--sec);color:var(--on);font-weight:500}
+.chip .ms{font-size:18px}
+.chip.end{margin-left:auto}
+.scroll{position:absolute;left:0;right:0;top:186px;bottom:80px;overflow:hidden}
+/* lane header */
+.lh{display:flex;align-items:center;padding:14px 8px 8px 16px;gap:6px}
+.lh .nm{font-size:16px;font-weight:500;color:var(--on)}
+.lh .ct{font-size:12px;color:var(--on3)}
+.lh .un{margin-left:auto;font-size:12px;font-weight:500;color:var(--pri);background:var(--sec);border-radius:10px;padding:2px 8px}
+.lh .ms{color:var(--on2);font-size:22px}
+.lh .see{margin-left:auto;font-size:13px;font-weight:500;color:var(--pri);padding:4px 6px}
+.lane{display:flex;gap:12px;padding:6px 16px 0;overflow:hidden}
+/* artwork */
+.art{flex:none;border-radius:12px;position:relative;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;letter-spacing:-.5px}
+.art .k{position:absolute;left:4px;bottom:4px;background:#000a;border-radius:6px;width:18px;height:18px;display:flex;align-items:center;justify-content:center}
+.art .k .ms{font-size:13px;color:#fff}
+.art b{position:absolute;top:-5px;right:-5px;background:var(--badge);color:#fff;border-radius:10px;font-size:10px;font-weight:500;padding:2px 6px;border:2px solid var(--bg);min-width:8px;text-align:center}
+.art.round{border-radius:50%}
+.cell{flex:none;display:flex;flex-direction:column;gap:6px}
+.cell .t{font-size:12px;color:var(--on);line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.cell .m{font-size:11px;color:var(--on3);margin-top:-4px}
+.more{flex:none;border-radius:12px;border:1px dashed var(--outline);display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--pri);font-size:12px;font-weight:500;gap:2px}
+/* option C rows */
+.crow{display:flex;align-items:center;gap:12px;padding:10px 12px 10px 16px}
+.crow .tx{flex:1;min-width:0}
+.crow .tx .nm{font-size:16px;font-weight:500}
+.crow .tx .ct{font-size:12px;color:var(--on3);margin-top:2px}
+.crow .stack{display:flex;margin-top:8px}
+.crow .stack .art{margin-right:-8px;border:2px solid var(--bg)}
+.crow .stack .plus{width:28px;height:28px;border-radius:8px;background:var(--surf3);color:var(--on2);font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:500;border:2px solid var(--bg)}
+.crow .un{font-size:12px;font-weight:500;color:var(--pri);background:var(--sec);border-radius:10px;padding:2px 8px}
+.div{height:1px;background:var(--surf3);margin:0 16px}
+.fab{position:absolute;right:16px;bottom:96px;background:var(--sec);border-radius:16px;height:56px;width:56px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px #0003}
+.nav{position:absolute;left:0;right:0;bottom:0;height:80px;background:var(--surf);display:flex;justify-content:space-around;padding-top:12px;box-sizing:border-box}
+.nav div{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px;font-weight:500;color:var(--on2);width:64px}
+.nav i{width:56px;height:32px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-style:normal}
+.nav .on{color:var(--on)}.nav .on i{background:var(--sec)}
+.note{position:absolute;background:#FFF3B0;color:#333;font-size:11px;padding:5px 8px;border-radius:6px;box-shadow:0 1px 4px #0003;max-width:170px;line-height:1.3;z-index:5}
+.top{display:flex;align-items:center;padding:8px 8px 4px 4px;gap:4px}.top .t{font-size:22px;flex:1}
+.top .ms{color:var(--on2);padding:8px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px 12px;padding:8px 16px}
+.list .it{display:flex;gap:14px;padding:8px 16px;align-items:center}
+.list .it .tx{flex:1}.list .it .tx div{font-size:15px}.list .it .tx small{font-size:12px;color:var(--on3)}
+.list .it .n{font-size:12px;font-weight:500;color:var(--on2)}
+</style></head><body>
+<h1>Feeder · Feeds home, "By feed" as folder swimlanes (Android)</h1>
+<p class="sub">Each folder is a horizontal row of feed artwork with a clear header (name, feed count, unread). Tapping a header opens the folder; tapping artwork opens that feed. A, B and C are the three layouts. The last two screens show what happens when a folder has many feeds, and apply to A and B. Artwork here is placeholder colour; the real app uses each podcast/channel/site image, with a letter tile when there is none.</p>
+<div class="row" id="row"></div>
+<script>
+const P=['#2f6f5e','#8a4b2a','#3d4f8f','#b03a3a','#5b5b5b','#6b3f8a','#1f5f8b','#7a6a2a','#2a6a7a','#4a6a3a','#7a3a5a','#3a3a6a','#a0522d','#246b8f','#6d4c41','#455a64','#c2185b','#00796b'];
+const F={
+ 'Tech':[['The Verge','a',42],['Ars Technica','a',18],['Hard Fork','p',3],['Stratechery','a',1],['Decoder','p',2],['Hacker News','a',64],['MKBHD','y',4],['Platformer','a',0],['Acquired','p',2],['Linus Tech Tips','y',9],['Daring Fireball','a',5],['Lex Fridman','p',1]],
+ 'News':[['BBC News','a',96],['Reuters','a',15],['The Daily','p',4],['Up First','p',1],['Vox','y',0]],
+ 'Science':[['NASA','a',12],['Veritasium','y',7],['Radiolab','p',1],['Quanta','a',0],['Kurzgesagt','y',2],['Nature','a',9]],
+ 'Blogs':[['Kottke','a',40],['Seth Godin','a',30],['Paul Graham','a',0],['Austin Kleon','a',15]],
+ 'Comics':[['xkcd','a',3],['SMBC','a',18]],
+ 'Video':[['Tom Scott','y',5],['3Blue1Brown','y',2],['CGP Grey','y',0],['Vsauce','y',8]],
+ 'Fun':[['Laughing Squid','a',4]],
+};
+let ci=0;const col=n=>P[(n.length*7+n.charCodeAt(0))%P.length];
+const ini=n=>n.split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase();
+const kind={p:'headphones',y:'smart_display',a:''};
+function art([n,k,u],s,o={}){const fs=Math.round(s*.34);return `<div class="art ${k=='y'&&o.round?'round':''}" style="width:${s}px;height:${s}px;background:${col(n)};font-size:${fs}px">${ini(n)}${k!='a'&&o.kind!==false?`<span class="k"><span class="ms fill">${kind[k]}</span></span>`:''}${u&&o.badge!==false?`<b>${u>99?'99+':u}</b>`:''}</div>`}
+const sum=f=>f.reduce((a,x)=>a+x[2],0);
+const chrome=`<div class="status"><span>9:41</span><span>▾ ▴ ■</span></div>
+<div class="searchbar"><span class="ms">search</span>Search everything<span class="ms r">more_vert</span></div>
+<div class="seg"><div><span class="ms" style="font-size:18px">view_agenda</span>Latest</div><div class="on"><span class="ms" style="font-size:18px">check</span>By feed</div></div>
+<div class="chips"><span class="chip on">All 34</span><span class="chip"><span class="ms">headphones</span>9</span><span class="chip"><span class="ms">smart_display</span>8</span><span class="chip end"><span class="ms">sort</span>Most unread</span></div>`;
+const navItems=[['dynamic_feed','Feeds'],['explore','Discover'],['queue_music','Playlists'],['video_library','Library']];
+const nav=`<div class="nav">${navItems.map(([i,l],j)=>`<div class="${j==0?'on':''}"><i><span class="ms ${j==0?'fill':''}">${i}</span></i>${l}</div>`).join('')}</div>`;
+const fab=`<div class="fab"><span class="ms">add</span></div>`;
+const row=document.getElementById('row');
+function colm(title,desc,inner){const c=document.createElement('div');c.className='col';c.innerHTML=`<h2>${title}</h2><p>${desc}</p><div class="phone">${inner}</div>`;row.appendChild(c)}
+function header(name,f,see){return `<div class="lh"><span class="nm">${name}</span><span class="ct">· ${f.length} feeds</span>${see?`<span class="see">See all</span>`:`<span class="un">${sum(f)} unread</span><span class="ms">chevron_right</span>`}</div>`}
+
+// A: logos only
+let a='';for(const [n,f] of Object.entries(F)){a+=header(n,f)+`<div class="lane">${f.map(x=>art(x,60)).join('')}</div>`}
+colm('A · Artwork only','Dense: about 7 folders on one screen, 4½ logos per row. The header carries the name and unread total; each logo has its own unread badge and a small podcast/YouTube mark. Feed names show on long press only, so sites without a logo fall back to letter tiles that are hard to tell apart.',
+ chrome+`<div class="scroll" style="padding-top:2px">${a}</div>`+fab+nav+`<div class="note" style="right:8px;top:300px">Rows scroll sideways; the half-cut logo shows there is more</div>`);
+
+// B: logo + name (recommended)
+let b='';for(const [n,f] of Object.entries(F)){const show=f.slice(0,8);b+=header(n,f)+`<div class="lane">${show.map(x=>`<div class="cell" style="width:84px">${art(x,84)}<div class="t">${x[0]}</div><div class="m">${x[2]?x[2]+' new':'Up to date'}</div></div>`).join('')}${f.length>8?`<div class="more" style="width:84px;height:84px"><span class="ms">arrow_forward</span>All ${f.length}</div>`:''}</div>`}
+colm('B · Artwork + name (recommended)','Each feed is a large tile with its name and "N new" under it, so podcasts, channels and plain blogs are all readable at a glance. About 3½ folders per screen. Folders with more than 8 feeds end in an "All 12" tile; the header chevron opens the same folder page.',
+ chrome+`<div class="scroll">${b}</div>`+fab+nav);
+
+// C: compact list
+let c='';for(const [n,f] of Object.entries(F)){const show=f.slice(0,6);c+=`<div class="crow"><div class="tx"><div class="nm">${n}</div><div class="ct">${f.length} feeds · ${f.filter(x=>x[1]=='p').length?f.filter(x=>x[1]=='p').length+(f.filter(x=>x[1]=='p').length>1?' podcasts · ':' podcast · '):''}${f.filter(x=>x[1]=='y').length?f.filter(x=>x[1]=='y').length+(f.filter(x=>x[1]=='y').length>1?' channels':' channel'):''}`.replace(/ · $/,'')+`</div><div class="stack">${show.map(x=>art(x,28,{badge:false,kind:false})).join('')}${f.length>6?`<div class="plus">+${f.length-6}</div>`:''}</div></div><span class="un">${sum(f)}</span><span class="ms" style="color:var(--on2)">chevron_right</span></div><div class="div"></div>`}
+colm('C · Compact folder list','One row per folder: name, what is inside, and a strip of small overlapping logos, with the unread total on the right. All folders fit on one screen and nothing scrolls sideways, but you always need one more tap to reach a feed.',
+ chrome+`<div class="scroll">${c}</div>`+fab+nav);
+
+// Many feeds: lane scrolled + folder page
+let m='';const tf=F['Tech'];
+m+=header('Tech',tf)+`<div class="lane"><div style="display:flex;gap:12px;transform:translateX(-540px)">${tf.slice(0,8).map(x=>`<div class="cell" style="width:84px">${art(x,84)}<div class="t">${x[0]}</div><div class="m">${x[2]?x[2]+' new':'Up to date'}</div></div>`).join('')}<div class="more" style="width:84px;height:84px"><span class="ms">arrow_forward</span>All ${tf.length}</div></div></div>`;
+for(const n of ['News','Science']){const f=F[n];m+=header(n,f)+`<div class="lane">${f.map(x=>`<div class="cell" style="width:84px">${art(x,84)}<div class="t">${x[0]}</div><div class="m">${x[2]?x[2]+' new':'Up to date'}</div></div>`).join('')}</div>`}
+colm('Many feeds · end of a row','Rows scroll sideways and show up to 8 feeds, then an "All 12" tile. Long rows never push other folders down, so the page height depends only on how many folders you have. Order inside a row follows the Sort chip (Unread, A–Z or your order).',
+ chrome+`<div class="scroll">${m}</div>`+fab+nav+`<div class="note" style="right:12px;top:336px">Swiped to the end</div>`);
+
+// Folder page
+const fp=`<div class="status"><span>9:41</span><span>▾ ▴ ■</span></div>
+<div class="top"><span class="ms">arrow_back</span><span class="t">Tech</span><span class="ms">done_all</span><span class="ms">more_vert</span></div>
+<div class="chips" style="padding-top:2px"><span class="chip on">All 12</span><span class="chip"><span class="ms">headphones</span>3</span><span class="chip"><span class="ms">smart_display</span>2</span><span class="chip end"><span class="ms">sort</span>Unread</span></div>
+<div style="padding:6px 16px 0;font-size:12px;color:var(--on3)">12 feeds · ${sum(tf)} unread</div>
+<div class="grid">${[...tf].sort((x,y)=>y[2]-x[2]).map(x=>`<div class="cell">${art(x,100)}<div class="t">${x[0]}</div><div class="m">${x[2]?x[2]+' new':'Up to date'}</div></div>`).join('')}</div>`;
+colm('Folder page (header tap or "All 12")','The folder as a grid with the same tiles, sorted by unread. Top bar: Back, Mark all read and ⋮ (Rename folder, Open all articles). Tapping a tile opens that feed, as today.',
+ fp+nav);
+</script></body></html>
