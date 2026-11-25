@@ -5,7 +5,7 @@
   <string name="ebooks_what">Books</string>
   <string name="zim_books_what">ZIM books</string>
   <string name="add_book">Add book</string>
-  <string name="ebooks_empty">No books yet. Add an EPUB, MOBI, AZW3, FB2 or CBZ file, or put books in Dropbox › Apps › Feeder › Ebooks.</string>
+  <string name="ebooks_empty">No books yet. Add an EPUB, MOBI, AZW3, FB2, CBZ or PDF file, or put books in Dropbox › Apps › Feeder › Ebooks.</string>
   <string name="ebook_new">New</string>
   <string name="ebook_in_dropbox">in Dropbox</string>
   <string name="ebook_phone_only">this phone only</string>

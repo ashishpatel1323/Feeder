@@ -539,7 +539,13 @@ fun EbookReaderScreen(
                                                 WebResourceResponse("application/octet-stream", null, f.inputStream())
                                             } else {
                                                 val name = path.removePrefix("/").ifBlank { "index.html" }
-                                                val mime = if (name.endsWith(".html")) "text/html" else if (name.endsWith(".js")) "text/javascript" else "application/octet-stream"
+                                                val mime =
+                                                    when (name.substringAfterLast('.')) {
+                                                        "html" -> "text/html"
+                                                        "js", "mjs" -> "text/javascript"
+                                                        "css" -> "text/css"
+                                                        else -> "application/octet-stream"
+                                                    }
                                                 WebResourceResponse(mime, "utf-8", ctx.assets.open("ebook/$name"))
                                             }
                                         } catch (e: Exception) {

@@ -135,7 +135,7 @@ fun EbooksScreen(
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = { pick.launch(arrayOf("application/epub+zip", "application/x-mobipocket-ebook", "application/octet-stream", "*/*")) },
+                onClick = { pick.launch(arrayOf("application/epub+zip", "application/pdf", "application/x-mobipocket-ebook", "application/octet-stream", "*/*")) },
                 icon = { Icon(Icons.Outlined.Add, contentDescription = null) },
                 text = { Text(stringResource(R.string.add_book)) },
             )

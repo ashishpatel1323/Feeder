@@ -32,7 +32,8 @@ describe('ebook library', () => {
   it('reads names', () => {
     expect(extOf('A.EPUB')).toBe('epub')
     expect(extOf('x.fb2.zip')).toBe('fbz')
-    expect(isBookName('notes.pdf')).toBe(false)
+    expect(isBookName('notes.pdf')).toBe(true)
+    expect(isBookName('notes.txt')).toBe(false)
     expect(isBookName('book.azw3')).toBe(true)
     expect(titleFromName('The_Time Machine.epub')).toBe('The Time Machine')
     expect(bookIdOfItem(bookItemId('abc'))).toBe('abc')
@@ -65,13 +66,13 @@ describe('ebook library', () => {
       book('gone-local', { dropboxPath: '/Ebooks/y.epub', local: true }),
       book('local-only', { local: true }),
     ]
-    const { put, remove } = mergeDropbox(books, [file('kept.epub', 'kept'), file('New_Book.epub', 'new'), file('new.mobi', 'moved'), file('notes.pdf', 'pdf'), file('dupe.epub', 'new')])
+    const { put, remove } = mergeDropbox(books, [file('kept.epub', 'kept'), file('New_Book.epub', 'new'), file('new.mobi', 'moved'), file('notes.txt', 'txt'), file('dupe.epub', 'new')])
     const byId = Object.fromEntries(put.map((b) => [b.id, b]))
     expect(byId.new).toMatchObject({ title: 'New Book', local: false, dropboxPath: '/Ebooks/New_Book.epub' })
     expect(byId.moved).toMatchObject({ dropboxPath: '/Ebooks/new.mobi', title: 'new' })
     expect(byId['gone-local']).toMatchObject({ dropboxPath: null, local: true })
     expect(byId.kept).toBeUndefined()
-    expect(byId.pdf).toBeUndefined()
+    expect(byId.txt).toBeUndefined()
     expect(remove).toEqual(['gone-remote'])
   })
 })

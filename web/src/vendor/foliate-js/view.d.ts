@@ -32,14 +32,15 @@ export interface Location {
 
 export interface Renderer extends HTMLElement {
   getContents(): { doc: Document; index: number; overlayer?: unknown }[]
-  setStyles(css: string | [string, string]): void
-  scrollToAnchor(anchor: Range | Element | number, select?: boolean): Promise<void>
   next(): Promise<void>
   prev(): Promise<void>
-  nextSection(): Promise<void>
-  prevSection(): Promise<void>
-  readonly atEnd: boolean
-  readonly atStart: boolean
+  // Reflowable books only (paginator); fixed layouts (PDF, comics) lack these
+  setStyles?(css: string | [string, string]): void
+  scrollToAnchor?(anchor: Range | Element | number, select?: boolean): Promise<void>
+  nextSection?(): Promise<void>
+  prevSection?(): Promise<void>
+  readonly atEnd?: boolean
+  readonly atStart?: boolean
 }
 
 export interface Annotation {
@@ -63,6 +64,7 @@ export declare class FoliateView extends HTMLElement {
   next(): Promise<void>
   prev(): Promise<void>
   getCFI(index: number, range?: Range): string
+  resolveNavigation(target: string | number): { index: number; anchor?: (doc: Document) => Range | Element | null } | undefined
   addAnnotation(a: Annotation, remove?: boolean): Promise<{ index: number; label: string } | undefined>
   deleteAnnotation(a: Annotation): Promise<unknown>
   showAnnotation(a: Annotation): Promise<void>
