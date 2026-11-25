@@ -82,6 +82,7 @@ import com.nononsenseapps.feeder.model.highlights.Highlight
 import com.nononsenseapps.feeder.model.playlists.ItemKind
 import com.nononsenseapps.feeder.model.playlists.kind
 import com.nononsenseapps.feeder.model.ebooks.EbookLibrary
+import com.nononsenseapps.feeder.model.zim.ZimLibrary
 import com.nononsenseapps.feeder.model.search.BookHit
 import com.nononsenseapps.feeder.model.search.FeedHit
 import com.nononsenseapps.feeder.model.search.FolderHit
@@ -156,6 +157,7 @@ fun GlobalSearchScreen(
             Shortcut(stringResource(R.string.search_scope_highlights), Icons.Outlined.BorderColor, "highlights notes quotes", nav.onHighlights),
         )
 
+    val zimLibrary = ZimLibrary.get(LocalContext.current)
     val open: (SearchHit) -> Unit = { hit ->
         keyboard?.hide()
         when (hit) {
@@ -168,9 +170,14 @@ fun GlobalSearchScreen(
 
             is HighlightHit -> {
                 viewModel.remember()
+                val zimPage = ZimLibrary.pageOfHighlight(hit.highlight.itemKey)
                 val bookId = EbookLibrary.bookIdOfItem(hit.highlight.itemKey)
-                val id = if (bookId == null) viewModel.itemIdOf(hit.highlight) else null
+                val id = if (bookId == null && zimPage == null) viewModel.itemIdOf(hit.highlight) else null
                 when {
+                    zimPage != null -> {
+                        zimLibrary.openAtHighlight(zimPage.first, zimPage.second, hit.highlight.id)
+                        nav.onOpenZim(zimPage.first)
+                    }
                     bookId != null -> nav.onOpenBook(bookId, hit.highlight.cfi)
                     id != null -> nav.onOpenArticle(id)
                     hit.highlight.itemLink != null -> nav.onOpenLink(hit.highlight.itemLink)

@@ -23,4 +23,6 @@
   <string name="zim_in_text">In the text</string>
   <string name="zim_no_fulltext">This book has no full-text index, so only titles are searched.</string>
   <string name="zim_book_missing">This book is not on this phone any more.</string>
+  <string name="zim_no_highlights">Long-press text on a page to highlight it.</string>
+  <string name="zim_highlight_book_missing">That ZIM book is not on this phone</string>
 </resources>

@@ -785,6 +785,11 @@ export class ReadAloudEngine {
     scroller?.addEventListener('keydown', this.onScrollKey)
   }
 
+  /** The reader scrolled a page this can't watch (a ZIM page's iframe): stop following, as onUserScroll. */
+  userScrolled() {
+    this.onUserScroll()
+  }
+
   private onUserScroll = () => {
     if (this.state.following && this.state.status === 'playing') this.set({ following: false })
   }

@@ -2,7 +2,47 @@ package com.nononsenseapps.feeder.ui.compose.zim
 
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
+import android.webkit.JavascriptInterface
+import android.widget.Toast
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.outlined.Headphones
+import androidx.compose.material.icons.outlined.Highlight
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.text.AnnotatedString
+import com.nononsenseapps.feeder.archmodel.Repository
+import com.nononsenseapps.feeder.model.PlaybackStatus
+import com.nononsenseapps.feeder.model.ReadAloudNeighbors
+import com.nononsenseapps.feeder.model.TTSStateHolder
+import com.nononsenseapps.feeder.model.highlights.Highlight
+import com.nononsenseapps.feeder.model.highlights.HighlightStore
+import com.nononsenseapps.feeder.ui.compose.ebooks.HighlightBar
+import com.nononsenseapps.feeder.ui.compose.ebooks.ttsIdOf
+import com.nononsenseapps.feeder.ui.compose.readaloud.HideableCompactTTSPlayer
+import com.nononsenseapps.feeder.ui.compose.utils.ImmutableHolder
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonPrimitive
+import org.kodein.di.compose.LocalDI
+import org.kodein.di.instance
+import java.util.UUID
 import android.graphics.Bitmap
 import android.view.ViewGroup
 import android.webkit.WebResourceRequest
@@ -66,9 +106,22 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
-/** Reads one ZIM book in a WebView, served from the file on the phone; search by title and full text. */
+/** Text selected on a page, anchored like an article highlight (see web/src/lib/zim/marks.ts). */
+private data class ZimSelection(
+    val text: String,
+    val start: Int,
+    val prefix: String,
+)
+
+private val bridgeJson = Json { ignoreUnknownKeys = true }
+
+/**
+ * Reads one ZIM book in a WebView, served from the file on the phone; search by title and full text.
+ * Pages can be highlighted and read aloud: a script built from the web app's code
+ * (assets/zim/feeder-zim.js, see web/src/zim-android) is added to each page.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
-@SuppressLint("SetJavaScriptEnabled")
+@SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
 @Composable
 fun ZimReaderScreen(
     bookId: String,
@@ -91,6 +144,119 @@ fun ZimReaderScreen(
     var textHits by remember { mutableStateOf<List<ZimWebContent.Hit>>(emptyList()) }
     var hasFulltext by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
+
+    val di = LocalDI.current
+    val highlightStore: HighlightStore by di.instance()
+    val ttsStateHolder: TTSStateHolder by di.instance()
+    val repository: Repository by di.instance()
+    /** The page shown, as its path in the book; null until a page of the book has loaded. */
+    var pagePath by remember { mutableStateOf<String?>(null) }
+    /** Bumped each time a page finishes loading and has the script. */
+    var pageLoads by remember { mutableStateOf(0) }
+    var selection by remember { mutableStateOf<ZimSelection?>(null) }
+    var editing by remember { mutableStateOf<Highlight?>(null) }
+    var highlightsSheet by remember { mutableStateOf(false) }
+    val allHighlights by highlightStore.highlights.collectAsState()
+    val bookPrefix = remember(bookId) { ZimLibrary.highlightKey(bookId, "") }
+    val bookHighlights = remember(allHighlights, bookPrefix) { allHighlights.filter { it.itemKey.startsWith(bookPrefix) } }
+    val itemKey = pagePath?.let { ZimLibrary.highlightKey(bookId, it) }
+    val pageHighlights = remember(bookHighlights, itemKey) { bookHighlights.filter { it.itemKey == itemKey } }
+    val ttsId = remember(itemKey) { ttsIdOf(itemKey ?: "zim:$bookId") }
+    val script = remember { runCatching { context.assets.open("zim/feeder-zim.js").bufferedReader().use { it.readText() } }.getOrNull() }
+
+    fun js(code: String) = webView?.evaluateJavascript(code, null)
+
+    fun q(s: String?) = if (s == null) "null" else JsonPrimitive(s).toString()
+
+    fun marksJson(list: List<Highlight>) =
+        JsonArray(
+            list.map {
+                JsonObject(
+                    mapOf(
+                        "id" to JsonPrimitive(it.id),
+                        "text" to JsonPrimitive(it.text),
+                        "start" to JsonPrimitive(it.start),
+                        "prefix" to JsonPrimitive(it.prefix),
+                        "color" to JsonPrimitive(it.color),
+                    ),
+                )
+            },
+        ).toString()
+
+    // The latest values for the bridge, which outlives recompositions
+    val currentPageHighlights by rememberUpdatedState(pageHighlights)
+    val currentPageTitle by rememberUpdatedState(pageTitle)
+    val currentBookTitle by rememberUpdatedState(bookTitle)
+    val currentTtsId by rememberUpdatedState(ttsId)
+    val bridge =
+        remember(bookId) {
+            val main = Handler(Looper.getMainLooper())
+            object {
+                @JavascriptInterface
+                fun onSelection(json: String) =
+                    main.post {
+                        val o = runCatching { bridgeJson.parseToJsonElement(json) as? JsonObject }.getOrNull()
+                        selection =
+                            o?.let {
+                                val text = it["text"]?.jsonPrimitive?.contentOrNull
+                                if (text.isNullOrBlank()) {
+                                    null
+                                } else {
+                                    ZimSelection(text, it["start"]?.jsonPrimitive?.intOrNull ?: 0, it["prefix"]?.jsonPrimitive?.contentOrNull ?: "")
+                                }
+                            }
+                        if (selection != null) editing = null
+                    }
+
+                @JavascriptInterface
+                fun onHighlightTap(id: String) =
+                    main.post {
+                        currentPageHighlights.firstOrNull { it.id == id }?.let {
+                            selection = null
+                            editing = it
+                        }
+                    }
+
+                @JavascriptInterface
+                fun onTtsText(
+                    text: String,
+                    offset: Int,
+                ) = main.post {
+                    if (text.isBlank()) return@post
+                    ttsStateHolder.tts(
+                        textArray = listOf(AnnotatedString(text)),
+                        useDetectLanguage = repository.useDetectLanguage.value,
+                        articleId = currentTtsId,
+                        title = currentPageTitle.ifBlank { currentBookTitle },
+                        author = "",
+                        feedTitle = currentBookTitle,
+                        startOffset = offset.coerceIn(0, maxOf(0, text.length - 1)),
+                    )
+                }
+            }
+        }
+
+    // Read aloud: the sentence and word being spoken, marked on the page
+    val ttsProgress by ttsStateHolder.progress.collectAsState()
+    val ttsState by ttsStateHolder.ttsState.collectAsState()
+    val reading = ttsProgress.articleId == ttsId && ttsState != PlaybackStatus.STOPPED
+    LaunchedEffect(ttsProgress.segment, ttsProgress.word, reading, pageLoads) {
+        if (!reading) {
+            js("window.feederZim&&feederZim.ttsClear()")
+            return@LaunchedEffect
+        }
+        val seg = ttsProgress.segment ?: return@LaunchedEffect
+        val w = ttsProgress.word
+        js("window.feederZim&&feederZim.ttsMark(${seg.start},${seg.end},${w?.start ?: 0},${w?.end ?: 0})")
+    }
+    LaunchedEffect(pageHighlights, pageLoads) { if (pageLoads > 0) js("window.feederZim&&feederZim.setHighlights(${q(marksJson(pageHighlights))})") }
+    DisposableEffect(bookId) {
+        onDispose {
+            if (ttsStateHolder.progress.value.articleId == ttsId) ttsStateHolder.stop()
+        }
+    }
+    val playerVisible = remember { MutableTransitionState(false) }
+    playerVisible.targetState = reading
 
     LaunchedEffect(bookId) {
         withContext(Dispatchers.IO) {
@@ -136,8 +302,26 @@ fun ZimReaderScreen(
         webView?.loadUrl(ZimWebContent.url(bookId, path))
     }
 
+    fun openHighlight(h: Highlight) {
+        val (_, path) = ZimLibrary.pageOfHighlight(h.itemKey) ?: return
+        highlightsSheet = false
+        if (path == pagePath) {
+            js("window.feederZim&&feederZim.scrollToHighlight(${q(h.id)})")
+        } else {
+            library.pendingHighlight = h.id
+            open(path)
+        }
+    }
+
+    fun quote(text: String) = "“$text”\n— ${listOf(pageTitle, bookTitle).filter { it.isNotBlank() }.distinct().joinToString(", ")}"
+
     BackHandler {
         when {
+            selection != null || editing != null -> {
+                if (selection != null) js("window.feederZim&&feederZim.clearSelection()")
+                selection = null
+                editing = null
+            }
             searching -> searching = false
             webView?.canGoBack() == true -> webView?.goBack()
             else -> onNavigateUp()
@@ -195,12 +379,91 @@ fun ZimReaderScreen(
                         IconButton(onClick = { searching = true }) {
                             Icon(Icons.Outlined.Search, contentDescription = stringResource(R.string.zim_search_in, bookTitle))
                         }
+                        IconButton(onClick = { highlightsSheet = true }) {
+                            Icon(Icons.Outlined.Highlight, contentDescription = stringResource(R.string.ebook_highlights))
+                        }
+                        IconButton(onClick = { if (reading) ttsStateHolder.play() else js("window.feederZim&&feederZim.ttsText()") }, enabled = pagePath != null) {
+                            Icon(Icons.Outlined.Headphones, contentDescription = stringResource(R.string.ebook_listen))
+                        }
                         IconButton(onClick = { mainPath?.let { open(it) } }) {
                             Icon(Icons.Outlined.Home, contentDescription = stringResource(R.string.zim_main_page))
                         }
                     }
                 },
             )
+        },
+        bottomBar = {
+            Column {
+                if (selection != null || editing != null) {
+                    HighlightBar(
+                        text = selection?.text ?: editing!!.text,
+                        existing = editing,
+                        onSave = { color, note ->
+                            val e = editing
+                            if (e != null) {
+                                highlightStore.update(e.id, color, note)
+                                editing = e.copy(color = color.id, note = note.trim())
+                            } else {
+                                val sel = selection ?: return@HighlightBar
+                                val key = itemKey ?: return@HighlightBar
+                                highlightStore.add(
+                                    Highlight(
+                                        id = UUID.randomUUID().toString(),
+                                        itemKey = key,
+                                        itemTitle = pageTitle.ifBlank { bookTitle },
+                                        itemLink = null,
+                                        feedTitle = bookTitle,
+                                        imageUrl = null,
+                                        text = sel.text,
+                                        start = sel.start,
+                                        prefix = sel.prefix,
+                                        color = color.id,
+                                        note = note.trim(),
+                                        createdAt = System.currentTimeMillis(),
+                                    ),
+                                )
+                                js("window.feederZim&&feederZim.clearSelection()")
+                                selection = null
+                            }
+                        },
+                        onCopy = {
+                            val text = selection?.text ?: editing?.text ?: ""
+                            (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("quote", quote(text)))
+                            Toast.makeText(context, R.string.ebook_copy, Toast.LENGTH_SHORT).show()
+                        },
+                        onShare = {
+                            val text = selection?.text ?: editing?.text ?: ""
+                            context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, quote(text)), null))
+                        },
+                        onDelete = {
+                            editing?.let { highlightStore.delete(it.id) }
+                            editing = null
+                        },
+                        onClose = {
+                            if (selection != null) js("window.feederZim&&feederZim.clearSelection()")
+                            selection = null
+                            editing = null
+                        },
+                    )
+                }
+                HideableCompactTTSPlayer(
+                    visibleState = playerVisible,
+                    currentlyPlaying = ttsState == PlaybackStatus.PLAYING,
+                    onPlay = { ttsStateHolder.play() },
+                    onPause = { ttsStateHolder.pause() },
+                    onStop = { ttsStateHolder.stop() },
+                    onSkipNext = { ttsStateHolder.skipNext() },
+                    languages = ImmutableHolder(ttsStateHolder.availableLanguages.collectAsState().value),
+                    onSelectLanguage = { ttsStateHolder.setLanguage(it) },
+                    progress = ttsStateHolder.progress,
+                    onSeekTo = { ttsStateHolder.seekTo(it) },
+                    onGoToSpokenText = { js("window.feederZim&&feederZim.ttsFollow()") },
+                    displayedArticleId = ttsId,
+                    onSelectSpeed = { ttsStateHolder.setSpeed(it) },
+                    diagnostics = { ttsStateHolder.diagnostics() },
+                    neighbors = ReadAloudNeighbors(currentTitle = pageTitle.ifBlank { bookTitle }),
+                )
+            }
         },
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
@@ -220,6 +483,7 @@ fun ZimReaderScreen(
                                 // Pages come only from the book (see shouldInterceptRequest), never from files
                                 settings.allowFileAccess = false
                                 settings.allowContentAccess = false
+                                addJavascriptInterface(bridge, "FeederZim")
                                 webViewClient =
                                     object : WebViewClient() {
                                         override fun shouldInterceptRequest(
@@ -250,6 +514,10 @@ fun ZimReaderScreen(
                                             favicon: Bitmap?,
                                         ) {
                                             loading = true
+                                            selection = null
+                                            editing = null
+                                            // A new page: stop reading the old one
+                                            if (ttsStateHolder.progress.value.articleId == currentTtsId && ttsStateHolder.ttsState.value != PlaybackStatus.STOPPED) ttsStateHolder.stop()
                                         }
 
                                         override fun onPageFinished(
@@ -258,8 +526,16 @@ fun ZimReaderScreen(
                                         ) {
                                             loading = false
                                             pageTitle = view.title?.takeUnless { it.contains(ZimWebContent.HOST) }.orEmpty()
-                                            ZimWebContent.parse(url.toUri())?.let { (book, path) ->
-                                                if (book == bookId && path.isNotEmpty()) library.rememberPath(bookId, path)
+                                            val at = ZimWebContent.parse(url.toUri())?.takeIf { it.first == bookId }
+                                            at?.let { (_, path) -> if (path.isNotEmpty()) library.rememberPath(bookId, path) }
+                                            pagePath = at?.second
+                                            if (at != null && script != null) {
+                                                view.evaluateJavascript(script, null)
+                                                library.pendingHighlight?.let {
+                                                    library.pendingHighlight = null
+                                                    view.evaluateJavascript("window.feederZim&&feederZim.scrollToHighlight(${q(it)})", null)
+                                                }
+                                                pageLoads++
                                             }
                                         }
                                     }
@@ -278,6 +554,38 @@ fun ZimReaderScreen(
                     onOpen = { open(it) },
                 )
             }
+        }
+    }
+
+    if (highlightsSheet) {
+        ZimHighlightsSheet(highlights = bookHighlights, bookTitle = bookTitle, onOpen = { openHighlight(it) }, onDismiss = { highlightsSheet = false })
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ZimHighlightsSheet(
+    highlights: List<Highlight>,
+    bookTitle: String,
+    onOpen: (Highlight) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        LazyColumn(Modifier.fillMaxWidth()) {
+            item { Text(stringResource(R.string.ebook_highlights), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
+            if (highlights.isEmpty()) {
+                item { Text(stringResource(R.string.zim_no_highlights), modifier = Modifier.padding(16.dp)) }
+            }
+            items(highlights.sortedWith(compareBy({ it.itemTitle }, { it.start })), key = { it.id }) { h ->
+                ListItem(
+                    leadingContent = { Box(Modifier.size(width = 4.dp, height = 36.dp).background(Color(h.highlightColor.ink))) },
+                    overlineContent = if (h.itemTitle.isNotBlank() && h.itemTitle != bookTitle) ({ Text(h.itemTitle, maxLines = 1, overflow = TextOverflow.Ellipsis) }) else null,
+                    headlineContent = { Text(h.text, maxLines = 4, overflow = TextOverflow.Ellipsis) },
+                    supportingContent = if (h.note.isNotBlank()) ({ Text(h.note) }) else null,
+                    modifier = Modifier.clickable { onOpen(h) },
+                )
+            }
+            item { Spacer(Modifier.height(24.dp)) }
         }
     }
 }

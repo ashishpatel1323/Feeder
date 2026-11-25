@@ -347,6 +347,7 @@ data object HighlightsDestination : NavigationDestination(
             onNavigateUp = { navController.popBackStack() },
             onOpenArticle = { id -> ArticleDestination.navigate(navController, itemId = id) },
             onOpenBook = { book, cfi -> EbookReaderDestination.navigate(navController, book, cfi) },
+            onOpenZim = { book -> ZimReaderDestination.navigate(navController, book) },
         )
     }
 }

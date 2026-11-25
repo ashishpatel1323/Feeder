@@ -666,7 +666,7 @@ private fun SheetTitle(text: String) {
 }
 
 @Composable
-private fun HighlightBar(
+internal fun HighlightBar(
     text: String,
     existing: Highlight?,
     onSave: (HighlightColor, String) -> Unit,
