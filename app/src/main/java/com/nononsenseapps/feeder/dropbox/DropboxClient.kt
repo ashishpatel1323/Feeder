@@ -509,9 +509,12 @@ class DropboxClient private constructor(
             }
 
         /** Dropbox's content hash: SHA-256 of each 4 MB block, then SHA-256 of those hashes. */
-        fun contentHash(file: File): String {
+        fun contentHash(file: File): String = contentHash(file.inputStream())
+
+        /** [contentHash] of a stream (a file picked on the phone); closes it. */
+        fun contentHash(stream: java.io.InputStream): String {
             val all = MessageDigest.getInstance("SHA-256")
-            file.inputStream().buffered().use { input ->
+            stream.buffered().use { input ->
                 val block = ByteArray(4 * 1024 * 1024)
                 while (true) {
                     var filled = 0

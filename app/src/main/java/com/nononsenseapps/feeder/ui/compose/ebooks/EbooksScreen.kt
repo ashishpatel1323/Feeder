@@ -1,5 +1,7 @@
 package com.nononsenseapps.feeder.ui.compose.ebooks
 
+import androidx.compose.material.icons.outlined.Folder
+
 import android.graphics.BitmapFactory
 import android.text.format.Formatter
 import android.widget.Toast
@@ -114,6 +116,8 @@ fun EbooksScreen(
         rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
             uris.forEach { library.import(it) }
         }
+    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> uri?.let(library::addFolder) }
+    var addMenu by remember { mutableStateOf(false) }
 
     LifecycleResumeEffect(Unit) {
         library.refresh()
@@ -139,6 +143,8 @@ fun EbooksScreen(
     val downloadLabel = stringResource(R.string.shelf_download)
     val removeLabel = stringResource(R.string.ebook_remove_from_phone)
     val deleteLabel = stringResource(R.string.ebook_delete)
+    val uploadLabel = stringResource(R.string.upload_to_dropbox)
+    val forgetLabel = stringResource(R.string.audiobook_forget)
     val deleteDropboxLabel = stringResource(R.string.ebook_delete_dropbox)
     val newLabel = stringResource(R.string.ebook_new)
     val noBooksHere = stringResource(R.string.shelf_no_books_here)
@@ -147,7 +153,7 @@ fun EbooksScreen(
             val p = pos[b.id]
             val f = p?.f
             val byOther = p?.let { otherDeviceText(it.by, it.ts, thisDeviceId) }
-            val job = jobs.firstOrNull { it.key == "down:${b.id}" }
+            val job = jobs.firstOrNull { it.key == "down:${b.id}" || it.key == "up:${b.id}" }
             ShelfItem(
                 key = b.id,
                 title = b.title,
@@ -157,12 +163,13 @@ fun EbooksScreen(
                 fallback = Icons.AutoMirrored.Outlined.MenuBook,
                 where = if (!b.local) Where.CLOUD else if (b.dropboxPath != null) Where.BOTH else Where.DEVICE,
                 size = b.size,
-                busy = job?.let { context.getString(R.string.shelf_downloading, if (it.total > 0) (it.done * 100 / it.total).toInt() else 0) },
+                busy = job?.let { context.getString(if (it.key.startsWith("up:")) R.string.shelf_uploading else R.string.shelf_downloading, if (it.total > 0) (it.done * 100 / it.total).toInt() else 0) },
                 onOpen = { onOpenBook(b.id) },
                 actions =
                     buildList {
                         if (!b.local) add(ShelfAction(downloadLabel) { library.download(b.id) })
-                        if (b.local) add(ShelfAction(if (b.dropboxPath != null) removeLabel else deleteLabel) { library.removeFromDevice(b.id) })
+                        if (b.local && b.dropboxPath == null && link != null && jobs.none { it.key == "up:${b.id}" }) add(ShelfAction(uploadLabel) { library.uploadToDropbox(b.id) })
+                        if (b.local) add(ShelfAction(if (b.uri != null) forgetLabel else if (b.dropboxPath != null) removeLabel else deleteLabel) { library.removeFromDevice(b.id) })
                         if (b.dropboxPath != null) add(ShelfAction(deleteDropboxLabel) { deleting = b })
                     },
             )
@@ -184,11 +191,31 @@ fun EbooksScreen(
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { pick.launch(arrayOf("application/epub+zip", "application/pdf", "application/x-mobipocket-ebook", "application/octet-stream", "*/*")) },
-                icon = { Icon(Icons.Outlined.Add, contentDescription = null) },
-                text = { Text(stringResource(R.string.add_book)) },
-            )
+            Box {
+                ExtendedFloatingActionButton(
+                    onClick = { addMenu = true },
+                    icon = { Icon(Icons.Outlined.Add, contentDescription = null) },
+                    text = { Text(stringResource(R.string.add_book)) },
+                )
+                DropdownMenu(expanded = addMenu, onDismissRequest = { addMenu = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.add_from_phone_files)) },
+                        leadingIcon = { Icon(Icons.AutoMirrored.Outlined.MenuBook, null) },
+                        onClick = {
+                            addMenu = false
+                            pick.launch(arrayOf("application/epub+zip", "application/pdf", "application/x-mobipocket-ebook", "application/octet-stream", "*/*"))
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.add_from_phone_folder)) },
+                        leadingIcon = { Icon(Icons.Outlined.Folder, null) },
+                        onClick = {
+                            addMenu = false
+                            pickFolder.launch(null)
+                        },
+                    )
+                }
+            }
         },
     ) { padding ->
         LazyVerticalGrid(
@@ -201,7 +228,7 @@ fun EbooksScreen(
             item(span = { GridItemSpan(maxLineSpan) }) {
                 DropboxCard(what = stringResource(R.string.ebooks_what), onSignedOut = { nudge.changed(false) }, horizontalPadding = 0.dp)
             }
-            items(jobs.filterNot { it.key.startsWith("down:") }, key = { "job:${it.key}" }, span = { GridItemSpan(maxLineSpan) }) { job ->
+            items(jobs.filterNot { it.key.startsWith("down:") || it.key.startsWith("up:") }, key = { "job:${it.key}" }, span = { GridItemSpan(maxLineSpan) }) { job ->
                 Column(Modifier.fillMaxWidth()) {
                     Text(job.label, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (job.total > 0) {

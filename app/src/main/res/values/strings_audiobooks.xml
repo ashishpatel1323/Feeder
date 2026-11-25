@@ -2,7 +2,7 @@
 <resources>
   <string name="tab_audiobooks">Audiobooks</string>
   <string name="audiobooks_what">Audiobooks</string>
-  <string name="audiobooks_empty">No audiobooks yet. Put them in Dropbox › Apps › Feeder › Audiobooks: a file there is one book (M4B, M4A, MP3…), and a folder there is one book whose files play in name order.</string>
+  <string name="audiobooks_empty">No audiobooks yet. Add files or a folder from this phone (they are played where they are, nothing is copied or uploaded), or put them in Dropbox › Apps › Feeder › Audiobooks: a file there is one book (M4B, M4A, MP3…), and a folder there is one book whose files play in name order.</string>
   <string name="audiobooks_refresh">Check Dropbox for new audiobooks</string>
   <string name="audiobook_not_started">Not started</string>
   <string name="audiobook_finished">Finished</string>
@@ -29,7 +29,14 @@
   <string name="audiobook_chapters">Chapters</string>
   <string name="audiobook_reading_chapters">Reading chapters, %1$d of %2$d files</string>
   <string name="audiobook_left">%1$s of %2$s · %3$s left</string>
-  <string name="audiobook_gone">This book is no longer in Dropbox.</string>
+  <string name="audiobook_gone">This book is no longer on this phone or in Dropbox.</string>
+  <string name="audiobooks_add">Add audiobook</string>
+  <string name="add_from_phone_files">Files…</string>
+  <string name="add_from_phone_folder">A folder…</string>
+  <string name="audiobooks_adding">Reading %1$s…</string>
+  <string name="audiobook_forget">Remove from Feeder</string>
+  <string name="audiobooks_empty_phone">No audiobooks on this phone yet. Add some, or download one from the In Dropbox list.</string>
+  <string name="shelf_streams_hint">Plays from Dropbox, needs a connection</string>
   <string name="audiobook_close">Close the audiobook player</string>
   <string name="audiobook_open_player">Open the player</string>
   <string name="audiobook_more_for">More for %1$s</string>

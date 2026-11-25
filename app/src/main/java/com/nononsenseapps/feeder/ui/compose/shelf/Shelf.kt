@@ -1,5 +1,9 @@
 package com.nononsenseapps.feeder.ui.compose.shelf
 
+import androidx.compose.material3.LinearProgressIndicator
+
+import androidx.compose.ui.graphics.Brush
+
 import android.content.Context
 import android.text.format.Formatter
 import androidx.compose.foundation.Image
@@ -78,9 +82,15 @@ enum class Where { BOTH, DEVICE, CLOUD }
 
 enum class Show { ALL, DEVICE, CLOUD }
 
-enum class CoverShape { BOOK, TILE }
+enum class CoverShape { BOOK, TILE, SQUARE }
 
 class ShelfAction(
+    val label: String,
+    val run: () -> Unit,
+)
+
+class ShelfQuick(
+    val icon: ImageVector,
     val label: String,
     val run: () -> Unit,
 )
@@ -101,6 +111,10 @@ class ShelfItem(
     val size: Long,
     /** Downloading or uploading right now, e.g. "Downloading 40%" */
     val busy: String? = null,
+    /** 0–1 through it (listened), drawn as a bar along the cover */
+    val progress: Float? = null,
+    /** One action right on the cover (an audiobook's Play) */
+    val quick: ShelfQuick? = null,
     val onOpen: () -> Unit,
     val actions: List<ShelfAction> = emptyList(),
 )
@@ -223,6 +237,8 @@ fun LazyGridScope.shelf(
     prefs: ShelfPrefs,
     shape: CoverShape,
     emptyDevice: String,
+    /** What is in Dropbox plays from there right away (audiobooks), so it isn't dimmed */
+    streams: Boolean = false,
 ) {
     val onPhone = items.filter { it.where != Where.CLOUD }
     val cloud = items.filter { it.where == Where.CLOUD }
@@ -230,7 +246,7 @@ fun LazyGridScope.shelf(
         if (cloud.isNotEmpty()) {
             item(key = "head:phone", span = { GridItemSpan(maxLineSpan) }) { SectionHead(Icons.Outlined.CheckCircle, R.string.shelf_on_phone, R.string.shelf_on_phone_hint) }
         }
-        items(onPhone, key = { it.key }) { ShelfEntry(it, prefs.cards, shape) }
+        items(onPhone, key = { it.key }) { ShelfEntry(it, prefs.cards, shape, streams) }
     }
     if (prefs.show == Show.DEVICE && onPhone.isEmpty()) {
         item(key = "empty:phone", span = { GridItemSpan(maxLineSpan) }) {
@@ -238,8 +254,8 @@ fun LazyGridScope.shelf(
         }
     }
     if (prefs.show != Show.DEVICE && cloud.isNotEmpty()) {
-        item(key = "head:cloud", span = { GridItemSpan(maxLineSpan) }) { SectionHead(Icons.Outlined.Cloud, R.string.in_dropbox, R.string.shelf_in_dropbox_hint) }
-        items(cloud, key = { it.key }) { ShelfEntry(it, prefs.cards, shape) }
+        item(key = "head:cloud", span = { GridItemSpan(maxLineSpan) }) { SectionHead(Icons.Outlined.Cloud, R.string.in_dropbox, if (streams) R.string.shelf_streams_hint else R.string.shelf_in_dropbox_hint) }
+        items(cloud, key = { it.key }) { ShelfEntry(it, prefs.cards, shape, streams) }
     }
 }
 
@@ -264,6 +280,7 @@ private fun ShelfEntry(
     item: ShelfItem,
     cards: Boolean,
     shape: CoverShape,
+    streams: Boolean,
 ) {
     var menu by remember { mutableStateOf(false) }
     val more: @Composable () -> Unit = {
@@ -287,12 +304,31 @@ private fun ShelfEntry(
             }
         }
     }
-    val dim = if (item.where == Where.CLOUD) Modifier.alpha(0.72f) else Modifier
+    val quick: @Composable (Boolean) -> Unit = { onCover ->
+        item.quick?.let { q ->
+            IconButton(onClick = q.run, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    q.icon,
+                    contentDescription = q.label,
+                    modifier = if (onCover) Modifier.background(MaterialTheme.colorScheme.surface.copy(alpha = 0.88f), RoundedCornerShape(50)).padding(6.dp) else Modifier,
+                )
+            }
+        }
+    }
+    val progress = item.progress?.takeIf { it > 0f && it < 0.999f }
+    val dim = if (item.where == Where.CLOUD && !streams) Modifier.alpha(0.72f) else Modifier
     if (cards) {
         Column(Modifier.clickable(onClick = item.onOpen)) {
             Box {
                 Cover(item, shape, small = false, modifier = dim)
-                Availability(item.where, item.size, item.busy, Modifier.align(Alignment.BottomStart).padding(6.dp))
+                Column(Modifier.align(Alignment.BottomStart).padding(6.dp)) {
+                    Availability(item.where, item.size, item.busy)
+                    if (progress != null) {
+                        Spacer(Modifier.height(6.dp))
+                        LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(), gapSize = 0.dp, drawStopIndicator = {})
+                    }
+                }
+                Box(Modifier.align(Alignment.TopStart).padding(2.dp)) { quick(true) }
                 Box(Modifier.align(Alignment.TopEnd)) { more() }
             }
             Spacer(Modifier.height(6.dp))
@@ -315,10 +351,16 @@ private fun ShelfEntry(
                             Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
+                    if (progress != null) LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(0.6f), gapSize = 0.dp, drawStopIndicator = {})
                 }
             },
             leadingContent = { Cover(item, shape, small = true, modifier = dim) },
-            trailingContent = { more() },
+            trailingContent = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    quick(false)
+                    more()
+                }
+            },
             modifier = Modifier.clickable(onClick = item.onOpen),
         )
     }
@@ -337,6 +379,15 @@ private fun Cover(
             item.coverUrl != null -> AsyncImage(model = item.coverUrl, contentDescription = null, contentScale = ContentScale.Fit, modifier = m)
             else -> Icon(item.fallback, contentDescription = null, modifier = m, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
+    if (shape == CoverShape.SQUARE) {
+        val m = (if (small) modifier.size(48.dp) else modifier.fillMaxWidth()).aspectRatio(1f).clip(RoundedCornerShape(if (small) 6.dp else 12.dp))
+        if (item.cover != null) {
+            Image(item.cover, contentDescription = null, contentScale = ContentScale.Crop, modifier = m)
+        } else {
+            GeneratedCover(item.title, item.fallback, small, m)
+        }
+        return
     }
     if (shape == CoverShape.BOOK) {
         val m = if (small) modifier.size(40.dp, 60.dp) else modifier.fillMaxWidth().aspectRatio(2f / 3f)
@@ -361,6 +412,30 @@ private fun Cover(
                 Image(item.cover, contentDescription = null, contentScale = ContentScale.Crop, alignment = Alignment.TopCenter, modifier = Modifier.fillMaxSize())
             } else {
                 picture(Modifier.size(if (small) 32.dp else 56.dp).clip(RoundedCornerShape(if (small) 6.dp else 8.dp)))
+            }
+        }
+    }
+}
+
+/** A cover made from the title when there is no picture: the same colours for the same title. */
+@Composable
+fun GeneratedCover(
+    title: String,
+    icon: ImageVector,
+    small: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val hue = (title.fold(0L) { h, c -> (h * 31 + c.code) and 0xffffffffL } % 360).toFloat()
+    val brush =
+        Brush.linearGradient(
+            listOf(Color.hsl(hue, 0.42f, 0.46f), Color.hsl((hue + 40f) % 360f, 0.46f, 0.26f)),
+        )
+    Box(modifier.background(brush).padding(if (small) 0.dp else 12.dp), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(if (small) 22.dp else 28.dp))
+            if (!small) {
+                Spacer(Modifier.height(8.dp))
+                Text(title, style = MaterialTheme.typography.titleSmall, color = Color.White, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 4, overflow = TextOverflow.Ellipsis)
             }
         }
     }
