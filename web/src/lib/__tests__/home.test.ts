@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { newFeed, type Item } from '../db'
-import { buildHomeFeeds, detectKind, filterHome, groupByFolder, initials, NO_FILTER, sortHome } from '../home'
+import { buildHomeFeeds, detectKind, filterHome, groupByFolder, initials, NO_FILTER, shortAge, sortHome } from '../home'
 
 let n = 0
 function item(feedUrl: string, p: Partial<Item> = {}): Item {
@@ -78,5 +78,30 @@ describe('initials', () => {
     expect(initials('The Verge')).toBe('VE')
     expect(initials('Stratechery')).toBe('ST')
     expect(initials('Paul Graham: Essays')).toBe('PG')
+  })
+})
+
+describe('home numbers', () => {
+  it('counts total, saved and started-but-not-finished episodes per feed', () => {
+    const feed = newFeed('https://pod/feed')
+    const a = item(feed.url, { saved: 1 })
+    const b = item(feed.url, { read: 1 })
+    const c = item(feed.url)
+    const positions = new Map([
+      [a.id, { t: 120, d: 3600 }],
+      [b.id, { t: 3590, d: 3600 }],
+      [c.id, { t: 2, d: 3600 }],
+    ])
+    const [h] = buildHomeFeeds([feed], [a, b, c], {}, positions)
+    expect(h).toMatchObject({ total: 3, saved: 1, unread: 2, inProgress: 1 })
+  })
+  it('writes short ages like Android', () => {
+    const now = 1_000_000_000_000
+    expect(shortAge(0, now)).toBe('')
+    expect(shortAge(now - 10_000, now)).toBe('now')
+    expect(shortAge(now - 12 * 60_000, now)).toBe('12m')
+    expect(shortAge(now - 3 * 3_600_000, now)).toBe('3h')
+    expect(shortAge(now - 2 * 86_400_000, now)).toBe('2d')
+    expect(shortAge(now - 15 * 86_400_000, now)).toBe('2w')
   })
 })

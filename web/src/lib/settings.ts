@@ -1,4 +1,4 @@
-import type { HomeGroup, HomeSize, HomeSort } from './home'
+import type { HomeGroup, HomeLayout, HomeSize, HomeSort } from './home'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, setKv } from './db'
 
@@ -41,6 +41,9 @@ export interface Settings {
   homeGroup: HomeGroup
   homeSort: HomeSort
   homeSize: HomeSize
+  homeLayout: HomeLayout
+  /** Folders folded in the Home list view. */
+  homeFolded: string[]
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -70,6 +73,8 @@ export const DEFAULT_SETTINGS: Settings = {
   homeGroup: 'folders',
   homeSort: 'latest',
   homeSize: 'm',
+  homeLayout: 'tiles',
+  homeFolded: [],
 }
 
 const KEY = 'settings'
