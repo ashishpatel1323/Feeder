@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { formatBytes } from '../lib/offline'
+import { onDropboxChange, type DropboxFile } from '../lib/dropbox'
 import {
   deleteBook,
+  downloadFromDropbox,
   downloadUrl,
+  listDropboxZims,
+  sameZim,
+  uploadToDropbox,
   importFile,
   lastPath,
   listBooks,
@@ -17,6 +22,7 @@ import {
   type CatalogEntry,
   type ZimBook,
 } from '../lib/zim/library'
+import { DropboxPanel, useDropbox } from './DropboxPanel'
 import { Icon, IconButton } from './Icon'
 
 /**
@@ -52,7 +58,22 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
   const [usage, setUsage] = useState<{ used: number; quota: number } | null>(null)
   const [jobs, setJobs] = useState<Job[]>([])
   const [catalog, setCatalog] = useState(false)
+  const [remote, setRemote] = useState<DropboxFile[] | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
+  const dbx = useDropbox()
+  const signedIn = useRef(false)
+  signedIn.current = dbx.signedIn
+
+  const refreshRemote = useCallback(() => {
+    listDropboxZims().then(setRemote, (e) => {
+      setRemote(null)
+      toast(e instanceof Error ? e.message : String(e))
+    })
+  }, [toast])
+  useEffect(() => {
+    refreshRemote()
+    return onDropboxChange(refreshRemote)
+  }, [refreshRemote])
 
   const refresh = useCallback(() => {
     listBooks()
@@ -72,7 +93,7 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
   }, [refresh])
 
   const run = useCallback(
-    (label: string, work: (onProgress: (d: number, t: number) => void, signal: AbortSignal) => Promise<string>) => {
+    (label: string, work: (onProgress: (d: number, t: number) => void, signal: AbortSignal) => Promise<string>, done?: (file: string) => void) => {
       const key = `${label}:${Date.now()}`
       const abort = new AbortController()
       setJobs((j) => [...j, { key, label, done: 0, total: 0, abort }])
@@ -83,7 +104,7 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
         last = Date.now()
         setJobs((j) => j.map((x) => (x.key === key ? { ...x, done, total } : x)))
       }, abort.signal)
-        .then(() => toast(`${label} is ready to read`))
+        .then((file) => (done ? done(file) : toast(`${label} is ready to read`)))
         .catch((e) => {
           if (!abort.signal.aborted) toast(`${label}: ${e instanceof Error ? e.message : e}`)
         })
@@ -92,8 +113,22 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
     [toast],
   )
 
+  /** Puts a book that just arrived on this device into Dropbox too, for the other devices. */
+  const upload = useCallback(
+    (file: string, label: string) =>
+      run(`Uploading ${label} to Dropbox`, (prog, signal) => uploadToDropbox(file, prog, signal), () => {
+        toast(`${label} is in Dropbox`)
+        refreshRemote()
+      }),
+    [run, toast, refreshRemote],
+  )
+  const added = (label: string) => (file: string) => {
+    toast(`${label} is ready to read`)
+    if (signedIn.current) upload(file, label)
+  }
+
   const onFiles = (files: FileList | null) => {
-    for (const f of files ?? []) run(f.name, (prog, signal) => importFile(f, prog, signal))
+    for (const f of files ?? []) run(f.name, (prog, signal) => importFile(f, prog, signal), added(f.name))
   }
 
   const download = (e: CatalogEntry) => {
@@ -106,11 +141,16 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
         }
         throw err
       }),
+      added(e.title),
     )
   }
 
+  const fromDropbox = (f: DropboxFile) => run(f.name, (prog, signal) => downloadFromDropbox(f, prog, signal))
+  const inDropbox = (b: ZimBook) => !!remote?.some((f) => sameZim(b, f))
+  const onlyInDropbox = (remote ?? []).filter((f) => !books?.some((b) => sameZim(b, f)))
+
   const remove = async (b: ZimBook) => {
-    if (!confirm(`Delete ${b.title} (${formatBytes(b.size)}) from this device?`)) return
+    if (!confirm(`Delete ${b.title} (${formatBytes(b.size)}) from this device?${inDropbox(b) ? ' It stays in Dropbox.' : ''}`)) return
     await deleteBook(b.file)
     toast(`Deleted ${b.title}`)
   }
@@ -153,9 +193,8 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
             }}
           />
         </div>
-        <p className="zim-intro muted">
-          Whole websites to read offline, such as Wikipedia, Wiktionary, Stack Exchange or your own sites made with zimit. Books stay on this device.
-        </p>
+        <p className="zim-intro muted">Whole websites to read offline, such as Wikipedia, Wiktionary, Stack Exchange or your own sites made with zimit.</p>
+        <DropboxPanel what="ZIM books" toast={toast} />
 
         {catalog ? <Catalog onDownload={download} /> : null}
 
@@ -180,12 +219,12 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
 
         {books === null ? (
           <p className="muted">Loading…</p>
-        ) : books.length === 0 && !jobs.length ? (
+        ) : books.length === 0 && !jobs.length && !onlyInDropbox.length ? (
           <div className="zim-empty">
             <Icon name="public" size={40} />
             <p>No books yet. Get one from the Kiwix library, or add a .zim file you already have (you can also drop it here).</p>
           </div>
-        ) : (
+        ) : books.length === 0 ? null : (
           <div className="lib-list">
             {books.map((b) => (
               <div key={b.file} className="lib-row zim-book" role="button" tabIndex={0} onClick={() => onOpen(b.id)} onKeyDown={(e) => e.key === 'Enter' && onOpen(b.id)}>
@@ -197,13 +236,42 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
                     {[formatBytes(b.size), b.flavour, b.articleCount ? `${b.articleCount.toLocaleString()} pages` : '', b.date, b.language].filter(Boolean).join(' · ')}
                   </span>
                 </span>
-                <span onClick={(e) => e.stopPropagation()}>
-                  <IconButton icon="delete" label={`Delete ${b.title}`} onClick={() => void remove(b)} />
+                <span className="zim-row-actions" onClick={(e) => e.stopPropagation()}>
+                  {dbx.signedIn && remote ? (
+                    inDropbox(b) ? (
+                      <span className="zim-cloud" title="Also in Dropbox">
+                        <Icon name="cloud" size={18} />
+                      </span>
+                    ) : jobs.some((j) => j.label.startsWith(`Uploading ${b.title}`) || j.label.startsWith(`Uploading ${b.file}`)) ? null : (
+                      <IconButton icon="upload" label={`Upload ${b.title} to Dropbox`} onClick={() => upload(b.file, b.title)} />
+                    )
+                  ) : null}
+                  <IconButton icon="delete" label={`Delete ${b.title} from this device`} onClick={() => void remove(b)} />
                 </span>
               </div>
             ))}
           </div>
         )}
+        {onlyInDropbox.length ? (
+          <>
+            <h2 className="lib-section">In Dropbox</h2>
+            <div className="lib-list">
+              {onlyInDropbox.map((f) => (
+                <div key={f.id} className="lib-row zim-book">
+                  <Icon name="cloud" size={32} />
+                  <span className="lib-text">
+                    <span className="lib-title">{f.name.replace(/\.zim$/i, '').replace(/_/g, ' ')}</span>
+                    <span className="lib-desc">{formatBytes(f.size)} · not on this device yet</span>
+                  </span>
+                  <button type="button" className="mf-btn" onClick={() => fromDropbox(f)} disabled={jobs.some((j) => j.label === f.name)}>
+                    <Icon name="download" size={18} />
+                    Download
+                  </button>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : null}
         {broken.length ? <p className="muted">Could not open: {broken.join(', ')}</p> : null}
         {usage ? (
           <p className="zim-usage muted">

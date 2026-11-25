@@ -34,6 +34,9 @@ import { queryTerms, type SearchHit, type SearchScope } from './lib/search'
 import { RESUME_BACK, saveVideoPos } from './lib/videopos'
 import { kindOf } from './lib/playlists'
 import { ZimPage } from './components/ZimPage'
+import { EbooksPage } from './components/EbooksPage'
+import { bookIdOfItem } from './lib/ebooks/library'
+import { DROPBOX_TS_KEY } from './lib/dropbox'
 import { feedsViewIsLatest, FeedsSwitch, LibraryPage, rememberFeedsView, TabBar, useTabShortcuts, type Tab } from './components/Tabs'
 import { useVideoJobs, useVideoSavingAvailable } from './lib/offline'
 
@@ -62,6 +65,20 @@ const zimFromHash = (): string | null => {
     return decodeURIComponent(h.slice(ZIM_HASH.length + 1))
   } catch {
     return ''
+  }
+}
+/** Ebooks: #/books for the library, #/books/<id> to read one, #/books/<id>@<cfi> at a place. */
+const BOOKS_HASH = '#/books'
+const bookFromHash = (): { id: string; at: string | null } | null => {
+  const h = window.location.hash
+  if (h === BOOKS_HASH) return { id: '', at: null }
+  if (!h.startsWith(BOOKS_HASH + '/')) return null
+  try {
+    const rest = decodeURIComponent(h.slice(BOOKS_HASH.length + 1))
+    const cut = rest.indexOf('@')
+    return cut < 0 ? { id: rest, at: null } : { id: rest.slice(0, cut), at: rest.slice(cut + 1) || null }
+  } catch {
+    return { id: '', at: null }
   }
 }
 const DOWNLOADS_HASH = '#/downloads'
@@ -148,6 +165,8 @@ export default function App() {
   const [libraryPage, setLibraryPage] = useState(isLibraryHash)
   /** null = not on the ZIM tab; '' = the ZIM library; else the book being read. */
   const [zimPage, setZimPage] = useState<string | null>(zimFromHash)
+  /** null = not on the Ebooks tab; id '' = the library; else the book being read. */
+  const [bookPage, setBookPage] = useState<{ id: string; at: string | null } | null>(bookFromHash)
   // Start on Home: give it its own address, so Back from the article list returns to it
   useEffect(() => {
     if (!window.location.hash && !feedsViewIsLatest()) history.replaceState(null, '', window.location.pathname + window.location.search + HOME_HASH)
@@ -176,6 +195,7 @@ export default function App() {
       setDiscoverPage(isDiscoverHash())
       setLibraryPage(isLibraryHash())
       setZimPage(zimFromHash())
+      setBookPage(bookFromHash())
       setPlaylistPage(playlistFromHash())
     }
     window.addEventListener('hashchange', onHash)
@@ -202,6 +222,7 @@ export default function App() {
     if (on) setDiscoverPage(false)
     if (on) setLibraryPage(false)
     if (on) setZimPage(null)
+    if (on) setBookPage(null)
   }, [])
   const showHighlights = useCallback((on: boolean) => {
     if (on !== isHighlightsHash()) {
@@ -220,6 +241,7 @@ export default function App() {
     if (on) setDiscoverPage(false)
     if (on) setLibraryPage(false)
     if (on) setZimPage(null)
+    if (on) setBookPage(null)
   }, [])
   const showDownloads = useCallback((on: boolean) => {
     if (on !== isDownloadsHash()) {
@@ -238,6 +260,7 @@ export default function App() {
     if (on) setDiscoverPage(false)
     if (on) setLibraryPage(false)
     if (on) setZimPage(null)
+    if (on) setBookPage(null)
   }, [])
   const showHome = useCallback((on: boolean) => {
     if (on !== isHomeHash()) {
@@ -256,6 +279,7 @@ export default function App() {
     if (on) setDiscoverPage(false)
     if (on) setLibraryPage(false)
     if (on) setZimPage(null)
+    if (on) setBookPage(null)
   }, [])
   const showDiscover = useCallback((on: boolean) => {
     if (on !== isDiscoverHash()) {
@@ -273,6 +297,7 @@ export default function App() {
       setPlaylistPage(null)
       setLibraryPage(false)
       setZimPage(null)
+      setBookPage(null)
     }
   }, [])
   const showLibrary = useCallback((on: boolean) => {
@@ -283,6 +308,7 @@ export default function App() {
     setLibraryPage(on)
     if (on) {
       setZimPage(null)
+      setBookPage(null)
       setHomePage(false)
       setManaging(false)
       setHighlightsPage(false)
@@ -300,6 +326,26 @@ export default function App() {
     else if (!want && zimFromHash() !== null) history.pushState(null, '', window.location.pathname + window.location.search)
     setZimPage(id)
     if (id !== null) {
+      setBookPage(null)
+      setHomePage(false)
+      setDiscoverPage(false)
+      setManaging(false)
+      setHighlightsPage(false)
+      setDownloadsPage(false)
+      setLibraryPage(false)
+      setPlaylistPage(null)
+      setFeedPage(null)
+      feedPageFromApp.current = false
+    }
+  }, [])
+  /** Opens the Ebooks library ('') or one book, optionally at a CFI; null leaves it. */
+  const showBooks = useCallback((id: string | null, at?: string | null) => {
+    const want = id === null ? null : id ? `${BOOKS_HASH}/${encodeURIComponent(id + (at ? `@${at}` : ''))}` : BOOKS_HASH
+    if (want && window.location.hash !== want) window.location.hash = want
+    else if (!want && bookFromHash() !== null) history.pushState(null, '', window.location.pathname + window.location.search)
+    setBookPage(id === null ? null : { id, at: at ?? null })
+    if (id !== null) {
+      setZimPage(null)
       setHomePage(false)
       setDiscoverPage(false)
       setManaging(false)
@@ -325,6 +371,7 @@ export default function App() {
       setDownloadsPage(false)
       setLibraryPage(false)
       setZimPage(null)
+      setBookPage(null)
       setFeedPage(null)
       feedPageFromApp.current = false
     }
@@ -345,6 +392,7 @@ export default function App() {
     setPlaylistPage(null)
     setLibraryPage(false)
     setZimPage(null)
+    setBookPage(null)
   }, [])
   /** Leaves the feed page for the article list. */
   const leaveFeedPage = useCallback(() => {
@@ -373,6 +421,15 @@ export default function App() {
     if (toastTimer.current) clearTimeout(toastTimer.current)
     toastTimer.current = window.setTimeout(() => setToastMsg(null), action ? 7000 : 4000)
   }, [])
+
+  // A Dropbox sign-in that failed on the way back from Dropbox's page
+  useEffect(() => {
+    const err = sessionStorage.getItem('feeder.dropboxError')
+    if (err) {
+      sessionStorage.removeItem('feeder.dropboxError')
+      toast(`Dropbox: ${err}`)
+    }
+  }, [toast])
 
   // Theme
   useEffect(() => {
@@ -555,7 +612,11 @@ export default function App() {
     // Highlights too: new, recolored, noted or deleted
     let hl = 0
     await db.highlights.each((h) => void (hl = Math.max(hl, h.modifiedAt || h.createdAt)))
-    return `${last}|${hl}|${await db.highlights.count()}|${JSON.stringify(lists?.value ?? null)}`
+    // Ebook positions, and the Dropbox sign-in (signing in or out here)
+    let book = 0
+    await db.bookPos.each((p) => void (book = Math.max(book, p.ts)))
+    const dropboxTs = (await db.kv.get(DROPBOX_TS_KEY))?.value ?? 0
+    return `${last}|${hl}|${await db.highlights.count()}|${JSON.stringify(lists?.value ?? null)}|${book}|${dropboxTs}`
   }, [])
   const firstUnsent = useRef(0)
   useEffect(() => {
@@ -788,6 +849,15 @@ export default function App() {
 
   /** From the Highlights page: open the article and scroll to the highlight. */
   const openHighlight = async (h: Highlight) => {
+    const bookId = bookIdOfItem(h.itemId)
+    if (bookId) {
+      if (!(await db.books.get(bookId))) {
+        toast('That book is no longer in your Ebooks')
+        return
+      }
+      showBooks(bookId, h.cfi ?? null)
+      return
+    }
     if (!(await db.items.get(h.itemId))) {
       if (h.itemLink) window.open(h.itemLink, '_blank', 'noopener')
       else toast('That article is no longer in Feeder')
@@ -808,6 +878,7 @@ export default function App() {
     showDiscover(false)
     showLibrary(false)
     showZim(null)
+    showBooks(null)
     if (feedPage) leaveFeedPage()
     setFlip(null)
   }
@@ -833,7 +904,7 @@ export default function App() {
   const searchData = useSearchData(items, feeds, allHighlights, settings.readAloudRate, searchActive)
 
   // Opening another page closes the results view
-  const anyPage = managing || highlightsPage || !!feedPage || downloadsPage || homePage || discoverPage || libraryPage || zimPage !== null || playlistPage !== null
+  const anyPage = managing || highlightsPage || !!feedPage || downloadsPage || homePage || discoverPage || libraryPage || zimPage !== null || bookPage !== null || playlistPage !== null
   useEffect(() => {
     if (anyPage) setSearchView(null)
   }, [anyPage])
@@ -934,6 +1005,8 @@ export default function App() {
     ? 'playlists'
     : zimPage !== null
       ? 'zim'
+    : bookPage !== null
+      ? 'books'
     : discoverPage && !feedPage
       ? 'discover'
       : libraryPage || highlightsPage || downloadsPage || (selection.kind === 'saved' && !anyPage && !searchView)
@@ -961,6 +1034,7 @@ export default function App() {
     if (t === 'discover') showDiscover(true)
     else if (t === 'playlists') showPlaylists('')
     else if (t === 'zim') showZim('')
+    else if (t === 'books') showBooks('')
     else showLibrary(true)
   }
   const openTabRef = useRef(openTab)
@@ -980,7 +1054,7 @@ export default function App() {
     : 'Not syncing'
 
   return (
-    <div className={`app pane-${pane}${drawer ? ' drawer-open' : ''}${navCollapsed ? ' nav-collapsed' : ''}${managing || highlightsPage || feedPage || downloadsPage || homePage || discoverPage || libraryPage || zimPage !== null || onPlaylists ? ' page-feeds' : ''}${queue.kind ? ' has-queue' : ''}`}>
+    <div className={`app pane-${pane}${drawer ? ' drawer-open' : ''}${navCollapsed ? ' nav-collapsed' : ''}${managing || highlightsPage || feedPage || downloadsPage || homePage || discoverPage || libraryPage || zimPage !== null || bookPage !== null || onPlaylists ? ' page-feeds' : ''}${queue.kind ? ' has-queue' : ''}`}>
       <div className="drawer-scrim" onClick={() => setDrawer(false)} />
       <Sidebar
         feeds={feedList}
@@ -1099,6 +1173,8 @@ export default function App() {
           onMoveFeed={moveFeed}
           toast={toast}
         />
+      ) : bookPage !== null ? (
+        <EbooksPage book={bookPage.id || null} at={bookPage.at} settings={settings} onOpen={(id, at) => showBooks(id ?? '', at)} onMenu={() => setDrawer(true)} toast={toast} />
       ) : zimPage !== null ? (
         <ZimPage book={zimPage || null} onOpen={(id) => showZim(id ?? '')} onMenu={() => setDrawer(true)} toast={toast} />
       ) : libraryPage ? (
@@ -1159,7 +1235,7 @@ export default function App() {
         feedsSwitch={feedsLatest ? <FeedsSwitch latest onChange={showFeedsView} /> : null}
         />
       )}
-      {managing || highlightsPage || feedPage || downloadsPage || homePage || discoverPage || libraryPage || zimPage !== null || onPlaylists || flip ? null : openItem ? (
+      {managing || highlightsPage || feedPage || downloadsPage || homePage || discoverPage || libraryPage || zimPage !== null || bookPage !== null || onPlaylists || flip ? null : openItem ? (
         <Reader
           item={openItem}
           feed={feeds.get(openItem.feedUrl)}
@@ -1181,7 +1257,7 @@ export default function App() {
         />
       ) : (
         <section className="reader-pane empty-reader">
-          <p>Select an article. Keyboard: ⌘K or / search everything, G then F, D, P, L or Z switch tabs, J / K next and previous, F flip mode, R read aloud, S save, M unread, O open original, [ hide or show feeds.</p>
+          <p>Select an article. Keyboard: ⌘K or / search everything, G then F, D, P, L, B or Z switch tabs, J / K next and previous, F flip mode, R read aloud, S save, M unread, O open original, [ hide or show feeds.</p>
         </section>
       )}
       {dialog?.kind === 'settings' ? <SettingsDialog

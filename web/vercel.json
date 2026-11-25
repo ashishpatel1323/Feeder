@@ -8,6 +8,10 @@
     {
       "source": "/api/:path*",
       "destination": "/api/proxy?__path=:path*"
+    },
+    {
+      "source": "/dropbox-auth",
+      "destination": "/index.html"
     }
   ]
 }

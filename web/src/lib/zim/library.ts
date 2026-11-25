@@ -1,8 +1,13 @@
 /**
  * ZIM library on this device: the files live in the browser's private file system (OPFS), so
- * they stay offline and never leave the device. Pages are served to the reader's iframe at
- * /zim/<book>/<path> by sw.js, which asks an open Feeder window (this module) for the bytes.
+ * they open offline. Pages are served to the reader's iframe at /zim/<book>/<path> by sw.js,
+ * which asks an open Feeder window (this module) for the bytes.
+ *
+ * With Dropbox signed in, Dropbox's /ZIM folder (in the app folder) is the shared library: books
+ * added here are uploaded there, and books other devices put there can be downloaded here.
+ * A book here and one in Dropbox are the same when they have the same file name and size.
  */
+import { downloadStream, getDropbox, listFolder, uploadFile, ZIM_FOLDER, type DropboxFile } from '../dropbox'
 import { blobSource, ZimArchive } from './zim'
 
 export interface ZimBook {
@@ -166,6 +171,30 @@ async function save(base: string, stream: ReadableStream<Uint8Array>, total: num
     await d.removeEntry(name).catch(() => undefined)
     throw e
   }
+}
+
+/** ZIM files in Dropbox's /ZIM folder, or null when Dropbox isn't signed in. */
+export async function listDropboxZims(signal?: AbortSignal): Promise<DropboxFile[] | null> {
+  if (!(await getDropbox())) return null
+  return (await listFolder(ZIM_FOLDER, signal)).filter((f) => /\.zim$/i.test(f.name))
+}
+
+/** Whether a book on this device is the same file as one in Dropbox. */
+export const sameZim = (b: Pick<ZimBook, 'file' | 'size'>, f: Pick<DropboxFile, 'name' | 'size'>) =>
+  b.size === f.size && (b.file.toLowerCase() === f.name.toLowerCase() || b.file === `${safeName(f.name)}.zim`)
+
+/** Downloads a book from Dropbox into this device's library. */
+export async function downloadFromDropbox(f: DropboxFile, onProgress: Progress, signal?: AbortSignal): Promise<string> {
+  const { body, size } = await downloadStream(f.path, signal)
+  return save(f.name, body, size || f.size, onProgress, signal)
+}
+
+/** Uploads a book on this device to Dropbox's /ZIM folder. */
+export async function uploadToDropbox(file: string, onProgress: Progress, signal?: AbortSignal): Promise<string> {
+  const f = await (await (await dir()).getFileHandle(file)).getFile()
+  await uploadFile(`${ZIM_FOLDER}/${file}`, f, onProgress, signal)
+  changed()
+  return file
 }
 
 /** Copies a .zim the user picked into the library. */
