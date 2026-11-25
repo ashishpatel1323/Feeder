@@ -39,8 +39,10 @@ import { bookIdOfItem } from './lib/ebooks/library'
 import { DROPBOX_TS_KEY } from './lib/dropbox'
 import { feedsViewIsLatest, FeedsSwitch, LibraryPage, rememberFeedsView, TabBar, useTabShortcuts, type Tab } from './components/Tabs'
 import { useVideoJobs, useVideoSavingAvailable } from './lib/offline'
+import { createItemReuser } from './lib/itemreuse'
 
 const NAV_COLLAPSED_KEY = 'feeder.navCollapsed'
+const NO_ITEMS: Item[] = []
 /** The Manage feeds page has its own address so it can be bookmarked and Back works. */
 const FEEDS_HASH = '#/feeds'
 const isFeedsHash = () => window.location.hash === FEEDS_HASH
@@ -126,7 +128,9 @@ function selectionTitle(s: Selection, feeds: Map<string, Feed>): string {
 export default function App() {
   const settings = useSettings()
   const feedList = useLiveQuery(() => db.feeds.toArray(), []) ?? []
-  const items = useLiveQuery(() => db.items.toArray(), []) ?? []
+  // One copy of each article across re-reads: the list is read again on every change (itemreuse.ts)
+  const [reuseItems] = useState(createItemReuser)
+  const items = useLiveQuery(() => db.items.toArray().then(reuseItems), []) ?? NO_ITEMS
   const syncState = useLiveQuery(() => getSyncState(), [])
   // Shared links belong to a built-in source that is not a real feed (lib/share.ts)
   const feeds = useMemo(() => new Map([...feedList.map((f) => [f.url, f] as const), [SHARED_FEED_URL, SHARED_FEED] as const]), [feedList])
@@ -537,9 +541,13 @@ export default function App() {
   }, [snapshot, settings.readAloudAutoContinue, open, nextId, prevId, flip, queue.kind])
 
   // Sync and refresh
+  // Kept the same function across renders: it changed with every progress step of a refresh,
+  // and each new copy held on to the render before it (and that render's articles)
+  const refreshingNow = useRef(false)
   const fullRefresh = useCallback(async () => {
     // Offline or Offline mode: nothing to fetch; read marks wait and go out later
-    if (refreshing || (await offlineNow())) return
+    if (refreshingNow.current || (await offlineNow())) return
+    refreshingNow.current = true
     try {
       setRefreshing('sync')
       await syncNow().catch((e) => toast(`Sync: ${e instanceof Error ? e.message : e}`))
@@ -551,9 +559,10 @@ export default function App() {
       const ogFeeds = new Set((await db.feeds.toArray()).filter((f) => f.fetchOgImages).map((f) => f.url))
       if (ogFeeds.size) fetchOgImages(recent.filter((i) => ogFeeds.has(i.feedUrl)), 40).catch(() => undefined)
     } finally {
+      refreshingNow.current = false
       setRefreshing(null)
     }
-  }, [refreshing, toast])
+  }, [toast])
 
   const fullRefreshRef = useRef(fullRefresh)
   fullRefreshRef.current = fullRefresh
