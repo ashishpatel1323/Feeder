@@ -566,4 +566,9 @@
   <string name="search_folder_feeds">Folder · %1$d feeds</string>
   <string name="search_playlist">Playlist</string>
   <string name="search_smart_playlist">Smart playlist</string>
+  <string name="search_scope_ebooks">Ebooks</string>
+  <string name="search_scope_zim">ZIM</string>
+  <string name="search_zim_group">In your ZIM files</string>
+  <string name="search_ebook">Ebook</string>
+  <string name="search_zim_in">ZIM · %1$s</string>
 </resources>

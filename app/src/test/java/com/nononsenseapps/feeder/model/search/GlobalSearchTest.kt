@@ -1,6 +1,7 @@
 package com.nononsenseapps.feeder.model.search
 
 import com.nononsenseapps.feeder.db.room.PlaylistCandidate
+import com.nononsenseapps.feeder.model.ebooks.Book
 import com.nononsenseapps.feeder.model.highlights.Highlight
 import com.nononsenseapps.feeder.model.playlists.ItemKind
 import com.nononsenseapps.feeder.model.playlists.newPlaylist
@@ -165,5 +166,46 @@ class GlobalSearchTest {
                 .single()
                 .title.ranges,
         )
+    }
+
+    @Test
+    fun findsEbooksByTitleOrAuthor() {
+        val data =
+            SearchData(
+                books =
+                    listOf(
+                        Book(id = "b1", title = "The Time Machine", author = "H. G. Wells", ext = "epub", size = 1, addedAt = 0),
+                        Book(id = "b2", title = "Dune", author = "Frank Herbert", ext = "epub", size = 1, addedAt = 0),
+                    ),
+                now = now,
+            )
+        assertEquals(listOf("b1"), searchAll("time machine", data).books.map { it.book.id })
+        assertEquals(listOf("b2"), searchAll("herbert", data).books.map { it.book.id })
+        val r = searchAll("wells", data)
+        assertEquals(1, r.count(SearchScope.BOOK))
+        assertEquals(1, r.count(SearchScope.ALL))
+    }
+
+    @Test
+    fun addsZimMatchesBelowYourOwn() {
+        val r = searchAll("python", SearchData(items = listOf(item(1, "Python 3.14 is out")), now = now))
+        val z =
+            addZimHits(
+                r,
+                listOf(
+                    ZimTitle("wiki", "Wikipedia", "Python_(language)", "Python (language)"),
+                    ZimTitle("wiki", "Wikipedia", "Monty", "Monty Python"),
+                    // Same page again from full text: the title match stays
+                    ZimTitle("wiki", "Wikipedia", "Monty", "Monty Python", "a python sketch"),
+                    ZimTitle("wiki", "Wikipedia", "Snake", "Snakes", "the python is a snake"),
+                ),
+            )
+        assertEquals(listOf("Python_(language)", "Monty", "Snake"), z.zim.map { it.path })
+        assertEquals(3, z.count(SearchScope.ZIM))
+        assertEquals(4, z.count(SearchScope.ALL))
+        assertTrue(z.inScope(SearchScope.ALL).first() is ItemHit)
+        assertNull(z.zim.first().snippet)
+        val last = z.zim.last()
+        assertEquals("the python is a snake", last.snippet?.text)
     }
 }

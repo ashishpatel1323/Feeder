@@ -29,12 +29,14 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.RssFeed
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.BorderColor
@@ -60,6 +62,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -78,6 +81,8 @@ import com.nononsenseapps.feeder.db.room.PlaylistCandidate
 import com.nononsenseapps.feeder.model.highlights.Highlight
 import com.nononsenseapps.feeder.model.playlists.ItemKind
 import com.nononsenseapps.feeder.model.playlists.kind
+import com.nononsenseapps.feeder.model.ebooks.EbookLibrary
+import com.nononsenseapps.feeder.model.search.BookHit
 import com.nononsenseapps.feeder.model.search.FeedHit
 import com.nononsenseapps.feeder.model.search.FolderHit
 import com.nononsenseapps.feeder.model.search.HighlightHit
@@ -86,6 +91,7 @@ import com.nononsenseapps.feeder.model.search.Marked
 import com.nononsenseapps.feeder.model.search.MatchField
 import com.nononsenseapps.feeder.model.search.PlaylistHit
 import com.nononsenseapps.feeder.model.search.SearchHit
+import com.nononsenseapps.feeder.model.search.ZimHit
 import com.nononsenseapps.feeder.model.search.SearchScope
 import com.nononsenseapps.feeder.model.search.clock
 import com.nononsenseapps.feeder.model.search.queryTerms
@@ -103,6 +109,10 @@ class GlobalSearchNav(
     val onOpenFolder: (String) -> Unit,
     val onOpenPlaylist: (String) -> Unit,
     val onOpenLink: (String) -> Unit,
+    /** An ebook, optionally at an EPUB CFI (a book highlight). */
+    val onOpenBook: (String, String?) -> Unit,
+    /** A ZIM book; it opens at the page last remembered for it. */
+    val onOpenZim: (String) -> Unit,
     val onAddFeed: () -> Unit,
     val onDiscover: () -> Unit,
     val onPlaylists: () -> Unit,
@@ -158,8 +168,10 @@ fun GlobalSearchScreen(
 
             is HighlightHit -> {
                 viewModel.remember()
-                val id = viewModel.itemIdOf(hit.highlight)
+                val bookId = EbookLibrary.bookIdOfItem(hit.highlight.itemKey)
+                val id = if (bookId == null) viewModel.itemIdOf(hit.highlight) else null
                 when {
+                    bookId != null -> nav.onOpenBook(bookId, hit.highlight.cfi)
                     id != null -> nav.onOpenArticle(id)
                     hit.highlight.itemLink != null -> nav.onOpenLink(hit.highlight.itemLink)
                 }
@@ -178,6 +190,16 @@ fun GlobalSearchScreen(
             is PlaylistHit -> {
                 viewModel.remember()
                 nav.onOpenPlaylist(hit.playlist.id)
+            }
+
+            is BookHit -> {
+                viewModel.remember()
+                nav.onOpenBook(hit.book.id, null)
+            }
+
+            is ZimHit -> {
+                viewModel.openingZim(hit.bookId, hit.path)
+                nav.onOpenZim(hit.bookId)
             }
         }
     }
@@ -320,6 +342,8 @@ fun GlobalSearchScreen(
             group(R.string.search_scope_videos, results.items.filter { it.kind == ItemKind.YOUTUBE && it !== top }, 3, SearchScope.YOUTUBE, state, open, viewModel::setScope)
             group(R.string.search_scope_highlights, results.highlights.filter { it !== top }, 2, SearchScope.HIGHLIGHT, state, open, viewModel::setScope)
             group(R.string.search_library_group, results.library.filter { it !== top }, 3, SearchScope.LIBRARY, state, open, viewModel::setScope)
+            group(R.string.search_scope_ebooks, results.books.filter { it !== top }, 3, SearchScope.BOOK, state, open, viewModel::setScope)
+            group(R.string.search_zim_group, results.zim.filter { it !== top }, 3, SearchScope.ZIM, state, open, viewModel::setScope)
             val terms = results.terms
             val matching = shortcuts.filter { s -> terms.all { "${s.label} ${s.keywords}".lowercase().contains(it) } }
             if (matching.isNotEmpty()) {
@@ -350,6 +374,8 @@ private fun SearchScope.label(): String =
             SearchScope.YOUTUBE -> R.string.search_scope_videos
             SearchScope.HIGHLIGHT -> R.string.search_scope_highlights
             SearchScope.LIBRARY -> R.string.search_scope_library
+            SearchScope.BOOK -> R.string.search_scope_ebooks
+            SearchScope.ZIM -> R.string.search_scope_zim
         },
     )
 
@@ -529,6 +555,47 @@ private fun HitRow(
                 },
                 title = hit.title.annotated(),
                 meta = AnnotatedString(stringResource(if (hit.playlist.smart) R.string.search_smart_playlist else R.string.search_playlist)),
+                onClick = { open(hit) },
+            )
+
+        is BookHit -> {
+            val context = LocalContext.current
+            val cover = remember(hit.book.id) { EbookLibrary.get(context).coverFile(hit.book.id).takeIf { it.exists() } }
+            ResultRow(
+                leading = {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.size(LEADING).clip(RoundedCornerShape(FeederTokens.Radius.sm)).background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
+                        if (cover != null) AsyncImage(model = cover, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                    }
+                },
+                title = hit.title.annotated(),
+                meta =
+                    buildAnnotatedString {
+                        append(stringResource(R.string.search_ebook))
+                        if (hit.author.text.isNotBlank()) {
+                            append(" · ")
+                            append(hit.author.annotated())
+                        }
+                    },
+                onClick = { open(hit) },
+            )
+        }
+
+        is ZimHit ->
+            ResultRow(
+                leading = { PlainIcon(Icons.Default.Public) },
+                title = hit.title.annotated(),
+                meta =
+                    buildAnnotatedString {
+                        append(stringResource(R.string.search_zim_in, hit.bookTitle))
+                        hit.snippet?.takeIf { it.text.isNotBlank() }?.let {
+                            append(" · ")
+                            append(it.annotated())
+                        }
+                    },
                 onClick = { open(hit) },
             )
     }

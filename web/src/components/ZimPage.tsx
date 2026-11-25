@@ -30,7 +30,13 @@ import { Icon, IconButton } from './Icon'
  * The ZIM tab: offline websites (Wikipedia, Stack Exchange, docs made with zimit…) kept on this
  * device. #/zim is the library, #/zim/<book> reads one book.
  */
-export function ZimPage(p: { book: string | null; onOpen: (id: string | null) => void; onMenu: () => void; toast: (m: string) => void }) {
+/** A page to go to in the open book (from search); n changes each time, so the same page can be asked for again. */
+export interface ZimJump {
+  path: string
+  n: number
+}
+
+export function ZimPage(p: { book: string | null; jump?: ZimJump | null; onOpen: (id: string | null) => void; onMenu: () => void; toast: (m: string) => void }) {
   if (!zimSupported())
     return (
       <section className="manage-pane zim-page" aria-label="ZIM library">
@@ -42,7 +48,7 @@ export function ZimPage(p: { book: string | null; onOpen: (id: string | null) =>
         </div>
       </section>
     )
-  return p.book ? <ZimReader key={p.book} id={p.book} onBack={() => p.onOpen(null)} /> : <ZimLibrary onOpen={p.onOpen} onMenu={p.onMenu} toast={p.toast} />
+  return p.book ? <ZimReader key={p.book} id={p.book} jump={p.jump ?? null} onBack={() => p.onOpen(null)} /> : <ZimLibrary onOpen={p.onOpen} onMenu={p.onMenu} toast={p.toast} />
 }
 
 interface Job {
@@ -360,7 +366,7 @@ function Catalog({ onDownload }: { onDownload: (e: CatalogEntry) => void }) {
   )
 }
 
-function ZimReader({ id, onBack }: { id: string; onBack: () => void }) {
+function ZimReader({ id, jump, onBack }: { id: string; jump: ZimJump | null; onBack: () => void }) {
   const frame = useRef<HTMLIFrameElement>(null)
   const [ready, setReady] = useState(false)
   const [title, setTitle] = useState(id)
@@ -415,6 +421,14 @@ function ZimReader({ id, onBack }: { id: string; onBack: () => void }) {
     if (w) w.location.href = url
     else setSrc(url)
   }
+
+  // A search result in the book that's already open: go there (a new book opens at it, see rememberPath)
+  const seenJump = useRef(jump?.n)
+  useEffect(() => {
+    if (!jump || jump.n === seenJump.current) return
+    seenJump.current = jump.n
+    go(jump.path)
+  }, [jump])
 
   const onLoad = () => {
     const w = frame.current?.contentWindow

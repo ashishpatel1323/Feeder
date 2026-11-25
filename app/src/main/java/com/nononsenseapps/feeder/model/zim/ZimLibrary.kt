@@ -222,6 +222,11 @@ class ZimLibrary private constructor(
     }
 
     private suspend fun load() {
+        // Reading a book needs libzim loaded first (global search can get here before the ZIM tab)
+        if (!ZimNative.available) {
+            _books.value = emptyList()
+            return
+        }
         checkDownloads()
         val downloading = _jobs.value.map { it.key }.toSet()
         val list =
