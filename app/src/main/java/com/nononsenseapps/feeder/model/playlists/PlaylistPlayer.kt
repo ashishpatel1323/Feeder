@@ -207,6 +207,8 @@ class PlaylistPlayer(
                 val kind = itemKind(article.link, article.enclosure.link.takeIf { article.enclosure.present }, article.enclosure.type)
                 installNavigator()
                 downloadsPlayback.stop()
+                com.nononsenseapps.feeder.model.audiobooks.AudioFocusHooks.pauseAudiobook
+                    ?.invoke()
                 _state.value =
                     _state.value.copy(
                         kind = kind,
@@ -485,7 +487,9 @@ class PlaylistPlayer(
         _state.value = _state.value.copy(audioSpeed = speed)
     }
 
-    fun articleSpeed(): Float = tts.progress.value.speed.takeIf { it > 0f } ?: 1f
+    fun articleSpeed(): Float =
+        tts.progress.value.speed
+            .takeIf { it > 0f } ?: 1f
 
     /** Speed of what plays now: read-aloud speed for articles, audio speed for the rest. */
     fun setSpeed(speed: Float) {

@@ -455,6 +455,60 @@ data object EbooksDestination : NavigationDestination(
     }
 }
 
+/** The Audiobooks tab: books from Dropbox's /Audiobooks, streamed or downloaded. */
+data object AudiobooksDestination : NavigationDestination(
+    path = "audiobooks",
+    navArguments = emptyList(),
+    deepLinks = emptyList(),
+) {
+    @Composable
+    override fun RegisterScreen(
+        navController: NavController,
+        backStackEntry: NavBackStackEntry,
+        navDrawerListState: LazyListState,
+        mainActivityViewModel: MainActivityViewModel,
+    ) {
+        com.nononsenseapps.feeder.ui.compose.audiobooks.AudiobooksScreen(
+            onOpenBook = { AudiobookPlayerDestination.navigate(navController, it) },
+        )
+    }
+}
+
+/** One audiobook's player: chapters, speed, sleep timer. */
+data object AudiobookPlayerDestination : NavigationDestination(
+    path = "audiobooks/play",
+    navArguments =
+        listOf(
+            QueryParamArgument("book") {
+                type = NavType.StringType
+                defaultValue = ""
+            },
+        ),
+    deepLinks = emptyList(),
+) {
+    fun navigate(
+        navController: NavController,
+        book: String,
+    ) {
+        navController.navigate("$path?book=${Uri.encode(book)}") {
+            launchSingleTop = true
+        }
+    }
+
+    @Composable
+    override fun RegisterScreen(
+        navController: NavController,
+        backStackEntry: NavBackStackEntry,
+        navDrawerListState: LazyListState,
+        mainActivityViewModel: MainActivityViewModel,
+    ) {
+        com.nononsenseapps.feeder.ui.compose.audiobooks.AudiobookPlayerScreen(
+            bookId = backStackEntry.arguments?.getString("book").orEmpty(),
+            onNavigateUp = { navController.popBackStack() },
+        )
+    }
+}
+
 /** Reads one ebook, optionally at a place (an EPUB CFI, from a highlight). */
 data object EbookReaderDestination : NavigationDestination(
     path = "ebooks/read",

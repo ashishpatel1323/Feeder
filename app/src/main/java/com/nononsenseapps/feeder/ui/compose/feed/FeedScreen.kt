@@ -1419,7 +1419,7 @@ fun FeedScreen(
                         },
                         actions = toolbarActions,
                     )
-                    FeedsViewSwitch(latest = true)
+                    FeedsViewSwitch(view = com.nononsenseapps.feeder.ui.compose.navigation.FeedsView.LATEST)
                 }
             } else {
                 SensibleTopAppBar(

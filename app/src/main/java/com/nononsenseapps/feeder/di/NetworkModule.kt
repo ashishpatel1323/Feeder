@@ -61,6 +61,18 @@ val networkModule =
                     .get(instance<android.app.Application>())
                     .also { store -> store.onChanged = { nudge.changed(true) } }
             }
+        bind<com.nononsenseapps.feeder.model.audiobooks.AudioPositions>() with
+            singleton {
+                val nudge = instance<SyncNudge>()
+                com.nononsenseapps.feeder.model.audiobooks.AudioPositions
+                    .get(instance<android.app.Application>())
+                    .also { store -> store.onChanged = { nudge.changed(true) } }
+            }
+        bind<com.nononsenseapps.feeder.model.audiobooks.AudiobookPlayer>() with
+            singleton {
+                com.nononsenseapps.feeder.model.audiobooks
+                    .AudiobookPlayer(di)
+            }
         bind<com.nononsenseapps.feeder.dropbox.DropboxClient>() with
             singleton {
                 com.nononsenseapps.feeder.dropbox.DropboxClient

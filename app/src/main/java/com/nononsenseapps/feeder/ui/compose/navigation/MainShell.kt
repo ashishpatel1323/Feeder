@@ -41,7 +41,7 @@ fun MainShell(
         remember(navController) {
             MainNav(
                 openSearch = { GlobalSearchDestination.navigate(navController) },
-                showFeedsView = { latest -> navController.showFeedsView(context, latest) },
+                showFeedsView = { view -> navController.showFeedsView(context, view) },
             )
         }
     val showBar = tab != null && nav.hiders == 0
@@ -50,6 +50,9 @@ fun MainShell(
     val player: PodcastPlayerStateHolder by di.instance()
     val playerState by player.playerState.collectAsState()
     val showPlayer = showBar && playerState.isVisible && entry?.wantsSharedMiniPlayer() == true
+    val audiobook: com.nononsenseapps.feeder.model.audiobooks.AudiobookPlayer by di.instance()
+    val audiobookState by audiobook.state.collectAsState()
+    val showAudiobook = showBar && !showPlayer && audiobookState.active && entry?.wantsSharedMiniPlayer() == true
 
     // The Feeds tab opens on the view used last; Home is the start screen, so switch once to Latest
     LaunchedEffect(navController) {
@@ -57,7 +60,7 @@ fun MainShell(
             navController.currentBackStack.value.count { it.destination.route != null } == 1 &&
             navController.currentDestination?.route == HomeDestination.route
         ) {
-            navController.showFeedsView(context, true)
+            navController.showFeedsView(context, FeedsView.LATEST)
         }
     }
 
@@ -87,6 +90,11 @@ fun MainShell(
                                 onSeekBack = { player.seekBy(-10_000) },
                                 onSeekForward = { player.seekBy(30_000) },
                                 onSeekTo = player::seekTo,
+                            )
+                        }
+                        if (showAudiobook) {
+                            com.nononsenseapps.feeder.ui.compose.audiobooks.AudiobookMiniBar(
+                                onOpen = { AudiobookPlayerDestination.navigate(navController, it) },
                             )
                         }
                         MainBottomBar(current = tab, onSelect = { navController.openTab(context, it, tab) })

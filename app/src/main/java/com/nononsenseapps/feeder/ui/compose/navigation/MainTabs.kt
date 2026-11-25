@@ -23,15 +23,17 @@ import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.filled.DynamicFeed
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.outlined.DynamicFeed
-import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.Headphones
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.Icon
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -53,6 +55,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavController
@@ -66,12 +69,15 @@ import com.nononsenseapps.feeder.db.room.ID_SAVED_ARTICLES
  */
 enum class MainTab {
     FEEDS,
-    DISCOVER,
     PLAYLISTS,
     LIBRARY,
     EBOOKS,
+    AUDIOBOOKS,
     ZIM,
 }
+
+/** The Feeds tab's views: Latest, By feed (the tiles) and Discover. */
+enum class FeedsView { LATEST, BY_FEED, DISCOVER }
 
 /** Which tab a screen belongs to, or null for screens that show no bottom bar (reader, settings, search...). */
 fun NavBackStackEntry.mainTab(): MainTab? =
@@ -79,11 +85,12 @@ fun NavBackStackEntry.mainTab(): MainTab? =
         HomeDestination.route -> MainTab.FEEDS
         FeedDestination.route ->
             if (arguments?.getLong("id") == ID_SAVED_ARTICLES) MainTab.LIBRARY else MainTab.FEEDS
-        DiscoverDestination.route -> MainTab.DISCOVER
+        DiscoverDestination.route -> MainTab.FEEDS
         PlaylistsDestination.route -> MainTab.PLAYLISTS
         LibraryDestination.route, DownloadsDestination.route, HighlightsDestination.route -> MainTab.LIBRARY
         ZimDestination.route -> MainTab.ZIM
         EbooksDestination.route -> MainTab.EBOOKS
+        AudiobooksDestination.route -> MainTab.AUDIOBOOKS
         else -> null
     }
 
@@ -97,6 +104,7 @@ fun NavBackStackEntry.wantsSharedMiniPlayer(): Boolean =
         HighlightsDestination.route,
         ZimDestination.route,
         EbooksDestination.route,
+        AudiobooksDestination.route,
         -> true
         else -> false
     }
@@ -116,11 +124,22 @@ object FeedsViewPreference {
 
 private val latestRoute = "feed?id=$ID_ALL_FEEDS&tag="
 
-/** Switches the Feeds tab between Latest and By feed. Home stays under Latest, so Back returns to the tiles. */
+/**
+ * Switches the Feeds tab between Latest, By feed and Discover. Home stays under the other two, so
+ * Back returns to the tiles. Discover isn't remembered as the tab's start view.
+ */
 fun NavController.showFeedsView(
     context: Context,
-    latest: Boolean,
+    view: FeedsView,
 ) {
+    if (view == FeedsView.DISCOVER) {
+        navigate(DiscoverDestination.route) {
+            popUpTo(HomeDestination.route) { saveState = true }
+            launchSingleTop = true
+        }
+        return
+    }
+    val latest = view == FeedsView.LATEST
     FeedsViewPreference.setLatest(context, latest)
     if (latest) {
         navigate(latestRoute) {
@@ -133,7 +152,7 @@ fun NavController.showFeedsView(
 }
 
 /**
- * Opens [tab]. Discover, Playlists and Library keep where they were (scroll, open playlist);
+ * Opens [tab]. Playlists and Library keep where they were (scroll, open playlist);
  * the Feeds tab and tapping the current tab go back to that tab's first screen.
  */
 fun NavController.openTab(
@@ -142,16 +161,16 @@ fun NavController.openTab(
     current: MainTab?,
 ) {
     if (tab == MainTab.FEEDS) {
-        showFeedsView(context, FeedsViewPreference.isLatest(context))
+        showFeedsView(context, if (FeedsViewPreference.isLatest(context)) FeedsView.LATEST else FeedsView.BY_FEED)
         return
     }
     val root =
         when (tab) {
-            MainTab.DISCOVER -> DiscoverDestination.route
             MainTab.PLAYLISTS -> "playlists"
             MainTab.LIBRARY -> LibraryDestination.route
             MainTab.ZIM -> ZimDestination.route
             MainTab.EBOOKS -> EbooksDestination.route
+            MainTab.AUDIOBOOKS -> AudiobooksDestination.route
             MainTab.FEEDS -> HomeDestination.route
         }
     if (tab == current) {
@@ -180,7 +199,15 @@ fun MainBottomBar(
                 selected = selected,
                 onClick = { onSelect(tab) },
                 icon = { Icon(if (selected) filled else outlined, contentDescription = null) },
-                label = { Text(stringResource(label), maxLines = 1) },
+                // Six tabs share the width: a long label (Audiobooks) shrinks a little instead of wrapping
+                label = {
+                    Text(
+                        stringResource(label),
+                        maxLines = 1,
+                        softWrap = false,
+                        autoSize = TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = MaterialTheme.typography.labelMedium.fontSize),
+                    )
+                },
             )
         }
     }
@@ -189,18 +216,18 @@ fun MainBottomBar(
 private fun MainTab.look(): Triple<ImageVector, ImageVector, Int> =
     when (this) {
         MainTab.FEEDS -> Triple(Icons.Filled.DynamicFeed, Icons.Outlined.DynamicFeed, R.string.tab_feeds)
-        MainTab.DISCOVER -> Triple(Icons.Filled.Explore, Icons.Outlined.Explore, R.string.discover)
         MainTab.PLAYLISTS -> Triple(Icons.AutoMirrored.Filled.QueueMusic, Icons.AutoMirrored.Outlined.QueueMusic, R.string.playlists)
         MainTab.LIBRARY -> Triple(Icons.Filled.VideoLibrary, Icons.Outlined.VideoLibrary, R.string.tab_library)
         MainTab.ZIM -> Triple(Icons.Filled.Public, Icons.Outlined.Public, R.string.tab_zim)
         MainTab.EBOOKS -> Triple(Icons.AutoMirrored.Filled.MenuBook, Icons.AutoMirrored.Outlined.MenuBook, R.string.tab_ebooks)
+        MainTab.AUDIOBOOKS -> Triple(Icons.Filled.Headphones, Icons.Outlined.Headphones, R.string.tab_audiobooks)
     }
 
 /** What the tab screens need from the app shell, so they don't each take these as parameters. */
 @Stable
 class MainNav(
     val openSearch: () -> Unit,
-    val showFeedsView: (latest: Boolean) -> Unit,
+    val showFeedsView: (view: FeedsView) -> Unit,
 ) {
     /** Screens that cover everything (Flip, car mode) hide the bottom bar while they are shown. */
     var hiders by mutableIntStateOf(0)
@@ -261,29 +288,38 @@ fun GlobalSearchTopBar(
     }
 }
 
-/** Latest | By feed, under the Feeds tab's search bar. */
+/** Latest | By feed | Discover, under the Feeds tab's search bar (Discover has it on top). */
 @Composable
 fun FeedsViewSwitch(
-    latest: Boolean,
+    view: FeedsView,
     modifier: Modifier = Modifier,
 ) {
     val nav = LocalMainNav.current
+    val options =
+        listOf(
+            Triple(FeedsView.LATEST, Icons.Default.ViewAgenda, R.string.feeds_view_latest),
+            Triple(FeedsView.BY_FEED, Icons.Default.GridView, R.string.feeds_view_by_feed),
+            Triple(FeedsView.DISCOVER, Icons.Default.Explore, R.string.discover),
+        )
     Column(modifier.fillMaxWidth().padding(PaddingValues(start = 16.dp, end = 16.dp, bottom = 8.dp))) {
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-            SegmentedButton(
-                selected = latest,
-                onClick = { if (!latest) nav.showFeedsView(true) },
-                shape = SegmentedButtonDefaults.itemShape(0, 2),
-                icon = { SegmentedButtonDefaults.Icon(latest) { Icon(Icons.Default.ViewAgenda, null, Modifier.size(18.dp)) } },
-                label = { Text(stringResource(R.string.feeds_view_latest)) },
-            )
-            SegmentedButton(
-                selected = !latest,
-                onClick = { if (latest) nav.showFeedsView(false) },
-                shape = SegmentedButtonDefaults.itemShape(1, 2),
-                icon = { SegmentedButtonDefaults.Icon(!latest) { Icon(Icons.Default.GridView, null, Modifier.size(18.dp)) } },
-                label = { Text(stringResource(R.string.feeds_view_by_feed)) },
-            )
+            options.forEachIndexed { k, (v, icon, label) ->
+                SegmentedButton(
+                    selected = view == v,
+                    onClick = { if (view != v) nav.showFeedsView(v) },
+                    shape = SegmentedButtonDefaults.itemShape(k, options.size),
+                    icon = { SegmentedButtonDefaults.Icon(view == v) { Icon(icon, null, Modifier.size(18.dp)) } },
+                    // Six tabs share the width: a long label (Audiobooks) shrinks a little instead of wrapping
+                label = {
+                    Text(
+                        stringResource(label),
+                        maxLines = 1,
+                        softWrap = false,
+                        autoSize = TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = MaterialTheme.typography.labelMedium.fontSize),
+                    )
+                },
+                )
+            }
         }
     }
 }

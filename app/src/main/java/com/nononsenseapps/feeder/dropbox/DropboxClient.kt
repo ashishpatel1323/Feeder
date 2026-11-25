@@ -31,6 +31,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.RandomAccessFile
 import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 /**
@@ -52,6 +53,8 @@ data class DropboxFile(
     val path: String,
     val size: Long,
     val hash: String,
+    /** When Dropbox got it (ISO 8601), empty when not known */
+    val modified: String = "",
 )
 
 class DropboxException(
@@ -198,6 +201,7 @@ class DropboxClient private constructor(
             path = o["path_display"]?.jsonPrimitive?.contentOrNull ?: "",
             size = o["size"]?.jsonPrimitive?.long ?: 0,
             hash = o["content_hash"]?.jsonPrimitive?.contentOrNull ?: "",
+            modified = o["server_modified"]?.jsonPrimitive?.contentOrNull ?: "",
         )
 
     /** Files in one folder of the app folder. A missing folder is empty. */
@@ -226,6 +230,83 @@ class DropboxClient private constructor(
                 res = rpc("files/list_folder/continue", buildJsonObject { put("cursor", res["cursor"]!!.jsonPrimitive.content) })
             }
             out
+        }
+
+    /** Every file under a folder, subfolders included. A missing folder is empty. */
+    suspend fun listTree(path: String): List<DropboxFile> =
+        withContext(Dispatchers.IO) {
+            val out = mutableListOf<DropboxFile>()
+            var res =
+                try {
+                    rpc(
+                        "files/list_folder",
+                        buildJsonObject {
+                            put("path", path)
+                            put("recursive", true)
+                        },
+                    )
+                } catch (e: DropboxException) {
+                    if (e.status == 409 && "not_found" in e.summary) return@withContext emptyList()
+                    throw e
+                }
+            while (true) {
+                res["entries"]?.jsonArray?.forEach { e ->
+                    val o = e.jsonObject
+                    if (o[".tag"]?.jsonPrimitive?.contentOrNull == "file") out += toFile(o)
+                }
+                if (res["has_more"]?.jsonPrimitive?.contentOrNull != "true") break
+                res = rpc("files/list_folder/continue", buildJsonObject { put("cursor", res["cursor"]!!.jsonPrimitive.content) })
+            }
+            out
+        }
+
+    private val links = ConcurrentHashMap<String, Pair<String, Long>>()
+
+    /**
+     * A direct link to a file that the player can stream (with seeking). Dropbox keeps it working
+     * for 4 hours; it is reused for 3, and [fresh] asks for a new one (after a playback error).
+     */
+    suspend fun temporaryLink(
+        path: String,
+        fresh: Boolean = false,
+    ): String =
+        withContext(Dispatchers.IO) {
+            val known = links[path]
+            if (!fresh && known != null && known.second > System.currentTimeMillis()) return@withContext known.first
+            val res = rpc("files/get_temporary_link", buildJsonObject { put("path", path) })
+            val link = res["link"]?.jsonPrimitive?.contentOrNull ?: throw DropboxException(0, "no link")
+            links[path] = link to System.currentTimeMillis() + LINK_REUSE_MS
+            link
+        }
+
+    /** Bytes [offset, offset + length) of a file, for reading tags without downloading the audio. */
+    suspend fun downloadRange(
+        path: String,
+        offset: Long,
+        length: Int,
+    ): ByteArray =
+        withContext(Dispatchers.IO) {
+            if (length <= 0) return@withContext ByteArray(0)
+            val arg = headerArg(buildJsonObject { put("path", path) })
+            call { token ->
+                Request
+                    .Builder()
+                    .url("https://content.dropboxapi.com/2/files/download")
+                    .header("Authorization", "Bearer $token")
+                    .header("Dropbox-API-Arg", arg)
+                    .header("Range", "bytes=$offset-${offset + length - 1}")
+                    .post(ByteArray(0).toRequestBody(null))
+                    .build()
+            }.use { res ->
+                val all = res.body.bytes()
+                // A server that ignored the range sent the whole file
+                if (res.code == 206) {
+                    all
+                } else {
+                    val from = offset.coerceAtMost(all.size.toLong()).toInt()
+                    all.copyOfRange(from, (offset + length).coerceAtMost(all.size.toLong()).toInt())
+                }
+            }
         }
 
     /** Downloads a file to [dest] (through a .part file), reporting bytes done of total. */
@@ -400,6 +481,8 @@ class DropboxClient private constructor(
     companion object {
         const val EBOOKS_FOLDER = "/Ebooks"
         const val ZIM_FOLDER = "/ZIM"
+        const val AUDIOBOOKS_FOLDER = "/Audiobooks"
+        private const val LINK_REUSE_MS = 3 * 60 * 60 * 1000L
         private const val KEY_LINK = "link"
         private const val KEY_TS = "ts"
         private const val KEY_ACCESS = "access"

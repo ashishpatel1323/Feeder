@@ -59,6 +59,12 @@ class PlaylistPlaybackService : MediaLibraryService() {
     private val dao: FeedItemDao by lazy { di.direct.instance() }
     private val offlineFiles: OfflineFiles by lazy { di.direct.instance() }
     private val offlineVideos: OfflineVideos by lazy { di.direct.instance() }
+    private val audiobookPlayer: com.nononsenseapps.feeder.model.audiobooks.AudiobookPlayer by lazy { di.direct.instance() }
+    private val audiobooks by lazy {
+        com.nononsenseapps.feeder.model.audiobooks.AudiobookLibrary
+            .get(this)
+    }
+    private val covers = HashMap<String, ByteArray?>()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var session: MediaLibrarySession? = null
     private lateinit var carPlayer: CarQueuePlayer
@@ -95,6 +101,8 @@ class PlaylistPlaybackService : MediaLibraryService() {
                     byId[id]?.let { CarItemInfo(it.title, it.feedTitle, it.image?.url ?: it.feedImage, it.kind) }
                 },
                 onPick = ::play,
+                audiobook = audiobookPlayer,
+                audiobookCover = ::audiobookCover,
             )
         session =
             MediaLibrarySession
@@ -133,6 +141,15 @@ class PlaylistPlaybackService : MediaLibraryService() {
         scope.launch {
             store.playlists.collect { session?.notifyChildrenChanged(PLAYLISTS, it.size, null) }
         }
+        scope.launch {
+            audiobookPlayer.state.collect { carPlayer.refresh() }
+        }
+        scope.launch {
+            audiobooks.books.collect { session?.notifyChildrenChanged(AUDIOBOOKS, it.size, null) }
+        }
+        scope.launch {
+            audiobooks.version.collect { covers.clear() }
+        }
     }
 
     private fun playlistsIntent(): PendingIntent {
@@ -158,6 +175,7 @@ class PlaylistPlaybackService : MediaLibraryService() {
     override fun onTaskRemoved(rootIntent: Intent?) {
         // Swiping the app away while paused ends it; while playing it keeps going
         if (!playlistPlayer.state.value.isPlaying) playlistPlayer.stop()
+        if (!audiobookPlayer.state.value.isPlaying) audiobookPlayer.close()
         super.onTaskRemoved(rootIntent)
     }
 
@@ -180,18 +198,35 @@ class PlaylistPlaybackService : MediaLibraryService() {
                 val pl = store.get(parts.getOrNull(1) ?: return) ?: return
                 var ids = pl.items(candidates, c, byId).map { it.id }
                 if (parts[0] == "plshuf") ids = ids.shuffled()
-                val start = parts.getOrNull(2)?.toLongOrNull()?.let { ids.indexOf(it) }?.takeIf { it >= 0 } ?: 0
+                val start =
+                    parts
+                        .getOrNull(2)
+                        ?.toLongOrNull()
+                        ?.let { ids.indexOf(it) }
+                        ?.takeIf { it >= 0 } ?: 0
                 playlistPlayer.start(ids, pl.name, pl.id, start)
             }
             "ep" -> {
                 val feedId = parts.getOrNull(1)?.toLongOrNull() ?: return
                 val items = episodes(feedId)
-                val start = parts.getOrNull(2)?.toLongOrNull()?.let { id -> items.indexOfFirst { it.id == id } }?.takeIf { it >= 0 } ?: 0
+                val start =
+                    parts
+                        .getOrNull(2)
+                        ?.toLongOrNull()
+                        ?.let { id -> items.indexOfFirst { it.id == id } }
+                        ?.takeIf { it >= 0 } ?: 0
                 playlistPlayer.start(items.map { it.id }, items.firstOrNull()?.feedTitle ?: "Podcast", null, start)
             }
+            "ab" -> parts.getOrNull(1)?.let { audiobookPlayer.open(it) }
+            "abch" -> parts.getOrNull(1)?.toIntOrNull()?.let(audiobookPlayer::jumpToChapter)
             "dl" -> {
                 val items = downloads()
-                val start = parts.getOrNull(1)?.toLongOrNull()?.let { id -> items.indexOfFirst { it.id == id } }?.takeIf { it >= 0 } ?: 0
+                val start =
+                    parts
+                        .getOrNull(1)
+                        ?.toLongOrNull()
+                        ?.let { id -> items.indexOfFirst { it.id == id } }
+                        ?.takeIf { it >= 0 } ?: 0
                 playlistPlayer.start(items.map { it.id }, getString(R.string.downloads), null, start)
             }
         }
@@ -223,7 +258,9 @@ class PlaylistPlaybackService : MediaLibraryService() {
             customCommand: SessionCommand,
             args: Bundle,
         ): ListenableFuture<SessionResult> {
-            if (customCommand.customAction == ACTION_SPEED) playlistPlayer.cycleSpeed()
+            if (customCommand.customAction == ACTION_SPEED) {
+                if (!playlistPlayer.state.value.active && audiobookPlayer.state.value.active) audiobookPlayer.cycleSpeed() else playlistPlayer.cycleSpeed()
+            }
             return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
 
@@ -248,7 +285,9 @@ class PlaylistPlaybackService : MediaLibraryService() {
             pageSize: Int,
             params: LibraryParams?,
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
-            val result = com.google.common.util.concurrent.SettableFuture.create<LibraryResult<ImmutableList<MediaItem>>>()
+            val result =
+                com.google.common.util.concurrent.SettableFuture
+                    .create<LibraryResult<ImmutableList<MediaItem>>>()
             scope.launch {
                 kotlinx.coroutines.withTimeoutOrNull(5_000) { ready.await() }
                 val all = children(parentId)
@@ -281,6 +320,7 @@ class PlaylistPlaybackService : MediaLibraryService() {
                     folder(PODCASTS, "Podcasts", null, grid = true),
                     folder(UP_NEXT, getString(R.string.queue_up_next), null),
                     folder(DOWNLOADS, getString(R.string.downloads), null),
+                    folder(AUDIOBOOKS, getString(R.string.tab_audiobooks), null, grid = true),
                 )
             parentId == PLAYLISTS ->
                 store.playlists.value.map { pl ->
@@ -308,7 +348,19 @@ class PlaylistPlaybackService : MediaLibraryService() {
                     .map { (feedId, eps) ->
                         val unplayed = eps.count { it.status(c) == PlayStatus.UNREAD }
                         val inProgress = eps.any { it.status(c) == PlayStatus.IN_PROGRESS }
-                        Triple(feedId, eps, if (inProgress) "In progress" else if (unplayed > 99) "99+ new" else if (unplayed > 0) "$unplayed new" else null)
+                        Triple(
+                            feedId,
+                            eps,
+                            if (inProgress) {
+                                "In progress"
+                            } else if (unplayed > 99) {
+                                "99+ new"
+                            } else if (unplayed > 0) {
+                                "$unplayed new"
+                            } else {
+                                null
+                            },
+                        )
                     }.sortedByDescending { (_, eps, _) -> eps.maxOf { it.sortTime } }
                     .map { (feedId, eps, badge) -> folder("feed:$feedId", eps.first().feedTitle, badge, artworkUri = eps.first().feedImage) }
             parentId.startsWith("feed:") -> {
@@ -320,6 +372,7 @@ class PlaylistPlaybackService : MediaLibraryService() {
                 s.ids.mapIndexedNotNull { i, id -> byId[id]?.let { itemEntry("q:$i", it, c, playing = i == s.index) } }
             }
             parentId == DOWNLOADS -> downloads().map { itemEntry("dl:${it.id}", it, c) }
+            parentId == AUDIOBOOKS -> audiobookEntries()
             else -> emptyList()
         }
     }
@@ -418,6 +471,59 @@ class PlaylistPlaybackService : MediaLibraryService() {
             .build()
     }
 
+    private fun audiobookCover(id: String): ByteArray? = covers.getOrPut(id) { audiobooks.coverFile(id).takeIf { it.exists() }?.readBytes() }
+
+    /** Audiobooks, last listened first, with how far each is. */
+    private fun audiobookEntries(): List<MediaItem> {
+        val positions =
+            com.nononsenseapps.feeder.model.audiobooks.AudioPositions
+                .get(this)
+                .all.value
+        return audiobooks.books.value
+            .sortedWith(compareByDescending<com.nononsenseapps.feeder.model.audiobooks.Audiobook> { it.lastOpenedAt }.thenByDescending { it.addedAt })
+            .map { b ->
+                val pos = positions[b.id]
+                val len =
+                    com.nononsenseapps.feeder.model.audiobooks.AudiobookRules
+                        .bookLengthMs(b)
+                val extras =
+                    Bundle().apply {
+                        when {
+                            pos == null || (pos.i == 0 && pos.ms < 1000) -> putInt(MediaConstants.EXTRAS_KEY_COMPLETION_STATUS, MediaConstants.EXTRAS_VALUE_COMPLETION_STATUS_NOT_PLAYED)
+                            pos.f >= 0.999 -> putInt(MediaConstants.EXTRAS_KEY_COMPLETION_STATUS, MediaConstants.EXTRAS_VALUE_COMPLETION_STATUS_FULLY_PLAYED)
+                            else -> {
+                                putInt(MediaConstants.EXTRAS_KEY_COMPLETION_STATUS, MediaConstants.EXTRAS_VALUE_COMPLETION_STATUS_PARTIALLY_PLAYED)
+                                if (pos.f > 0) putDouble(MediaConstants.EXTRAS_KEY_COMPLETION_PERCENTAGE, pos.f)
+                            }
+                        }
+                    }
+                val meta =
+                    MediaMetadata
+                        .Builder()
+                        .setTitle(b.title)
+                        .setSubtitle(
+                            listOfNotNull(
+                                b.author.ifBlank { null },
+                                if (len > 0) {
+                                    com.nononsenseapps.feeder.model.audiobooks.AudiobookRules
+                                        .lengthText(len)
+                                } else {
+                                    null
+                                },
+                            ).joinToString(" · "),
+                        ).setArtist(b.author)
+                        .setIsBrowsable(false)
+                        .setIsPlayable(true)
+                        .setExtras(extras)
+                audiobookCover(b.id)?.let { meta.setArtworkData(it, MediaMetadata.PICTURE_TYPE_FRONT_COVER) }
+                MediaItem
+                    .Builder()
+                    .setMediaId("ab:${b.id}")
+                    .setMediaMetadata(meta.build())
+                    .build()
+            }
+    }
+
     /** The playlist's colored tile with its emoji, as a PNG for the car. */
     private fun tile(pl: Playlist): ByteArray =
         tiles.getOrPut("${pl.icon}|${pl.color}") {
@@ -448,6 +554,7 @@ class PlaylistPlaybackService : MediaLibraryService() {
         private const val PODCASTS = "podcasts"
         private const val UP_NEXT = "upnext"
         private const val DOWNLOADS = "downloads"
+        private const val AUDIOBOOKS = "audiobooks"
         private const val MAX_EPISODES = 50
     }
 }

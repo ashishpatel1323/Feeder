@@ -12,6 +12,8 @@ import com.nononsenseapps.feeder.db.room.Sync2ItemKey
 import com.nononsenseapps.feeder.db.room.Sync2Known
 import com.nononsenseapps.feeder.dropbox.DropboxClient
 import com.nononsenseapps.feeder.dropbox.DropboxLink
+import com.nononsenseapps.feeder.model.audiobooks.AudioPos
+import com.nononsenseapps.feeder.model.audiobooks.AudioPositions
 import com.nononsenseapps.feeder.model.ebooks.BookPositions
 import com.nononsenseapps.feeder.model.highlights.Highlight
 import com.nononsenseapps.feeder.model.highlights.HighlightStore
@@ -61,6 +63,8 @@ const val SYNC2_SERVER = "https://feeder-web-snowy.vercel.app"
  *   playlist (key: playlist id) [SyncedPlaylist], or {"deleted": true} after deleting it
  *   highlight (key: highlight id) [highlightValue], or {"deleted": true} after deleting it
  *   bookpos (key: ebook id)       { cfi, f }: where an ebook was left (newest wins)
+ *   audiopos (key: audiobook id) { i, h, ms, f }: where an audiobook was left (newest wins):
+ *     file index and content hash, ms into that file, 0–1 through the book
  *   dropbox "main"                [DropboxLink], or {"deleted": true} after signing out
  *
  * The device remembers the last value exchanged for every record (sync2_known) and sends
@@ -80,6 +84,7 @@ class Sync2Client(
     private val playlistStore: PlaylistStore by instance()
     private val highlightStore: HighlightStore by instance()
     private val bookPositions: BookPositions by instance()
+    private val audioPositions: AudioPositions by instance()
     private val app: android.app.Application by instance()
     private val thisDevice by lazy { ThisDevice.get(app) }
 
@@ -507,6 +512,16 @@ class Sync2Client(
             }
         }
 
+        // Where audiobooks were left, saved here since they were last exchanged
+        val knownAudio = dao.getKnownWithPrefix("audiopos\n").associateBy { it.k.removePrefix("audiopos\n") }
+        for ((id, pos) in audioPositions.all.value) {
+            val kn = knownAudio[id]
+            if (kn == null || pos.ts > kn.ts) {
+                val value = linkedMapOf<String, Any?>("i" to pos.i, "h" to pos.h, "ms" to pos.ms, "f" to pos.f).putStamp(pos.by)
+                out += Pending("audiopos", id, value, maxOf(pos.ts, (kn?.ts ?: 0) + 1))
+            }
+        }
+
         // The Dropbox sign-in (signing in or out on this phone)
         val link = dropbox.link.value
         val linkValue: Any? = link?.let { dropboxValue(it) } ?: mapOf("deleted" to true)
@@ -683,6 +698,16 @@ class Sync2Client(
                     if (v is Map<*, *>) {
                         val cfi = v["cfi"] as? String
                         if (!cfi.isNullOrBlank()) bookPositions.applyRemote(key, cfi, (v["f"] as? Number)?.toDouble() ?: 0.0, ts, DeviceStamp.fromMap(v), (v["p"] as? Number)?.toInt() ?: 0, (v["n"] as? Number)?.toInt() ?: 0)
+                    }
+                }
+
+                "audiopos" -> {
+                    val ms = (v as? Map<*, *>)?.let { (it["ms"] as? Number)?.toLong() }
+                    if (v is Map<*, *> && ms != null) {
+                        val by = DeviceStamp.fromMap(v)
+                        val i = (v["i"] as? Number)?.toInt()?.coerceAtLeast(0) ?: 0
+                        val f = (v["f"] as? Number)?.toDouble()?.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0) ?: 0.0
+                        audioPositions.applyRemote(key, AudioPos(i, v["h"] as? String ?: "", ms.coerceAtLeast(0), f, ts, by.id, by.name))
                     }
                 }
 
