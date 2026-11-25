@@ -17,4 +17,12 @@ data class HomeFeedRow(
     @ColumnInfo(name = "audio_items") val audioItems: Int,
     /** Articles that link to a YouTube video. */
     @ColumnInfo(name = "video_items") val videoItems: Int,
+    /** Saved (bookmarked) articles. */
+    val saved: Int = 0,
+)
+
+/** Which feed an article belongs to. */
+data class ItemFeedId(
+    val id: Long,
+    @ColumnInfo(name = "feed_id") val feedId: Long,
 )
