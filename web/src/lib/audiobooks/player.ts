@@ -9,6 +9,7 @@ import { db, getKv, setKv, type Audiobook } from '../db'
 import { temporaryLink } from '../dropbox'
 import { audioFocus, playQueue } from '../playqueue'
 import { readAloud } from '../readaloud'
+import { clockText, recordHistory } from '../history'
 import { saveAudioPos, scanBook } from './library'
 import { bookLengthMs, chapterAt, chaptersOf, fractionAt, resumePoint, trackStartMs, type Chapter } from './timeline'
 
@@ -55,6 +56,11 @@ class AudiobookPlayer {
   private lastSaved = 0
   private retried = false
   private sleepTimer: ReturnType<typeof setInterval> | null = null
+  /** History: whether a "play" was noted and no "pause" since, and why the next play or pause happens */
+  private noted = false
+  private playReason = 'app'
+  private pauseReason: string | null = null
+  private switching = false
   onMessage: ((msg: string) => void) | null = null
 
   subscribe(l: Listener): () => void {
@@ -78,10 +84,18 @@ class AudiobookPlayer {
     a.addEventListener('timeupdate', () => this.onTime())
     a.addEventListener('playing', () => {
       this.retried = false
+      this.switching = false
       this.set({ status: 'playing', error: null })
+      if (!this.noted) {
+        this.noted = true
+        this.note('play', this.playReason)
+      }
+      this.playReason = 'app'
       if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing'
     })
     a.addEventListener('pause', () => {
+      // Paused by the browser or the system (not by a file change): headphones out, another tab
+      if (this.noted && !this.switching && !a.ended) this.notePause(this.pauseReason ?? 'system')
       if (this.state.status === 'playing') this.set({ status: 'paused' })
       if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused'
       this.save()
@@ -105,13 +119,41 @@ class AudiobookPlayer {
       if (this.state.sleep?.endOfChapter) {
         // Reached the next chapter while waiting for the end of the last one
         this.cancelSleep()
-        this.pause()
+        this.pause('sleep')
         this.onMessage?.('Sleep timer: paused at the end of the chapter')
         return
       }
     }
     if (Date.now() - this.lastSaved > 15_000) this.save()
     this.updatePositionState()
+  }
+
+  /** Notes a play or pause in the book's history, with the chapter and time into it. */
+  private note(a: 'play' | 'pause', reason: string) {
+    const b = this.book
+    if (!b) return
+    const s = this.state
+    const ch = s.chapters[s.chapter]
+    const inChapter = ch && ch.i === s.i ? s.ms - ch.startMs : s.ms
+    void recordHistory(
+      'audiobook',
+      b.id,
+      a,
+      {
+        p: ch ? `Ch. ${s.chapter + 1} · ${clockText(inChapter)}` : clockText(s.bookMs),
+        s: ch?.title,
+        f: fractionAt(b, s.i, s.ms),
+        x: `${s.i}:${Math.round(s.ms)}`,
+      },
+      reason,
+    )
+  }
+
+  private notePause(reason: string) {
+    if (!this.noted) return
+    this.noted = false
+    this.pauseReason = null
+    this.note('pause', reason)
   }
 
   /** Saves the position now (also sent to other devices with the next sync). */
@@ -132,12 +174,14 @@ class AudiobookPlayer {
   }
 
   /** Opens a book where it was left (or [at]), and plays it unless [play] is false. */
-  async open(id: string, opts: { play?: boolean; at?: { i: number; ms: number } } = {}) {
+  async open(id: string, opts: { play?: boolean; at?: { i: number; ms: number }; reason?: string } = {}) {
     if (this.state.bookId === id && !opts.at) {
-      if (opts.play !== false) this.play()
+      if (opts.play !== false) this.play(opts.reason)
       return
     }
+    this.notePause('app')
     this.stopAudio()
+    this.playReason = opts.reason ?? 'app'
     const gen = ++this.generation
     const b = await db.audiobooks.get(id)
     if (!b || gen !== this.generation) return
@@ -183,6 +227,7 @@ class AudiobookPlayer {
     }
     if (gen !== this.generation) return
     const a = this.ensureAudio()
+    this.switching = this.noted
     a.src = url
     a.playbackRate = this.state.rate
     a.volume = 1
@@ -220,6 +265,7 @@ class AudiobookPlayer {
       return
     }
     const name = this.book.tracks[this.state.i]?.name ?? 'this file'
+    this.notePause('system')
     this.set({ status: 'paused', error: `Could not play ${name}` })
     this.onMessage?.(`Could not play ${name}. This browser may not play its format.`)
   }
@@ -234,13 +280,15 @@ class AudiobookPlayer {
     // The end of the book
     const last = b.tracks[b.tracks.length - 1]
     void saveAudioPos(b.id, b.tracks.length - 1, last.hash, (last.duration ?? 0) * 1000, 1)
+    this.notePause('end')
     this.cancelSleep()
     this.set({ status: 'paused' })
     this.onMessage?.(`Finished ${b.title}`)
   }
 
-  play() {
+  play(reason = 'app') {
     if (!this.book) return
+    this.playReason = reason
     if (!this.audio?.src) {
       void this.load(this.state.i, this.state.ms, true)
       return
@@ -248,14 +296,16 @@ class AudiobookPlayer {
     void this.startAudio()
   }
 
-  pause() {
+  pause(reason = 'app') {
+    this.pauseReason = reason
+    this.notePause(reason)
     this.audio?.pause()
     this.set({ status: 'paused' })
   }
 
-  toggle() {
-    if (this.state.status === 'playing' || this.state.status === 'loading') this.pause()
-    else this.play()
+  toggle(reason = 'app') {
+    if (this.state.status === 'playing' || this.state.status === 'loading') this.pause(reason)
+    else this.play(reason)
   }
 
   /** Jumps [seconds] back or ahead, across files when needed. */
@@ -379,7 +429,7 @@ class AudiobookPlayer {
     if (this.state.status !== 'playing') return
     if (left <= 0) {
       this.cancelSleep()
-      this.pause()
+      this.pause('sleep')
       // Back a little, so the last words before falling asleep are heard again
       this.seekBy(-10)
       this.onMessage?.('Sleep timer: paused')
@@ -400,9 +450,9 @@ class AudiobookPlayer {
       artwork: b.cover ? [{ src: b.cover }] : [],
     })
     const handlers: [MediaSessionAction, MediaSessionActionHandler | null][] = [
-      ['play', () => this.play()],
-      ['pause', () => this.pause()],
-      ['stop', () => this.pause()],
+      ['play', () => this.play('media')],
+      ['pause', () => this.pause('media')],
+      ['stop', () => this.pause('media')],
       ['seekbackward', () => this.seekBy(-10)],
       ['seekforward', () => this.seekBy(30)],
       ['previoustrack', () => this.prevChapter()],
@@ -443,6 +493,7 @@ class AudiobookPlayer {
 
   /** Stops and closes the player (the position is kept). */
   close() {
+    this.notePause('closed')
     this.generation++
     this.stopAudio()
     this.cancelSleep()
@@ -454,7 +505,7 @@ class AudiobookPlayer {
 
 export const audiobookPlayer = new AudiobookPlayer()
 audioFocus.pauseAudiobook = () => {
-  if (audiobookPlayer.state.status === 'playing' || audiobookPlayer.state.status === 'loading') audiobookPlayer.pause()
+  if (audiobookPlayer.state.status === 'playing' || audiobookPlayer.state.status === 'loading') audiobookPlayer.pause('focus')
 }
 
 export function useAudiobookPlayer(): BookPlayerState {

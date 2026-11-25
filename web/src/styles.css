@@ -8458,3 +8458,95 @@ mark.sr-mark {
     font-size: var(--fs-2xs);
   }
 }
+
+/* -- History of an audiobook, ebook or ZIM site (components/History.tsx) */
+.hist-empty {
+  margin: var(--sp-3) 0;
+}
+.hist section + section {
+  margin-top: var(--sp-3);
+}
+.hist-day {
+  margin: 0 0 var(--sp-1);
+  padding: var(--sp-2) var(--sp-3) 0;
+  color: var(--accent);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+.hist ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hist-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: 52px;
+  padding: var(--sp-2) var(--sp-3);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+button.hist-row {
+  cursor: pointer;
+}
+button.hist-row:hover {
+  background: var(--surface-2);
+}
+.hist-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+.hist-icon.play,
+.hist-icon.open {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.hist-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.hist-what {
+  font-weight: 500;
+}
+.hist-why {
+  color: var(--text-2);
+  font-weight: 400;
+}
+.hist-when {
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: var(--fs-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hist-chip {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  padding: 2px var(--sp-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ab-chapters .segmented {
+  margin-bottom: var(--sp-2);
+}

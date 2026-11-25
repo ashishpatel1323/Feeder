@@ -676,7 +676,11 @@ export default function App() {
     let book = 0
     await db.bookPos.each((p) => void (book = Math.max(book, p.ts)))
     const dropboxTs = (await db.kv.get(DROPBOX_TS_KEY))?.value ?? 0
-    return `${last}|${hl}|${await db.highlights.count()}|${JSON.stringify(lists?.value ?? null)}|${book}|${dropboxTs}`
+    // Audiobook positions, and history events not sent yet
+    let audio = 0
+    await db.audioPos.each((p) => void (audio = Math.max(audio, p.ts)))
+    const history = await db.history.where('synced').equals(0).count()
+    return `${last}|${hl}|${await db.highlights.count()}|${JSON.stringify(lists?.value ?? null)}|${book}|${dropboxTs}|${audio}|${history}`
   }, [])
   const firstUnsent = useRef(0)
   useEffect(() => {

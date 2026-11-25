@@ -17,12 +17,14 @@ import { loadFoliate } from '../lib/ebooks/foliate'
 import { atEnd, atStart, drawFixedHighlights, markFixedPage, readableContent, redrawFixedHighlights, nextSection, pageNumbers, prevSection, reveal, setStyles } from '../lib/ebooks/nav'
 import { bookCss, injectCsp, loadReaderPrefs, saveReaderPrefs, type ReaderPrefs } from '../lib/ebooks/reader'
 import { deleteHighlight, HIGHLIGHT_COLORS, quoteText, saveHighlight, updateHighlight } from '../lib/highlights'
+import { bookChip, trackOpen, type Where } from '../lib/history'
 import { formatBytes } from '../lib/offline'
 import { readAloud, type ReadAloudState } from '../lib/readaloud'
 import type { Settings } from '../lib/settings'
 import type { FoliateView, Location, TocItem } from '../vendor/foliate-js/view.js'
 import { DropboxPanel, useDropbox } from './DropboxPanel'
 import { HighlightBar } from './Highlights'
+import { HistoryList } from './History'
 import { Icon, IconButton } from './Icon'
 import { Player } from './Player'
 import { otherDeviceText } from '../lib/device'
@@ -235,7 +237,16 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
   )
 }
 
-type Panel = null | 'toc' | 'highlights' | 'look'
+const PANEL_TITLES = { toc: 'Contents', highlights: 'Highlights', look: 'Text and theme', history: 'History' } as const
+
+type Panel = null | 'toc' | 'highlights' | 'look' | 'history'
+
+/** Where a book is, for its history: "p. 41 of 310" (or "37%"), the chapter, and the CFI. */
+function bookWhere(l: Location, fixed: boolean): Where {
+  const f = Number.isFinite(l.fraction) ? l.fraction : 0
+  const pages = pageNumbers(l, fixed)
+  return { p: bookChip(f, pages ? { p: pages.page, n: pages.pages } : null), s: l.tocItem?.label, f, x: l.cfi }
+}
 
 interface Pending {
   cfi: string
@@ -271,6 +282,11 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
     let saveTimer = 0
     const abort = new AbortController()
     const el = host.current!
+    // History: opened once the first page shows, closed with the reader
+    const opened = trackOpen('ebook', id, () => {
+      const l = viewRef.current?.lastLocation
+      return l ? bookWhere(l, !!viewRef.current?.isFixedLayout) : null
+    })
     ;(async () => {
       await loadFoliate()
       const file = await bookFile(id, (done, total) => live && setStatus((s) => ({ ...s, done, total })), abort.signal)
@@ -299,6 +315,7 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
       view.addEventListener('relocate', (e) => {
         const l = (e as CustomEvent<Location>).detail
         setLoc(l)
+        opened.touch()
         // Fixed-layout pages (PDF) may already be loaded: carry on reading aloud once the page shows
         if (continueNext.current && view.isFixedLayout) {
           continueNext.current = false
@@ -369,6 +386,7 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
       abort.abort()
       window.clearTimeout(saveTimer)
       const v = viewRef.current
+      opened.stop()
       if (v?.lastLocation) void savePosition(id, v.lastLocation.cfi, v.lastLocation.fraction ?? 0, pageNumbers(v.lastLocation, v.isFixedLayout))
       if (readAloud.state.itemId === bookItemId(id)) readAloud.stop()
       readAloud.revealHook = null
@@ -501,6 +519,7 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
           <IconButton icon="toc" label="Contents" onClick={() => setPanel(panel === 'toc' ? null : 'toc')} />
           <IconButton icon="highlight" label={`Highlights (${highlights.length})`} onClick={() => setPanel(panel === 'highlights' ? null : 'highlights')} />
           <IconButton icon="textSize" label="Text size and theme" onClick={() => setPanel(panel === 'look' ? null : 'look')} />
+          <IconButton icon="history" label="History" onClick={() => setPanel(panel === 'history' ? null : 'history')} />
           <IconButton icon="headphones" label="Listen: read aloud" text="Listen" onClick={() => (listening ? readAloud.toggle() : startListening())} disabled={status.loading || !!status.error} className="bar-primary" />
         </span>
       </header>
@@ -530,9 +549,9 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
         ) : null}
 
         {panel ? (
-          <aside className="book-panel" aria-label={panel === 'toc' ? 'Contents' : panel === 'highlights' ? 'Highlights' : 'Text and theme'}>
+          <aside className="book-panel" aria-label={PANEL_TITLES[panel]}>
             <div className="book-panel-head">
-              <h2>{panel === 'toc' ? 'Contents' : panel === 'highlights' ? 'Highlights' : 'Text and theme'}</h2>
+              <h2>{PANEL_TITLES[panel]}</h2>
               <IconButton icon="close" label="Close" onClick={() => setPanel(null)} />
             </div>
             {panel === 'toc' ? (
@@ -570,6 +589,15 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
               ) : (
                 <p className="muted">Select text in the book to highlight it.</p>
               )
+            ) : panel === 'history' ? (
+              <HistoryList
+                c="ebook"
+                i={id}
+                onJump={(e) => {
+                  if (e.x) void viewRef.current?.goTo(e.x)
+                  if (window.innerWidth < 900) setPanel(null)
+                }}
+              />
             ) : (
               <LookPanel prefs={prefs} onChange={setPrefs} />
             )}

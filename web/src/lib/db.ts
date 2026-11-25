@@ -216,6 +216,26 @@ export interface AudioPos {
   dn?: string
 }
 
+/** One play, pause, open or close of an audiobook, ebook or ZIM site (history.ts; synced as "history"). */
+export interface HistoryEvent {
+  id: string
+  /** "kind:item id", for looking up one item's history */
+  item: string
+  c: 'audiobook' | 'ebook' | 'zim'
+  i: string
+  a: 'play' | 'pause' | 'open' | 'close'
+  r?: string
+  at: number
+  p?: string
+  s?: string
+  f?: number
+  x?: string
+  dv?: string
+  dn?: string
+  /** 1 once sent to the sync server (or when it came from there) */
+  synced: number
+}
+
 export interface KeyValue {
   key: string
   value: unknown
@@ -237,6 +257,7 @@ class FeederDb extends Dexie {
   bookPos!: EntityTable<BookPos, 'id'>
   audiobooks!: EntityTable<Audiobook, 'id'>
   audioPos!: EntityTable<AudioPos, 'id'>
+  history!: EntityTable<HistoryEvent, 'id'>
 
   constructor() {
     super('feeder-web')
@@ -274,6 +295,8 @@ class FeederDb extends Dexie {
     this.version(6).stores({ books: '&id, lastOpenedAt', bookPos: '&id' })
     // The Audiobooks tab: books and where each was left
     this.version(7).stores({ audiobooks: '&id, lastOpenedAt', audioPos: '&id' })
+    // History of plays, pauses, opens and closes (history.ts)
+    this.version(8).stores({ history: '&id, [item+at], at, synced' })
   }
 }
 
