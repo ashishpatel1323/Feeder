@@ -2,6 +2,8 @@ package com.nononsenseapps.feeder.model.ebooks
 
 import android.content.Context
 import androidx.core.content.edit
+import com.nononsenseapps.feeder.sync2.DeviceStamp
+import com.nononsenseapps.feeder.sync2.ThisDevice
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,7 +16,12 @@ data class BookPos(
     val cfi: String,
     val f: Double,
     val ts: Long,
-)
+    /** Device that saved it (ThisDevice), empty when not known */
+    val dv: String = "",
+    val dn: String = "",
+) {
+    val by: DeviceStamp get() = if (dv.isNotEmpty() && dn.isNotEmpty()) DeviceStamp(dv, dn) else DeviceStamp.NONE
+}
 
 /**
  * Where each ebook was left, by book id. Synced with the web app as kind "bookpos"
@@ -23,6 +30,7 @@ data class BookPos(
 class BookPositions private constructor(
     context: Context,
 ) {
+    private val device = ThisDevice.get(context)
     private val prefs = context.getSharedPreferences("ebook_positions", Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true }
     private val _all = MutableStateFlow(load())
@@ -48,7 +56,7 @@ class BookPositions private constructor(
         val f = Math.round(fraction.coerceIn(0.0, 1.0) * 10000) / 10000.0
         val old = _all.value[id]
         if (old != null && old.cfi == cfi) return
-        put(id, BookPos(cfi, f, maxOf(now, (old?.ts ?: 0) + 1)))
+        device.stamp().let { me -> put(id, BookPos(cfi, f, maxOf(now, (old?.ts ?: 0) + 1), me.id, me.name)) }
         onChanged?.invoke()
     }
 
@@ -59,11 +67,12 @@ class BookPositions private constructor(
         cfi: String,
         f: Double,
         ts: Long,
+        by: DeviceStamp = DeviceStamp.NONE,
     ) {
         if (cfi.isBlank()) return
         val local = _all.value[id]
         if (local != null && local.ts > ts) return
-        put(id, BookPos(cfi, if (f.isFinite()) f else 0.0, ts))
+        put(id, BookPos(cfi, if (f.isFinite()) f else 0.0, ts, by.id, by.name))
     }
 
     private fun put(

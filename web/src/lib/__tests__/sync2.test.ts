@@ -4,6 +4,7 @@ import { handleSync2, MemoryStore, type SyncRecord } from '../../../server/sync2
 import { db, deleteFeeds, FEED_ORDER_KEY, getKv, hideItems, itemId, newFeed, setKv, unhideItems, updateFeed, type Item } from '../db'
 import { decryptString, encryptString } from '../crypto'
 import { saveVideoPos } from '../videopos'
+import { deviceId, deviceName, otherDeviceText } from '../device'
 import { deleteHighlight, saveHighlight, updateHighlight } from '../highlights'
 import { deletePlaylist, loadPlaylists, newPlaylist, savePlaylist, seedPlaylists, PLAYLISTS_KEY } from '../playlists'
 import {
@@ -313,6 +314,29 @@ describe('sync client', () => {
 
     // Watching on here again sends the new position
     await saveVideoPos(a, 520, 859)
+    expect((await syncNow())?.sent).toBe(1)
+  })
+
+  it('says which device saved a position, and keeps it without echoing', async () => {
+    await joinSync(CODE, KEY)
+    const a = itemId('https://yt/feed', 'a')
+    const b = itemId('https://yt/feed', 'b')
+    await saveVideoPos(a, 252, 859, 1000)
+    await syncNow()
+    const other = await otherDevice()
+    expect((await other.all()).find((p) => p.k === 'video')?.v).toEqual({ t: 252, d: 859, dv: deviceId(), dn: deviceName() })
+
+    await other.push({ k: 'video', key: b, v: { t: 40, d: 600, dv: 'phone-1', dn: 'Pixel 8' }, ts: 3000 }, { k: 'bookpos', key: 'book1', v: { cfi: 'epubcfi(/6/4)', f: 0.4, dv: 'phone-1', dn: 'Pixel 8' }, ts: 3000 })
+    await syncNow()
+    expect(await db.videoPos.get(b)).toEqual({ id: b, t: 40, d: 600, ts: 3000, dv: 'phone-1', dn: 'Pixel 8' })
+    expect(await db.bookPos.get('book1')).toMatchObject({ dv: 'phone-1', dn: 'Pixel 8' })
+    expect(otherDeviceText(await db.videoPos.get(b), 3000 + 2 * 3_600_000)).toBe('on Pixel 8, 2h ago')
+    expect(otherDeviceText(await db.videoPos.get(a))).toBe('')
+    expect((await syncNow())?.sent).toBe(0)
+
+    // Playing it here makes it this device's again
+    await saveVideoPos(b, 80, 600)
+    expect((await db.videoPos.get(b))?.dv).toBe(deviceId())
     expect((await syncNow())?.sent).toBe(1)
   })
 

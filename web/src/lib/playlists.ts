@@ -106,7 +106,8 @@ export function itemKind(item: Pick<Item, 'link' | 'contentHtml' | 'enclosureUrl
 export interface PlaylistContext {
   feeds: Map<string, Feed>
   feedKinds: Record<string, FeedKind>
-  positions: Map<string, Pick<VideoPos, 't' | 'd'>>
+  /** With who saved it (ts, dv, dn) where known, for "on Pixel 8, 2h ago" */
+  positions: Map<string, Pick<VideoPos, 't' | 'd'> & Partial<Pick<VideoPos, 'ts' | 'dv' | 'dn'>>>
   /** YouTube video id → seconds, learned when a video was saved or played. */
   videoDurations: Record<string, number>
   /** Read-aloud speed, for an article's listening time. */

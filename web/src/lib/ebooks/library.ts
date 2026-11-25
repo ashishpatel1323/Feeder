@@ -6,6 +6,7 @@
  */
 import { contentHash, deleteFile, downloadStream, EBOOKS_FOLDER, getDropbox, listFolder, uploadFile, type DropboxFile, type Progress } from '../dropbox'
 import { db, type Book } from '../db'
+import { thisDevice } from '../device'
 import { loadFoliate } from './foliate'
 import { authorString, langString } from './reader'
 
@@ -267,5 +268,5 @@ export async function deleteBook(id: string): Promise<void> {
 
 /** Where a book was left, as saved here or synced from another device. */
 export async function savePosition(id: string, cfi: string, f: number): Promise<void> {
-  await db.bookPos.put({ id, cfi, f: Math.round(f * 10000) / 10000, ts: Date.now() })
+  await db.bookPos.put({ id, cfi, f: Math.round(f * 10000) / 10000, ts: Date.now(), ...thisDevice() })
 }

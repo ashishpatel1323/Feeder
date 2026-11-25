@@ -2,6 +2,7 @@ package com.nononsenseapps.feeder.model.playlists
 
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import com.nononsenseapps.feeder.sync2.DeviceStamp
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,6 +41,36 @@ class PlaylistStore(
 
     // Items whose position came from another device after this device last saved one
     private val fromOtherDevice = mutableSetOf<Long>()
+
+    private val devicesSerializer = MapSerializer(Long.serializer(), ListSerializer(String.serializer()))
+    private val devicesState = MutableStateFlow(loadDevices())
+
+    /** Item id to the other device that saved its position last (gone once played here). */
+    val positionDevices: StateFlow<Map<Long, DeviceStamp>> = devicesState.asStateFlow()
+
+    /** When each position was saved (epoch millis), for "2h ago". */
+    fun positionTime(itemId: Long): Long = stamped[itemId]?.third ?: 0L
+
+    private fun loadDevices(): Map<Long, DeviceStamp> =
+        runCatching {
+            json
+                .decodeFromString(devicesSerializer, prefs.getString(PREF_POSITION_DEVICES, null) ?: "{}")
+                .mapNotNull { (k, v) -> if (v.size == 2) k to DeviceStamp(v[0], v[1]) else null }
+                .toMap()
+        }.getOrDefault(emptyMap())
+
+    private fun putDevice(
+        itemId: Long,
+        stamp: DeviceStamp?,
+    ) {
+        val old = devicesState.value
+        val next = if (stamp == null || !stamp.known) old - itemId else old + (itemId to stamp)
+        if (next == old) return
+        // Only for items that still have a position
+        val kept = next.filterKeys { it in stamped }
+        devicesState.value = kept
+        prefs.edit { putString(PREF_POSITION_DEVICES, json.encodeToString(devicesSerializer, kept.mapValues { (_, v) -> listOf(v.id, v.name) })) }
+    }
 
     private fun load(): List<Playlist> {
         val raw = prefs.getString(PREF_PLAYLISTS, null)
@@ -130,6 +161,7 @@ class PlaylistStore(
         if (old != null && old.first == seconds && old.second == len) return
         fromOtherDevice -= itemId
         putPosition(itemId, Triple(seconds, len, maxOf(System.currentTimeMillis(), (old?.third ?: 0L) + 1)))
+        putDevice(itemId, null)
         onChanged?.invoke(true)
     }
 
@@ -140,12 +172,15 @@ class PlaylistStore(
         seconds: Long,
         length: Long,
         ts: Long,
+        by: DeviceStamp = DeviceStamp.NONE,
+        thisDeviceId: String = "",
     ) {
         val old = stamped[itemId]
         if (old != null && old.third >= ts) return
         if (old != null && old.first == seconds) return
         fromOtherDevice += itemId
         putPosition(itemId, Triple(seconds, if (length > 0) length else old?.second ?: 0L, ts))
+        putDevice(itemId, by.takeIf { it.id != thisDeviceId })
     }
 
     /**
@@ -187,6 +222,7 @@ class PlaylistStore(
         private const val PREF_PLAYLISTS = "playlists_json"
         private const val PREF_SEEDED = "playlists_seeded"
         private const val PREF_POSITIONS = "playlists_positions"
+        private const val PREF_POSITION_DEVICES = "playlists_position_devices"
         private const val PREF_AUDIO_SPEED = "playlists_audio_speed"
         private const val MAX_POSITIONS = 500
     }

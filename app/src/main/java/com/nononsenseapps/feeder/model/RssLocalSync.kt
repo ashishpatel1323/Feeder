@@ -152,6 +152,13 @@ class RssLocalSync(
                         }
 
                         try {
+                            sync2Client.copyWaitingEpisodePositionsIn()
+                        } catch (e: Exception) {
+                            if (e is CancellationException) throw e
+                            Log.e(LOG_TAG, "Error copying episode positions", e)
+                        }
+
+                        try {
                             repository.applyRemoteReadMarks()
                         } catch (e: Exception) {
                             if (e is CancellationException) throw e

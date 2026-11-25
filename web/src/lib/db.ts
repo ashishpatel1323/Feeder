@@ -121,6 +121,9 @@ export interface VideoPos {
   d: number
   /** When it was saved, or the synced record's time when it came from another device */
   ts: number
+  /** Device that saved it (device.ts): id and name */
+  dv?: string
+  dn?: string
 }
 
 /** An ebook in the Ebooks tab (ebooks/library.ts). */
@@ -152,6 +155,9 @@ export interface BookPos {
   /** 0–1 through the book */
   f: number
   ts: number
+  /** Device that saved it (device.ts): id and name */
+  dv?: string
+  dn?: string
 }
 
 export interface KeyValue {

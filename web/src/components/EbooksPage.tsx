@@ -25,6 +25,7 @@ import { DropboxPanel, useDropbox } from './DropboxPanel'
 import { HighlightBar } from './Highlights'
 import { Icon, IconButton } from './Icon'
 import { Player } from './Player'
+import { otherDeviceText } from '../lib/device'
 import { Shelf, ShelfControls, useShelfPrefs, type ShelfItem } from './Shelf'
 
 /**
@@ -85,7 +86,7 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
     return onDropboxChange(refresh)
   }, [refresh])
 
-  const progressOf = useMemo(() => new Map(positions.map((x) => [x.id, x.f])), [positions])
+  const progressOf = useMemo(() => new Map(positions.map((x) => [x.id, x])), [positions])
   const sorted = useMemo(
     () => [...(books ?? [])].sort((a, b) => (b.lastOpenedAt || 0) - (a.lastOpenedAt || 0) || b.addedAt - a.addedAt || a.title.localeCompare(b.title)),
     [books],
@@ -139,7 +140,9 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
   }
 
   const items: ShelfItem[] = sorted.map((b) => {
-    const f = progressOf.get(b.id)
+    const pos = progressOf.get(b.id)
+    const f = pos?.f
+    const where = otherDeviceText(pos)
     const actions: ShelfItem['actions'] = []
     if (!b.local) actions.push({ label: 'Download to this device', run: () => void download(b) })
     if (b.local) actions.push({ label: b.dropboxPath ? 'Remove from this device' : 'Delete', run: () => void act(b, 'device') })
@@ -148,7 +151,7 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
       key: b.id,
       title: b.title,
       subtitle: b.author,
-      detail: [f ? `${Math.round(f * 100)}% read` : 'Not started', b.ext.toUpperCase(), formatBytes(b.size)].join(' · '),
+      detail: [f ? `${Math.round(f * 100)}% read${where ? ` ${where}` : ''}` : 'Not started', b.ext.toUpperCase(), formatBytes(b.size)].join(' · '),
       cover: b.cover,
       coverIcon: 'book',
       where: b.local ? (b.dropboxPath ? 'both' : 'device') : 'cloud',

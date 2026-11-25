@@ -31,6 +31,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -45,6 +47,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -54,6 +57,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,14 +66,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
@@ -80,6 +87,7 @@ import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.crypto.AesCbcWithIntegrity
 import com.nononsenseapps.feeder.db.room.ID_UNSET
 import com.nononsenseapps.feeder.db.room.SyncDevice
+import com.nononsenseapps.feeder.sync2.ThisDevice
 import com.nononsenseapps.feeder.ui.compose.components.safeSemantics
 import com.nononsenseapps.feeder.ui.compose.feed.PlainTooltipBox
 import com.nononsenseapps.feeder.ui.compose.minimumTouchSize
@@ -836,6 +844,7 @@ fun SyncDeviceListContent(
                 },
             )
         }
+        ThisDeviceNameField(modifier = Modifier.padding(top = 8.dp))
         Text(
             text = stringResource(R.string.device_sync_financed_by_community),
             style = MaterialTheme.typography.bodyLarge,
@@ -903,6 +912,36 @@ fun SyncDeviceListContent(
             onDeleteDevice(itemToDelete.deviceId)
             itemToDelete = SyncDevice(deviceId = ID_UNSET, deviceName = "")
         }
+    }
+}
+
+/** This device's name on progress other devices see ("42% played on Pixel 8"). Saved on Done or leaving the field. */
+@Composable
+fun ThisDeviceNameField(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val device = remember { ThisDevice.get(context) }
+    val saved by device.name.collectAsState()
+    var text by remember(saved) { mutableStateOf(saved) }
+    val save = { if (text != saved) device.setName(text) }
+    Column(modifier = modifier.fillMaxWidth()) {
+        OutlinedTextField(
+            value = text,
+            onValueChange = { text = it.take(ThisDevice.MAX_NAME) },
+            label = { Text(stringResource(R.string.this_device_name)) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { save() }),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { if (!it.isFocused) save() },
+        )
+        Text(
+            text = stringResource(R.string.this_device_name_help, saved),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
     }
 }
 

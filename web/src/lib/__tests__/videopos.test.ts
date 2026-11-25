@@ -31,12 +31,12 @@ describe('video positions', () => {
     await saveVideoPos('f\na', 2, 600, 1000)
     expect(await db.videoPos.get('f\na')).toBeUndefined()
     await saveVideoPos('f\na', 61.4, 600.2, 2000)
-    expect(await db.videoPos.get('f\na')).toEqual({ id: 'f\na', t: 61, d: 600, ts: 2000 })
+    expect(await db.videoPos.get('f\na')).toMatchObject({ id: 'f\na', t: 61, d: 600, ts: 2000 })
     await saveVideoPos('f\na', 61.2, 600, 3000)
     expect((await db.videoPos.get('f\na'))!.ts).toBe(2000)
     // Starting over after watching saves the new, earlier position
     await saveVideoPos('f\na', 2, NaN, 4000)
-    expect(await db.videoPos.get('f\na')).toEqual({ id: 'f\na', t: 2, d: 600, ts: 4000 })
+    expect(await db.videoPos.get('f\na')).toMatchObject({ id: 'f\na', t: 2, d: 600, ts: 4000 })
   })
 
   it('embeds with the player API on and the start position', () => {
