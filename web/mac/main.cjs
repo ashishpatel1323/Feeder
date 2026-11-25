@@ -17,6 +17,43 @@ process.env.SYNC_UPSTREAM = process.env.SYNC_UPSTREAM || 'https://feeder-web-sno
 if (!app.requestSingleInstanceLock()) app.quit()
 
 let win = null
+let authWin = null
+
+const DROPBOX_AUTHORIZE = 'https://www.dropbox.com/oauth2/authorize'
+const DROPBOX_RETURN = `${ORIGIN}/dropbox-auth`
+
+/**
+ * Dropbox sign-in in a window of its own (with Dropbox's cookies, so "Continue with Google"
+ * works too). When Dropbox sends it back to /dropbox-auth, the main window opens that address:
+ * it finishes the sign-in with the code check it saved before leaving.
+ */
+function openDropboxSignIn(url) {
+  if (authWin) {
+    authWin.loadURL(url)
+    authWin.focus()
+    return
+  }
+  authWin = new BrowserWindow({
+    width: 520,
+    height: 760,
+    parent: win ?? undefined,
+    title: 'Sign in to Dropbox',
+    webPreferences: { contextIsolation: true, sandbox: true },
+  })
+  const finish = (e, to) => {
+    if (!to.startsWith(DROPBOX_RETURN)) return
+    e.preventDefault()
+    authWin?.close()
+    win?.loadURL(to)
+    win?.focus()
+  }
+  authWin.webContents.on('will-redirect', finish)
+  authWin.webContents.on('will-navigate', finish)
+  // Google and Apple sign-in open their own small windows
+  authWin.webContents.setWindowOpenHandler(() => ({ action: 'allow' }))
+  authWin.on('closed', () => (authWin = null))
+  authWin.loadURL(url)
+}
 
 function createWindow() {
   win = new BrowserWindow({
@@ -38,7 +75,9 @@ function createWindow() {
   win.webContents.on('will-navigate', (e, url) => {
     if (!url.startsWith(ORIGIN)) {
       e.preventDefault()
-      shell.openExternal(url)
+      // Dropbox sign-in happens in a window of this app, so it comes back here, not to a browser
+      if (url.startsWith(DROPBOX_AUTHORIZE)) openDropboxSignIn(url)
+      else shell.openExternal(url)
     }
   })
   win.on('closed', () => (win = null))
