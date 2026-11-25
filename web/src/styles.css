@@ -7013,3 +7013,203 @@ mark.sr-mark {
     display: none;
   }
 }
+
+/* ZIM tab: offline websites kept on the device (components/ZimPage.tsx) */
+.zim-page .mf-page {
+  max-width: 820px;
+}
+.zim-actions {
+  display: flex;
+  gap: var(--sp-2);
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+.zim-intro {
+  margin: 0 0 var(--sp-4);
+}
+.zim-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-xs);
+  flex: none;
+  object-fit: contain;
+}
+.zim-book {
+  cursor: pointer;
+}
+.zim-jobs {
+  margin-bottom: var(--sp-4);
+}
+.zim-jobs progress {
+  width: 100%;
+  margin-top: var(--sp-1);
+  accent-color: var(--accent);
+}
+.zim-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-6) var(--sp-4);
+  color: var(--text-3);
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: var(--r-md);
+}
+.zim-usage {
+  font-size: var(--fs-xs);
+  margin-top: var(--sp-4);
+}
+.zim-catalog {
+  margin-bottom: var(--sp-5);
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.zim-catalog-bar {
+  display: flex;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+.zim-catalog-bar input,
+.zim-catalog-bar select {
+  height: var(--control-h);
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+.zim-catalog-bar input {
+  flex: 1;
+  min-width: 0;
+}
+.zim-catalog-list {
+  max-height: 420px;
+  overflow: auto;
+}
+.zim-entry {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0;
+}
+.zim-entry + .zim-entry {
+  border-top: 1px solid var(--border);
+}
+.zim-flavour {
+  height: auto;
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-2xs);
+  vertical-align: middle;
+}
+.zim-reader {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg);
+}
+.zim-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.zim-titles {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+.zim-book-title {
+  font-weight: 600;
+  font-size: var(--fs-md);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.zim-page-title {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.zim-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: 1;
+  max-width: 420px;
+  margin-left: auto;
+  height: var(--control-h);
+  padding: 0 var(--sp-3);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--text-3);
+}
+.zim-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}
+.zim-hits {
+  position: absolute;
+  top: calc(100% + var(--sp-1));
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  max-height: 60vh;
+  overflow: auto;
+  padding: var(--sp-1) 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+.zim-hits button {
+  padding: var(--sp-2) var(--sp-3);
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.zim-hits button.on,
+.zim-hits button:hover {
+  background: var(--surface-2);
+}
+.zim-hits .muted {
+  padding: var(--sp-2) var(--sp-3);
+}
+.zim-frame {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  /* Book pages are designed for a white page, in dark mode too */
+  background: white;
+}
+.zim-error {
+  padding: var(--sp-5);
+}
+@media (max-width: 720px) {
+  .zim-titles {
+    display: none;
+  }
+  .zim-search {
+    max-width: none;
+  }
+}

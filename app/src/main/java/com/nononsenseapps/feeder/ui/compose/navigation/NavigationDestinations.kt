@@ -433,6 +433,60 @@ data object LibraryDestination : NavigationDestination(
     }
 }
 
+/** The ZIM tab: offline websites (Wikipedia, Stack Exchange, zimit copies…) kept on the phone. */
+data object ZimDestination : NavigationDestination(
+    path = "zim",
+    navArguments = emptyList(),
+    deepLinks = emptyList(),
+) {
+    @Composable
+    override fun RegisterScreen(
+        navController: NavController,
+        backStackEntry: NavBackStackEntry,
+        navDrawerListState: LazyListState,
+        mainActivityViewModel: MainActivityViewModel,
+    ) {
+        com.nononsenseapps.feeder.ui.compose.zim.ZimLibraryScreen(
+            onOpenBook = { ZimReaderDestination.navigate(navController, it) },
+        )
+    }
+}
+
+/** Reads one ZIM book. */
+data object ZimReaderDestination : NavigationDestination(
+    path = "zim/read",
+    navArguments =
+        listOf(
+            QueryParamArgument("book") {
+                type = NavType.StringType
+                defaultValue = ""
+            },
+        ),
+    deepLinks = emptyList(),
+) {
+    fun navigate(
+        navController: NavController,
+        book: String,
+    ) {
+        navController.navigate("$path?book=${Uri.encode(book)}") {
+            launchSingleTop = true
+        }
+    }
+
+    @Composable
+    override fun RegisterScreen(
+        navController: NavController,
+        backStackEntry: NavBackStackEntry,
+        navDrawerListState: LazyListState,
+        mainActivityViewModel: MainActivityViewModel,
+    ) {
+        com.nononsenseapps.feeder.ui.compose.zim.ZimReaderScreen(
+            bookId = backStackEntry.arguments?.getString("book").orEmpty(),
+            onNavigateUp = { navController.popBackStack() },
+        )
+    }
+}
+
 /** Discover: find new text feeds, podcasts and YouTube channels and add them to folders. */
 data object DiscoverDestination : NavigationDestination(
     path = "discover",

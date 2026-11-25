@@ -33,6 +33,7 @@ import { CommandPalette, SearchView, useSearchData, type OpenOptions, type Palet
 import { queryTerms, type SearchHit, type SearchScope } from './lib/search'
 import { RESUME_BACK, saveVideoPos } from './lib/videopos'
 import { kindOf } from './lib/playlists'
+import { ZimPage } from './components/ZimPage'
 import { feedsViewIsLatest, FeedsSwitch, LibraryPage, rememberFeedsView, TabBar, useTabShortcuts, type Tab } from './components/Tabs'
 import { useVideoJobs, useVideoSavingAvailable } from './lib/offline'
 
@@ -51,6 +52,18 @@ const DISCOVER_HASH = '#/discover'
 const LIBRARY_HASH = '#/library'
 const isLibraryHash = () => window.location.hash === LIBRARY_HASH
 const isDiscoverHash = () => window.location.hash === DISCOVER_HASH
+/** ZIM books: #/zim for the library, #/zim/<book> to read one. */
+const ZIM_HASH = '#/zim'
+const zimFromHash = (): string | null => {
+  const h = window.location.hash
+  if (h === ZIM_HASH) return ''
+  if (!h.startsWith(ZIM_HASH + '/')) return null
+  try {
+    return decodeURIComponent(h.slice(ZIM_HASH.length + 1))
+  } catch {
+    return ''
+  }
+}
 const DOWNLOADS_HASH = '#/downloads'
 const isDownloadsHash = () => window.location.hash === DOWNLOADS_HASH
 /** Playlists: #/playlists for all of them, #/playlist/<id> for one. */
@@ -133,6 +146,8 @@ export default function App() {
   const [homePage, setHomePage] = useState(() => isHomeHash() || (!window.location.hash && !feedsViewIsLatest()))
   const [discoverPage, setDiscoverPage] = useState(isDiscoverHash)
   const [libraryPage, setLibraryPage] = useState(isLibraryHash)
+  /** null = not on the ZIM tab; '' = the ZIM library; else the book being read. */
+  const [zimPage, setZimPage] = useState<string | null>(zimFromHash)
   // Start on Home: give it its own address, so Back from the article list returns to it
   useEffect(() => {
     if (!window.location.hash && !feedsViewIsLatest()) history.replaceState(null, '', window.location.pathname + window.location.search + HOME_HASH)
@@ -160,6 +175,7 @@ export default function App() {
       setHomePage(isHomeHash())
       setDiscoverPage(isDiscoverHash())
       setLibraryPage(isLibraryHash())
+      setZimPage(zimFromHash())
       setPlaylistPage(playlistFromHash())
     }
     window.addEventListener('hashchange', onHash)
@@ -185,6 +201,7 @@ export default function App() {
     if (on) setPlaylistPage(null)
     if (on) setDiscoverPage(false)
     if (on) setLibraryPage(false)
+    if (on) setZimPage(null)
   }, [])
   const showHighlights = useCallback((on: boolean) => {
     if (on !== isHighlightsHash()) {
@@ -202,6 +219,7 @@ export default function App() {
     if (on) setPlaylistPage(null)
     if (on) setDiscoverPage(false)
     if (on) setLibraryPage(false)
+    if (on) setZimPage(null)
   }, [])
   const showDownloads = useCallback((on: boolean) => {
     if (on !== isDownloadsHash()) {
@@ -219,6 +237,7 @@ export default function App() {
     if (on) setPlaylistPage(null)
     if (on) setDiscoverPage(false)
     if (on) setLibraryPage(false)
+    if (on) setZimPage(null)
   }, [])
   const showHome = useCallback((on: boolean) => {
     if (on !== isHomeHash()) {
@@ -236,6 +255,7 @@ export default function App() {
     if (on) setPlaylistPage(null)
     if (on) setDiscoverPage(false)
     if (on) setLibraryPage(false)
+    if (on) setZimPage(null)
   }, [])
   const showDiscover = useCallback((on: boolean) => {
     if (on !== isDiscoverHash()) {
@@ -252,6 +272,7 @@ export default function App() {
       feedPageFromApp.current = false
       setPlaylistPage(null)
       setLibraryPage(false)
+      setZimPage(null)
     }
   }, [])
   const showLibrary = useCallback((on: boolean) => {
@@ -261,6 +282,7 @@ export default function App() {
     }
     setLibraryPage(on)
     if (on) {
+      setZimPage(null)
       setHomePage(false)
       setManaging(false)
       setHighlightsPage(false)
@@ -269,6 +291,24 @@ export default function App() {
       setFeedPage(null)
       feedPageFromApp.current = false
       setPlaylistPage(null)
+    }
+  }, [])
+  /** Opens the ZIM library ('') or one book; null leaves it. */
+  const showZim = useCallback((id: string | null) => {
+    const want = id === null ? null : id ? `${ZIM_HASH}/${encodeURIComponent(id)}` : ZIM_HASH
+    if (want && window.location.hash !== want) window.location.hash = want
+    else if (!want && zimFromHash() !== null) history.pushState(null, '', window.location.pathname + window.location.search)
+    setZimPage(id)
+    if (id !== null) {
+      setHomePage(false)
+      setDiscoverPage(false)
+      setManaging(false)
+      setHighlightsPage(false)
+      setDownloadsPage(false)
+      setLibraryPage(false)
+      setPlaylistPage(null)
+      setFeedPage(null)
+      feedPageFromApp.current = false
     }
   }, [])
   /** Opens Playlists ('' = all of them) or one playlist; null leaves it. */
@@ -284,6 +324,7 @@ export default function App() {
       setHighlightsPage(false)
       setDownloadsPage(false)
       setLibraryPage(false)
+      setZimPage(null)
       setFeedPage(null)
       feedPageFromApp.current = false
     }
@@ -303,6 +344,7 @@ export default function App() {
     setHighlightsPage(false)
     setPlaylistPage(null)
     setLibraryPage(false)
+    setZimPage(null)
   }, [])
   /** Leaves the feed page for the article list. */
   const leaveFeedPage = useCallback(() => {
@@ -765,6 +807,7 @@ export default function App() {
     showHome(false)
     showDiscover(false)
     showLibrary(false)
+    showZim(null)
     if (feedPage) leaveFeedPage()
     setFlip(null)
   }
@@ -790,7 +833,7 @@ export default function App() {
   const searchData = useSearchData(items, feeds, allHighlights, settings.readAloudRate, searchActive)
 
   // Opening another page closes the results view
-  const anyPage = managing || highlightsPage || !!feedPage || downloadsPage || homePage || discoverPage || libraryPage || playlistPage !== null
+  const anyPage = managing || highlightsPage || !!feedPage || downloadsPage || homePage || discoverPage || libraryPage || zimPage !== null || playlistPage !== null
   useEffect(() => {
     if (anyPage) setSearchView(null)
   }, [anyPage])
@@ -889,6 +932,8 @@ export default function App() {
   // The tab the screen belongs to, for the sidebar and the bottom bar
   const currentTab: Tab | null = onPlaylists
     ? 'playlists'
+    : zimPage !== null
+      ? 'zim'
     : discoverPage && !feedPage
       ? 'discover'
       : libraryPage || highlightsPage || downloadsPage || (selection.kind === 'saved' && !anyPage && !searchView)
@@ -915,6 +960,7 @@ export default function App() {
     leavePages()
     if (t === 'discover') showDiscover(true)
     else if (t === 'playlists') showPlaylists('')
+    else if (t === 'zim') showZim('')
     else showLibrary(true)
   }
   const openTabRef = useRef(openTab)
@@ -934,7 +980,7 @@ export default function App() {
     : 'Not syncing'
 
   return (
-    <div className={`app pane-${pane}${drawer ? ' drawer-open' : ''}${navCollapsed ? ' nav-collapsed' : ''}${managing || highlightsPage || feedPage || downloadsPage || homePage || discoverPage || libraryPage || onPlaylists ? ' page-feeds' : ''}${queue.kind ? ' has-queue' : ''}`}>
+    <div className={`app pane-${pane}${drawer ? ' drawer-open' : ''}${navCollapsed ? ' nav-collapsed' : ''}${managing || highlightsPage || feedPage || downloadsPage || homePage || discoverPage || libraryPage || zimPage !== null || onPlaylists ? ' page-feeds' : ''}${queue.kind ? ' has-queue' : ''}`}>
       <div className="drawer-scrim" onClick={() => setDrawer(false)} />
       <Sidebar
         feeds={feedList}
@@ -1053,6 +1099,8 @@ export default function App() {
           onMoveFeed={moveFeed}
           toast={toast}
         />
+      ) : zimPage !== null ? (
+        <ZimPage book={zimPage || null} onOpen={(id) => showZim(id ?? '')} onMenu={() => setDrawer(true)} toast={toast} />
       ) : libraryPage ? (
         <LibraryPage
           savedCount={savedCount}
@@ -1111,7 +1159,7 @@ export default function App() {
         feedsSwitch={feedsLatest ? <FeedsSwitch latest onChange={showFeedsView} /> : null}
         />
       )}
-      {managing || highlightsPage || feedPage || downloadsPage || homePage || discoverPage || libraryPage || onPlaylists || flip ? null : openItem ? (
+      {managing || highlightsPage || feedPage || downloadsPage || homePage || discoverPage || libraryPage || zimPage !== null || onPlaylists || flip ? null : openItem ? (
         <Reader
           item={openItem}
           feed={feeds.get(openItem.feedUrl)}
@@ -1133,7 +1181,7 @@ export default function App() {
         />
       ) : (
         <section className="reader-pane empty-reader">
-          <p>Select an article. Keyboard: ⌘K or / search everything, G then F, D, P or L switch tabs, J / K next and previous, F flip mode, R read aloud, S save, M unread, O open original, [ hide or show feeds.</p>
+          <p>Select an article. Keyboard: ⌘K or / search everything, G then F, D, P, L or Z switch tabs, J / K next and previous, F flip mode, R read aloud, S save, M unread, O open original, [ hide or show feeds.</p>
         </section>
       )}
       {dialog?.kind === 'settings' ? <SettingsDialog

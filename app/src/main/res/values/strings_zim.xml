@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+  <!-- ZIM tab: offline websites (Wikipedia and others) read with libzim from Kiwix -->
+  <string name="tab_zim">ZIM</string>
+  <string name="zim_library">ZIM library</string>
+  <string name="zim_intro">Whole websites to read offline, such as Wikipedia, Wiktionary, Stack Exchange or your own sites made with zimit. Books stay on this phone.</string>
+  <string name="zim_get_books">Get ZIM files</string>
+  <string name="zim_add_file">Add .zim file</string>
+  <string name="zim_empty">No books yet. Get one from the Kiwix library, or add a .zim file you already have.</string>
+  <string name="zim_unavailable">ZIM books need a 64-bit phone; this one cannot open them.</string>
+  <string name="zim_pages">%1$,d pages</string>
+  <string name="zim_progress">%1$s of %2$s</string>
+  <string name="zim_storage">Books use %1$s; %2$s free on this phone.</string>
+  <string name="zim_stop">Stop</string>
+  <string name="zim_delete_title">Delete %1$s?</string>
+  <string name="zim_delete_text">This removes the book (%1$s) from this phone.</string>
+  <string name="zim_delete">Delete</string>
+  <string name="zim_catalog_hint">Search the Kiwix library (wikipedia, medicine, python…)</string>
+  <string name="zim_nothing_found">Nothing found</string>
+  <string name="zim_search_in">Search %1$s</string>
+  <string name="zim_clear">Clear</string>
+  <string name="zim_main_page">Main page</string>
+  <string name="zim_in_text">In the text</string>
+  <string name="zim_no_fulltext">This book has no full-text index, so only titles are searched.</string>
+  <string name="zim_book_missing">This book is not on this phone any more.</string>
+</resources>

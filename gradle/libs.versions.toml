@@ -58,6 +58,8 @@ media3 = "1.11.1"
 youtubedl-android = "0.18.1"
 
 [libraries]
+# Reads ZIM files (offline websites) for the ZIM tab. Only libzim is packaged, see app/build.gradle.kts
+kiwix-libkiwix = { module = "org.kiwix:libkiwix", version = "2.7.0" }
 mlkit-genai-prompt = { module = "com.google.mlkit:genai-prompt", version.ref = "mlkit-genai-prompt" }
 mlkit-genai-summarization = { module = "com.google.mlkit:genai-summarization", version.ref = "mlkit-genai-summarization" }
 media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "media3" }

@@ -34,6 +34,12 @@ self.addEventListener('fetch', (e) => {
     return
   }
 
+  // ZIM books (offline websites) are read from the device by an open Feeder window
+  if (url.origin === location.origin && url.pathname.startsWith('/zim/')) {
+    e.respondWith(zimResponse(e.request, url))
+    return
+  }
+
   if (DEV || url.origin !== location.origin || url.pathname.startsWith('/api/')) return
   // Network first, cache as fallback (so new deploys show up right away)
   e.respondWith(
@@ -48,3 +54,29 @@ self.addEventListener('fetch', (e) => {
       .catch(() => caches.match(e.request).then((r) => r || caches.match('/index.html'))),
   )
 })
+
+/** Asks a Feeder window (src/lib/zim/library.ts) for a /zim/<book>/<path> item. */
+async function zimResponse(request, url) {
+  const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+  // The reader's own iframe is a /zim/ page: ask the app windows instead
+  const apps = windows.filter((c) => !new URL(c.url).pathname.startsWith('/zim/'))
+  for (const client of apps) {
+    const res = await askWindow(client, { type: 'zim-fetch', path: url.pathname, range: request.headers.get('range') })
+    if (!res) continue
+    if (res.status === 302) return Response.redirect(new URL(res.headers.Location, url).href, 302)
+    return new Response(res.status === 416 || res.status === 302 ? null : res.body, { status: res.status, headers: res.headers })
+  }
+  return new Response('Open this book from the ZIM tab in Feeder.', { status: 503, headers: { 'Content-Type': 'text/plain' } })
+}
+
+function askWindow(client, message) {
+  return new Promise((resolve) => {
+    const channel = new MessageChannel()
+    const timer = setTimeout(() => resolve(null), 15000)
+    channel.port1.onmessage = (m) => {
+      clearTimeout(timer)
+      resolve(m.data)
+    }
+    client.postMessage(message, [channel.port2])
+  })
+}
