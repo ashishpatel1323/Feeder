@@ -15,6 +15,8 @@ import com.nononsenseapps.feeder.dropbox.DropboxLink
 import com.nononsenseapps.feeder.model.audiobooks.AudioPos
 import com.nononsenseapps.feeder.model.audiobooks.AudioPositions
 import com.nononsenseapps.feeder.model.ebooks.BookPositions
+import com.nononsenseapps.feeder.model.history.HistoryEvent
+import com.nononsenseapps.feeder.model.history.ItemHistory
 import com.nononsenseapps.feeder.model.highlights.Highlight
 import com.nononsenseapps.feeder.model.highlights.HighlightStore
 import com.nononsenseapps.feeder.model.offline.OfflineFiles
@@ -66,6 +68,8 @@ const val SYNC2_SERVER = "https://feeder-web-snowy.vercel.app"
  *   audiopos (key: audiobook id) { i, h, ms, f }: where an audiobook was left (newest wins):
  *     file index and content hash, ms into that file, 0–1 through the book
  *   dropbox "main"                [DropboxLink], or {"deleted": true} after signing out
+ *   history (key: event id)       [HistoryEvent.toValue]: one play, pause, open or close. Never
+ *     changes, so events from every device add up; not kept in sync2_known ([HistoryEvent.synced])
  *
  * The device remembers the last value exchanged for every record (sync2_known) and sends
  * whatever differs locally, then applies what other devices changed. Unknown kinds (Read later
@@ -85,6 +89,7 @@ class Sync2Client(
     private val highlightStore: HighlightStore by instance()
     private val bookPositions: BookPositions by instance()
     private val audioPositions: AudioPositions by instance()
+    private val history: ItemHistory by instance()
     private val app: android.app.Application by instance()
     private val thisDevice by lazy { ThisDevice.get(app) }
 
@@ -189,6 +194,7 @@ class Sync2Client(
             remote.copy(syncChainId = syncCode, secretKey = secretKey, deviceId = 0L, latestMessageTimestamp = Instant.EPOCH),
         )
         resetKnown(Sync2State(migrated = true))
+        history.markAllUnsynced()
         configured = true
     }
 
@@ -196,6 +202,7 @@ class Sync2Client(
     suspend fun leave() {
         repository.replaceWithDefaultSyncRemote()
         resetKnown(Sync2State())
+        history.markAllUnsynced()
         configured = false
     }
 
@@ -209,6 +216,7 @@ class Sync2Client(
                     .map { if (it.k.startsWith("feed\n")) Sync2Known(it.k, PLACEHOLDER, it.ts) else Sync2Known(it.k, "false", 0) }
             resetKnown(getState().copy(cursor = 0))
             dao.upsertKnown(keep)
+            history.markAllUnsynced()
         }
         sync()
     }
@@ -312,9 +320,9 @@ class Sync2Client(
         do {
             val batch = records.subList(i, minOf(i + BATCH, records.size))
             var res = post(ExchangeRequest(keys.account, keys.auth, cursor, batch))
-            dao.upsertKnown(
-                pending.subList(i, minOf(i + BATCH, pending.size)).map { p -> Sync2Known(knownKey(p.kind, p.key), canonical(p.v), p.ts) },
-            )
+            val sent = pending.subList(i, minOf(i + BATCH, pending.size))
+            dao.upsertKnown(sent.filter { it.kind != HISTORY }.map { p -> Sync2Known(knownKey(p.kind, p.key), canonical(p.v), p.ts) })
+            history.markSynced(sent.filter { it.kind == HISTORY }.map { it.key })
             while (true) {
                 for (c in res.changes) {
                     val payload =
@@ -522,6 +530,9 @@ class Sync2Client(
             }
         }
 
+        // History events noted here and not sent yet
+        for (e in history.unsynced()) out += Pending(HISTORY, e.id, e.toValue(), maxOf(1L, e.at))
+
         // The Dropbox sign-in (signing in or out on this phone)
         val link = dropbox.link.value
         val linkValue: Any? = link?.let { dropboxValue(it) } ?: mapOf("deleted" to true)
@@ -598,6 +609,10 @@ class Sync2Client(
         ts: Long,
         article: Map<*, *>? = null,
     ) {
+        if (kind == HISTORY) {
+            HistoryEvent.fromValue(key, v, ts)?.let { history.applyRemote(listOf(it)) }
+            return
+        }
         val k = knownKey(kind, key)
         val kn = dao.getKnown(k)
         if (kn != null && (kn.ts > ts || (kn.ts == ts && parse(kn.v) == v))) return
@@ -827,6 +842,7 @@ class Sync2Client(
             ).apply { h.cfi?.takeIf { it.isNotBlank() }?.let { put("cfi", it) } }
 
         const val DROPBOX_KEY = "main"
+        const val HISTORY = "history"
 
         /** The Dropbox sign-in as synced, in the same field order as the web app's DropboxLink. */
         fun dropboxValue(l: DropboxLink): Map<String, Any?> =

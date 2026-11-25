@@ -17,6 +17,9 @@
  *   audiopos audiobook id         { i, h, ms, f }: where an audiobook was left (file index and
  *                                 content hash, ms into that file, f = 0–1 through the book)
  *   dropbox  "main"               DropboxLink (the Dropbox sign-in), or { deleted: true } after signing out
+ *   history  event id             HistoryValue (history.ts): one play, pause, open or close of an
+ *                                 audiobook, ebook or ZIM site. Never changes, so events from every
+ *                                 device add up; not remembered in syncKnown (db.history.synced)
  *
  * New kinds (Read later links, …) can be added later: devices keep records of kinds they
  * don't know and the server never looks inside.
@@ -29,6 +32,7 @@ import { offlineNow } from './settings'
 import { apiHeaders, HttpError } from './api'
 import { b64encode, decodeKey, decryptString, encryptString, type SecretKeys } from './crypto'
 import { applyDropboxLink, dropboxLink, DROPBOX_TS_KEY, type DropboxLink } from './dropbox'
+import { eventFromValue, historyValue } from './history'
 import { PLAYLISTS_KEY, STARTER_IDS, loadPlaylists, type Playlist } from './playlists'
 import {
   db,
@@ -58,7 +62,7 @@ export interface SyncState {
   lastError?: string | null
 }
 
-export type Kind = 'feed' | 'read' | 'saved' | 'hidden' | 'layout' | 'video' | 'playlist' | 'highlight' | 'bookpos' | 'audiopos' | 'dropbox'
+export type Kind = 'feed' | 'read' | 'saved' | 'hidden' | 'layout' | 'video' | 'playlist' | 'highlight' | 'bookpos' | 'audiopos' | 'dropbox' | 'history'
 
 /** The plaintext inside a record. */
 export interface Payload {
@@ -416,6 +420,9 @@ interface Pending extends Payload {
   item?: { id: string; read: number; saved: number }
 }
 
+/** History events are only sent once, and never remembered in syncKnown. */
+const isHistory = (p: { k: string }) => p.k === 'history'
+
 /** Everything that differs from what was last exchanged. */
 export async function collectChanges(now = Date.now()): Promise<Pending[]> {
   const out: Pending[] = []
@@ -542,6 +549,11 @@ export async function collectChanges(now = Date.now()): Promise<Pending[]> {
     const changedAt = await getKv<number>(DROPBOX_TS_KEY, 0)
     out.push({ k: 'dropbox', key: DROPBOX_RECORD_KEY, v: dropboxValue, ts: Math.max(changedAt || now, (kd?.ts ?? 0) + 1) })
   }
+
+  // History events noted here and not sent yet
+  for (const e of await db.history.where('synced').equals(0).toArray()) {
+    out.push({ k: 'history', key: e.id, v: historyValue(e), ts: Math.max(1, e.at) })
+  }
   return out
 }
 
@@ -559,6 +571,14 @@ export interface ApplyResult {
 
 /** Applies one record from another device, unless what this device knows is newer. */
 export async function applyRemote(p: Payload, ts: number, result: ApplyResult): Promise<void> {
+  if (isHistory(p)) {
+    const e = eventFromValue(p.key, p.v, ts)
+    if (e && !(await db.history.get(e.id))) {
+      await db.history.put(e)
+      result.applied++
+    }
+    return
+  }
   const k = knownKey(p.k, p.key)
   let dropbox: { link: DropboxLink | null } | null = null
   await db.transaction('rw', [db.feeds, db.items, db.syncKnown, db.hidden, db.kv, db.videoPos, db.highlights, db.bookPos, db.audioPos], async () => {
@@ -792,9 +812,12 @@ async function runSync(state: SyncState): Promise<SyncResult> {
     let res = await post({ account: keys.account, auth: keys.auth, since: cursor, push: batch })
     await assertCurrent(state)
     // What was sent is now the known value; the server's answer below may still override it
+    const sent = toSend.slice(i, i + BATCH)
     await db.syncKnown.bulkPut(
-      toSend.slice(i, i + BATCH).map((p) => ({ k: knownKey(p.k, p.key), v: p.v, ts: p.ts, ...(p.a ? { a: p.a } : {}) })),
+      sent.filter((p) => !isHistory(p)).map((p) => ({ k: knownKey(p.k, p.key), v: p.v, ts: p.ts, ...(p.a ? { a: p.a } : {}) })),
     )
+    const sentHistory = sent.filter(isHistory).map((p) => p.key)
+    if (sentHistory.length) await db.history.bulkUpdate(sentHistory.map((key) => ({ key, changes: { synced: 1 } })))
     for (;;) {
       for (const c of res.changes) {
         let payload: Payload
@@ -863,7 +886,8 @@ export async function forceSync(): Promise<SyncResult | null> {
 }
 
 async function resetExchange(state: SyncState) {
-  await db.transaction('rw', [db.items, db.syncKnown, db.kv], async () => {
+  await db.transaction('rw', [db.items, db.syncKnown, db.kv, db.history], async () => {
+    await db.history.toCollection().modify({ synced: 0 })
     // Keep remembered unsubscribes and deletions, so they are sent again rather than undone.
     // Unsubscribes keep the time they happened, so a feed subscribed to again elsewhere since stays.
     const keep = await db.syncKnown.filter((r) => (r.k.startsWith('feed\n') && isDeleted(r.v)) || r.k.startsWith('hidden\n')).toArray()
@@ -890,9 +914,10 @@ export function randomSecretKey(): string {
 async function start(syncCode: string, secretKey: string, extra: Partial<SyncState> = {}): Promise<SyncState> {
   const keys = await decodeKey(secretKey) // validates
   const state: SyncState = { syncCode: syncCode.toLowerCase(), secretKey: keys.encoded, cursor: 0, ...extra }
-  await db.transaction('rw', [db.items, db.syncKnown, db.kv], async () => {
+  await db.transaction('rw', [db.items, db.syncKnown, db.kv, db.history], async () => {
     await db.syncKnown.clear()
     await db.items.toCollection().modify({ readSynced: 0 })
+    await db.history.toCollection().modify({ synced: 0 })
     await setKv(STATE_KEY, state)
   })
   return state
@@ -913,10 +938,11 @@ export async function createSync(): Promise<SyncState> {
 /** Stops syncing in this browser. Feeds and articles stay; other devices are not touched. */
 export async function leaveSync(): Promise<void> {
   if (running) await running.catch(() => undefined)
-  await db.transaction('rw', [db.items, db.syncKnown, db.kv], async () => {
+  await db.transaction('rw', [db.items, db.syncKnown, db.kv, db.history], async () => {
     await setKv(STATE_KEY, null)
     await db.syncKnown.clear()
     await db.items.toCollection().modify({ readSynced: 0 })
+    await db.history.toCollection().modify({ synced: 0 })
   })
 }
 
