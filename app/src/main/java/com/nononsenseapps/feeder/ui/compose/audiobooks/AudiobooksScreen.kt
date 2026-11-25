@@ -1,5 +1,20 @@
 package com.nononsenseapps.feeder.ui.compose.audiobooks
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.AudioFile
+import androidx.compose.material.icons.outlined.Folder
+import com.nononsenseapps.feeder.ui.compose.shelf.CoverShape
+import com.nononsenseapps.feeder.ui.compose.shelf.GeneratedCover
+import com.nononsenseapps.feeder.ui.compose.shelf.ShelfAction
+import com.nononsenseapps.feeder.ui.compose.shelf.ShelfControls
+import com.nononsenseapps.feeder.ui.compose.shelf.ShelfItem
+import com.nononsenseapps.feeder.ui.compose.shelf.ShelfQuick
+import com.nononsenseapps.feeder.ui.compose.shelf.Where
+import com.nononsenseapps.feeder.ui.compose.shelf.rememberShelfPrefs
+import com.nononsenseapps.feeder.ui.compose.shelf.shelf
+
 import android.graphics.BitmapFactory
 import android.text.format.Formatter
 import android.widget.Toast
@@ -171,22 +186,12 @@ private fun Cover(
         if (cover != null) {
             Image(cover, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         } else {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(FeederTokens.Space.md)) {
-                Icon(Icons.Default.Headphones, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
-                Text(
-                    title,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                )
-            }
+            GeneratedCover(title, Icons.Default.Headphones, small = false, modifier = Modifier.fillMaxSize())
         }
     }
 }
 
-/** The Audiobooks tab: books from Dropbox › Apps › Feeder › Audiobooks, last listened first. */
+/** The Audiobooks tab: books on this phone and in Dropbox › Apps › Feeder › Audiobooks, last listened first, as cards or a list. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AudiobooksScreen(
@@ -204,11 +209,16 @@ fun AudiobooksScreen(
     val books by library.books.collectAsState()
     val jobs by library.jobs.collectAsState()
     val refreshing by library.refreshing.collectAsState()
+    val adding by library.adding.collectAsState()
     val message by library.messages.collectAsState()
     val pos by positions.all.collectAsState()
     val link by dropbox.link.collectAsState()
     val version by library.version.collectAsState()
     val playing by player.state.collectAsState()
+    val prefs = rememberShelfPrefs("audiobooks", defaultCards = true)
+    var addMenu by remember { mutableStateOf(false) }
+    val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris -> library.addFiles(uris) }
+    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> uri?.let(library::addFolder) }
 
     LifecycleResumeEffect(Unit) {
         library.refresh()
@@ -223,6 +233,56 @@ fun AudiobooksScreen(
     }
     val covers = rememberCovers(library, books, version)
     val sorted = remember(books) { books.sortedWith(compareByDescending<Audiobook> { it.lastOpenedAt }.thenByDescending { it.addedAt }.thenBy { it.title.lowercase() }) }
+    val downloadText = stringResource(R.string.audiobook_download)
+    val removeDownloadText = stringResource(R.string.audiobook_remove_download)
+    val forgetText = stringResource(R.string.audiobook_forget)
+    val playText = stringResource(R.string.audiobook_play)
+    val resumeText = stringResource(R.string.audiobook_resume)
+    val pauseText = stringResource(R.string.audiobook_pause)
+    val filesText = stringResource(R.string.audiobook_files)
+    val emptyPhoneText = stringResource(R.string.audiobooks_empty_phone)
+    val downloadingText = stringResource(R.string.shelf_downloading)
+    val items =
+        sorted.map { b ->
+            val p = pos[b.id]
+            val len = AudiobookRules.bookLengthMs(b)
+            val job = jobs[b.id]
+            val downloaded = library.isDownloaded(b)
+            val isPlaying = playing.bookId == b.id && (playing.isPlaying || playing.loading)
+            val started = p != null && p.f > 0 && p.f < 0.999
+            val actions = mutableListOf<ShelfAction>()
+            if (b.dropboxPath != null && !downloaded && !b.onPhone && job == null) actions += ShelfAction(downloadText) { library.download(b.id) }
+            if (downloaded && b.dropboxPath != null && !b.onPhone) actions += ShelfAction(removeDownloadText) { library.removeDownload(b.id) }
+            if (b.tracks.any { it.uri != null }) actions += ShelfAction(forgetText) { library.forget(b.id) }
+            ShelfItem(
+                key = b.id,
+                title = b.title,
+                subtitle = b.author,
+                detail =
+                    listOf(
+                        progressText(b, p, thisDeviceId),
+                        if (len > 0) AudiobookRules.lengthText(len) else if (b.tracks.size > 1) filesText.format(b.tracks.size) else Formatter.formatShortFileSize(context, b.size),
+                    ).joinToString(" · "),
+                cover = covers[b.id],
+                fallback = Icons.Default.Headphones,
+                where =
+                    when {
+                        b.dropboxPath == null -> Where.DEVICE
+                        downloaded || b.onPhone -> Where.BOTH
+                        else -> Where.CLOUD
+                    },
+                size = b.size,
+                busy = job?.let { downloadingText.format(if (it.total > 0) (it.done * 100 / it.total).toInt() else 0) },
+                progress = p?.f?.toFloat(),
+                quick =
+                    ShelfQuick(
+                        if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        "${if (isPlaying) pauseText else if (started) resumeText else playText} ${b.title}",
+                    ) { if (isPlaying) player.pause() else player.open(b.id) },
+                onOpen = { onOpenBook(b.id) },
+                actions = actions,
+            )
+        }
 
     Scaffold(
         modifier = modifier.windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal)),
@@ -236,21 +296,52 @@ fun AudiobooksScreen(
                             Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.audiobooks_refresh))
                         }
                     }
+                    Box {
+                        IconButton(onClick = { addMenu = true }) {
+                            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.audiobooks_add))
+                        }
+                        DropdownMenu(expanded = addMenu, onDismissRequest = { addMenu = false }) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.add_from_phone_files)) },
+                                leadingIcon = { Icon(Icons.Outlined.AudioFile, null) },
+                                onClick = {
+                                    addMenu = false
+                                    pickFiles.launch(arrayOf("audio/*", "video/mp4", "application/octet-stream"))
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.add_from_phone_folder)) },
+                                leadingIcon = { Icon(Icons.Outlined.Folder, null) },
+                                onClick = {
+                                    addMenu = false
+                                    pickFolder.launch(null)
+                                },
+                            )
+                        }
+                    }
                 },
             )
         },
     ) { padding ->
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(150.dp),
+            columns = if (prefs.cards) GridCells.Adaptive(150.dp) else GridCells.Fixed(1),
             modifier = Modifier.padding(padding).fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
+            verticalArrangement = Arrangement.spacedBy(if (prefs.cards) 18.dp else 0.dp),
         ) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 DropboxCard(what = stringResource(R.string.audiobooks_what), onSignedOut = { nudge.changed(false) }, horizontalPadding = 0.dp)
             }
-            if (refreshing && sorted.isEmpty()) {
+            adding?.let { title ->
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Column {
+                        Text(stringResource(R.string.audiobooks_adding, title), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                    }
+                }
+            }
+            if (refreshing && sorted.isEmpty() && adding == null) {
                 item(span = { GridItemSpan(maxLineSpan) }) { LinearProgressIndicator(Modifier.fillMaxWidth()) }
             }
             if (sorted.isEmpty() && !refreshing) {
@@ -264,113 +355,11 @@ fun AudiobooksScreen(
                     )
                 }
             }
-            items(sorted, key = { it.id }) { b ->
-                val p = pos[b.id]
-                val len = AudiobookRules.bookLengthMs(b)
-                val job = jobs[b.id]
-                val downloaded = remember(b, version) { library.isDownloaded(b) }
-                val isPlaying = playing.bookId == b.id && (playing.isPlaying || playing.loading)
-                var menu by remember { mutableStateOf(false) }
-                Column(
-                    Modifier
-                        .clip(RoundedCornerShape(FeederTokens.Radius.md))
-                        .clickable { onOpenBook(b.id) },
-                ) {
-                    Box {
-                        Cover(covers[b.id], b.title, Modifier.fillMaxWidth())
-                        if (p != null && p.f > 0 && p.f < 0.999) {
-                            LinearProgressIndicator(
-                                progress = { p.f.toFloat() },
-                                modifier = Modifier.align(Alignment.BottomCenter).padding(FeederTokens.Space.sm).fillMaxWidth(),
-                                gapSize = 0.dp,
-                                drawStopIndicator = {},
-                            )
-                        }
-                        val playLabel =
-                            stringResource(
-                                if (isPlaying) {
-                                    R.string.audiobook_pause
-                                } else if (p != null && p.f > 0) {
-                                    R.string.audiobook_resume
-                                } else {
-                                    R.string.audiobook_play
-                                },
-                            )
-                        Box(Modifier.align(Alignment.TopEnd).padding(FeederTokens.Space.xs)) {
-                            PlainTooltipBox(tooltip = { Text(playLabel) }) {
-                                FilledIconButton(onClick = { if (isPlaying) player.pause() else player.open(b.id) }) {
-                                    Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = "$playLabel ${b.title}")
-                                }
-                            }
-                        }
-                    }
-                    Row(verticalAlignment = Alignment.Top) {
-                        Column(Modifier.weight(1f).padding(top = FeederTokens.Space.sm)) {
-                            Text(b.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            if (b.author.isNotBlank()) {
-                                Text(
-                                    b.author,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                            Text(
-                                listOfNotNull(
-                                    progressText(b, p, thisDeviceId),
-                                    if (len >
-                                        0
-                                    ) {
-                                        AudiobookRules.lengthText(len)
-                                    } else if (b.tracks.size >
-                                        1
-                                    ) {
-                                        stringResource(R.string.audiobook_files, b.tracks.size)
-                                    } else {
-                                        Formatter.formatShortFileSize(context, b.size)
-                                    },
-                                ).joinToString(" · "),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            if (job != null) {
-                                Text(
-                                    stringResource(R.string.audiobook_downloading, Formatter.formatShortFileSize(context, job.done), Formatter.formatShortFileSize(context, job.total)),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                                LinearProgressIndicator(progress = { if (job.total > 0) job.done.toFloat() / job.total else 0f }, modifier = Modifier.fillMaxWidth())
-                            } else if (downloaded) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Outlined.DownloadDone, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
-                                    Spacer(Modifier.width(4.dp))
-                                    Text(stringResource(R.string.audiobook_on_phone), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                                }
-                            }
-                        }
-                        Box {
-                            IconButton(onClick = { menu = true }) {
-                                Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.audiobook_more_for, b.title))
-                            }
-                            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                                if (downloaded) {
-                                    DropdownMenuItem(text = { Text(stringResource(R.string.audiobook_remove_download)) }, onClick = {
-                                        menu = false
-                                        library.removeDownload(b.id)
-                                    })
-                                } else if (job == null) {
-                                    DropdownMenuItem(text = { Text(stringResource(R.string.audiobook_download)) }, onClick = {
-                                        menu = false
-                                        library.download(b.id)
-                                    })
-                                }
-                            }
-                        }
-                    }
+            if (sorted.isNotEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    ShelfControls(prefs, all = items.size, device = items.count { it.where != Where.CLOUD }, cloud = items.count { it.where == Where.CLOUD })
                 }
+                shelf(items, prefs, CoverShape.SQUARE, emptyPhoneText, streams = true)
             }
         }
     }

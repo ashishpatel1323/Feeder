@@ -24,6 +24,8 @@ data class AudioTrack(
     val marks: List<Mark> = emptyList(),
     /** Whether the tags have been read (once, on the first play) */
     val scanned: Boolean = false,
+    /** The file on the phone (a document URI from the file picker), read in place */
+    val uri: String? = null,
 ) {
     val lengthMs: Long get() = duration?.let { Math.round(it * 1000) } ?: 0
 }
@@ -35,8 +37,8 @@ data class Audiobook(
     val id: String,
     val title: String,
     val author: String = "",
-    /** The file, or the folder, in Dropbox */
-    val dropboxPath: String,
+    /** The file, or the folder, in Dropbox; null when the book is only on the phone */
+    val dropboxPath: String?,
     val folder: Boolean,
     val tracks: List<AudioTrack>,
     val size: Long,
@@ -44,6 +46,19 @@ data class Audiobook(
     val described: Boolean = false,
     val addedAt: Long = 0,
     val lastOpenedAt: Long = 0,
+    /** The picked folder or file on the phone the book came from */
+    val source: String? = null,
+) {
+    /** Every file is on the phone, picked in place */
+    val onPhone: Boolean get() = tracks.isNotEmpty() && tracks.all { it.uri != null }
+}
+
+/** Picked files that make one book (see [AudiobookRules.groupPicked]). */
+data class PickedBook(
+    val title: String,
+    val folder: Boolean,
+    val files: List<com.nononsenseapps.feeder.model.local.LocalEntry>,
+    val cover: com.nononsenseapps.feeder.model.local.LocalEntry?,
 )
 
 /** A chapter across the book: file [i], start [startMs] in that file and [bookMs] in the book. */
@@ -208,6 +223,7 @@ object AudiobookRules {
     fun mergeBooks(
         have: List<Audiobook>,
         drafts: List<BookDraft>,
+        keep: (Audiobook) -> Boolean = { false },
     ): Pair<List<Audiobook>, List<String>> {
         val byId = have.associateBy { it.id }
         val seen = mutableSetOf<String>()
@@ -224,7 +240,49 @@ object AudiobookRules {
             val moved = old.dropboxPath != d.dropboxPath || tracks.indices.any { tracks[it].path != old.tracks.getOrNull(it)?.path }
             if (moved) put += old.copy(dropboxPath = d.dropboxPath, tracks = tracks, title = if (old.described) old.title else d.title)
         }
-        return put to have.filter { it.id !in seen }.map { it.id }
+        val remove = mutableListOf<String>()
+        for (b in have) {
+            if (b.id in seen || b.dropboxPath == null) continue
+            // Gone from Dropbox: forget it unless the phone has its files, then it stays as a phone book
+            if (b.onPhone || keep(b)) put += b.copy(dropboxPath = null) else remove += b.id
+        }
+        return put to remove
+    }
+
+    /**
+     * How picked files make books, the same as the web app's groupPicked: loose files or a folder
+     * of files only make one book named [title] (several .m4b files make one book each); a folder
+     * with subfolders of audio follows Dropbox's rule, each file and subfolder there is one book.
+     * Paths of the files are cut to inside their book.
+     */
+    fun groupPicked(
+        picked: List<com.nononsenseapps.feeder.model.local.LocalEntry>,
+        title: String,
+    ): List<PickedBook> {
+        val audio = picked.filter { isAudioName(it.name) }
+        val images = picked.filter { IMAGE.containsMatchIn(it.name) }
+        val nested = audio.any { '/' in it.rel }
+        val allM4b = audio.size > 1 && audio.all { extOf(it.name) == "m4b" }
+        val named = Regex("^(cover|folder|front)\\.", RegexOption.IGNORE_CASE)
+
+        fun coverOf(list: List<com.nononsenseapps.feeder.model.local.LocalEntry>) = list.filter { '/' !in it.rel }.let { top -> top.firstOrNull { named.containsMatchIn(it.name) } ?: top.firstOrNull() }
+        if (!nested && !allM4b) {
+            if (audio.isEmpty()) return emptyList()
+            val sorted = audio.sortedWith { a, b -> comparePaths(a.rel, b.rel) }
+            return listOf(PickedBook(if (audio.size == 1) nameWithoutExt(audio[0].name) else title, audio.size > 1, sorted, coverOf(images)))
+        }
+        val out = mutableListOf<PickedBook>()
+        val folders = LinkedHashMap<String, MutableList<com.nononsenseapps.feeder.model.local.LocalEntry>>()
+        for (p in audio) {
+            val cut = p.rel.indexOf('/')
+            if (cut < 0) out += PickedBook(nameWithoutExt(p.name), false, listOf(p), null) else folders.getOrPut(p.rel.substring(0, cut)) { mutableListOf() } += p
+        }
+        for ((name, list) in folders) {
+            val inner = list.map { it.copy(rel = it.rel.substring(name.length + 1)) }.sortedWith { a, b -> comparePaths(a.rel, b.rel) }
+            val pics = images.filter { it.rel.startsWith("$name/") }.map { it.copy(rel = it.rel.substring(name.length + 1)) }
+            out += PickedBook(name.replace('_', ' ').trim().ifEmpty { name }, true, inner, coverOf(pics) ?: pics.firstOrNull())
+        }
+        return out
     }
 
     // ---- The timeline ----

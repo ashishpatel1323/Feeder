@@ -220,14 +220,6 @@ class ZimLibrary private constructor(
         }
     }
 
-    /** New books go to Dropbox too when it is signed in. */
-    private fun shareNew(
-        name: String,
-        label: String,
-    ) {
-        if (dropbox.link.value != null) uploadFile(File(dir, name), label)
-    }
-
     /** Downloads a book from Dropbox into the phone's library. */
     fun downloadFromDropbox(f: DropboxFile) {
         val name = uniqueName(f.name)
@@ -344,7 +336,11 @@ class ZimLibrary private constructor(
         }
     }
 
-    /** Copies a .zim file the user picked into the library. */
+    /**
+     * Copies a .zim file the user picked into the library (it stays on this phone; Upload to
+     * Dropbox shares it). libzim can't read a picked file in place: it opens the file again by
+     * path, which Android refuses for files outside the app's own folder.
+     */
     fun import(uri: Uri) {
         val resolver = context.contentResolver
         var displayName = "book.zim"
@@ -389,7 +385,6 @@ class ZimLibrary private constructor(
                     }
                     check(part.renameTo(File(dir, name))) { "Could not save $name" }
                     _messages.value = "$displayName is ready to read"
-                    shareNew(name, displayName)
                 } catch (e: Exception) {
                     part.delete()
                     if (e !is kotlinx.coroutines.CancellationException) {
@@ -454,7 +449,6 @@ class ZimLibrary private constructor(
                     DownloadManager.STATUS_SUCCESSFUL -> {
                         File(dir, "$name.part").renameTo(File(dir, name))
                         _messages.value = "$title is ready to read"
-                        shareNew(name, title)
                     }
 
                     DownloadManager.STATUS_FAILED -> {

@@ -176,7 +176,7 @@ class AudiobookPlayer(
     private fun mediaItems(b: Audiobook): List<MediaItem> =
         b.tracks.mapIndexed { k, t ->
             val uri =
-                library.localFile(t)?.let(Uri::fromFile) ?: Uri
+                library.localFile(t)?.let(Uri::fromFile) ?: t.uri?.let(Uri::parse) ?: Uri
                     .Builder()
                     .scheme(SCHEME)
                     .path(t.path)

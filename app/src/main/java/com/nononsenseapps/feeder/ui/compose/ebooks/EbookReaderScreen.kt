@@ -191,7 +191,7 @@ fun EbookReaderScreen(
     val highlights = remember(allHighlights, itemKey) { allHighlights.filter { it.itemKey == itemKey && !it.cfi.isNullOrBlank() } }
     val ttsId = remember(bookId) { ttsIdOf(bookId) }
 
-    var file by remember { mutableStateOf<File?>(null) }
+    var file by remember { mutableStateOf<com.nononsenseapps.feeder.model.ebooks.BookSource?>(null) }
     var progress by remember { mutableStateOf(0L to 0L) }
     var error by remember { mutableStateOf<String?>(null) }
     var opened by remember { mutableStateOf(false) }
@@ -544,7 +544,7 @@ fun EbookReaderScreen(
                                         val path = url.path.orEmpty()
                                         return try {
                                             if (path.startsWith("/book/")) {
-                                                WebResourceResponse("application/octet-stream", null, f.inputStream())
+                                                WebResourceResponse("application/octet-stream", null, f.open())
                                             } else {
                                                 val name = path.removePrefix("/").ifBlank { "index.html" }
                                                 val mime =
@@ -577,7 +577,7 @@ fun EbookReaderScreen(
                                     ) {
                                         val b = currentBook
                                         val start = at?.takeIf { it.isNotBlank() } ?: positions.get(bookId)?.cfi
-                                        val name = "book.${b?.ext ?: f.extension}"
+                                        val name = "book.${b?.ext ?: f.ext}"
                                         view.evaluateJavascript(
                                             "feeder.open(${q("https://$HOST/book/$name")}, ${q(name)}, ${q(start)}, " +
                                                 "${q(prefsJson.encodeToString(ReaderPrefs.serializer(), currentPrefs))}, $currentDark, ${q(highlightsJson())})",

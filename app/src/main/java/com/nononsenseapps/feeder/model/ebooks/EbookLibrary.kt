@@ -1,5 +1,8 @@
 package com.nononsenseapps.feeder.model.ebooks
 
+import com.nononsenseapps.feeder.model.local.LocalEntry
+import com.nononsenseapps.feeder.model.local.LocalFiles
+
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -35,11 +38,22 @@ data class Book(
     val size: Long,
     /** Where the file is in Dropbox, or null when it is only on this phone. */
     val dropboxPath: String? = null,
+    /** Whether the phone has the book: the app's own copy, or [uri] */
     val local: Boolean = false,
+    /** The file on the phone (a document URI from the file picker), read where it is */
+    val uri: String? = null,
+    /** The picked folder [uri] was found in, when it came from one */
+    val source: String? = null,
     /** Whether title, author and cover came from the book itself (else from its file name). */
     val described: Boolean = false,
     val addedAt: Long,
     val lastOpenedAt: Long = 0,
+)
+
+/** The bytes of a book to open, wherever they are on the phone. */
+class BookSource(
+    val ext: String,
+    val open: () -> java.io.InputStream,
 )
 
 /** An upload or download in progress. */
@@ -106,15 +120,15 @@ class EbookLibrary private constructor(
     // -----------------------------------------------------------------------------------------
     // Dropbox
 
-    /** Reads Dropbox's /Ebooks folder again, and uploads books only this phone has. */
+    /** Reads Dropbox's /Ebooks folder again, and the folders picked on the phone. */
     fun refresh() {
         scope.launch {
             mutex.withLock {
+                scanFolders()
                 if (dropbox.link.value == null) return@withLock
                 try {
                     val files = dropbox.listFolder(DropboxClient.EBOOKS_FOLDER)
                     change { merge(it, files).books }
-                    uploadLocalOnly()
                 } catch (e: Exception) {
                     Log.w(LOG_TAG, "Could not read Dropbox", e)
                     _messages.value = e.message
@@ -123,19 +137,30 @@ class EbookLibrary private constructor(
         }
     }
 
-    private suspend fun uploadLocalOnly() {
-        for (b in _books.value.filter { it.local && it.dropboxPath == null }) {
+    /** Uploads a book only on this phone to Dropbox, so the other devices have it too. */
+    fun uploadToDropbox(id: String) {
+        val b = get(id) ?: return
+        scope.launch {
             try {
                 upload(b)
+                _messages.value = "${b.title} is in Dropbox"
             } catch (e: Exception) {
                 Log.w(LOG_TAG, "Could not upload ${b.title}", e)
+                _messages.value = e.message ?: "Upload failed"
             }
         }
     }
 
     private suspend fun upload(b: Book) {
-        val f = file(b)
-        if (!f.exists()) return
+        var f = file(b)
+        var tmp: File? = null
+        if (!f.exists()) {
+            // A book read in place: upload a copy of it
+            val uri = b.uri ?: return
+            tmp = File(context.cacheDir, "upload-${b.id}.${b.ext}")
+            context.contentResolver.openInputStream(Uri.parse(uri))!!.use { input -> tmp.outputStream().use { input.copyTo(it) } }
+            f = tmp
+        }
         val key = "up:${b.id}"
         _jobs.update { it + BookJob(key, "Uploading ${b.title}", 0, f.length()) }
         try {
@@ -145,6 +170,7 @@ class EbookLibrary private constructor(
                 }
             patch(b.id) { it.copy(dropboxPath = up.path) }
         } finally {
+            tmp?.delete()
             _jobs.update { jobs -> jobs.filterNot { it.key == key } }
         }
     }
@@ -152,36 +178,25 @@ class EbookLibrary private constructor(
     // -----------------------------------------------------------------------------------------
     // Adding, opening, removing
 
-    /** Adds a book file the user picked: kept here, and uploaded to Dropbox when signed in. */
+    /** Picked folders whose books are read in place, looked at again on every refresh. */
+    private fun folders(): Set<String> = prefs.getStringSet(KEY_FOLDERS, emptySet()).orEmpty()
+
+    /** Adds a book file the user picked. It is read where it is: nothing is copied or uploaded. */
     fun import(uri: Uri) {
-        val resolver = context.contentResolver
-        var displayName = "book.epub"
-        resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
-            if (c.moveToFirst()) displayName = c.getString(0) ?: displayName
-        }
-        val ext = extOf(displayName)
-        if (ext !in EXTENSIONS) {
+        LocalFiles.keep(context, uri)
+        val entry = LocalFiles.describe(context, uri)
+        val displayName = entry?.name ?: "book.epub"
+        if (extOf(displayName) !in EXTENSIONS) {
             _messages.value = "$displayName: Feeder reads EPUB, MOBI, AZW3, FB2, CBZ and PDF books"
             return
         }
         val key = "add:$displayName:${System.nanoTime()}"
         _jobs.update { it + BookJob(key, displayName, 0, 0) }
         scope.launch {
-            val tmp = File(dir, "import-${System.nanoTime()}.part")
             try {
-                resolver.openInputStream(uri)!!.use { input -> tmp.outputStream().use { input.copyTo(it) } }
-                val id = DropboxClient.contentHash(tmp)
-                val existing = get(id)
-                val dest = File(dir, "$id.$ext")
-                if (dest.exists()) tmp.delete() else check(tmp.renameTo(dest)) { "Could not save $displayName" }
-                val book =
-                    existing?.copy(local = true)
-                        ?: Book(id = id, title = titleFromName(displayName), ext = ext, size = dest.length(), local = true, addedAt = System.currentTimeMillis())
-                change { list -> list.filterNot { it.id == id } + book }
+                val book = addInPlace(entry ?: LocalEntry(uri, displayName, displayName, 0, 0), null)
                 _messages.value = "Added ${book.title}"
-                if (book.dropboxPath == null && dropbox.link.value != null) upload(book)
             } catch (e: Exception) {
-                tmp.delete()
                 Log.w(LOG_TAG, "Import failed", e)
                 _messages.value = e.message ?: "Could not add $displayName"
             } finally {
@@ -190,20 +205,83 @@ class EbookLibrary private constructor(
         }
     }
 
+    /** Adds every book in a folder on the phone (subfolders too), read in place; new books there show up on refresh. */
+    fun addFolder(tree: Uri) {
+        LocalFiles.keep(context, tree)
+        prefs.edit { putStringSet(KEY_FOLDERS, folders() + tree.toString()) }
+        scope.launch {
+            mutex.withLock {
+                val n = scanFolder(tree)
+                _messages.value = if (n == 0) "No books in that folder" else "$n books from the folder"
+            }
+        }
+    }
+
+    private suspend fun scanFolders() {
+        val seen = mutableSetOf<String>()
+        for (f in folders()) {
+            try {
+                seen += scanFolderIds(Uri.parse(f))
+            } catch (e: Exception) {
+                Log.w(LOG_TAG, "Could not read $f", e)
+                seen += _books.value.filter { it.source == f }.map { it.id }
+            }
+        }
+        // Books from folders that no longer have them: forget them unless they are in Dropbox
+        change { list ->
+            list.mapNotNull { b ->
+                when {
+                    b.source == null || b.id in seen -> b
+                    b.dropboxPath != null -> b.copy(uri = null, source = null, local = file(b).exists())
+                    else -> null
+                }
+            }
+        }
+    }
+
+    private suspend fun scanFolder(tree: Uri): Int = scanFolderIds(tree).size
+
+    private suspend fun scanFolderIds(tree: Uri): Set<String> =
+        withContext(Dispatchers.IO) {
+            LocalFiles
+                .walk(context, tree)
+                .filter { extOf(it.name) in EXTENSIONS }
+                .mapNotNull { e -> runCatching { addInPlace(e, tree.toString()).id }.onFailure { Log.w(LOG_TAG, "Could not add ${e.name}", it) }.getOrNull() }
+                .toSet()
+        }
+
+    private fun addInPlace(
+        e: LocalEntry,
+        folder: String?,
+    ): Book {
+        val id = LocalFiles.hash(context, e)
+        val existing = get(id)
+        val book =
+            existing?.copy(local = true, uri = e.uri.toString(), source = folder ?: existing.source)
+                ?: Book(id = id, title = titleFromName(e.name), ext = extOf(e.name), size = e.size, local = true, uri = e.uri.toString(), source = folder, addedAt = System.currentTimeMillis())
+        if (existing != book) change { list -> list.filterNot { it.id == id } + book }
+        return book
+    }
+
     /** The book's file, downloading it from Dropbox first when it isn't on the phone. */
     suspend fun ensureLocal(
         id: String,
         onProgress: (Long, Long) -> Unit,
-    ): File =
+    ): BookSource =
         withContext(Dispatchers.IO) {
             val b = get(id) ?: throw IllegalStateException("This book is no longer in the library")
             val f = file(b)
+            val picked = b.uri?.let(Uri::parse)
+            if (!f.exists() && picked != null && LocalFiles.canRead(context, picked)) {
+                patch(id) { it.copy(local = true, lastOpenedAt = System.currentTimeMillis()) }
+                return@withContext BookSource(b.ext) { context.contentResolver.openInputStream(picked) ?: error("Could not read ${b.title}") }
+            }
             if (!f.exists()) {
                 val path = b.dropboxPath ?: throw IllegalStateException("This book is not on this phone, and not in Dropbox")
                 dropbox.download(path, f, onProgress)
             }
             patch(id) { it.copy(local = true, lastOpenedAt = System.currentTimeMillis()) }
-            f
+            BookSource(b.ext.ifBlank { f.extension }) { f.inputStream() }
         }
 
     /** Downloads a book from Dropbox without opening it. */
@@ -242,11 +320,12 @@ class EbookLibrary private constructor(
         }
     }
 
-    /** Frees the space on the phone; the book stays in Dropbox. */
+    /** Frees the space on the phone; the book stays in Dropbox. A book read in place leaves the library, its file stays. */
     fun removeFromDevice(id: String) {
         val b = get(id) ?: return
         file(b).delete()
-        if (b.dropboxPath != null) patch(id) { it.copy(local = false) } else change { list -> list.filterNot { it.id == id } }
+        if (b.source == null) b.uri?.let { LocalFiles.release(context, Uri.parse(it)) }
+        if (b.dropboxPath != null) patch(id) { it.copy(local = false, uri = null, source = null) } else change { list -> list.filterNot { it.id == id } }
     }
 
     /** Deletes the book from Dropbox and the phone. Positions and highlights stay. */
@@ -268,6 +347,7 @@ class EbookLibrary private constructor(
     companion object {
         private const val LOG_TAG = "FEEDER_EBOOKS"
         private const val KEY = "books_v1"
+        private const val KEY_FOLDERS = "folders"
         const val ITEM_PREFIX = "ebook:\n"
         val EXTENSIONS = setOf("epub", "mobi", "azw3", "azw", "kf8", "fb2", "fbz", "cbz", "pdf")
 

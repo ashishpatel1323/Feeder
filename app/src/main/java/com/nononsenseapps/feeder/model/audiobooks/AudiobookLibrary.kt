@@ -6,7 +6,10 @@ import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.util.Log
 import androidx.core.content.edit
+import android.net.Uri
 import com.nononsenseapps.feeder.dropbox.DropboxClient
+import com.nononsenseapps.feeder.model.local.LocalEntry
+import com.nononsenseapps.feeder.model.local.LocalFiles
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -40,7 +43,10 @@ data class AudiobookJob(
  * The Audiobooks tab's library, with the same rules as the web app's: books live in Dropbox's
  * /Audiobooks folder (see [AudiobookRules]) and stream from there. A book can also be downloaded
  * to the phone (Android/data/<app>/files/audiobooks) to play offline; the player then uses those
- * files. Title, author, cover, lengths and chapters are read from the files once, on first play.
+ * files. Books can also be only on the phone: files or folders picked with Android's file picker
+ * are read where they are (nothing is copied or uploaded), and a picked folder is looked at again
+ * on every refresh, so new books there show up. Title, author, cover, lengths and chapters are
+ * read from the files once, on first play.
  */
 class AudiobookLibrary private constructor(
     private val context: Context,
@@ -68,6 +74,11 @@ class AudiobookLibrary private constructor(
     val version: StateFlow<Int> = _version.asStateFlow()
     private val coverPaths = ConcurrentHashMap<String, String>()
     private val scans = ConcurrentHashMap<String, Deferred<Audiobook?>>()
+    private val pickedCovers = ConcurrentHashMap<String, Uri>()
+    private val _adding = MutableStateFlow<String?>(null)
+
+    /** What is being added from the phone right now ("Reading Dune…"), or null. */
+    val adding: StateFlow<String?> = _adding.asStateFlow()
 
     fun consumeMessage() {
         _messages.value = null
@@ -96,18 +107,22 @@ class AudiobookLibrary private constructor(
 
     fun isDownloaded(b: Audiobook) = b.tracks.all { localFile(it) != null }
 
+    /** Whether the book plays without Dropbox: picked on the phone, or downloaded. */
+    fun onPhone(b: Audiobook) = b.onPhone || isDownloaded(b)
+
     // ---- Dropbox ----
 
     /** Reads Dropbox's /Audiobooks folder again. */
     fun refresh() {
         scope.launch {
             mutex.withLock {
-                if (dropbox.link.value == null) return@withLock
                 _refreshing.value = true
                 try {
+                    scanPicked()
+                    if (dropbox.link.value == null) return@withLock
                     val drafts = AudiobookRules.booksInListing(dropbox.listTree(DropboxClient.AUDIOBOOKS_FOLDER))
                     drafts.forEach { d -> d.coverPath?.let { coverPaths[d.id] = it } }
-                    val (put, remove) = AudiobookRules.mergeBooks(_books.value, drafts)
+                    val (put, remove) = AudiobookRules.mergeBooks(_books.value, drafts) { isDownloaded(it) }
                     val byId = put.associateBy { it.id }
                     change { list -> list.filterNot { it.id in remove }.map { byId[it.id] ?: it } + put.filter { p -> list.none { it.id == p.id } } }
                     // Covers and titles for new books, a few at a time
@@ -126,6 +141,28 @@ class AudiobookLibrary private constructor(
 
     /** Reads only the asked-for bytes of a Dropbox file, 64 KB at a time, with a small cache. */
     private fun reader(t: AudioTrack): RangeReader {
+        val picked = t.uri?.let(Uri::parse)
+        if (localFile(t) == null && picked != null) {
+            return object : RangeReader {
+                override val size = t.size
+
+                override suspend fun read(
+                    offset: Long,
+                    length: Int,
+                ): ByteArray =
+                    withContext(Dispatchers.IO) {
+                        context.contentResolver.openFileDescriptor(picked, "r")!!.use { pfd ->
+                            java.io.FileInputStream(pfd.fileDescriptor).channel.use { ch ->
+                                val n = minOf(length.toLong(), size - offset).toInt().coerceAtLeast(0)
+                                val buf = java.nio.ByteBuffer.allocate(n)
+                                ch.position(offset)
+                                while (buf.hasRemaining() && ch.read(buf) >= 0) Unit
+                                buf.array().copyOf(buf.position())
+                            }
+                        }
+                    }
+            }
+        }
         localFile(t)?.let { f ->
             return object : RangeReader {
                 override val size = f.length()
@@ -175,7 +212,11 @@ class AudiobookLibrary private constructor(
             val r = MediaMetadataRetriever()
             try {
                 val local = localFile(t)
-                if (local != null) r.setDataSource(local.path) else r.setDataSource(dropbox.temporaryLink(t.path), emptyMap())
+                when {
+                    local != null -> r.setDataSource(local.path)
+                    t.uri != null -> r.setDataSource(context, Uri.parse(t.uri))
+                    else -> r.setDataSource(dropbox.temporaryLink(t.path), emptyMap())
+                }
                 r
                     .extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
                     ?.toLongOrNull()
@@ -241,6 +282,9 @@ class AudiobookLibrary private constructor(
         val first = tags ?: b.tracks.firstOrNull()?.let { runCatching { AudioTags.read(it.name, reader(it)) }.getOrNull() }
         var cover = first?.cover?.let(::smallCover)
         if (cover == null) {
+            pickedCovers[b.id]?.let { uri -> cover = runCatching { context.contentResolver.openInputStream(uri)?.use { smallCover(it.readBytes()) } }.getOrNull() }
+        }
+        if (cover == null) {
             coverPaths[b.id]?.let { path ->
                 runCatching {
                     val tmp = File(coverDir, "${b.id}.download")
@@ -299,6 +343,143 @@ class AudiobookLibrary private constructor(
         }
     }
 
+    // ---- Picked on the phone ----
+
+    /** Picked folders and files, as "folder|<uri>" or "files|<title>|<uri> <uri>…". */
+    private fun picks(): Set<String> = prefs.getStringSet(KEY_PICKS, emptySet()).orEmpty()
+
+    /** Books the user removed from the library: a rescan of their folder leaves them out. */
+    private fun hidden(): Set<String> = prefs.getStringSet(KEY_HIDDEN, emptySet()).orEmpty()
+
+    /** Adds a folder from the phone: one book, or a book per subfolder and per file (see [AudiobookRules.groupPicked]). */
+    fun addFolder(tree: Uri) {
+        LocalFiles.keep(context, tree)
+        prefs.edit { putStringSet(KEY_PICKS, picks() + "folder|$tree") }
+        scope.launch {
+            mutex.withLock {
+                val n = addPicked(tree.toString(), LocalFiles.walk(context, tree), LocalFiles.treeName(context, tree), clearHidden = true)
+                _messages.value = if (n == 0) "No audio files in that folder" else if (n == 1) "Added 1 audiobook" else "Added $n audiobooks"
+            }
+        }
+    }
+
+    /** Adds picked files: one file is a book; several make one book (several .m4b files, one book each). */
+    fun addFiles(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        uris.forEach { LocalFiles.keep(context, it) }
+        scope.launch {
+            mutex.withLock {
+                val entries = uris.mapNotNull { LocalFiles.describe(context, it) }
+                val title = commonTitle(entries.map { it.name })
+                prefs.edit { putStringSet(KEY_PICKS, picks() + "files|${title.replace('|', ' ')}|${uris.joinToString(" ")}") }
+                val n = addPicked(uris.joinToString(" "), entries, title, clearHidden = true)
+                _messages.value = if (n == 0) "Pick audio files: M4B, M4A, MP3, OGG, Opus or FLAC" else if (n == 1) "Added 1 audiobook" else "Added $n audiobooks"
+            }
+        }
+    }
+
+    /** Looks at the picked folders again: new books show up, books whose files are gone leave. */
+    private suspend fun scanPicked() {
+        val seen = mutableSetOf<String>()
+        for (pick in picks()) {
+            val parts = pick.split('|')
+            try {
+                if (parts[0] == "folder") {
+                    val tree = Uri.parse(parts[1])
+                    seen += addPickedIds(parts[1], LocalFiles.walk(context, tree), LocalFiles.treeName(context, tree))
+                } else if (parts[0] == "files" && parts.size >= 3) {
+                    val entries = parts[2].split(' ').mapNotNull { LocalFiles.describe(context, Uri.parse(it)) }
+                    seen += addPickedIds(parts[2], entries, parts[1])
+                }
+            } catch (e: Exception) {
+                // The folder is gone or access was taken away: its books stay until it can be read
+                Log.w(LOG_TAG, "Could not read $pick", e)
+                seen += _books.value.filter { it.source == parts.getOrNull(1) || it.source == parts.getOrNull(2) }.map { it.id }
+            }
+        }
+        // Phone books whose files are no longer picked: forget the files, and the book unless it is in Dropbox
+        val gone = _books.value.filter { b -> b.tracks.any { it.uri != null } && b.id !in seen }
+        if (gone.isNotEmpty()) {
+            change { list ->
+                list.mapNotNull { b ->
+                    if (gone.none { it.id == b.id }) b else if (b.dropboxPath != null || isDownloaded(b)) b.copy(tracks = b.tracks.map { it.copy(uri = null) }, source = null) else null
+                }
+            }
+        }
+    }
+
+    private suspend fun addPicked(
+        source: String,
+        entries: List<LocalEntry>,
+        title: String,
+        clearHidden: Boolean,
+    ): Int {
+        val ids = addPickedIds(source, entries, title, clearHidden)
+        _books.value.filter { it.id in ids && !it.described }.forEach { b -> runCatching { describe(b, null) }.onFailure { Log.w(LOG_TAG, "Could not describe ${b.title}", it) } }
+        return ids.size
+    }
+
+    /** Makes books of picked files (reading their content hashes once) and returns their ids. */
+    private suspend fun addPickedIds(
+        source: String,
+        entries: List<LocalEntry>,
+        title: String,
+        clearHidden: Boolean = false,
+    ): Set<String> {
+        val groups = AudiobookRules.groupPicked(entries, title)
+        val ids = mutableSetOf<String>()
+        for (g in groups) {
+            _adding.value = g.title
+            val tracks =
+                withContext(Dispatchers.IO) {
+                    g.files.map { e -> AudioTrack(path = "local:${e.rel}", name = e.name, hash = LocalFiles.hash(context, e), size = e.size, uri = e.uri.toString()) }
+                }
+            val id = if (g.folder) AudiobookRules.folderBookId(tracks.map { it.hash }) else tracks[0].hash
+            if (clearHidden) prefs.edit { putStringSet(KEY_HIDDEN, hidden() - id) } else if (id in hidden()) continue
+            ids += id
+            g.cover?.let { pickedCovers[id] = it.uri }
+            val byHash = tracks.associateBy { it.hash }
+            change { list ->
+                val old = list.firstOrNull { it.id == id }
+                if (old != null) {
+                    list.map { b -> if (b.id != id) b else b.copy(tracks = b.tracks.map { t -> byHash[t.hash]?.let { p -> t.copy(uri = p.uri) } ?: t }, source = source) }
+                } else {
+                    list + Audiobook(id = id, title = g.title, dropboxPath = null, folder = g.folder, tracks = tracks, size = tracks.sumOf { it.size }, addedAt = System.currentTimeMillis(), source = source)
+                }
+            }
+        }
+        _adding.value = null
+        return ids
+    }
+
+    /** Takes a phone book out of the library; its files stay where they are. */
+    fun forget(id: String) {
+        val b = get(id) ?: return
+        prefs.edit { putStringSet(KEY_HIDDEN, hidden() + id) }
+        if (b.dropboxPath != null) {
+            patch(id) { it.copy(tracks = it.tracks.map { t -> t.copy(uri = null) }, source = null) }
+        } else {
+            b.tracks.forEach { t -> localFile(t)?.delete() }
+            coverFile(id).delete()
+            change { list -> list.filterNot { it.id == id } }
+        }
+        // Files picked one by one: let go of them
+        val pick = picks().firstOrNull { it.startsWith("files|") && it.substringAfterLast('|') == b.source }
+        if (pick != null) {
+            prefs.edit { putStringSet(KEY_PICKS, picks() - pick) }
+            b.source?.split(' ')?.forEach { LocalFiles.release(context, Uri.parse(it)) }
+        }
+        _version.update { it + 1 }
+        _messages.value = "Removed ${b.title} from Feeder; the files stay on the phone"
+    }
+
+    private fun commonTitle(names: List<String>): String {
+        if (names.size == 1) return AudiobookRules.nameWithoutExt(names[0])
+        var p = names.firstOrNull().orEmpty()
+        for (n in names) while (p.isNotEmpty() && !n.startsWith(p)) p = p.dropLast(1)
+        return p.trimEnd(' ', '-', '_', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9').trim().ifEmpty { AudiobookRules.nameWithoutExt(names.first()) }
+    }
+
     /** Frees the space on the phone; the book stays in Dropbox. */
     fun removeDownload(id: String) {
         val b = get(id) ?: return
@@ -309,6 +490,8 @@ class AudiobookLibrary private constructor(
 
     companion object {
         private const val KEY = "books"
+        private const val KEY_PICKS = "picks"
+        private const val KEY_HIDDEN = "hidden"
         private const val LOG_TAG = "FEEDER_AUDIOBOOKS"
 
         @Volatile

@@ -176,4 +176,31 @@ class AudiobooksTest {
         assertEquals("1:02:03", AudiobookRules.clock(3_723_000))
         assertEquals("5 h 12 min", AudiobookRules.lengthText(312 * 60_000L))
     }
+
+    private fun picked(rel: String) = com.nononsenseapps.feeder.model.local.LocalEntry(io.mockk.mockk(relaxed = true), rel, rel.substringAfterLast('/'), 1, 0)
+
+    @Test
+    fun picksMakeBooksLikeTheWebApp() {
+        val one = AudiobookRules.groupPicked(listOf("10 End.mp3", "2 Middle.mp3", "1 Start.mp3", "cover.jpg").map(::picked), "Dune")
+        assertEquals(listOf("Dune"), one.map { it.title })
+        assertEquals(listOf("1 Start.mp3", "2 Middle.mp3", "10 End.mp3"), one[0].files.map { it.rel })
+        assertEquals("cover.jpg", one[0].cover?.rel)
+        assertEquals(listOf("A", "B"), AudiobookRules.groupPicked(listOf("A.m4b", "B.m4b").map(::picked), "x").map { it.title })
+        val lib = AudiobookRules.groupPicked(listOf("Loose.mp3", "Dune/02.mp3", "Dune/01.mp3", "Dune/folder.jpg", "Emma/CD1/1.mp3").map(::picked), "x")
+        assertEquals(listOf("Loose", "Dune", "Emma"), lib.map { it.title })
+        assertEquals(listOf("01.mp3", "02.mp3"), lib[1].files.map { it.rel })
+        assertEquals("folder.jpg", lib[1].cover?.rel)
+        assertEquals(listOf("CD1/1.mp3"), lib[2].files.map { it.rel })
+    }
+
+    @Test
+    fun phoneBooksStayWhenTheyLeaveDropbox() {
+        val t = AudioTrack(path = "/Audiobooks/a.mp3", name = "a.mp3", hash = "a", size = 1)
+        val onPhone = Audiobook("a", "A", dropboxPath = "/Audiobooks/a.mp3", folder = false, tracks = listOf(t.copy(uri = "content://x")), size = 1)
+        val onlyDropbox = Audiobook("b", "B", dropboxPath = "/Audiobooks/b.mp3", folder = false, tracks = listOf(t.copy(hash = "b")), size = 1)
+        val phoneOnly = Audiobook("c", "C", dropboxPath = null, folder = false, tracks = listOf(t.copy(hash = "c", uri = "content://c")), size = 1)
+        val (put, remove) = AudiobookRules.mergeBooks(listOf(onPhone, onlyDropbox, phoneOnly), emptyList())
+        assertEquals(listOf("a" to null), put.map { it.id to it.dropboxPath })
+        assertEquals(listOf("b"), remove)
+    }
 }
