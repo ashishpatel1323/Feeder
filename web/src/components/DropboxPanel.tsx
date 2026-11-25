@@ -5,7 +5,11 @@ import { Icon } from './Icon'
 export function useDropbox(): { signedIn: boolean; name: string; ready: boolean } {
   const [s, setS] = useState({ signedIn: false, name: '', ready: false })
   useEffect(() => {
-    const load = () => void getDropbox().then((d) => setS({ signedIn: !!d, name: d?.name || d?.email || '', ready: true }))
+    const load = () =>
+      void getDropbox()
+        .then((d) => setS({ signedIn: !!d, name: d?.name || d?.email || '', ready: true }))
+        // Can't read the sign-in: offer to sign in rather than showing nothing
+        .catch(() => setS({ signedIn: false, name: '', ready: true }))
     load()
     return onDropboxChange(load)
   }, [])
@@ -30,7 +34,7 @@ export function DropboxPanel({ what, toast }: { what: string; toast: (m: string)
     await startDropboxSignIn(appKey)
   }
 
-  if (!dbx.ready) return null
+  // Until the sign-in is read, show the sign-in offer (it never hides: it is the way to Dropbox)
   if (dbx.signedIn)
     return (
       <div className="dbx-panel">
