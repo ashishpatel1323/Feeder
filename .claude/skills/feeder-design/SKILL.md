@@ -34,7 +34,11 @@ Feeder follows Material 3 (and Material 3 Expressive on Android). These rules re
    and one chip row: the rules summed up in one chip (tap to edit) and a Sort chip with a menu.
 5. **One primary (filled/tonal) action per view.** Everything else is an icon button or menu entry.
    Web list rows: one round Play for media, then a ⋮ (`MoreMenu`) with Save, Playlist, Mark read, Delete.
-6. Keyboard hints stay in tooltips and, on wide screens, as `.btn-kbd` next to the label (web).
+6. **Browse and search pages (Discover) use list rows, not cards**: a pill search bar (no Search button,
+   the keyboard's search key or Enter searches), text-only tabs, one chip row where long lists go in a
+   dropdown chip (topic sheet on Android, menu on web), then 72 dp rows with the site icon and one
+   trailing + that opens a folder sheet (Android) or menu (web), last used folder first.
+7. Keyboard hints stay in tooltips and, on wide screens, as `.btn-kbd` next to the label (web).
 
 ## Media players (Android and web)
 

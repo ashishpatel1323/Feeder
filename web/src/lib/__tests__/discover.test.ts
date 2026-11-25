@@ -7,6 +7,7 @@ import {
   defaultCountry,
   feedlyQueries,
   googleNewsResult,
+  iconUrl,
   isFollowed,
   looksLikeUrl,
   parseChartIds,
@@ -14,6 +15,8 @@ import {
   parseItunes,
   parseYouTubeChannels,
   searchCurated,
+  supportingLine,
+  topicLabel,
   youtubeFeedUrl,
 } from '../discover'
 
@@ -117,5 +120,16 @@ describe('Bundled topics', () => {
     const web = readFileSync(resolve(process.cwd(), 'src/lib/discover-feeds.json'), 'utf8')
     const android = readFileSync(resolve(process.cwd(), '../app/src/main/assets/discover-feeds.json'), 'utf8')
     expect(android).toBe(web)
+  })
+
+  it('labels topics, finds row icons and joins the supporting line', () => {
+    expect(topicLabel('India: Business')).toBe('India business')
+    expect(topicLabel('Tech')).toBe('Tech')
+    const ars = { kind: 'text' as const, title: 'Ars', feedUrl: 'http://feeds.arstechnica.com/arstechnica/index', meta: 'feeds.arstechnica.com' }
+    expect(iconUrl(ars)).toBe('https://icons.duckduckgo.com/ip3/arstechnica.com.ico')
+    expect(iconUrl({ ...ars, image: 'https://art' })).toBe('https://art')
+    expect(iconUrl({ ...ars, site: 'https://www.livemint.com/x' })).toBe('https://icons.duckduckgo.com/ip3/livemint.com.ico')
+    expect(supportingLine(ars)).toBe('feeds.arstechnica.com')
+    expect(supportingLine({ ...ars, meta: 'a', description: 'b' })).toBe('a · b')
   })
 })

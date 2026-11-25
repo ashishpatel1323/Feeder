@@ -71,4 +71,17 @@ class DiscoverSourcesTest {
         assertTrue(business.feeds.any { it.feedUrl == "https://www.livemint.com/rss/markets" })
         assertTrue(searchCurated(topics, "mint money").any { it.feedUrl == "https://www.livemint.com/rss/money" })
     }
+
+    @Test
+    fun displayHelpers() {
+        assertEquals("India business", topicLabel("India: Business"))
+        assertEquals("India startups & tech", topicLabel("India: Startups & tech"))
+        assertEquals("Tech", topicLabel("Tech"))
+        val ars = DiscoverResult(DiscoverKind.TEXT, "Ars", "http://feeds.arstechnica.com/arstechnica/index", meta = "feeds.arstechnica.com")
+        assertEquals("https://icons.duckduckgo.com/ip3/arstechnica.com.ico", iconUrl(ars))
+        assertEquals("https://art", iconUrl(ars.copy(image = "https://art")))
+        assertEquals("https://icons.duckduckgo.com/ip3/livemint.com.ico", iconUrl(ars.copy(site = "https://www.livemint.com/x")))
+        assertEquals("feeds.arstechnica.com", supportingLine(ars))
+        assertEquals("a · b", supportingLine(ars.copy(meta = "a", description = "b")))
+    }
 }
