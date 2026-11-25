@@ -10,8 +10,11 @@
  */
 import { getKv, setKv } from './db'
 
-/** The Dropbox app's key (public: PKCE apps have no secret). Settings can override it. */
-export const DEFAULT_DROPBOX_APP_KEY = (import.meta.env?.VITE_DROPBOX_APP_KEY as string | undefined) ?? ''
+/**
+ * The Dropbox app's key ("Feeder" app in Ashish's Dropbox, app folder access). It is public:
+ * PKCE apps have no secret. VITE_DROPBOX_APP_KEY or the key typed at sign-in override it.
+ */
+export const DEFAULT_DROPBOX_APP_KEY = (import.meta.env?.VITE_DROPBOX_APP_KEY as string | undefined) || 'nw6h0xyqgr4g1wh'
 
 export const EBOOKS_FOLDER = '/Ebooks'
 export const ZIM_FOLDER = '/ZIM'
