@@ -16,6 +16,8 @@ import { getKv, setKv } from './db'
  */
 export const DEFAULT_DROPBOX_APP_KEY = (import.meta.env?.VITE_DROPBOX_APP_KEY as string | undefined) || 'nw6h0xyqgr4g1wh'
 
+export const DROPBOX_SCOPES = 'account_info.read files.metadata.read files.metadata.write files.content.read files.content.write'
+
 export const EBOOKS_FOLDER = '/Ebooks'
 export const ZIM_FOLDER = '/ZIM'
 
@@ -94,6 +96,9 @@ export async function startDropboxSignIn(appKey: string, returnTo = window.locat
     code_challenge: await pkceChallenge(verifier),
     code_challenge_method: 'S256',
     token_access_type: 'offline',
+    // Only what Feeder uses. Without this Dropbox asks for every permission ticked on the app,
+    // and one team permission makes it refuse personal accounts ("sign in with a work account").
+    scope: DROPBOX_SCOPES,
     redirect_uri: redirectUri(),
     state,
   })
