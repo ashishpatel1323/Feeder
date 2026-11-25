@@ -29,7 +29,6 @@ import okio.BufferedSink
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
-import java.io.RandomAccessFile
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
@@ -371,6 +370,18 @@ class DropboxClient private constructor(
         file: File,
         onProgress: (Long, Long) -> Unit = { _, _ -> },
     ): DropboxFile =
+        upload(path, file.length(), { from -> java.io.FileInputStream(file).also { it.channel.position(from) } }, onProgress)
+
+    /**
+     * Uploads [size] bytes read with [open], which gives a stream positioned at a byte offset
+     * (e.g. a document picked on the phone, read in place), like [upload] of a file.
+     */
+    suspend fun upload(
+        path: String,
+        size: Long,
+        open: (from: Long) -> InputStream,
+        onProgress: (Long, Long) -> Unit = { _, _ -> },
+    ): DropboxFile =
         withContext(Dispatchers.IO) {
             val commit =
                 buildJsonObject {
@@ -379,7 +390,6 @@ class DropboxClient private constructor(
                     put("autorename", true)
                     put("mute", true)
                 }
-            val size = file.length()
 
             fun content(
                 url: String,
@@ -392,7 +402,7 @@ class DropboxClient private constructor(
                     .url(url)
                     .header("Authorization", "Bearer $token")
                     .header("Dropbox-API-Arg", headerArg(arg))
-                    .post(FileSlice(file, from, length))
+                    .post(StreamSlice(open, from, length))
                     .build()
             }
 
@@ -454,8 +464,8 @@ class DropboxClient private constructor(
         }
 
     /** Part of a file as a request body, for upload sessions. */
-    private class FileSlice(
-        val file: File,
+    private class StreamSlice(
+        val open: (Long) -> InputStream,
         val from: Long,
         val length: Long,
     ) : RequestBody() {
@@ -464,12 +474,11 @@ class DropboxClient private constructor(
         override fun contentLength() = length
 
         override fun writeTo(sink: BufferedSink) {
-            RandomAccessFile(file, "r").use { raf ->
-                raf.seek(from)
+            open(from).use { input ->
                 val buf = ByteArray(1 shl 16)
                 var left = length
                 while (left > 0) {
-                    val n = raf.read(buf, 0, minOf(buf.size.toLong(), left).toInt())
+                    val n = input.read(buf, 0, minOf(buf.size.toLong(), left).toInt())
                     if (n < 0) break
                     sink.write(buf, 0, n)
                     left -= n

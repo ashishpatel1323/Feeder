@@ -4,10 +4,10 @@ import { db, type AudioPos, type Audiobook } from '../lib/db'
 import { onDropboxChange } from '../lib/dropbox'
 import { otherDeviceText } from '../lib/device'
 import { formatBytes } from '../lib/offline'
-import { ACCEPT_AUDIO, addLocal, downloadAudiobook, isAudioName, localSupported, onDevice, pickedFromFolder, refreshAudiobooks, removeFromDevice, uploadAudiobook, type Picked } from '../lib/audiobooks/library'
+import { ACCEPT_AUDIO, addLocal, deleteAudiobookFromDropbox, downloadAudiobook, isAudioName, localSupported, onDevice, pickedFromFolder, refreshAudiobooks, removeFromDevice, uploadAudiobook, type Picked } from '../lib/audiobooks/library'
 import { audiobookPlayer, useAudiobookPlayer, type BookPlayerState } from '../lib/audiobooks/player'
 import { bookLengthMs, chaptersOf, clock, lengthText } from '../lib/audiobooks/timeline'
-import { DropboxPanel, useDropbox } from './DropboxPanel'
+import { DeleteFromDropboxDialog, DropboxButton, needsDropbox, useDropbox } from './DropboxPanel'
 import { HistoryList } from './History'
 import { Icon, IconButton } from './Icon'
 import { formatSpeed } from './Player'
@@ -65,6 +65,7 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
   const folderInput = useRef<HTMLInputElement>(null)
   const prefs = useShelfPrefs('audiobooks', 'cards')
   const dbx = useDropbox()
+  const [deleting, setDeleting] = useState<Audiobook | null>(null)
   const ab = useAudiobookPlayer()
 
   const refresh = useCallback(() => {
@@ -149,8 +150,8 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
     const actions: ShelfItem['actions'] = []
     if (!here && b.dropboxPath && localSupported())
       actions.push({ label: 'Download to this device', run: () => void job(b, 'Downloading', (p) => downloadAudiobook(b.id, p), `${b.title} is on this device`) })
-    if (here && !b.dropboxPath && dbx.signedIn)
-      actions.push({ label: 'Upload to Dropbox', run: () => void job(b, 'Uploading', (p) => uploadAudiobook(b.id, p), `${b.title} is in Dropbox`) })
+    if (here && !b.dropboxPath && !j)
+      actions.push({ label: 'Upload to Dropbox', run: () => needsDropbox(dbx.signedIn, toast, () => void job(b, 'Uploading', (p) => uploadAudiobook(b.id, p), `${b.title} is in Dropbox`)) })
     if (here || b.tracks.some((t) => t.local))
       actions.push({
         label: b.dropboxPath ? 'Remove from this device' : 'Delete',
@@ -159,6 +160,7 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
           void removeFromDevice(b.id).then(() => toast(b.dropboxPath ? `Removed ${b.title} from this device; it stays in Dropbox` : `Deleted ${b.title}`))
         },
       })
+    if (b.dropboxPath && !j) actions.push({ label: 'Delete from Dropbox', run: () => setDeleting(b) })
     return {
       key: b.id,
       title: b.title,
@@ -198,6 +200,7 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
           <h1>Audiobooks</h1>
           <span className="zim-actions">
             {dbx.signedIn ? <IconButton icon="refresh" label="Check Dropbox for new audiobooks" onClick={refresh} disabled={busy} /> : null}
+            <DropboxButton folder="Audiobooks" toast={toast} />
             <span className="ab-menu-wrap">
               <button
                 type="button"
@@ -248,7 +251,19 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
             }}
           />
         </div>
-        <DropboxPanel what="Audiobooks" toast={toast} />
+        {deleting ? (
+          <DeleteFromDropboxDialog
+            title={deleting.title}
+            keepsCopy={onDevice(deleting)}
+            onConfirm={() => {
+              const b = deleting
+              void deleteAudiobookFromDropbox(b.id)
+                .then(() => toast(`Deleted ${b.title} from Dropbox`))
+                .catch((e) => toast(e instanceof Error ? e.message : String(e)))
+            }}
+            onClose={() => setDeleting(null)}
+          />
+        ) : null}
 
         {adding ? (
           <div className="lib-list zim-jobs">

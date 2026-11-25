@@ -235,6 +235,15 @@ export async function removeFromDevice(id: string): Promise<void> {
   else await db.books.delete(id)
 }
 
+/** Deletes the book from Dropbox for every device. A copy on this device stays, as a book only here. */
+export async function deleteFromDropbox(id: string): Promise<void> {
+  const b = await db.books.get(id)
+  if (!b?.dropboxPath) return
+  await deleteFile(b.dropboxPath)
+  if (b.local) await db.books.update(id, { dropboxPath: null })
+  else await db.books.delete(id)
+}
+
 /** Deletes the book from Dropbox and this device. Positions and highlights stay. */
 export async function deleteBook(id: string): Promise<void> {
   const b = await db.books.get(id)

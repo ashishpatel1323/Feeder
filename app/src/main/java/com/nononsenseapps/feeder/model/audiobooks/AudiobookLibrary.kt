@@ -32,11 +32,12 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
-/** A download to the phone in progress: bytes done of all the book's bytes. */
+/** A download to the phone (or an upload to Dropbox, [up]) in progress: bytes done of all the book's bytes. */
 data class AudiobookJob(
     val bookId: String,
     val done: Long,
     val total: Long,
+    val up: Boolean = false,
 )
 
 /**
@@ -478,6 +479,108 @@ class AudiobookLibrary private constructor(
         var p = names.firstOrNull().orEmpty()
         for (n in names) while (p.isNotEmpty() && !n.startsWith(p)) p = p.dropLast(1)
         return p.trimEnd(' ', '-', '_', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9').trim().ifEmpty { AudiobookRules.nameWithoutExt(names.first()) }
+    }
+
+    // ---- Into and out of Dropbox ----
+
+    /**
+     * Puts a book that is only on this phone into Dropbox › Apps › Feeder › Audiobooks, for the
+     * other devices: a one-file book as that file, a book of several files as a folder named after
+     * the book, with the files as they are inside it (so Dropbox's play order is the same).
+     * Files are read where they are; nothing is copied on the phone first.
+     */
+    fun uploadToDropbox(id: String) {
+        val b = get(id) ?: return
+        if (b.dropboxPath != null || _jobs.value.containsKey(id)) return
+        _jobs.update { it + (id to AudiobookJob(id, 0, b.size, up = true)) }
+        scope.launch {
+            try {
+                val root = DropboxClient.AUDIOBOOKS_FOLDER
+                val taken =
+                    dropbox
+                        .listTree(root)
+                        .map { it.path.substring(root.length + 1).substringBefore('/').lowercase() }
+                        .toSet()
+                val single = !b.folder && b.tracks.size == 1
+                val base = if (single) b.tracks[0].name else safeName(b.title)
+                val name = freeName(base, taken, keepExt = single)
+                val bookPath = "$root/$name"
+                var before = 0L
+                val tracks =
+                    b.tracks.map { t ->
+                        val dest = if (single) bookPath else "$bookPath/${t.path.removePrefix("local:").ifBlank { t.name }}"
+                        val file = localFile(t)
+                        val progress: (Long, Long) -> Unit = { done, _ -> _jobs.update { it + (id to AudiobookJob(id, before + done, b.size, up = true)) } }
+                        val up =
+                            if (file != null) {
+                                dropbox.upload(dest, file, progress)
+                            } else {
+                                val uri = Uri.parse(t.uri ?: throw IllegalStateException("${t.name} is no longer on this phone"))
+                                dropbox.upload(dest, t.size, { from ->
+                                    val fd = context.contentResolver.openFileDescriptor(uri, "r") ?: throw IllegalStateException("Could not read ${t.name}")
+                                    android.os.ParcelFileDescriptor.AutoCloseInputStream(fd).also { it.channel.position(from) }
+                                }, progress)
+                            }
+                        before += t.size
+                        t.copy(path = up.path)
+                    }
+                patch(id) { it.copy(dropboxPath = bookPath, tracks = tracks) }
+                _messages.value = "${b.title} is in Dropbox"
+            } catch (e: Exception) {
+                Log.w(LOG_TAG, "Upload failed", e)
+                _messages.value = e.message ?: "Upload failed"
+            } finally {
+                _jobs.update { it - id }
+                _version.update { it + 1 }
+            }
+            refresh()
+        }
+    }
+
+    /**
+     * Deletes the book (its file, or its folder) from Dropbox for every device. When this phone
+     * has the files (picked here, or downloaded) the book stays, as a phone book.
+     */
+    fun deleteFromDropbox(id: String) {
+        val b = get(id) ?: return
+        val path = b.dropboxPath ?: return
+        scope.launch {
+            try {
+                dropbox.delete(path)
+                if (b.onPhone || isDownloaded(b)) {
+                    patch(id) { it.copy(dropboxPath = null) }
+                } else {
+                    coverFile(id).delete()
+                    change { list -> list.filterNot { it.id == id } }
+                }
+                _messages.value = "Deleted ${b.title} from Dropbox"
+            } catch (e: Exception) {
+                Log.w(LOG_TAG, "Could not delete ${b.title} from Dropbox", e)
+                _messages.value = e.message ?: "Could not delete from Dropbox"
+            } finally {
+                _version.update { it + 1 }
+            }
+            refresh()
+        }
+    }
+
+    private fun safeName(title: String) = title.replace(Regex("[\\\\/:*?\"<>|]"), " ").replace(Regex("\\s+"), " ").trim().trimEnd('.').ifEmpty { "Audiobook" }
+
+    /** [base], or "base (2)", "base (3)"… when Dropbox already has that name. */
+    private fun freeName(
+        base: String,
+        taken: Set<String>,
+        keepExt: Boolean,
+    ): String {
+        val ext = if (keepExt && '.' in base) "." + base.substringAfterLast('.') else ""
+        val stem = base.removeSuffix(ext)
+        var n = 1
+        var name = base
+        while (name.lowercase() in taken) {
+            n++
+            name = "$stem ($n)$ext"
+        }
+        return name
     }
 
     /** Frees the space on the phone; the book stays in Dropbox. */

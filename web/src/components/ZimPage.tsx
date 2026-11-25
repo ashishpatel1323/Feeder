@@ -31,7 +31,7 @@ import {
   type CatalogEntry,
   type ZimBook,
 } from '../lib/zim/library'
-import { DropboxPanel, useDropbox } from './DropboxPanel'
+import { DeleteFromDropboxDialog, DropboxButton, needsDropbox, useDropbox } from './DropboxPanel'
 import { Shelf, ShelfControls, useShelfPrefs, type ShelfItem } from './Shelf'
 import { HighlightBar } from './Highlights'
 import { HistoryList } from './History'
@@ -188,9 +188,9 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
     }
   }, [missingIcons])
 
-  const removeFromDropbox = async (f: DropboxFile, onDevice: boolean) => {
+  const [deleting, setDeleting] = useState<{ f: DropboxFile; onDevice: boolean } | null>(null)
+  const removeFromDropbox = async (f: DropboxFile) => {
     const name = f.name.replace(/\.zim$/i, '').replace(/_/g, ' ')
-    if (!confirm(`Delete ${name} (${formatBytes(f.size)}) from Dropbox? Your other devices can no longer download it.${onDevice ? ' The copy on this device stays.' : ''}`)) return
     try {
       await deleteFromDropbox(f)
       toast(`Deleted ${name} from Dropbox`)
@@ -212,8 +212,9 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
     ...(books ?? []).map((b): ShelfItem => {
       const remoteCopy = remote?.find((f) => sameZim(b, f))
       const actions: ShelfItem['actions'] = []
-      if (dbx.signedIn && remote && !remoteCopy) actions.push({ label: 'Upload to Dropbox', run: () => upload(b.file, b.title) })
-      if (remoteCopy) actions.push({ label: 'Delete from Dropbox', run: () => void removeFromDropbox(remoteCopy, true) })
+      const uploadingNow = jobs.some((j) => j.label === `Uploading ${b.title} to Dropbox`)
+      if ((!dbx.signedIn || remote) && !remoteCopy && !uploadingNow) actions.push({ label: 'Upload to Dropbox', run: () => needsDropbox(dbx.signedIn, toast, () => upload(b.file, b.title)) })
+      if (remoteCopy) actions.push({ label: 'Delete from Dropbox', run: () => setDeleting({ f: remoteCopy, onDevice: true }) })
       actions.push({ label: remoteCopy ? 'Remove from this device' : 'Delete', run: () => void remove(b) })
       return {
         key: `local:${b.file}`,
@@ -245,7 +246,7 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
         },
         actions: [
           ...(jobFor(f.name) ? [] : [{ label: 'Download to this device', run: () => fromDropbox(f) }]),
-          { label: 'Delete from Dropbox', run: () => void removeFromDropbox(f, false) },
+          { label: 'Delete from Dropbox', run: () => setDeleting({ f, onDevice: false }) },
         ],
       }),
     ),
@@ -268,6 +269,8 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
           </span>
           <h1>ZIM library</h1>
           <span className="zim-actions">
+            {dbx.signedIn ? <IconButton icon="refresh" label="Check Dropbox for ZIM files" onClick={refreshRemote} /> : null}
+            <DropboxButton folder="ZIM" toast={toast} />
             <button type="button" className={`mf-btn${catalog ? '' : ' primary'}`} onClick={() => setCatalog((c) => !c)} aria-expanded={catalog}>
               <Icon name="explore" size={18} />
               Get ZIM files
@@ -290,7 +293,14 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
           />
         </div>
         <p className="zim-intro muted">Whole websites to read offline, such as Wikipedia, Wiktionary, Stack Exchange or your own sites made with zimit.</p>
-        <DropboxPanel what="ZIM books" toast={toast} />
+        {deleting ? (
+          <DeleteFromDropboxDialog
+            title={deleting.f.name.replace(/\.zim$/i, '').replace(/_/g, ' ')}
+            keepsCopy={deleting.onDevice}
+            onConfirm={() => void removeFromDropbox(deleting.f)}
+            onClose={() => setDeleting(null)}
+          />
+        ) : null}
 
         {catalog ? <Catalog onDownload={download} /> : null}
 
