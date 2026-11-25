@@ -13,4 +13,6 @@ createRoot(document.getElementById('root')!).render(
 if ('serviceWorker' in navigator) {
   const script = import.meta.env.PROD ? '/sw.js' : '/sw.js?dev=1'
   window.addEventListener('load', () => navigator.serviceWorker.register(script).catch(() => undefined))
+  // The worker asks this window for the pages of ZIM books (offline websites) kept on the device
+  void import('./lib/zim/library').then((m) => m.serveZimToServiceWorker())
 }

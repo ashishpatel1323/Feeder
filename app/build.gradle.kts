@@ -220,6 +220,18 @@ android {
         }
 
         jniLibs {
+            // libkiwix: the ZIM tab only needs libzim (the Kiwix server and library parts are 28 MB
+            // per ABI), and only on the ABIs whisper.cpp is built for
+            excludes.addAll(
+                listOf(
+                    "**/libkiwix.so",
+                    "**/libkiwix_wrapper.so",
+                    "lib/armeabi-v7a/libzim.so",
+                    "lib/armeabi-v7a/libzim_wrapper.so",
+                    "lib/x86/libzim.so",
+                    "lib/x86/libzim_wrapper.so",
+                ),
+            )
             // youtubedl-android runs its bundled Python as a program, which needs the native
             // libraries extracted to disk
             useLegacyPackaging = true
@@ -276,6 +288,7 @@ ktlint {
 
 dependencies {
     implementation(libs.media3.exoplayer)
+    implementation(libs.kiwix.libkiwix)
     // On-device summaries with Gemini Nano (fork only: proprietary Google library)
     implementation(libs.mlkit.genai.prompt)
     implementation(libs.mlkit.genai.summarization)

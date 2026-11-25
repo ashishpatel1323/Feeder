@@ -2,16 +2,17 @@ import { useEffect } from 'react'
 import { Icon, IconButton, type IconName } from './Icon'
 
 /**
- * The four places, as on Android: Feeds (Latest or By feed), Discover, Playlists and Library.
+ * The five places, as on Android: Feeds (Latest or By feed), Discover, Playlists, Library and ZIM.
  * Search is not a tab: ⌘K, /, and the "Search everything" bars open it.
  */
-export type Tab = 'feeds' | 'discover' | 'playlists' | 'library'
+export type Tab = 'feeds' | 'discover' | 'playlists' | 'library' | 'zim'
 
 export const TABS: { tab: Tab; label: string; icon: IconName; key: string; hint: string }[] = [
   { tab: 'feeds', label: 'Feeds', icon: 'dynamicFeed', key: 'f', hint: 'Latest and By feed' },
   { tab: 'discover', label: 'Discover', icon: 'explore', key: 'd', hint: 'Find new feeds, podcasts and channels' },
   { tab: 'playlists', label: 'Playlists', icon: 'queue', key: 'p', hint: 'Smart and hand-made playlists' },
   { tab: 'library', label: 'Library', icon: 'library', key: 'l', hint: 'Saved, Highlights and Downloads' },
+  { tab: 'zim', label: 'ZIM', icon: 'public', key: 'z', hint: 'Offline websites such as Wikipedia' },
 ]
 
 export const tabKeys = (t: Tab) => `G then ${TABS.find((x) => x.tab === t)!.key.toUpperCase()}`
@@ -86,7 +87,7 @@ export function SearchEverything({ onSearch }: { onSearch: () => void }) {
   )
 }
 
-/** G then F / D / P / L switches tabs, when not typing (as in Gmail). */
+/** G then F / D / P / L / Z switches tabs, when not typing (as in Gmail). */
 export function useTabShortcuts(onTab: (t: Tab) => void, disabled: boolean) {
   useEffect(() => {
     if (disabled) return

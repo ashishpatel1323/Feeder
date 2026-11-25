@@ -47,6 +47,8 @@ import com.nononsenseapps.feeder.ui.compose.navigation.SearchFeedDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.SettingsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.SyncScreenDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.TextSettingsDestination
+import com.nononsenseapps.feeder.ui.compose.navigation.ZimDestination
+import com.nononsenseapps.feeder.ui.compose.navigation.ZimReaderDestination
 import com.nononsenseapps.feeder.ui.compose.playlists.AddToPlaylistHost
 import com.nononsenseapps.feeder.ui.compose.utils.withAllProviders
 import com.nononsenseapps.feeder.util.isLanLocalAddress
@@ -225,6 +227,8 @@ class MainActivity : DIAwareComponentActivity() {
                 PlaylistsDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
                 HighlightsDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
                 LibraryDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
+                ZimDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
+                ZimReaderDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
             }
         }
         // "Playlist" on any article, episode or video opens this sheet

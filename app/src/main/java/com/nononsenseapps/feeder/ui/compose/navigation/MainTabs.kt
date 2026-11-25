@@ -21,11 +21,13 @@ import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.filled.DynamicFeed
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.outlined.DynamicFeed
 import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -65,6 +67,7 @@ enum class MainTab {
     DISCOVER,
     PLAYLISTS,
     LIBRARY,
+    ZIM,
 }
 
 /** Which tab a screen belongs to, or null for screens that show no bottom bar (reader, settings, search...). */
@@ -76,6 +79,7 @@ fun NavBackStackEntry.mainTab(): MainTab? =
         DiscoverDestination.route -> MainTab.DISCOVER
         PlaylistsDestination.route -> MainTab.PLAYLISTS
         LibraryDestination.route, DownloadsDestination.route, HighlightsDestination.route -> MainTab.LIBRARY
+        ZimDestination.route -> MainTab.ZIM
         else -> null
     }
 
@@ -87,6 +91,7 @@ fun NavBackStackEntry.wantsSharedMiniPlayer(): Boolean =
         LibraryDestination.route,
         DownloadsDestination.route,
         HighlightsDestination.route,
+        ZimDestination.route,
         -> true
         else -> false
     }
@@ -140,6 +145,7 @@ fun NavController.openTab(
             MainTab.DISCOVER -> DiscoverDestination.route
             MainTab.PLAYLISTS -> "playlists"
             MainTab.LIBRARY -> LibraryDestination.route
+            MainTab.ZIM -> ZimDestination.route
             MainTab.FEEDS -> HomeDestination.route
         }
     if (tab == current) {
@@ -180,6 +186,7 @@ private fun MainTab.look(): Triple<ImageVector, ImageVector, Int> =
         MainTab.DISCOVER -> Triple(Icons.Filled.Explore, Icons.Outlined.Explore, R.string.discover)
         MainTab.PLAYLISTS -> Triple(Icons.AutoMirrored.Filled.QueueMusic, Icons.AutoMirrored.Outlined.QueueMusic, R.string.playlists)
         MainTab.LIBRARY -> Triple(Icons.Filled.VideoLibrary, Icons.Outlined.VideoLibrary, R.string.tab_library)
+        MainTab.ZIM -> Triple(Icons.Filled.Public, Icons.Outlined.Public, R.string.tab_zim)
     }
 
 /** What the tab screens need from the app shell, so they don't each take these as parameters. */
