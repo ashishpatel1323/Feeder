@@ -33,10 +33,14 @@ fun itemSeconds(
         else -> mediaSeconds(knownLength, enclosureDuration, positionLength)
     }
 
-/** Where an episode or video was left. */
+/**
+ * Where an episode or video was left. [otherDevice] says who left it there when another device
+ * saved it last, such as "on Pixel 8, 2h ago" (null for progress made on this device).
+ */
 data class ItemProgress(
     val positionSeconds: Long,
     val lengthSeconds: Long,
+    val otherDevice: String? = null,
 ) {
     /** 0..1, or 0 when the length is not known. */
     val fraction: Float

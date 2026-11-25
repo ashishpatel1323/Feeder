@@ -3,7 +3,9 @@ package com.nononsenseapps.feeder.model.youtube
 import android.app.Application
 import android.content.Context
 import androidx.compose.runtime.Immutable
+import com.nononsenseapps.feeder.sync2.DeviceStamp
 import com.nononsenseapps.feeder.sync2.SyncNudge
+import com.nononsenseapps.feeder.sync2.ThisDevice
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -11,15 +13,21 @@ import org.kodein.di.DI
 import org.kodein.di.DIAware
 import org.kodein.di.instance
 import org.kodein.di.instanceOrNull
+import java.net.URLDecoder
+import java.net.URLEncoder
 import kotlin.math.max
 import kotlin.math.roundToInt
 
-/** Where a YouTube video was left: [t] seconds watched of [d] (0 = length not known), saved at [ts]. */
+/**
+ * Where a YouTube video was left: [t] seconds watched of [d] (0 = length not known), saved at [ts]
+ * by [by] (empty when not known).
+ */
 @Immutable
 data class VideoPos(
     val t: Int,
     val d: Int,
     val ts: Long,
+    val by: DeviceStamp = DeviceStamp.NONE,
 )
 
 /**
@@ -67,7 +75,7 @@ class VideoPositions(
         if (key.isBlank() || !t.isFinite() || t < 0) return false
         ensureLoaded()
         val old = _all.value[key]
-        val next = nextPos(old, t, d, now) ?: return false
+        val next = nextPos(old, t, d, now)?.copy(by = ThisDevice.get(app).stamp()) ?: return false
         put(key, next)
         syncNudge?.changed(positionOnly = true)
         return true
@@ -80,12 +88,13 @@ class VideoPositions(
         t: Double,
         d: Double,
         ts: Long,
+        by: DeviceStamp = DeviceStamp.NONE,
     ) {
         if (key.isBlank() || !t.isFinite() || t < 0) return
         ensureLoaded()
         val local = _all.value[key]
         if (local != null && local.ts > ts) return
-        put(key, VideoPos(t.roundToInt(), if (d.isFinite() && d > 0) d.roundToInt() else 0, ts))
+        put(key, VideoPos(t.roundToInt(), if (d.isFinite() && d > 0) d.roundToInt() else 0, ts, by))
     }
 
     private fun put(
@@ -150,15 +159,27 @@ class VideoPositions(
                 else -> formatClock(p.t)
             }
 
-        internal fun encode(p: VideoPos): String = "${p.t}|${p.d}|${p.ts}"
+        // "t|d|ts", plus "|id|name" (URL-encoded) when the device is known
+        internal fun encode(p: VideoPos): String =
+            if (p.by.known) {
+                "${p.t}|${p.d}|${p.ts}|${URLEncoder.encode(p.by.id, "UTF-8")}|${URLEncoder.encode(p.by.name, "UTF-8")}"
+            } else {
+                "${p.t}|${p.d}|${p.ts}"
+            }
 
         internal fun decode(s: String): VideoPos? {
             val parts = s.split('|')
-            if (parts.size != 3) return null
+            if (parts.size != 3 && parts.size != 5) return null
             return VideoPos(
                 t = parts[0].toIntOrNull() ?: return null,
                 d = parts[1].toIntOrNull() ?: 0,
                 ts = parts[2].toLongOrNull() ?: 0,
+                by =
+                    if (parts.size == 5) {
+                        runCatching { DeviceStamp(URLDecoder.decode(parts[3], "UTF-8"), URLDecoder.decode(parts[4], "UTF-8")) }.getOrDefault(DeviceStamp.NONE)
+                    } else {
+                        DeviceStamp.NONE
+                    },
             )
         }
 

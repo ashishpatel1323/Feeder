@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Feed } from '../lib/db'
 import { addFeed, deleteFeed, exportOpml, importOpml, refreshFeeds } from '../lib/refresh'
+import { autoDeviceName, deviceName, setDeviceName } from '../lib/device'
 import { addDeviceLink, createSync, forceSync, getSyncState, joinSync, leaveSync, syncNow } from '../lib/sync2'
 import { parseJoinLink } from '../lib/crypto'
 import { getAccessToken, health, setAccessToken } from '../lib/api'
@@ -321,6 +322,7 @@ function SyncSection({ toast }: { toast: (m: string) => void }) {
         Sync is on: feeds, read marks, Saved, deleted articles, feed order, playlists, highlights and where episodes and videos were left.
         {state.lastSyncAt ? ` Last synced ${new Date(state.lastSyncAt).toLocaleString()}.` : ''}
       </p>
+      <DeviceNameField />
       {state.fromChain ? <p className="muted small">Moved over from Feeder's old sync chain, with the same link and key.</p> : null}
       {state.lastError ? <p className="error small">Last sync failed: {state.lastError}</p> : null}
       {error ? <p className="error">{error}</p> : null}
@@ -357,6 +359,27 @@ function SyncSection({ toast }: { toast: (m: string) => void }) {
         </div>
       ) : null}
     </section>
+  )
+}
+
+/** This device's name, shown on progress other devices see ("42% played on Chrome on Mac, 2h ago"). */
+function DeviceNameField() {
+  const [name, setName] = useState(() => deviceName())
+  return (
+    <label>
+      This device's name
+      <input
+        value={name}
+        maxLength={40}
+        placeholder={autoDeviceName()}
+        onChange={(e) => setName(e.target.value)}
+        onBlur={() => {
+          setDeviceName(name)
+          setName(deviceName())
+        }}
+      />
+      <span className="muted small">Other devices show it next to progress made here, such as “42% played on {deviceName()}”.</span>
+    </label>
   )
 }
 

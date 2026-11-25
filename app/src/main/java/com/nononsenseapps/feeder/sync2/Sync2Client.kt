@@ -80,6 +80,11 @@ class Sync2Client(
     private val playlistStore: PlaylistStore by instance()
     private val highlightStore: HighlightStore by instance()
     private val bookPositions: BookPositions by instance()
+    private val app: android.app.Application by instance()
+    private val thisDevice by lazy { ThisDevice.get(app) }
+
+    // Synced positions whose episode isn't on this phone yet (see copyWaitingEpisodePositionsIn)
+    private val waitingPositions = mutableSetOf<String>()
     private val dropbox: DropboxClient by instance()
     private val mutex = Mutex()
 
@@ -342,9 +347,19 @@ class Sync2Client(
                 val (t, d, ts) = stamped[k.id] ?: continue
                 val key = "${k.feedUrl}\n${k.guid}"
                 val synced = videoPositions.get(key)
-                if (synced == null || synced.ts < ts) videoPositions.applyRemote(key, t.toDouble(), d.toDouble(), ts)
+                val by = playlistStore.positionDevices.value[k.id] ?: thisDevice.stamp()
+                if (synced == null || synced.ts < ts) videoPositions.applyRemote(key, t.toDouble(), d.toDouble(), ts, by)
             }
         }
+    }
+
+    /**
+     * After feeds were fetched: positions that arrived before their episode was here (a feed new on
+     * this phone, a new episode) go to the podcast player's store now. Kept ones are skipped there.
+     */
+    suspend fun copyWaitingEpisodePositionsIn() {
+        val keys = synchronized(waitingPositions) { waitingPositions.toSet().also { waitingPositions.clear() } }
+        if (keys.isNotEmpty()) copyEpisodePositions(keys)
     }
 
     /** Positions from other devices for episodes this device has go to the podcast player's store. */
@@ -352,15 +367,23 @@ class Sync2Client(
         val known = dao.getKnown(EPISODES_COPIED_KEY)
         // The first time, every position synced so far (the web app has always sent episodes)
         val keys = if (known == null) videoPositions.all.value.keys else arrivedPositions.toSet()
+        copyEpisodePositions(keys)
+        if (known == null) dao.upsertKnown(listOf(Sync2Known(EPISODES_COPIED_KEY, "true", System.currentTimeMillis())))
+        arrivedPositions.clear()
+    }
+
+    private suspend fun copyEpisodePositions(keys: Set<String>) {
         for (key in keys) {
             val pos = videoPositions.get(key) ?: continue
             val cut = key.indexOf('\n')
             if (cut <= 0) continue
-            val id = dao.getEpisodeId(key.substring(0, cut), key.substring(cut + 1)) ?: continue
-            playlistStore.applyRemotePosition(id, pos.t.toLong(), pos.d.toLong(), pos.ts)
+            val id = dao.getEpisodeId(key.substring(0, cut), key.substring(cut + 1))
+            if (id == null) {
+                synchronized(waitingPositions) { if (waitingPositions.size < 500) waitingPositions += key }
+                continue
+            }
+            playlistStore.applyRemotePosition(id, pos.t.toLong(), pos.d.toLong(), pos.ts, pos.by, thisDevice.id)
         }
-        if (known == null) dao.upsertKnown(listOf(Sync2Known(EPISODES_COPIED_KEY, "true", System.currentTimeMillis())))
-        arrivedPositions.clear()
     }
 
     private suspend fun post(body: ExchangeRequest): ExchangeResponse =
@@ -469,7 +492,7 @@ class Sync2Client(
         val knownVideos = dao.getKnownWithPrefix("video\n").associateBy { it.k.removePrefix("video\n") }
         for ((key, pos) in videoPositions.all.value) {
             val kn = knownVideos[key]
-            val value = linkedMapOf<String, Any?>("t" to pos.t, "d" to pos.d)
+            val value = linkedMapOf<String, Any?>("t" to pos.t, "d" to pos.d).putStamp(pos.by)
             if (kn == null || pos.ts > kn.ts) {
                 out += Pending("video", key, value, maxOf(pos.ts, (kn?.ts ?: 0) + 1))
             }
@@ -480,7 +503,7 @@ class Sync2Client(
         for ((id, pos) in bookPositions.all.value) {
             val kn = knownBooks[id]
             if (kn == null || pos.ts > kn.ts) {
-                out += Pending("bookpos", id, linkedMapOf<String, Any?>("cfi" to pos.cfi, "f" to pos.f), maxOf(pos.ts, (kn?.ts ?: 0) + 1))
+                out += Pending("bookpos", id, linkedMapOf<String, Any?>("cfi" to pos.cfi, "f" to pos.f).apply { if (pos.n > 0) putAll(listOf("p" to pos.p, "n" to pos.n)) }.putStamp(pos.by), maxOf(pos.ts, (kn?.ts ?: 0) + 1))
             }
         }
 
@@ -628,7 +651,7 @@ class Sync2Client(
                     if (v is Map<*, *>) {
                         val t = (v["t"] as? Number)?.toDouble()
                         if (t != null) {
-                            videoPositions.applyRemote(key, t, (v["d"] as? Number)?.toDouble() ?: 0.0, ts)
+                            videoPositions.applyRemote(key, t, (v["d"] as? Number)?.toDouble() ?: 0.0, ts, DeviceStamp.fromMap(v))
                             arrivedPositions += key
                         }
                     }
@@ -659,7 +682,7 @@ class Sync2Client(
                 "bookpos" -> {
                     if (v is Map<*, *>) {
                         val cfi = v["cfi"] as? String
-                        if (!cfi.isNullOrBlank()) bookPositions.applyRemote(key, cfi, (v["f"] as? Number)?.toDouble() ?: 0.0, ts)
+                        if (!cfi.isNullOrBlank()) bookPositions.applyRemote(key, cfi, (v["f"] as? Number)?.toDouble() ?: 0.0, ts, DeviceStamp.fromMap(v), (v["p"] as? Number)?.toInt() ?: 0, (v["n"] as? Number)?.toInt() ?: 0)
                     }
                 }
 

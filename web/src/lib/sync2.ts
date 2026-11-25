@@ -22,6 +22,7 @@
  * The device remembers the last value it exchanged for every record (db.syncKnown). A sync
  * sends whatever differs locally, then applies what other devices changed.
  */
+import type { DeviceStamp } from './device'
 import { offlineNow } from './settings'
 import { apiHeaders, HttpError } from './api'
 import { b64encode, decodeKey, decryptString, encryptString, type SecretKeys } from './crypto'
@@ -93,6 +94,12 @@ export interface BookPosValue {
   cfi: string
   /** 0–1 through the book */
   f: number
+  /** Page and pages, when known (library.ts pageNumbers) */
+  p?: number
+  n?: number
+  /** Device that saved it (device.ts), left out by older versions */
+  dv?: string
+  dn?: string
 }
 
 export const DROPBOX_RECORD_KEY = 'main'
@@ -102,6 +109,9 @@ export interface VideoValue {
   t: number
   /** Video length in seconds, 0 when not known */
   d: number
+  /** Device that saved it (device.ts), left out by older versions */
+  dv?: string
+  dn?: string
 }
 
 /**
@@ -359,6 +369,16 @@ async function layoutValue(): Promise<LayoutValue> {
 }
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
+
+/** A book position's page fields, only when both are there. */
+function pagesOf(p: { p?: unknown; n?: unknown }): { p?: number; n?: number } {
+  return typeof p.p === 'number' && typeof p.n === 'number' && p.n > 0 ? { p: p.p, n: p.n } : {}
+}
+
+/** The device fields of a position, only when both are there (older versions send neither). */
+function stampOf(p: { dv?: unknown; dn?: unknown }): DeviceStamp {
+  return typeof p.dv === 'string' && p.dv && typeof p.dn === 'string' && p.dn ? { dv: p.dv, dn: p.dn } : {}
+}
 const isDeleted = (v: unknown) => !!v && typeof v === 'object' && (v as { deleted?: boolean }).deleted === true
 /** Known value of a record seen but never exchanged (moving over from the old chain, Force sync). */
 const isPlaceholder = (v: unknown) => !!v && typeof v === 'object' && (v as { known?: boolean }).known === true
@@ -476,7 +496,7 @@ export async function collectChanges(now = Date.now()): Promise<Pending[]> {
   const knownVideos = await db.syncKnown.bulkGet(videos.map((v) => knownKey('video', v.id)))
   videos.forEach((v, n) => {
     const kn = knownVideos[n]
-    const value: VideoValue = { t: v.t, d: v.d }
+    const value: VideoValue = { t: v.t, d: v.d, ...stampOf(v) }
     if (!kn || (v.ts > kn.ts && !same(kn.v, value))) out.push({ k: 'video', key: v.id, v: value, ts: Math.max(v.ts, (kn?.ts ?? 0) + 1) })
   })
 
@@ -485,7 +505,7 @@ export async function collectChanges(now = Date.now()): Promise<Pending[]> {
   const knownPos = await db.syncKnown.bulkGet(positions.map((p) => knownKey('bookpos', p.id)))
   positions.forEach((p, n) => {
     const kn = knownPos[n]
-    const value: BookPosValue = { cfi: p.cfi, f: p.f }
+    const value: BookPosValue = { cfi: p.cfi, f: p.f, ...pagesOf(p), ...stampOf(p) }
     if (!kn || (p.ts > kn.ts && !same(kn.v, value))) out.push({ k: 'bookpos', key: p.id, v: value, ts: Math.max(p.ts, (kn?.ts ?? 0) + 1) })
   })
 
@@ -576,7 +596,7 @@ export async function applyRemote(p: Payload, ts: number, result: ApplyResult): 
         if (v && typeof v.t === 'number' && Number.isFinite(v.t)) {
           const local = await db.videoPos.get(p.key)
           if (!local || local.ts <= ts) {
-            await db.videoPos.put({ id: p.key, t: v.t, d: typeof v.d === 'number' && Number.isFinite(v.d) ? v.d : 0, ts })
+            await db.videoPos.put({ id: p.key, t: v.t, d: typeof v.d === 'number' && Number.isFinite(v.d) ? v.d : 0, ts, ...stampOf(v) })
           }
         }
         break
@@ -610,7 +630,7 @@ export async function applyRemote(p: Payload, ts: number, result: ApplyResult): 
         if (v && typeof v.cfi === 'string' && v.cfi) {
           const local = await db.bookPos.get(p.key)
           if (!local || local.ts <= ts) {
-            await db.bookPos.put({ id: p.key, cfi: v.cfi, f: typeof v.f === 'number' && Number.isFinite(v.f) ? v.f : 0, ts })
+            await db.bookPos.put({ id: p.key, cfi: v.cfi, f: typeof v.f === 'number' && Number.isFinite(v.f) ? v.f : 0, ts, ...pagesOf(v), ...stampOf(v) })
           }
         }
         break

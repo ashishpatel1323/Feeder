@@ -72,6 +72,8 @@ import com.nononsenseapps.feeder.model.ebooks.Book
 import com.nononsenseapps.feeder.model.ebooks.BookPositions
 import com.nononsenseapps.feeder.model.ebooks.EbookLibrary
 import com.nononsenseapps.feeder.sync2.SyncNudge
+import com.nononsenseapps.feeder.sync2.ThisDevice
+import com.nononsenseapps.feeder.sync2.otherDeviceText
 import com.nononsenseapps.feeder.ui.compose.shelf.CoverShape
 import com.nononsenseapps.feeder.ui.compose.shelf.ShelfAction
 import com.nononsenseapps.feeder.ui.compose.shelf.ShelfControls
@@ -99,6 +101,7 @@ fun EbooksScreen(
     val nudge: SyncNudge by di.instance()
     val library = remember { EbookLibrary.get(context) }
     val positions = remember { BookPositions.get(context) }
+    val thisDeviceId = remember { ThisDevice.get(context).id }
     val dropbox = remember { DropboxClient.get(context) }
     val books by library.books.collectAsState()
     val jobs by library.jobs.collectAsState()
@@ -141,13 +144,15 @@ fun EbooksScreen(
     val noBooksHere = stringResource(R.string.shelf_no_books_here)
     val items =
         sorted.map { b ->
-            val f = pos[b.id]?.f
+            val p = pos[b.id]
+            val f = p?.f
+            val byOther = p?.let { otherDeviceText(it.by, it.ts, thisDeviceId) }
             val job = jobs.firstOrNull { it.key == "down:${b.id}" }
             ShelfItem(
                 key = b.id,
                 title = b.title,
                 subtitle = b.author,
-                detail = listOf(f?.let { "${(it * 100).roundToInt()}%" } ?: newLabel, b.ext.uppercase(), Formatter.formatShortFileSize(context, b.size)).joinToString(" · "),
+                detail = listOf(f?.let { (if (p.n > 0) "${p.p} of ${p.n} pages" else "${(it * 100).roundToInt()}%") + (byOther?.let { w -> " $w" } ?: "") } ?: newLabel, b.ext.uppercase(), Formatter.formatShortFileSize(context, b.size)).joinToString(" · "),
                 cover = covers[b.id],
                 fallback = Icons.AutoMirrored.Outlined.MenuBook,
                 where = if (!b.local) Where.CLOUD else if (b.dropboxPath != null) Where.BOTH else Where.DEVICE,

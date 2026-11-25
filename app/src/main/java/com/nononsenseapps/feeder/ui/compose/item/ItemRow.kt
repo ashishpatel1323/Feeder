@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
@@ -50,6 +52,8 @@ import com.nononsenseapps.feeder.model.playlists.ItemProgress
 import com.nononsenseapps.feeder.model.playlists.PlaylistStore
 import com.nononsenseapps.feeder.model.playlists.lengthText
 import com.nononsenseapps.feeder.model.youtube.VideoPositions
+import com.nononsenseapps.feeder.sync2.ThisDevice
+import com.nononsenseapps.feeder.sync2.otherDeviceText
 import com.nononsenseapps.feeder.ui.compose.feed.PlainTooltipBox
 import com.nononsenseapps.feeder.ui.compose.theme.FeederTokens
 import org.kodein.di.compose.LocalDI
@@ -72,7 +76,10 @@ data class ItemRowModel(
     val progress: ItemProgress? = null,
 )
 
-/** Where an episode or video was left: the playlist/podcast positions, then YouTube's. */
+/**
+ * Where an episode or video was left: the playlist/podcast positions, then YouTube's (whichever
+ * is newer when both are known), with the other device that saved it last.
+ */
 @Composable
 fun rememberItemProgress(
     itemId: Long,
@@ -81,12 +88,19 @@ fun rememberItemProgress(
     val di = LocalDI.current
     val playlistStore: PlaylistStore by di.instance()
     val videoPositions: VideoPositions by di.instance()
+    val context = LocalContext.current
+    val me = remember { ThisDevice.get(context).id }
     val positions by playlistStore.positions.collectAsState()
+    val devices by playlistStore.positionDevices.collectAsState()
     val videos by videoPositions.all.collectAsState()
-    positions[itemId]?.let { (pos, len) -> if (pos > 0) return ItemProgress(pos, len) }
-    if (videoKey.isNotEmpty()) {
-        videos[videoKey]?.let { return ItemProgress(it.t.toLong(), it.d.toLong()) }
+    val video = if (videoKey.isNotEmpty()) videos[videoKey] else null
+    positions[itemId]?.let { (pos, len) ->
+        val ts = playlistStore.positionTime(itemId)
+        if (pos > 0 && (video == null || video.ts <= ts)) {
+            return ItemProgress(pos, len, otherDeviceText(devices[itemId], ts, me))
+        }
     }
+    video?.let { return ItemProgress(it.t.toLong(), it.d.toLong(), otherDeviceText(it.by, it.ts, me)) }
     return null
 }
 

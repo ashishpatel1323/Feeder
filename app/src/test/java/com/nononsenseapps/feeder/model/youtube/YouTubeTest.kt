@@ -1,6 +1,10 @@
 package com.nononsenseapps.feeder.model.youtube
 
+import com.nononsenseapps.feeder.sync2.DeviceStamp
 import com.nononsenseapps.feeder.sync2.Sync2Client
+import com.nononsenseapps.feeder.sync2.agoText
+import com.nononsenseapps.feeder.sync2.otherDeviceText
+import com.nononsenseapps.feeder.sync2.putStamp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -65,6 +69,31 @@ class YouTubeTest {
         val p = VideoPos(252, 859, 1_700_000_000_000)
         assertEquals(p, VideoPositions.decode(VideoPositions.encode(p)))
         assertNull(VideoPositions.decode("garbage"))
+        // With the device that saved it, names with | and spaces included
+        val q = VideoPos(252, 859, 1_700_000_000_000, DeviceStamp("abc-1", "Ashish's Pixel | 8"))
+        assertEquals(q, VideoPositions.decode(VideoPositions.encode(q)))
+        // Saved before devices were known
+        assertEquals(DeviceStamp.NONE, VideoPositions.decode("252|859|1")?.by)
+    }
+
+    @Test
+    fun namesTheOtherDeviceOnly() {
+        val pixel = DeviceStamp("phone-1", "Pixel 8")
+        assertEquals("on Pixel 8, 2h ago", otherDeviceText(pixel, 0, "mac-1", now = 2 * 3_600_000L))
+        assertNull(otherDeviceText(pixel, 0, "phone-1", now = 1000))
+        assertNull(otherDeviceText(DeviceStamp.NONE, 0, "mac-1", now = 1000))
+        assertEquals("just now", agoText(0, 30_000))
+        assertEquals("5 min ago", agoText(0, 5 * 60_000L))
+        assertEquals("3d ago", agoText(0, 3 * 86_400_000L))
+    }
+
+    @Test
+    fun syncedPositionCarriesDevice() {
+        val v = linkedMapOf<String, Any?>("t" to 1, "d" to 2).putStamp(DeviceStamp("phone-1", "Pixel 8"))
+        assertEquals(listOf("t", "d", "dv", "dn"), v.keys.toList())
+        assertEquals(DeviceStamp("phone-1", "Pixel 8"), DeviceStamp.fromMap(v))
+        assertEquals(DeviceStamp.NONE, DeviceStamp.fromMap(mapOf("t" to 1)))
+        assertEquals(listOf("t"), linkedMapOf<String, Any?>("t" to 1).putStamp(DeviceStamp.NONE).keys.toList())
     }
 
     @Test

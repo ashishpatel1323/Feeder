@@ -7,6 +7,7 @@ import type { Item } from './db'
 import { readingMinutes, wordsOf } from './listquery'
 import { ITEM_KIND_LABELS, itemSeconds, kindOf, type ItemKind, type PlaylistContext } from './playlists'
 import { formatClock, isWatched } from './videopos'
+import { otherDeviceText } from './device'
 
 export const KIND_LABELS = ITEM_KIND_LABELS
 
@@ -17,7 +18,10 @@ export interface ItemFacts {
   badge: string
   /** Length in words for the meta line: "4 min read", "24 min", "19 min left". */
   lengthText: string
-  /** How much of an episode or video was played: "42% played", "100% watched"; '' when not started. */
+  /**
+   * How much of an episode or video was played: "42% played", "100% watched"; '' when not started.
+   * When another device saved it last: "42% played on Pixel 8, 2h ago".
+   */
   percentText: string
   /** 0..1 when an episode or video was started and not finished, else null. */
   progress: number | null
@@ -50,6 +54,8 @@ export function itemFacts(item: Item, ctx: PlaylistContext): ItemFacts {
   let percentText = ''
   if (done) percentText = `100% ${doneWord}`
   else if (started && seconds) percentText = `${Math.min(99, Math.max(1, Math.floor((pos!.t / seconds) * 100)))}% ${doneWord}`
+  const where = percentText && pos ? otherDeviceText({ ts: pos.ts ?? 0, dv: pos.dv, dn: pos.dn }, ctx.now) : ''
+  if (where) percentText = `${percentText} ${where}`
   return {
     kind,
     kindLabel,

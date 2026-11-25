@@ -16,7 +16,7 @@ import type { FoliateView, Location, TocItem } from '../vendor/foliate-js/view.j
 import { Overlayer } from '../vendor/foliate-js/overlayer.js'
 import { authorString, bookCss, injectCsp, langString, type ReaderPrefs } from '../lib/ebooks/reader'
 import { indexText, rangeFor, type TextIndex } from './textindex'
-import { atEnd, atStart, drawFixedHighlights, markFixedPage, readableContent, redrawFixedHighlights, nextSection, prevSection, reveal, setStyles } from '../lib/ebooks/nav'
+import { atEnd, atStart, drawFixedHighlights, markFixedPage, readableContent, redrawFixedHighlights, nextSection, pageNumbers, prevSection, reveal, setStyles } from '../lib/ebooks/nav'
 
 interface Bridge {
   onOpened(json: string): void
@@ -135,6 +135,8 @@ function listen(v: FoliateView) {
       JSON.stringify({
         cfi: l.cfi,
         fraction: Number.isFinite(l.fraction) ? l.fraction : 0,
+        // Page x of y, the same on every device (see pageNumbers)
+        ...(pageNumbers(l, v.isFixedLayout) ?? {}),
         chapter: l.tocItem?.label?.trim() ?? '',
         atStart: atStart(v),
         atEnd: atEnd(v),

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { newFeed, type Item } from '../db'
 import { itemFacts } from '../itemview'
+import { deviceId } from '../device'
 import { makeContext } from '../playlists'
 
 let n = 0
@@ -8,7 +9,7 @@ function item(p: Partial<Item> = {}): Item {
   n++
   return { id: `f\n${n}`, feedUrl: 'f', guid: String(n), title: `t${n}`, link: null, contentHtml: '', snippet: '', imageUrl: null, author: null, sortTime: 0, firstSeen: 0, wordCount: 880, read: 0, readTime: null, readSynced: 1, saved: 0, ...p }
 }
-const ctx = (positions: [string, { t: number; d: number }][] = []) => makeContext({ feeds: new Map([['f', newFeed('f')]]), positions: new Map(positions) })
+const ctx = (positions: [string, { t: number; d: number; ts?: number; dv?: string; dn?: string }][] = []) => makeContext({ feeds: new Map([['f', newFeed('f')]]), positions: new Map(positions) })
 
 describe('itemFacts', () => {
   it('gives articles their reading time and Read', () => {
@@ -28,6 +29,15 @@ describe('itemFacts', () => {
     expect(f.percentText).toBe('20% played')
     expect(f.primaryLabel).toBe('Resume')
     expect(f.progress).toBeCloseTo(0.2)
+  })
+
+  it('names the other device that played it last', () => {
+    const it = item({ enclosureUrl: 'https://x/ep.mp3', duration: 1500 })
+    const c = ctx([[it.id, { t: 300, d: 1500, ts: 0, dv: 'phone-1', dn: 'Pixel 8' }]])
+    c.now = 2 * 3_600_000
+    expect(itemFacts(it, c).percentText).toBe('20% played on Pixel 8, 2h ago')
+    const mine = ctx([[it.id, { t: 300, d: 1500, ts: 0, dv: deviceId(), dn: 'Mine' }]])
+    expect(itemFacts(it, mine).percentText).toBe('20% played')
   })
 
   it('calls a YouTube item a video, with Watch and Mark watched', () => {

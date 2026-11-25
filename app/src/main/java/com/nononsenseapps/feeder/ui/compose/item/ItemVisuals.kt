@@ -126,7 +126,9 @@ fun percentPlayedLabel(
 ): String? {
     if (kind == ItemKind.ARTICLE) return null
     val percent = percentPlayed(progress, lengthSeconds) ?: return null
-    return stringResource(if (kind == ItemKind.YOUTUBE) R.string.item_percent_watched else R.string.item_percent_played, percent)
+    val label = stringResource(if (kind == ItemKind.YOUTUBE) R.string.item_percent_watched else R.string.item_percent_played, percent)
+    // "42% played on Pixel 8, 2h ago" when another device left it there
+    return progress?.otherDevice?.let { "$label $it" } ?: label
 }
 
 /** The badge on a thumbnail: "mm:ss" for audio and video, "N min" for articles. */

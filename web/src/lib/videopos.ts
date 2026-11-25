@@ -3,6 +3,7 @@
  * Synced to other devices as the "video" record kind (sync2.ts), newest wins.
  */
 import { db, type VideoPos } from './db'
+import { thisDevice } from './device'
 
 /** Resume this many seconds before where the video was left. */
 export const RESUME_BACK = 3
@@ -31,7 +32,7 @@ export async function saveVideoPos(id: string, t: number, d: number, now = Date.
     const old = await db.videoPos.get(id)
     if (!old && time < MIN_SAVE) return
     if (old && old.t === time && (old.d === dur || !dur)) return
-    await db.videoPos.put({ id, t: time, d: dur || old?.d || 0, ts: Math.max(now, (old?.ts ?? 0) + 1) })
+    await db.videoPos.put({ id, t: time, d: dur || old?.d || 0, ts: Math.max(now, (old?.ts ?? 0) + 1), ...thisDevice() })
   })
 }
 

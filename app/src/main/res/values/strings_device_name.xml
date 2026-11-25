@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Sync screen: this device's name, shown on progress other devices see -->
+    <string name="this_device_name">This device\'s name</string>
+    <string name="this_device_name_help">Other devices show it next to progress made here, such as “42%% played on %1$s, 2h ago”.</string>
+</resources>

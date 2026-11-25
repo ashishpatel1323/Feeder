@@ -14,7 +14,7 @@ import {
   savePosition,
 } from '../lib/ebooks/library'
 import { loadFoliate } from '../lib/ebooks/foliate'
-import { atEnd, atStart, drawFixedHighlights, markFixedPage, readableContent, redrawFixedHighlights, nextSection, prevSection, reveal, setStyles } from '../lib/ebooks/nav'
+import { atEnd, atStart, drawFixedHighlights, markFixedPage, readableContent, redrawFixedHighlights, nextSection, pageNumbers, prevSection, reveal, setStyles } from '../lib/ebooks/nav'
 import { bookCss, injectCsp, loadReaderPrefs, saveReaderPrefs, type ReaderPrefs } from '../lib/ebooks/reader'
 import { deleteHighlight, HIGHLIGHT_COLORS, quoteText, saveHighlight, updateHighlight } from '../lib/highlights'
 import { formatBytes } from '../lib/offline'
@@ -25,6 +25,7 @@ import { DropboxPanel, useDropbox } from './DropboxPanel'
 import { HighlightBar } from './Highlights'
 import { Icon, IconButton } from './Icon'
 import { Player } from './Player'
+import { otherDeviceText } from '../lib/device'
 import { Shelf, ShelfControls, useShelfPrefs, type ShelfItem } from './Shelf'
 
 /**
@@ -85,7 +86,7 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
     return onDropboxChange(refresh)
   }, [refresh])
 
-  const progressOf = useMemo(() => new Map(positions.map((x) => [x.id, x.f])), [positions])
+  const progressOf = useMemo(() => new Map(positions.map((x) => [x.id, x])), [positions])
   const sorted = useMemo(
     () => [...(books ?? [])].sort((a, b) => (b.lastOpenedAt || 0) - (a.lastOpenedAt || 0) || b.addedAt - a.addedAt || a.title.localeCompare(b.title)),
     [books],
@@ -139,7 +140,9 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
   }
 
   const items: ShelfItem[] = sorted.map((b) => {
-    const f = progressOf.get(b.id)
+    const pos = progressOf.get(b.id)
+    const f = pos?.f
+    const where = otherDeviceText(pos)
     const actions: ShelfItem['actions'] = []
     if (!b.local) actions.push({ label: 'Download to this device', run: () => void download(b) })
     if (b.local) actions.push({ label: b.dropboxPath ? 'Remove from this device' : 'Delete', run: () => void act(b, 'device') })
@@ -148,7 +151,7 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
       key: b.id,
       title: b.title,
       subtitle: b.author,
-      detail: [f ? `${Math.round(f * 100)}% read` : 'Not started', b.ext.toUpperCase(), formatBytes(b.size)].join(' · '),
+      detail: [f ? `${pos?.n ? `${pos.p} of ${pos.n} pages` : `${Math.round(f * 100)}%`} read${where ? ` ${where}` : ''}` : 'Not started', b.ext.toUpperCase(), formatBytes(b.size)].join(' · '),
       cover: b.cover,
       coverIcon: 'book',
       where: b.local ? (b.dropboxPath ? 'both' : 'device') : 'cloud',
@@ -302,7 +305,7 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
           window.setTimeout(() => startListening(0), 300)
         }
         window.clearTimeout(saveTimer)
-        saveTimer = window.setTimeout(() => void savePosition(id, l.cfi, l.fraction ?? 0), 800)
+        saveTimer = window.setTimeout(() => void savePosition(id, l.cfi, l.fraction ?? 0, pageNumbers(l, view.isFixedLayout)), 800)
       })
       view.addEventListener('create-overlay', () => {
         for (const h of highlightsRef.current) if (h.cfi) void view.addAnnotation({ value: h.cfi, color: h.color })
@@ -366,7 +369,7 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
       abort.abort()
       window.clearTimeout(saveTimer)
       const v = viewRef.current
-      if (v?.lastLocation) void savePosition(id, v.lastLocation.cfi, v.lastLocation.fraction ?? 0)
+      if (v?.lastLocation) void savePosition(id, v.lastLocation.cfi, v.lastLocation.fraction ?? 0, pageNumbers(v.lastLocation, v.isFixedLayout))
       if (readAloud.state.itemId === bookItemId(id)) readAloud.stop()
       readAloud.revealHook = null
       v?.close()
@@ -483,6 +486,8 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
 
   const fraction = Number.isFinite(loc?.fraction) ? loc!.fraction : 0
   const chapter = loc?.tocItem?.label ?? ''
+  const pages = pageNumbers(loc, !!viewRef.current?.isFixedLayout)
+  const pageLabel = pages ? `${pages.page} / ${pages.pages}` : ''
 
   return (
     <section className={`book-reader theme-${prefs.theme}`} aria-label={book?.title ?? 'Book'}>
@@ -583,7 +588,7 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
           onChange={(e) => void viewRef.current?.goToFraction(Number(e.target.value))}
           disabled={status.loading}
         />
-        <span className="book-pct">{Math.round(fraction * 100)}%</span>
+        <span className="book-pct">{pageLabel ? `${pageLabel} · ` : ''}{Math.round(fraction * 100)}%</span>
       </footer>
 
       {pending || editing ? (
