@@ -36,3 +36,26 @@ describe('listTree', () => {
     await expect(listTree('/Audiobooks')).rejects.toThrow('Dropbox: could not reach files/list_folder (Failed to fetch)')
   })
 })
+
+describe('uploadFile', () => {
+  it('uploads a big file in chunks through the files/upload_session endpoints', async () => {
+    const { uploadFile } = await import('../dropbox')
+    const urls: string[] = []
+    vi.stubGlobal('fetch', async (url: string) => {
+      urls.push(url)
+      if (url.endsWith('/start')) return json({ session_id: 's1' })
+      if (url.endsWith('/finish')) return json(entry('file', '/Audiobooks/Big.m4b'))
+      return json(null)
+    })
+    const big = new Blob([new Uint8Array(40 * 1024 * 1024)])
+    const f = await uploadFile('/Audiobooks/Big.m4b', big)
+    expect(f.path).toBe('/Audiobooks/Big.m4b')
+    expect(urls.map((u) => u.replace('https://content.dropboxapi.com/2/', ''))).toEqual([
+      'files/upload_session/start',
+      'files/upload_session/append_v2',
+      'files/upload_session/append_v2',
+      'files/upload_session/append_v2',
+      'files/upload_session/finish',
+    ])
+  })
+})

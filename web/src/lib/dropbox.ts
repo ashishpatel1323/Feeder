@@ -392,7 +392,7 @@ export async function uploadFile(path: string, blob: Blob, onProgress?: Progress
     onProgress?.(blob.size, blob.size)
     return toFile((await res.json()) as RawEntry)
   }
-  const start = await call('https://content.dropboxapi.com/2/upload_session/start', (t) => content(t, { close: false }, blob.slice(0, CHUNK)), signal)
+  const start = await call('https://content.dropboxapi.com/2/files/upload_session/start', (t) => content(t, { close: false }, blob.slice(0, CHUNK)), signal)
   const { session_id } = (await start.json()) as { session_id: string }
   let offset = Math.min(CHUNK, blob.size)
   onProgress?.(offset, blob.size)
