@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { addEmptyFolder, FEED_ORDER_KEY, FOLDER_ORDER_KEY, getKv, renameTag, type Feed, type Item } from '../lib/db'
+import { addEmptyFolder, db, FEED_ORDER_KEY, FOLDER_ORDER_KEY, getKv, renameTag, type Feed, type Item } from '../lib/db'
 import {
   buildHomeFeeds,
   FEED_KINDS,
@@ -9,7 +9,10 @@ import {
   groupByFolder,
   initials,
   KIND_LABELS,
+  LANE_MAX,
+  LIST_FOLDER_MAX,
   NO_FILTER,
+  shortAge,
   sortHome,
   tileColors,
   type FeedKind,
@@ -17,6 +20,7 @@ import {
   type HomeFilter,
   type HomeFolder,
   type HomeGroup,
+  type HomeLayout,
   type HomeSize,
   type HomeSort,
 } from '../lib/home'
@@ -58,6 +62,10 @@ const SORTS: [HomeSort, string][] = [
   ['unread', 'Most unread'],
   ['order', 'My order'],
 ]
+const LAYOUTS: [HomeLayout, string][] = [
+  ['tiles', 'Tiles'],
+  ['list', 'List'],
+]
 const SIZES: [HomeSize, string][] = [
   ['s', 'S'],
   ['m', 'M'],
@@ -94,38 +102,98 @@ function Art({ h, mini = false }: { h: HomeFeed; mini?: boolean }) {
   )
 }
 
-function FeedTile({ h, onOpen }: { h: HomeFeed; onOpen: (url: string) => void }) {
-  const label = `${h.title}, ${KIND_LABELS[h.kind]}${h.unread ? `, ${h.unread} unread` : ''}${h.hasError ? ', last check failed' : ''}`
+const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`
+
+function feedLabel(h: HomeFeed): string {
+  return `${h.title}, ${KIND_LABELS[h.kind]}${h.unread ? `, ${h.unread} unread` : ''}${h.hasError ? ', last check failed' : ''}`
+}
+
+/** Artwork with an unread badge and type mark, then the feed's name and "N new" under it. */
+function NamedTile({ h, onOpen }: { h: HomeFeed; onOpen: (url: string) => void }) {
+  const label = feedLabel(h)
   return (
-    <button type="button" className="home-tile" title={label} aria-label={label} onClick={() => onOpen(h.feed.url)}>
-      <Art h={h} />
-      {h.unread ? <span className="home-badge">{h.unread > 999 ? '999+' : h.unread}</span> : null}
-      <span className={`home-kind k-${h.kind}`}>
-        <Icon name={KIND_ICON[h.kind]} size={14} />
+    <button type="button" className="home-ntile" title={label} aria-label={label} onClick={() => onOpen(h.feed.url)}>
+      <span className="home-tile">
+        <Art h={h} mini />
+        {h.kind !== 'text' ? (
+          <span className={`home-kind k-${h.kind}`}>
+            <Icon name={KIND_ICON[h.kind]} size={14} />
+          </span>
+        ) : null}
+        {h.hasError ? <span className="home-err" title={`Last check failed: ${h.feed.lastError}`} /> : null}
       </span>
-      {h.hasError ? <span className="home-err" title={`Last check failed: ${h.feed.lastError}`} /> : null}
+      {h.unread ? <span className="home-badge">{h.unread > 999 ? '999+' : h.unread}</span> : null}
+      <span className="home-ntile-t">{h.title}</span>
+      <span className="home-ntile-m">{h.unread ? `${h.unread} new` : 'Up to date'}</span>
     </button>
   )
 }
 
-function FolderTile({ f, onOpen }: { f: HomeFolder; onOpen: (name: string) => void }) {
-  const [bg] = tileColors(f.name)
-  const label = `Folder ${f.name}, ${f.feeds.length} feed${f.feeds.length === 1 ? '' : 's'}${f.unread ? `, ${f.unread} unread` : ''}`
+/** One feed as a list row: artwork, name, then unread · total · saved · in progress, and when it last posted. */
+function FeedRow({ h, onOpen }: { h: HomeFeed; onOpen: (url: string) => void }) {
+  const rest = [`${h.total} total`, h.saved ? `${h.saved} saved` : '', h.inProgress ? `${h.inProgress} in progress` : ''].filter(Boolean).join(' · ')
+  const age = shortAge(h.latest)
   return (
-    <button type="button" className="home-tile home-folder" style={{ background: bg }} title={label} aria-label={label} onClick={() => onOpen(f.name)}>
-      <span className="home-fgrid">
-        {f.feeds.slice(0, 4).map((h) => (
-          <span key={h.feed.url} className="home-mini">
-            <Art h={h} mini />
+    <button type="button" className="home-row" aria-label={`${feedLabel(h)}, ${rest}${age ? `, last post ${age} ago` : ''}`} onClick={() => onOpen(h.feed.url)}>
+      <span className="home-row-art">
+        <Art h={h} mini />
+        {h.kind !== 'text' ? (
+          <span className={`home-kind k-${h.kind}`}>
+            <Icon name={KIND_ICON[h.kind]} size={12} />
           </span>
-        ))}
+        ) : null}
       </span>
-      <span className="home-fname">
-        <span className="home-fname-t">{f.name}</span>
-        <span className="home-fname-c">{f.feeds.length}</span>
+      <span className="home-row-tx">
+        <span className="home-row-t">
+          {h.title}
+          {h.hasError ? <span className="home-row-err"> · last check failed</span> : null}
+        </span>
+        <span className="home-row-m">
+          <span className={h.unread ? 'u' : ''}>{h.unread ? `${h.unread} unread` : 'All read'}</span> · {rest}
+        </span>
       </span>
-      {f.unread ? <span className="home-badge">{f.unread > 999 ? '999+' : f.unread}</span> : null}
+      {age ? <span className="home-row-age">{age}</span> : null}
     </button>
+  )
+}
+
+/** A folder's title line: name, feed count and unread. Opens the folder (tiles) or folds it (list). */
+function FolderHead({ f, foldable, folded, onClick }: { f: HomeFolder; foldable: boolean; folded: boolean; onClick: () => void }) {
+  const name = f.name || 'No folder'
+  return (
+    <h2 className="home-lh">
+      <button
+        type="button"
+        aria-expanded={foldable ? !folded : undefined}
+        title={foldable ? (folded ? `Unfold ${name}` : `Fold ${name}`) : `Open ${name}`}
+        onClick={onClick}
+      >
+        {foldable ? <Icon name={folded ? 'next' : 'expand'} size={20} /> : null}
+        <span className="home-lh-n">
+          {name}
+          <span> · {plural(f.feeds.length, 'feed')}</span>
+        </span>
+        {f.unread ? <span className="home-lh-u">{f.unread} unread</span> : null}
+        {foldable ? null : <Icon name="next" size={20} />}
+      </button>
+    </h2>
+  )
+}
+
+/** A folder as a sideways row of named tiles, ending in "All N" when it has more than LANE_MAX. */
+function Lane({ f, onOpen, onAll }: { f: HomeFolder; onOpen: (url: string) => void; onAll: () => void }) {
+  return (
+    <div className="home-lane">
+      {f.feeds.slice(0, LANE_MAX).map((h) => (
+        <NamedTile key={h.feed.url} h={h} onOpen={onOpen} />
+      ))}
+      {f.feeds.length > LANE_MAX ? (
+        <button type="button" className="home-all" onClick={onAll}>
+          <Icon name="next" size={20} />
+          All {f.feeds.length}
+        </button>
+      ) : null}
+    </div>
   )
 }
 
@@ -139,9 +207,12 @@ export function HomePage(p: Props) {
   const folderOrder = useLiveQuery(() => getKv<string[]>(FOLDER_ORDER_KEY, []), []) ?? []
   const [filter, setFilter] = useState<HomeFilter>(NO_FILTER)
   const [openFolder, setOpenFolder] = useState<string | null>(null)
-  const { homeGroup: group, homeSort: sort, homeSize: size } = p.settings
+  const positionRows = useLiveQuery(() => db.videoPos.toArray(), [])
+  const positions = useMemo(() => new Map((positionRows ?? []).map((r) => [r.id, r])), [positionRows])
+  const { homeGroup: group, homeSort: sort, homeSize: size, homeLayout: layout = 'tiles', homeFolded: folded = [] } = p.settings
+  const list = layout === 'list'
 
-  const all = useMemo(() => buildHomeFeeds(p.feeds, p.items, overrides), [p.feeds, p.items, overrides])
+  const all = useMemo(() => buildHomeFeeds(p.feeds, p.items, overrides, positions), [p.feeds, p.items, overrides, positions])
   // Inside a folder, every count and filter is about that folder's feeds
   const scope = useMemo(() => (openFolder === null ? all : all.filter((h) => h.feed.tag === openFolder)), [all, openFolder])
   const active: HomeFilter = openFolder === null ? filter : { ...filter, folder: null }
@@ -153,19 +224,6 @@ export function HomePage(p: Props) {
   }, [scope, active])
   const unreadCount = useMemo(() => filterHome(scope, active, ['unreadOnly']).filter((h) => h.unread > 0).length, [scope, active])
   const errorCount = useMemo(() => filterHome(scope, active, ['errorsOnly']).filter((h) => h.hasError).length, [scope, active])
-  const folderCounts = useMemo(() => {
-    const base = filterHome(all, filter, ['folder'])
-    const m = new Map<string, number>()
-    for (const h of base) m.set(h.feed.tag, (m.get(h.feed.tag) ?? 0) + 1)
-    // Folders with no matching feeds still get a chip, so the row doesn't jump around
-    for (const h of all) if (!m.has(h.feed.tag)) m.set(h.feed.tag, 0)
-    return m
-  }, [all, filter])
-  const folderNames = useMemo(() => {
-    const names = [...folderCounts.keys()].filter(Boolean)
-    return sort === 'order' ? groupByFolder(all, 'order', feedOrder, folderOrder).folders.map((f) => f.name).filter((n) => names.includes(n)) : names.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
-  }, [folderCounts, sort, all, feedOrder, folderOrder])
-
   // Esc leaves an open folder
   useEffect(() => {
     if (openFolder === null) return
@@ -201,6 +259,18 @@ export function HomePage(p: Props) {
     p.toast(`Renamed to ${to}`)
   }
 
+  const markFolderRead = async (tag: string) => {
+    const urls = new Set(p.feeds.filter((f) => f.tag === tag).map((f) => f.url))
+    const ids = p.items.filter((i) => !i.read && urls.has(i.feedUrl)).map((i) => i.id)
+    if (!ids.length) return p.toast(`Nothing unread in ${tag || 'No folder'}`)
+    await db.items.bulkUpdate(ids.map((key) => ({ key, changes: { read: 1 as const, readTime: Date.now(), readSynced: 0 as const } })))
+    syncNow().catch(() => undefined)
+    p.toast(`Marked ${ids.length} as read`)
+  }
+  const toggleFold = (name: string) => setSetting({ homeFolded: folded.includes(name) ? folded.filter((n) => n !== name) : [...folded, name] })
+  const folderTags = useMemo(() => [...new Set(all.map((h) => h.feed.tag))], [all])
+  const allFolded = folderTags.length > 0 && folderTags.every((t) => folded.includes(t))
+
   const summary = (() => {
     const n = shown.length
     const feedsWord = `${n} feed${n === 1 ? '' : 's'}`
@@ -209,7 +279,20 @@ export function HomePage(p: Props) {
     return `${feedsWord} · ${unread} with unread`
   })()
 
-  const grid = (children: React.ReactNode) => <div className="home-grid">{children}</div>
+  const feedsView = (hs: HomeFeed[]) =>
+    list ? (
+      <div className="home-rows">
+        {hs.map((h) => (
+          <FeedRow key={h.feed.url} h={h} onOpen={p.onOpenFeed} />
+        ))}
+      </div>
+    ) : (
+      <div className="home-grid home-ngrid">
+        {hs.map((h) => (
+          <NamedTile key={h.feed.url} h={h} onOpen={p.onOpenFeed} />
+        ))}
+      </div>
+    )
   let body: React.ReactNode
   if (!p.feeds.length) {
     body = (
@@ -236,33 +319,56 @@ export function HomePage(p: Props) {
       </div>
     )
   } else if (folderView) {
-    body = grid(
-      <>
-        {folderView.folders.map((f) => (
-          <FolderTile key={`f:${f.name}`} f={f} onOpen={setOpenFolder} />
-        ))}
-        {folderView.loose.map((h) => (
-          <FeedTile key={h.feed.url} h={h} onOpen={p.onOpenFeed} />
-        ))}
-      </>,
-    )
-  } else if (group === 'type') {
+    const sections: HomeFolder[] = [...folderView.folders]
+    if (folderView.loose.length) {
+      const l = folderView.loose
+      sections.push({ name: '', feeds: l, unread: l.reduce((n, h) => n + h.unread, 0), latest: Math.max(0, ...l.map((h) => h.latest)) })
+    }
+    body = sections.map((f) => {
+      if (!list) {
+        return (
+          <section key={f.name} className="home-sec">
+            <FolderHead f={f} foldable={false} folded={false} onClick={() => setOpenFolder(f.name)} />
+            <Lane f={f} onOpen={p.onOpenFeed} onAll={() => setOpenFolder(f.name)} />
+          </section>
+        )
+      }
+      const isFolded = folded.includes(f.name)
+      return (
+        <section key={f.name} className="home-sec">
+          <FolderHead f={f} foldable folded={isFolded} onClick={() => toggleFold(f.name)} />
+          {isFolded ? null : (
+            <div className="home-rows">
+              {f.feeds.slice(0, LIST_FOLDER_MAX).map((h) => (
+                <FeedRow key={h.feed.url} h={h} onOpen={p.onOpenFeed} />
+              ))}
+              {f.feeds.length > LIST_FOLDER_MAX ? (
+                <button type="button" className="home-showall" onClick={() => setOpenFolder(f.name)}>
+                  Show all {f.feeds.length}
+                </button>
+              ) : null}
+            </div>
+          )}
+        </section>
+      )
+    })
+  } else if (group === 'type' && openFolder === null) {
     body = FEED_KINDS.map((k) => {
-      const list = sorted.filter((h) => h.kind === k)
-      if (!list.length) return null
+      const ofKind = sorted.filter((h) => h.kind === k)
+      if (!ofKind.length) return null
       return (
         <section key={k} className="home-shelf">
           <h2>
             <Icon name={KIND_ICON[k]} size={18} />
             {KIND_LABELS[k]}
-            <span>{list.length}</span>
+            <span>{ofKind.length}</span>
           </h2>
-          {grid(list.map((h) => <FeedTile key={h.feed.url} h={h} onOpen={p.onOpenFeed} />))}
+          {feedsView(ofKind)}
         </section>
       )
     })
   } else {
-    body = grid(sorted.map((h) => <FeedTile key={h.feed.url} h={h} onOpen={p.onOpenFeed} />))
+    body = feedsView(sorted)
   }
 
   const chip = (on: boolean, label: React.ReactNode, count: number, onClick: () => void, icon?: IconName, key?: string) => (
@@ -288,7 +394,7 @@ export function HomePage(p: Props) {
                 <Icon name="back" size={22} />
               </button>
               <Icon name="folder" size={24} />
-              <h1>{openFolder}</h1>
+              <h1>{openFolder || 'No folder'}</h1>
             </>
           ) : (
             <>
@@ -299,21 +405,27 @@ export function HomePage(p: Props) {
           <input
             className="home-search"
             type="search"
-            placeholder={openFolder !== null ? `Search ${openFolder}…` : 'Search feeds…'}
+            placeholder={openFolder !== null ? `Search ${openFolder || 'No folder'}…` : 'Search feeds…'}
             aria-label="Search feeds"
             value={filter.query}
             onChange={(e) => set({ query: e.target.value })}
           />
           {openFolder !== null ? (
             <>
+              <button type="button" className="mf-btn" onClick={() => void markFolderRead(openFolder)}>
+                <Icon name="doneAll" size={18} />
+                <span>Mark all read</span>
+              </button>
               <button type="button" className="mf-btn" onClick={() => p.onShowFolder(openFolder)}>
                 <Icon name="article" size={18} />
                 <span>Show articles</span>
               </button>
-              <button type="button" className="mf-btn" onClick={() => void renameFolder(openFolder)}>
-                <Icon name="edit" size={18} />
-                <span>Rename</span>
-              </button>
+              {openFolder ? (
+                <button type="button" className="mf-btn" onClick={() => void renameFolder(openFolder)}>
+                  <Icon name="edit" size={18} />
+                  <span>Rename</span>
+                </button>
+              ) : null}
             </>
           ) : null}
           <button type="button" className="mf-btn" onClick={p.onRefresh} disabled={!!p.refreshing}>
@@ -341,14 +453,6 @@ export function HomePage(p: Props) {
           {chip(filter.unreadOnly, 'Has unread', unreadCount, () => set({ unreadOnly: !filter.unreadOnly }), 'unread')}
           {errorCount || filter.errorsOnly ? chip(filter.errorsOnly, 'Errors', errorCount, () => set({ errorsOnly: !filter.errorsOnly }), 'close') : null}
         </div>
-        {openFolder === null && folderNames.length ? (
-          <div className="home-chips" aria-label="Filter by folder">
-            <span className="home-chips-label">Folders</span>
-            {folderNames.map((n) => chip(filter.folder === n, n, folderCounts.get(n) ?? 0, () => set({ folder: filter.folder === n ? null : n }), 'folder', n))}
-            {folderCounts.has('') ? chip(filter.folder === '', 'No folder', folderCounts.get('') ?? 0, () => set({ folder: filter.folder === '' ? null : '' }), undefined, '') : null}
-          </div>
-        ) : null}
-
         <div className="home-tools">
           <span className="home-count">
             {openFolder !== null ? `In ${openFolder}` : filter.folder !== null ? filter.folder || 'No folder' : filter.kind ? KIND_LABELS[filter.kind] : 'All feeds'}
@@ -356,7 +460,14 @@ export function HomePage(p: Props) {
           </span>
           {openFolder === null ? <Segmented label="Group" value={group} options={GROUPS} onChange={(v) => setSetting({ homeGroup: v })} /> : null}
           <Segmented label="Sort" value={sort} options={SORTS} onChange={(v) => setSetting({ homeSort: v })} />
-          <Segmented label="Size" value={size} options={SIZES} onChange={(v) => setSetting({ homeSize: v })} />
+          <Segmented label="View" value={layout} options={LAYOUTS} onChange={(v) => setSetting({ homeLayout: v })} />
+          {!list && !asFolders ? <Segmented label="Size" value={size} options={SIZES} onChange={(v) => setSetting({ homeSize: v })} /> : null}
+          {list && asFolders ? (
+            <button type="button" className="mf-btn" onClick={() => setSetting({ homeFolded: allFolded ? [] : folderTags })}>
+              <Icon name={allFolded ? 'unfoldMore' : 'unfoldLess'} size={18} />
+              <span>{allFolded ? 'Unfold all' : 'Fold all'}</span>
+            </button>
+          ) : null}
           {openFolder === null ? (
             <button type="button" className="mf-btn" onClick={() => void newFolder()}>
               <Icon name="newFolder" size={18} />

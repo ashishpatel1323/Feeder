@@ -1,4 +1,5 @@
 import { feedDisplayTitle, sortFolder, sortFolders, type Feed, type Item } from './db'
+import { isWatched } from './videopos'
 import { youtubeVideoId } from './youtube'
 
 /** What a feed carries, for the Home page's type filter. */
@@ -12,6 +13,14 @@ export const FEED_KINDS_KEY = 'feedKinds'
 export type HomeGroup = 'folders' | 'none' | 'type'
 export type HomeSort = 'latest' | 'az' | 'unread' | 'order'
 export type HomeSize = 's' | 'm' | 'l'
+/** Feeds as artwork tiles (folders as sideways rows) or as a list of rows with their numbers. */
+export type HomeLayout = 'tiles' | 'list'
+
+/** Feeds a folder's row shows before its "All N" tile, and its list section before "Show all N". */
+export const LANE_MAX = 8
+export const LIST_FOLDER_MAX = 4
+/** Positions this early do not count as started (same as Android). */
+const MIN_PROGRESS = 5
 
 const AUDIO = /\.(mp3|m4a|m4b|aac|ogg|oga|opus|wav|flac)(\?|#|$)/i
 const NOT_AUDIO = /\.(jpe?g|png|gif|webp|avif|svg|mp4|m4v|webm|mov|pdf)(\?|#|$)/i
@@ -47,9 +56,18 @@ export interface HomeFeed {
   /** Newest article time, 0 when the feed has none. */
   latest: number
   hasError: boolean
+  total: number
+  saved: number
+  /** Episodes and videos started and not finished. */
+  inProgress: number
 }
 
-export function buildHomeFeeds(feeds: Feed[], items: Item[], overrides: Record<string, FeedKind> = {}): HomeFeed[] {
+export function buildHomeFeeds(
+  feeds: Feed[],
+  items: Item[],
+  overrides: Record<string, FeedKind> = {},
+  positions: Map<string, { t: number; d: number }> = new Map(),
+): HomeFeed[] {
   const byFeed = new Map<string, Item[]>()
   for (const i of items) {
     const list = byFeed.get(i.feedUrl)
@@ -60,9 +78,14 @@ export function buildHomeFeeds(feeds: Feed[], items: Item[], overrides: Record<s
     const its = byFeed.get(feed.url) ?? []
     let unread = 0
     let latest = 0
+    let saved = 0
+    let inProgress = 0
     for (const i of its) {
       if (!i.read) unread++
+      if (i.saved) saved++
       if (i.sortTime > latest) latest = i.sortTime
+      const p = positions.get(i.id)
+      if (p && p.t >= MIN_PROGRESS && !isWatched(p)) inProgress++
     }
     const o = overrides[feed.url]
     return {
@@ -72,6 +95,9 @@ export function buildHomeFeeds(feeds: Feed[], items: Item[], overrides: Record<s
       unread,
       latest,
       hasError: !!feed.lastError,
+      total: its.length,
+      saved,
+      inProgress,
     }
   })
 }
@@ -172,4 +198,17 @@ export function tileColors(title: string): [string, string] {
   let h = 0
   for (const c of title) h = (h * 31 + c.charCodeAt(0)) >>> 0
   return TILE_COLORS[h % TILE_COLORS.length]
+}
+
+/** How long ago, short: "now", "12m", "3h", "2d", "5w", "8mo", "2y". Empty when `ms` is 0. Same as Android. */
+export function shortAge(ms: number, now = Date.now()): string {
+  if (ms <= 0) return ''
+  const min = Math.max(0, Math.floor((now - ms) / 60_000))
+  if (min < 1) return 'now'
+  if (min < 60) return `${min}m`
+  if (min < 60 * 24) return `${Math.floor(min / 60)}h`
+  if (min < 60 * 24 * 7) return `${Math.floor(min / (60 * 24))}d`
+  if (min < 60 * 24 * 30) return `${Math.floor(min / (60 * 24 * 7))}w`
+  if (min < 60 * 24 * 365) return `${Math.floor(min / (60 * 24 * 30))}mo`
+  return `${Math.floor(min / (60 * 24 * 365))}y`
 }
