@@ -9,6 +9,7 @@ import {
   deleteBook,
   ebooksSupported,
   importBook,
+  uploadBook,
   refreshFromDropbox,
   removeFromDevice,
   savePosition,
@@ -73,6 +74,7 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
   const [jobs, setJobs] = useState<Job[]>([])
   const [busy, setBusy] = useState(false)
   const [downloading, setDownloading] = useState<Set<string>>(new Set())
+  const [uploading, setUploading] = useState<Record<string, number>>({})
   const prefs = useShelfPrefs('ebooks', 'cards')
   const fileInput = useRef<HTMLInputElement>(null)
   const dbx = useDropbox()
@@ -104,7 +106,7 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
         last = Date.now()
         setJobs((j) => j.map((x) => (x.key === key ? { ...x, done, total } : x)))
       })
-        .then((b) => toast(b.dropboxPath ? `Added ${b.title} (also in Dropbox)` : `Added ${b.title}`))
+        .then((b) => toast(b.dropboxPath ? `Added ${b.title} (also in Dropbox)` : `Added ${b.title} to this device`))
         .catch((e) => toast(e instanceof Error ? e.message : String(e)))
         .finally(() => setJobs((j) => j.filter((x) => x.key !== key)))
     }
@@ -141,12 +143,29 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
     }
   }
 
+  const upload = async (b: Book) => {
+    setUploading((u) => ({ ...u, [b.id]: 0 }))
+    try {
+      await uploadBook(b.id, (done, total) => setUploading((u) => ({ ...u, [b.id]: total ? done / total : 0 })))
+      toast(`${b.title} is in Dropbox`)
+    } catch (e) {
+      toast(e instanceof Error ? e.message : String(e))
+    } finally {
+      setUploading((u) => {
+        const n = { ...u }
+        delete n[b.id]
+        return n
+      })
+    }
+  }
+
   const items: ShelfItem[] = sorted.map((b) => {
     const pos = progressOf.get(b.id)
     const f = pos?.f
     const where = otherDeviceText(pos)
     const actions: ShelfItem['actions'] = []
     if (!b.local) actions.push({ label: 'Download to this device', run: () => void download(b) })
+    if (b.local && !b.dropboxPath && dbx.signedIn && uploading[b.id] === undefined) actions.push({ label: 'Upload to Dropbox', run: () => void upload(b) })
     if (b.local) actions.push({ label: b.dropboxPath ? 'Remove from this device' : 'Delete', run: () => void act(b, 'device') })
     if (b.dropboxPath) actions.push({ label: 'Delete from Dropbox', run: () => void act(b, 'everywhere') })
     return {
@@ -158,7 +177,7 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
       coverIcon: 'book',
       where: b.local ? (b.dropboxPath ? 'both' : 'device') : 'cloud',
       size: b.size,
-      busy: downloading.has(b.id) ? 'Downloading…' : undefined,
+      busy: downloading.has(b.id) ? 'Downloading…' : uploading[b.id] !== undefined ? `Uploading ${Math.floor(uploading[b.id] * 100)}%` : undefined,
       onOpen: () => onOpen(b.id),
       actions,
     }

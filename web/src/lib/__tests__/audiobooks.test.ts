@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { bytesReader, readId3, readMp4, readTags, tidyMarks } from '../audiobooks/tags'
-import { booksInListing, comparePaths, mergeBooks } from '../audiobooks/library'
+import { booksInListing, comparePaths, groupPicked, mergeBooks, pickedFromFolder, type Picked } from '../audiobooks/library'
 import { bookLengthMs, chapterAt, chaptersOf, clock, fractionAt, lengthText, locate, resumePoint } from '../audiobooks/timeline'
 import type { DropboxFile } from '../dropbox'
 import type { AudioTrack, Audiobook } from '../db'
@@ -156,5 +156,41 @@ describe('audiobook timeline', () => {
     expect(resumePoint(book, { i: 0, h: 'a', ms: 59_900, f: 0.3 })).toEqual({ i: 0, ms: 58_000 })
     expect(clock(3_723_000)).toBe('1:02:03')
     expect(lengthText(312 * 60_000)).toBe('5 h 12 min')
+  })
+})
+
+describe('Audiobooks picked on this device', () => {
+  const pick = (rel: string): Picked => ({ rel, file: new File(['x'], rel.split('/').pop()!) })
+  const shape = (g: ReturnType<typeof groupPicked>) => g.map((b) => [b.title, b.folder, b.files.map((f) => f.rel), b.cover?.rel ?? null])
+
+  it('makes one book of loose files or a folder of files, in play order', () => {
+    expect(shape(groupPicked(['10 End.mp3', '2 Middle.mp3', '1 Start.mp3', 'cover.jpg'].map(pick), 'Dune'))).toEqual([
+      ['Dune', true, ['1 Start.mp3', '2 Middle.mp3', '10 End.mp3'], 'cover.jpg'],
+    ])
+    expect(shape(groupPicked([pick('Book One.m4b')], 'x'))).toEqual([['Book One', false, ['Book One.m4b'], null]])
+  })
+
+  it('makes a book of each m4b, and of each subfolder (the Dropbox rule)', () => {
+    expect(shape(groupPicked(['A.m4b', 'B.m4b'].map(pick), 'x')).map((b) => b[0])).toEqual(['A', 'B'])
+    expect(shape(groupPicked(['Loose.mp3', 'Dune/02.mp3', 'Dune/01.mp3', 'Dune/folder.jpg', 'Emma/CD1/1.mp3'].map(pick), 'x'))).toEqual([
+      ['Loose', false, ['Loose.mp3'], null],
+      ['Dune', true, ['01.mp3', '02.mp3'], 'folder.jpg'],
+      ['Emma', true, ['CD1/1.mp3'], null],
+    ])
+  })
+
+  it('cuts the picked folder off the paths', () => {
+    const f = (p: string) => Object.assign(new File(['x'], p.split('/').pop()!), { webkitRelativePath: p })
+    const { name, files } = pickedFromFolder([f('Dune/01.mp3'), f('Dune/Disc 2/01.mp3')])
+    expect(name).toBe('Dune')
+    expect(files.map((x) => x.rel)).toEqual(['01.mp3', 'Disc 2/01.mp3'])
+  })
+
+  it('keeps a book whose files are on this device when it leaves Dropbox', () => {
+    const track = (hash: string, local: boolean): AudioTrack => ({ path: `/Audiobooks/${hash}.mp3`, name: `${hash}.mp3`, hash, size: 1, duration: null, title: null, marks: [], scanned: false, local })
+    const base = { title: 't', author: '', cover: null, folder: false, size: 1, described: false, addedAt: 0, lastOpenedAt: 0, dropboxPath: '/Audiobooks/a.mp3' }
+    const { put, remove } = mergeBooks([{ ...base, id: 'a', tracks: [track('a', true)] }, { ...base, id: 'b', tracks: [track('b', false)] }], [])
+    expect(put.map((b) => [b.id, b.dropboxPath])).toEqual([['a', null]])
+    expect(remove).toEqual(['b'])
   })
 })

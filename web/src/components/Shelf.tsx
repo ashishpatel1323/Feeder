@@ -3,8 +3,8 @@ import { formatBytes } from '../lib/offline'
 import { Icon, IconButton, type IconName } from './Icon'
 
 /**
- * The shared shelf of the Ebooks and ZIM tabs: what is on this device (ready, also offline) and
- * what is only in Dropbox, as cards or a list. Both tabs look and behave the same.
+ * The shared shelf of the Ebooks, ZIM and Audiobooks tabs: what is on this device (ready, also
+ * offline) and what is only in Dropbox, as cards or a list. The tabs look and behave the same.
  */
 
 /** both = on this device and in Dropbox; device = only here; cloud = only in Dropbox */
@@ -28,6 +28,10 @@ export interface ShelfItem {
   coverIcon: IconName
   /** A page to show shrunk as the cover when there is no [cover] (a ZIM's landing page) */
   preview?: string
+  /** 0–1 through it (listened), drawn as a bar along the cover */
+  progress?: number
+  /** One action right on the cover (an audiobook's Play) */
+  quick?: { icon: IconName; label: string; run: () => void }
   where: Where
   size: number
   /** Downloading or uploading right now */
@@ -58,7 +62,7 @@ function useStored<T extends string>(key: string, allowed: readonly T[], fallbac
   ]
 }
 
-/** What to show and how, remembered per tab ("ebooks", "zim"). */
+/** What to show and how, remembered per tab ("ebooks", "zim", "audiobooks"). */
 export function useShelfPrefs(tab: string, defaultView: ShelfView) {
   const [show, setShow] = useStored<Show>(`feeder.${tab}Show`, ['all', 'device', 'cloud'], 'all')
   const [view, setView] = useStored<ShelfView>(`feeder.${tab}View`, ['cards', 'list'], defaultView)
@@ -130,8 +134,23 @@ export function ShelfControls(p: { show: Show; setShow: (s: Show) => void; view:
   )
 }
 
-/** "On this device" and "In Dropbox" sections, filtered by [show], as cards or rows. */
-export function Shelf(p: { items: ShelfItem[]; show: Show; view: ShelfView; shape: 'book' | 'tile'; emptyDevice: string }) {
+/** A cover made from the title when there is no picture: the same colour for the same title. */
+export function GeneratedCover({ title, icon, small }: { title: string; icon: IconName; small?: boolean }) {
+  let h = 0
+  for (const c of title) h = (h * 31 + c.charCodeAt(0)) >>> 0
+  return (
+    <span className={`gen-cover${small ? ' small' : ''}`} style={{ ['--gen-h' as string]: String(h % 360) }}>
+      <Icon name={icon} size={small ? 20 : 28} />
+      {small ? null : <span>{title}</span>}
+    </span>
+  )
+}
+
+/**
+ * "On this device" and "In Dropbox" sections, filtered by [show], as cards or rows. [streams]:
+ * what is in Dropbox plays from there right away (audiobooks), so it isn't dimmed.
+ */
+export function Shelf(p: { items: ShelfItem[]; show: Show; view: ShelfView; shape: 'book' | 'tile' | 'square'; emptyDevice: string; streams?: boolean }) {
   const [menu, setMenu] = useState<string | null>(null)
   const onDevice = p.items.filter((i) => i.where !== 'cloud')
   const cloud = p.items.filter((i) => i.where === 'cloud')
@@ -160,8 +179,34 @@ export function Shelf(p: { items: ShelfItem[]; show: Show; view: ShelfView; shap
       </span>
     ) : null
 
+  const quick = (i: ShelfItem, cls: string) =>
+    i.quick ? (
+      <span className={cls} onClick={(e) => e.stopPropagation()}>
+        <IconButton icon={i.quick.icon} label={i.quick.label} onClick={i.quick.run} />
+      </span>
+    ) : null
+
+  const progress = (i: ShelfItem) =>
+    i.progress && i.progress > 0 && i.progress < 0.999 ? (
+      <span className="shelf-progress" aria-hidden>
+        <i style={{ width: `${i.progress * 100}%` }} />
+      </span>
+    ) : null
+
   const cover = (i: ShelfItem, small: boolean) =>
-    p.shape === 'book' ? (
+    p.shape === 'square' ? (
+      i.cover ? (
+        <img className={small ? 'shelf-thumb shelf-square' : 'shelf-square-cover'} src={i.cover} alt="" />
+      ) : small ? (
+        <span className="shelf-thumb shelf-square">
+          <GeneratedCover title={i.title} icon={i.coverIcon} small />
+        </span>
+      ) : (
+        <span className="shelf-square-cover">
+          <GeneratedCover title={i.title} icon={i.coverIcon} />
+        </span>
+      )
+    ) : p.shape === 'book' ? (
       i.cover ? (
         <img className={small ? 'shelf-thumb' : 'book-cover'} src={i.cover} alt="" />
       ) : (
@@ -173,12 +218,15 @@ export function Shelf(p: { items: ShelfItem[]; show: Show; view: ShelfView; shap
       </span>
     )
 
+  const dim = (i: ShelfItem) => (i.where === 'cloud' && !p.streams ? ' in-cloud' : '')
+
   const card = (i: ShelfItem) => (
-    <div key={i.key} className={`book-card${i.where === 'cloud' ? ' in-cloud' : ''}`}>
-      <button type="button" className="book-open" onClick={i.onOpen} title={i.where === 'cloud' ? `Download and open ${i.title}` : `Open ${i.title}`}>
-        <span className="shelf-cover-wrap">
+    <div key={i.key} className={`book-card${dim(i)}`}>
+      <button type="button" className="book-open" onClick={i.onOpen} title={i.where === 'cloud' && !p.streams ? `Download and open ${i.title}` : `Open ${i.title}`}>
+        <span className={`shelf-cover-wrap${progress(i) ? ' has-progress' : ''}`}>
           {cover(i, false)}
           <Availability where={i.where} size={i.size} busy={i.busy} />
+          {progress(i)}
         </span>
         <span className="book-title">{i.title}</span>
         <span className="book-meta">
@@ -186,12 +234,13 @@ export function Shelf(p: { items: ShelfItem[]; show: Show; view: ShelfView; shap
           {i.detail ? <span className="book-where">{i.detail}</span> : null}
         </span>
       </button>
+      {quick(i, 'shelf-quick')}
       {more(i)}
     </div>
   )
 
   const row = (i: ShelfItem) => (
-    <div key={i.key} className={`lib-row shelf-row${i.where === 'cloud' ? ' in-cloud' : ''}`} role="button" tabIndex={0} onClick={i.onOpen} onKeyDown={(e) => e.key === 'Enter' && i.onOpen()}>
+    <div key={i.key} className={`lib-row shelf-row${dim(i)}`} role="button" tabIndex={0} onClick={i.onOpen} onKeyDown={(e) => e.key === 'Enter' && i.onOpen()}>
       {cover(i, true)}
       <span className="lib-text">
         <span className="lib-title">{i.title}</span>
@@ -200,7 +249,9 @@ export function Shelf(p: { items: ShelfItem[]; show: Show; view: ShelfView; shap
           <Availability where={i.where} size={i.size} busy={i.busy} />
           {i.detail ? <span className="lib-desc">{i.detail}</span> : null}
         </span>
+        {p.view === 'list' && progress(i)}
       </span>
+      {quick(i, 'shelf-row-quick')}
       {more(i)}
     </div>
   )
@@ -214,7 +265,7 @@ export function Shelf(p: { items: ShelfItem[]; show: Show; view: ShelfView; shap
           {cloud.length ? (
             <h2 className="lib-section shelf-section">
               <Icon name="check" size={18} />
-              On this device <span className="muted">· ready to read, also offline</span>
+              On this device <span className="muted">· {p.streams ? 'plays offline too' : 'ready to read, also offline'}</span>
             </h2>
           ) : null}
           {group(onDevice)}
@@ -225,7 +276,7 @@ export function Shelf(p: { items: ShelfItem[]; show: Show; view: ShelfView; shap
         <>
           <h2 className="lib-section shelf-section">
             <Icon name="cloud" size={18} />
-            In Dropbox <span className="muted">· not on this device yet, downloads when you open it</span>
+            In Dropbox <span className="muted">· {p.streams ? 'plays from Dropbox, needs a connection' : 'not on this device yet, downloads when you open it'}</span>
           </h2>
           {group(cloud)}
         </>
