@@ -427,6 +427,27 @@ describe('sync client', () => {
     expect((await other.all()).find((p) => p.k === 'playlist' && p.key === mine.id)?.v).toEqual({ deleted: true })
   })
 
+  it('puts back a synced playlist that went missing here instead of deleting it everywhere', async () => {
+    await joinSync(CODE, KEY)
+    const mine = newPlaylist({ name: 'Road trip', smart: false, itemIds: [itemId('https://p/feed', 'e1')] })
+    await savePlaylist(mine)
+    await syncNow()
+    // Lost here without anyone deleting it (a wiped or unreadable store)
+    await setKv(PLAYLISTS_KEY, [])
+    await syncNow()
+    expect((await loadPlaylists()).map((p) => p.name)).toEqual(['Road trip'])
+    expect((await loadPlaylists())[0].itemIds).toEqual(['https://p/feed\ne1'])
+    const other = await otherDevice()
+    expect((await other.all()).find((p) => p.k === 'playlist' && p.key === mine.id)?.v).toMatchObject({ name: 'Road trip' })
+
+    // Deleting it here still deletes it everywhere, once
+    await deletePlaylist(mine.id)
+    expect((await syncNow())?.sent).toBe(1)
+    expect((await other.all()).find((p) => p.k === 'playlist' && p.key === mine.id)?.v).toEqual({ deleted: true })
+    expect((await syncNow())?.sent).toBe(0)
+    expect(await loadPlaylists()).toEqual([])
+  })
+
   it('gives starter playlists made before fixed ids their fixed id', async () => {
     await joinSync(CODE, KEY)
     await setKv(PLAYLISTS_KEY, [{ ...newPlaylist({ name: 'Short reads', smart: true }), id: 'pl-old', createdAt: 500 }])
