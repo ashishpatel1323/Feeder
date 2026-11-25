@@ -76,6 +76,7 @@ import com.nononsenseapps.feeder.model.zim.ZimCatalogEntry
 import com.nononsenseapps.feeder.model.zim.ZimJob
 import com.nononsenseapps.feeder.model.zim.ZimLibrary
 import com.nononsenseapps.feeder.model.zim.ZimNative
+import com.nononsenseapps.feeder.model.zim.ZimSnapshots
 import com.nononsenseapps.feeder.sync2.SyncNudge
 import com.nononsenseapps.feeder.ui.compose.shelf.CoverShape
 import com.nononsenseapps.feeder.ui.compose.shelf.ShelfAction
@@ -183,6 +184,16 @@ fun ZimLibraryScreen(
         val localIcons by produceState(emptyMap<String, ImageBitmap>(), list) {
             value = list.orEmpty().mapNotNull { b -> b.icon?.let { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() }?.let { b.id to it } }.toMap()
         }
+        // Books without an icon (most zimit sites) get a picture of their landing page
+        val snapshots by produceState(emptyMap<String, ImageBitmap>(), list) {
+            val shots = ZimSnapshots.get(context)
+            val noIcon = list.orEmpty().filter { it.icon == null }
+            value = noIcon.mapNotNull { b -> shots.cached(b)?.let { b.id to it.asImageBitmap() } }.toMap()
+            for (b in noIcon) {
+                if (b.id in value) continue
+                shots.snapshot(library, b)?.let { value = value + (b.id to it.asImageBitmap()) }
+            }
+        }
         fun pct(j: ZimJob?) = j?.let { if (it.total > 0) (it.done * 100 / it.total).toInt() else 0 }
         val shelfItems =
             list.orEmpty().map { book ->
@@ -199,7 +210,8 @@ fun ZimLibraryScreen(
                             if (book.articleCount > 0) pagesLabel(book.articleCount) else null,
                             book.date.ifBlank { null },
                         ).joinToString(" · "),
-                    cover = localIcons[book.id],
+                    cover = localIcons[book.id] ?: snapshots[book.id],
+                    coverFills = book.id !in localIcons && book.id in snapshots,
                     fallback = Icons.Outlined.Public,
                     where = if (copy != null) Where.BOTH else Where.DEVICE,
                     size = book.size,

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -93,6 +94,8 @@ class ShelfItem(
     val cover: ImageBitmap? = null,
     /** A picture to load (the Kiwix catalog's icon for a ZIM only in Dropbox) */
     val coverUrl: String? = null,
+    /** [cover] is a picture of the whole page (a ZIM's landing page), so it fills the tile */
+    val coverFills: Boolean = false,
     val fallback: ImageVector,
     val where: Where,
     val size: Long,
@@ -354,7 +357,11 @@ private fun Cover(
     } else {
         val m = if (small) modifier.size(44.dp) else modifier.fillMaxWidth().aspectRatio(4f / 3f)
         Box(m.clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh), contentAlignment = Alignment.Center) {
-            picture(Modifier.size(if (small) 32.dp else 56.dp).clip(RoundedCornerShape(if (small) 6.dp else 8.dp)))
+            if (item.cover != null && item.coverFills) {
+                Image(item.cover, contentDescription = null, contentScale = ContentScale.Crop, alignment = Alignment.TopCenter, modifier = Modifier.fillMaxSize())
+            } else {
+                picture(Modifier.size(if (small) 32.dp else 56.dp).clip(RoundedCornerShape(if (small) 6.dp else 8.dp)))
+            }
         }
     }
 }

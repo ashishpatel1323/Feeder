@@ -72,6 +72,15 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
   const dbx = useDropbox()
   const prefs = useShelfPrefs('zim', 'list')
   const [icons, setIcons] = useState<Record<string, string>>({})
+  // Landing-page covers come from the service worker, like the reader's pages
+  const [swReady, setSwReady] = useState(false)
+  useEffect(() => {
+    let live = true
+    navigator.serviceWorker?.ready.then(() => live && setSwReady(true))
+    return () => {
+      live = false
+    }
+  }, [])
   const signedIn = useRef(false)
   signedIn.current = dbx.signedIn
 
@@ -206,6 +215,7 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
         detail: [formatBytes(b.size), b.flavour, b.articleCount ? `${b.articleCount.toLocaleString()} pages` : '', b.date].filter(Boolean).join(' · '),
         cover: b.icon,
         coverIcon: 'public',
+        preview: !b.icon && swReady ? zimUrl(b.id, '') : undefined,
         where: remoteCopy ? 'both' : 'device',
         size: b.size,
         busy: percent(jobs.find((j) => j.label === `Uploading ${b.title} to Dropbox`), 'Uploading'),

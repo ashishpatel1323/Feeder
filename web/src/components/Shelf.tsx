@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { formatBytes } from '../lib/offline'
 import { Icon, IconButton, type IconName } from './Icon'
 
@@ -26,6 +26,8 @@ export interface ShelfItem {
   detail?: string
   cover: string | null
   coverIcon: IconName
+  /** A page to show shrunk as the cover when there is no [cover] (a ZIM's landing page) */
+  preview?: string
   where: Where
   size: number
   /** Downloading or uploading right now */
@@ -166,8 +168,8 @@ export function Shelf(p: { items: ShelfItem[]; show: Show; view: ShelfView; shap
         <span className={`${small ? 'shelf-thumb' : 'book-cover'} book-cover-blank`}>{small ? <Icon name={i.coverIcon} size={18} /> : <span>{i.title}</span>}</span>
       )
     ) : (
-      <span className={small ? 'shelf-thumb shelf-tile' : 'shelf-tile-cover'}>
-        {i.cover ? <img src={i.cover} alt="" /> : <Icon name={i.coverIcon} size={small ? 22 : 44} />}
+      <span className={`${small ? 'shelf-thumb shelf-tile' : 'shelf-tile-cover'}${!i.cover && i.preview ? ' shelf-preview' : ''}`}>
+        {i.cover ? <img src={i.cover} alt="" /> : i.preview ? <PagePreview src={i.preview} /> : <Icon name={i.coverIcon} size={small ? 22 : 44} />}
       </span>
     )
 
@@ -229,5 +231,38 @@ export function Shelf(p: { items: ShelfItem[]; show: Show; view: ShelfView; shap
         </>
       ) : null}
     </>
+  )
+}
+
+/** Width in CSS pixels the page is laid out at before it's shrunk: a phone screen. */
+const PREVIEW_WIDTH = 420
+
+/**
+ * A page drawn small and still, as a cover: laid out at phone width, scaled to fit, no scripts and
+ * no clicks (the cover's own button opens the book).
+ */
+function PagePreview({ src }: { src: string }) {
+  const box = useRef<HTMLSpanElement>(null)
+  const [scale, setScale] = useState(0)
+  useEffect(() => {
+    const el = box.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setScale(el.clientWidth / PREVIEW_WIDTH))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  return (
+    <span ref={box} className="page-preview" aria-hidden="true">
+      {scale > 0 ? (
+        <iframe
+          src={src}
+          title=""
+          tabIndex={-1}
+          loading="lazy"
+          sandbox="allow-same-origin"
+          style={{ width: PREVIEW_WIDTH, height: PREVIEW_WIDTH * 0.75, transform: `scale(${scale})` }}
+        />
+      ) : null}
+    </span>
   )
 }
