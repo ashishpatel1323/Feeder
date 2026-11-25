@@ -98,22 +98,29 @@ function charBefore(el: Element): string | undefined {
 /** A paragraph-like block with no blocks inside, so a credit check never drops a whole short article. */
 function isLeafBlock(el: Element): boolean {
   if (!BLOCK_TAGS.test(el.tagName)) return false
-  for (const c of el.children) if (BLOCK_TAGS.test(c.tagName) && c.tagName !== 'BR') return false
+  for (const c of el.children) if (BLOCK_TAGS.test(c.tagName) && tagOf(c) !== 'BR') return false
   return true
 }
 
 /** Clutter elements that read aloud skips with everything inside them. */
 function isClutter(el: Element): boolean {
-  if (SKIP_TAGS.has(el.tagName) || el.getAttribute('aria-hidden') === 'true') return true
+  const tag = tagOf(el)
+  if (SKIP_TAGS.has(tag) || el.getAttribute('aria-hidden') === 'true') return true
   const role = el.getAttribute('role')
   if (role === 'doc-noteref' || role === 'doc-endnotes' || role === 'doc-footnote') return true
+  // Ebooks mark note references and notes with epub:type
+  const epubType = el.getAttributeNS?.(EPUB_NS, 'type')
+  if (epubType && /\b(noteref|footnote|endnote|rearnote)s?\b/.test(epubType)) return true
   if (el.id && FOOTNOTE_SECTION.test(el.id)) return true
-  if (el.tagName === 'SUP') return isFootnoteMarker(el.textContent ?? '', !!el.closest('a'), charBefore(el))
-  if (el.tagName === 'A') return isFootnoteLink(el.getAttribute('href') ?? '', el.textContent ?? '')
+  if (tag === 'SUP') return isFootnoteMarker(el.textContent ?? '', !!el.closest('a'), charBefore(el))
+  if (tag === 'A') return isFootnoteLink(el.getAttribute('href') ?? '', el.textContent ?? '')
   return false
 }
+const EPUB_NS = 'http://www.idpf.org/2007/ops'
+/** Tag names are lower case in XHTML pages (ebooks). */
+const tagOf = (el: Element) => el.tagName.toUpperCase()
 const BLOCK_TAGS =
-  /^(P|DIV|LI|H[1-6]|BLOCKQUOTE|PRE|TD|TH|SECTION|ARTICLE|HEADER|FOOTER|FIGURE|UL|OL|TABLE|TR|BR|HR|DT|DD)$/
+  /^(P|DIV|LI|H[1-6]|BLOCKQUOTE|PRE|TD|TH|SECTION|ARTICLE|HEADER|FOOTER|FIGURE|UL|OL|TABLE|TR|BR|HR|DT|DD)$/i
 
 const hasSpeech = () => typeof window !== 'undefined' && 'speechSynthesis' in window
 const cancelSpeech = () => {
@@ -140,7 +147,14 @@ export function chunkForKokoro(text: string, max = 280): { start: number; end: n
   return out
 }
 
-const highlights = () => (typeof CSS !== 'undefined' && 'highlights' in CSS ? CSS.highlights : null)
+type HighlightWindow = Window & { CSS?: typeof CSS; Highlight?: typeof Highlight }
+
+/** The highlight registry of the window `el` is in: an ebook page lives in its own iframe. */
+const highlightsOf = (el: Node | null) => {
+  const w = (el?.ownerDocument?.defaultView ?? (typeof window !== 'undefined' ? window : null)) as HighlightWindow | null
+  const css = w?.CSS
+  return css && 'highlights' in css && w?.Highlight ? { registry: css.highlights, make: (r: Range) => new w.Highlight!(r) } : null
+}
 
 /** A tiny silent WAV, looped while reading so the browser shows media controls (Media Session). */
 function silentWavUrl(): string {
@@ -218,6 +232,11 @@ export class ReadAloudEngine {
   onError: ((message: string) => void) | null = null
   onMediaNext: (() => void) | null = null
   onMediaPrevious: (() => void) | null = null
+  /**
+   * Brings spoken text into view instead of scrolling the article, for readers that turn pages
+   * (ebooks). Return false to fall back to scrolling.
+   */
+  revealHook: ((r: Range) => boolean) | null = null
   title = ''
   artist = ''
 
@@ -262,7 +281,7 @@ export class ReadAloudEngine {
       while (block && block !== container && !BLOCK_TAGS.test(block.tagName)) block = block.parentElement
       return block
     }
-    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+    const walker = container.ownerDocument.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
       acceptNode: (n) => {
         for (let p = n.parentElement; p && p !== container; p = p.parentElement) {
           let skip = clutter.get(p)
@@ -355,7 +374,7 @@ export class ReadAloudEngine {
     const s = this.segments.find((g) => start >= g.start && start < g.end)
     const e = [...this.segments].reverse().find((g) => end > g.start && end <= g.end)
     if (!s || !e) return null
-    const r = document.createRange()
+    const r = (this.container?.ownerDocument ?? document).createRange()
     r.setStart(s.node, s.nodeStart + start - s.start)
     r.setEnd(e.node, e.nodeStart + end - e.start)
     return r
@@ -401,13 +420,13 @@ export class ReadAloudEngine {
   }
 
   showTapWord(offset: number | null) {
-    const hl = highlights()
+    const hl = highlightsOf(this.container)
     if (!hl) return
-    hl.delete('ra-tap')
+    hl.registry.delete('ra-tap')
     if (offset === null) return
     const w = this.wordAt(offset)
     const r = w && this.rangeFor(w.start, w.end)
-    if (r) hl.set('ra-tap', new Highlight(r))
+    if (r) hl.registry.set('ra-tap', hl.make(r))
   }
 
   setRate(rate: number) {
@@ -458,8 +477,8 @@ export class ReadAloudEngine {
     // Nothing to read ahead for any more (the one sentence already being made still finishes)
     kokoro.dropWaiting(new Set())
     this.clearEstimate()
-    highlights()?.delete('ra-sentence')
-    highlights()?.delete('ra-word')
+    highlightsOf(this.container)?.registry.delete('ra-sentence')
+    highlightsOf(this.container)?.registry.delete('ra-word')
     this.silentAudio?.pause()
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none'
     this.rsvp = []
@@ -694,7 +713,7 @@ export class ReadAloudEngine {
   }
 
   private highlightSentence(i: number) {
-    const hl = highlights()
+    const hl = highlightsOf(this.container)
     const s = this.sentences[i]
     if (s && !this.state.muted) {
       const first = this.wordAt(s.start)
@@ -704,8 +723,8 @@ export class ReadAloudEngine {
     if (!hl || !s) return
     const r = this.rangeFor(s.start, s.end)
     if (!r) return
-    hl.set('ra-sentence', new Highlight(r))
-    hl.delete('ra-word')
+    hl.registry.set('ra-sentence', hl.make(r))
+    hl.registry.delete('ra-word')
     this.lastWord = null
     // Keep the start of the sentence in view (not its whole paragraph, which can be taller than the screen)
     const start = this.wordAt(s.start) ?? { start: s.start, end: Math.min(s.end, s.start + 1) }
@@ -715,11 +734,11 @@ export class ReadAloudEngine {
   private highlightWord(start: number, end: number, shown?: string) {
     this.lastWord = { start, end }
     this.set({ wordStart: start, offset: start, word: shown ?? this.text.slice(start, end).trim() })
-    const hl = highlights()
+    const hl = highlightsOf(this.container)
     if (!hl) return
     const r = this.rangeFor(start, end)
     if (!r) return
-    hl.set('ra-word', new Highlight(r))
+    hl.registry.set('ra-word', hl.make(r))
     this.lastWord = { start, end }
     // Long sentences keep scrolling with the voice
     this.keepInView(r)
@@ -731,6 +750,7 @@ export class ReadAloudEngine {
    */
   private keepInView(r: Range, force = false) {
     if (!this.state.following && !force) return
+    if (this.revealHook?.(r)) return
     const scroller = this.scroller ?? (this.container?.closest('[data-scroll]') as HTMLElement | null)
     const rect = r.getClientRects()[0] ?? r.getBoundingClientRect()
     if (!rect || (rect.width === 0 && rect.height === 0)) return

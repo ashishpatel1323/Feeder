@@ -13,6 +13,8 @@
  *   video    feedUrl \n guid      { t, d }: where a video or podcast episode was left, in seconds
  *   playlist playlist id          PlaylistValue, or { deleted: true } after deleting it
  *   highlight highlight id        HighlightValue, or { deleted: true } after deleting it
+ *   bookpos  ebook id             { cfi, f }: where an ebook was left (f = 0–1 through the book)
+ *   dropbox  "main"               DropboxLink (the Dropbox sign-in), or { deleted: true } after signing out
  *
  * New kinds (Read later links, …) can be added later: devices keep records of kinds they
  * don't know and the server never looks inside.
@@ -23,6 +25,7 @@
 import { offlineNow } from './settings'
 import { apiHeaders, HttpError } from './api'
 import { b64encode, decodeKey, decryptString, encryptString, type SecretKeys } from './crypto'
+import { applyDropboxLink, dropboxLink, DROPBOX_TS_KEY, type DropboxLink } from './dropbox'
 import { PLAYLISTS_KEY, STARTER_IDS, loadPlaylists, type Playlist } from './playlists'
 import {
   db,
@@ -52,7 +55,7 @@ export interface SyncState {
   lastError?: string | null
 }
 
-export type Kind = 'feed' | 'read' | 'saved' | 'hidden' | 'layout' | 'video' | 'playlist' | 'highlight'
+export type Kind = 'feed' | 'read' | 'saved' | 'hidden' | 'layout' | 'video' | 'playlist' | 'highlight' | 'bookpos' | 'dropbox'
 
 /** The plaintext inside a record. */
 export interface Payload {
@@ -84,6 +87,15 @@ export interface FeedValue {
   blockRules: string
   allowRules: string
 }
+
+export interface BookPosValue {
+  /** EPUB CFI of the page start */
+  cfi: string
+  /** 0–1 through the book */
+  f: number
+}
+
+export const DROPBOX_RECORD_KEY = 'main'
 
 export interface VideoValue {
   /** Seconds watched */
@@ -207,6 +219,8 @@ export interface HighlightValue {
   color: HighlightColor
   note: string
   createdAt: number
+  /** Ebook highlights only: where the text is, as an EPUB CFI. */
+  cfi?: string
 }
 
 const HIGHLIGHT_COLOR_IDS: HighlightColor[] = ['yellow', 'green', 'blue', 'pink']
@@ -224,6 +238,7 @@ export function highlightValue(h: Highlight): HighlightValue {
     color: h.color,
     note: h.note,
     createdAt: h.createdAt,
+    ...(h.cfi ? { cfi: h.cfi } : {}),
   }
 }
 
@@ -244,6 +259,7 @@ export function highlightFromValue(id: string, v: Partial<HighlightValue>, ts: n
     note: str(v.note),
     createdAt: typeof v.createdAt === 'number' ? v.createdAt : ts,
     modifiedAt: ts,
+    ...(typeof v.cfi === 'string' && v.cfi ? { cfi: v.cfi } : {}),
   }
 }
 
@@ -463,6 +479,24 @@ export async function collectChanges(now = Date.now()): Promise<Pending[]> {
     const value: VideoValue = { t: v.t, d: v.d }
     if (!kn || (v.ts > kn.ts && !same(kn.v, value))) out.push({ k: 'video', key: v.id, v: value, ts: Math.max(v.ts, (kn?.ts ?? 0) + 1) })
   })
+
+  // Ebook positions saved here since they were last exchanged
+  const positions = await db.bookPos.toArray()
+  const knownPos = await db.syncKnown.bulkGet(positions.map((p) => knownKey('bookpos', p.id)))
+  positions.forEach((p, n) => {
+    const kn = knownPos[n]
+    const value: BookPosValue = { cfi: p.cfi, f: p.f }
+    if (!kn || (p.ts > kn.ts && !same(kn.v, value))) out.push({ k: 'bookpos', key: p.id, v: value, ts: Math.max(p.ts, (kn?.ts ?? 0) + 1) })
+  })
+
+  // The Dropbox sign-in, so other devices use the same Dropbox without signing in
+  const link = await dropboxLink()
+  const kd = await db.syncKnown.get(knownKey('dropbox', DROPBOX_RECORD_KEY))
+  const dropboxValue = link ?? { deleted: true }
+  if (kd ? !same(kd.v, dropboxValue) : !!link) {
+    const changedAt = await getKv<number>(DROPBOX_TS_KEY, 0)
+    out.push({ k: 'dropbox', key: DROPBOX_RECORD_KEY, v: dropboxValue, ts: Math.max(changedAt || now, (kd?.ts ?? 0) + 1) })
+  }
   return out
 }
 
@@ -481,7 +515,8 @@ export interface ApplyResult {
 /** Applies one record from another device, unless what this device knows is newer. */
 export async function applyRemote(p: Payload, ts: number, result: ApplyResult): Promise<void> {
   const k = knownKey(p.k, p.key)
-  await db.transaction('rw', [db.feeds, db.items, db.syncKnown, db.hidden, db.kv, db.videoPos, db.highlights], async () => {
+  let dropbox: { link: DropboxLink | null } | null = null
+  await db.transaction('rw', [db.feeds, db.items, db.syncKnown, db.hidden, db.kv, db.videoPos, db.highlights, db.bookPos], async () => {
     const kn = await db.syncKnown.get(k)
     if (kn && kn.ts > ts) return
     if (kn && kn.ts === ts && same(kn.v, p.v)) return
@@ -570,9 +605,32 @@ export async function applyRemote(p: Payload, ts: number, result: ApplyResult): 
         }
         break
       }
+      case 'bookpos': {
+        const v = p.v as Partial<BookPosValue> | null
+        if (v && typeof v.cfi === 'string' && v.cfi) {
+          const local = await db.bookPos.get(p.key)
+          if (!local || local.ts <= ts) {
+            await db.bookPos.put({ id: p.key, cfi: v.cfi, f: typeof v.f === 'number' && Number.isFinite(v.f) ? v.f : 0, ts })
+          }
+        }
+        break
+      }
+      case 'dropbox': {
+        if (p.key !== DROPBOX_RECORD_KEY) break
+        const v = p.v as Partial<DropboxLink> | null
+        if (isDeleted(v) || !v) dropbox = { link: null }
+        else if (typeof v.refreshToken === 'string' && typeof v.appKey === 'string' && v.refreshToken && v.appKey) {
+          dropbox = { link: { appKey: v.appKey, refreshToken: v.refreshToken, name: typeof v.name === 'string' ? v.name : '', email: typeof v.email === 'string' ? v.email : '' } }
+        }
+        if (dropbox) await setKv(DROPBOX_TS_KEY, ts)
+        break
+      }
       // Unknown kinds are only remembered (a newer version of the app will use them)
     }
   })
+  // Outside the transaction: it writes the kv table and tells the Ebooks and ZIM tabs
+  const d = dropbox as { link: DropboxLink | null } | null
+  if (d) await applyDropboxLink(d.link)
 }
 
 /** A saved article another device has but this one never fetched. */

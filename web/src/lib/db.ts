@@ -90,6 +90,8 @@ export interface Highlight {
   createdAt: number
   /** Last color or note change, which sync goes by (newest wins). Unset = createdAt. */
   modifiedAt?: number
+  /** Ebook highlights (itemId "ebook:\n<book id>"): where the text is, as an EPUB CFI. */
+  cfi?: string
 }
 
 export type HighlightColor = 'yellow' | 'green' | 'blue' | 'pink'
@@ -121,6 +123,37 @@ export interface VideoPos {
   ts: number
 }
 
+/** An ebook in the Ebooks tab (ebooks/library.ts). */
+export interface Book {
+  /** Dropbox content hash of the file (dropbox.ts contentHash): the same on every device. */
+  id: string
+  title: string
+  author: string
+  /** File extension: epub, mobi, azw3, fb2, cbz… */
+  ext: string
+  size: number
+  /** A small cover picture (data: URL), or null. */
+  cover: string | null
+  /** Where the file is in Dropbox, or null when it is only on this device. */
+  dropboxPath: string | null
+  /** Whether the file is on this device (in the browser's private storage). */
+  local: boolean
+  /** Whether title, author and cover were read from the file itself (not just its name). */
+  described: boolean
+  addedAt: number
+  lastOpenedAt: number
+}
+
+/** Where an ebook was left (synced as kind "bookpos"). */
+export interface BookPos {
+  id: string
+  /** EPUB CFI of the page start */
+  cfi: string
+  /** 0–1 through the book */
+  f: number
+  ts: number
+}
+
 export interface KeyValue {
   key: string
   value: unknown
@@ -138,6 +171,8 @@ class FeederDb extends Dexie {
   syncKnown!: EntityTable<SyncKnown, 'k'>
   hidden!: EntityTable<HiddenItem, 'id'>
   videoPos!: EntityTable<VideoPos, 'id'>
+  books!: EntityTable<Book, 'id'>
+  bookPos!: EntityTable<BookPos, 'id'>
 
   constructor() {
     super('feeder-web')
@@ -171,6 +206,8 @@ class FeederDb extends Dexie {
     })
     // Watch positions of YouTube videos
     this.version(5).stores({ videoPos: '&id' })
+    // The Ebooks tab: books and where each was left
+    this.version(6).stores({ books: '&id, lastOpenedAt', bookPos: '&id' })
   }
 }
 
