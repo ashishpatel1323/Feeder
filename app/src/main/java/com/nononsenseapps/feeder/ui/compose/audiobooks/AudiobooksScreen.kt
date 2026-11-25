@@ -125,7 +125,9 @@ import com.nononsenseapps.feeder.model.history.ItemHistory
 import com.nononsenseapps.feeder.sync2.SyncNudge
 import com.nononsenseapps.feeder.sync2.ThisDevice
 import com.nononsenseapps.feeder.sync2.otherDeviceText
-import com.nononsenseapps.feeder.ui.compose.ebooks.DropboxCard
+import com.nononsenseapps.feeder.ui.compose.ebooks.DeleteFromDropboxDialog
+import com.nononsenseapps.feeder.ui.compose.ebooks.DropboxAccountButton
+import com.nononsenseapps.feeder.ui.compose.ebooks.uploadOrExplain
 import com.nononsenseapps.feeder.ui.compose.feed.PlainTooltipBox
 import com.nononsenseapps.feeder.ui.compose.history.historyItems
 import com.nononsenseapps.feeder.ui.compose.history.rememberHistory
@@ -224,6 +226,7 @@ fun AudiobooksScreen(
     val playing by player.state.collectAsState()
     val prefs = rememberShelfPrefs("audiobooks", defaultCards = true)
     var addMenu by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf<Audiobook?>(null) }
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris -> library.addFiles(uris) }
     val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> uri?.let(library::addFolder) }
 
@@ -249,6 +252,10 @@ fun AudiobooksScreen(
     val filesText = stringResource(R.string.audiobook_files)
     val emptyPhoneText = stringResource(R.string.audiobooks_empty_phone)
     val downloadingText = stringResource(R.string.shelf_downloading)
+    val uploadingText = stringResource(R.string.shelf_uploading)
+    val uploadText = stringResource(R.string.upload_to_dropbox)
+    val deleteDropboxText = stringResource(R.string.delete_from_dropbox)
+    val audiobooksWhat = stringResource(R.string.audiobooks_what)
     val items =
         sorted.map { b ->
             val p = pos[b.id]
@@ -260,7 +267,9 @@ fun AudiobooksScreen(
             val actions = mutableListOf<ShelfAction>()
             if (b.dropboxPath != null && !downloaded && !b.onPhone && job == null) actions += ShelfAction(downloadText) { library.download(b.id) }
             if (downloaded && b.dropboxPath != null && !b.onPhone) actions += ShelfAction(removeDownloadText) { library.removeDownload(b.id) }
+            if (b.dropboxPath == null && job == null) actions += ShelfAction(uploadText) { uploadOrExplain(context, link != null, audiobooksWhat) { library.uploadToDropbox(b.id) } }
             if (b.tracks.any { it.uri != null }) actions += ShelfAction(forgetText) { library.forget(b.id) }
+            if (b.dropboxPath != null && job == null) actions += ShelfAction(deleteDropboxText) { deleting = b }
             ShelfItem(
                 key = b.id,
                 title = b.title,
@@ -279,7 +288,7 @@ fun AudiobooksScreen(
                         else -> Where.CLOUD
                     },
                 size = b.size,
-                busy = job?.let { downloadingText.format(if (it.total > 0) (it.done * 100 / it.total).toInt() else 0) },
+                busy = job?.let { (if (it.up) uploadingText else downloadingText).format(if (it.total > 0) (it.done * 100 / it.total).toInt() else 0) },
                 progress = p?.f?.toFloat(),
                 quick =
                     ShelfQuick(
@@ -303,6 +312,7 @@ fun AudiobooksScreen(
                             Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.audiobooks_refresh))
                         }
                     }
+                    DropboxAccountButton(what = audiobooksWhat, folder = DropboxClient.AUDIOBOOKS_FOLDER.removePrefix("/"), onSignedOut = { nudge.changed(false) })
                     Box {
                         IconButton(onClick = { addMenu = true }) {
                             Icon(Icons.Default.Add, contentDescription = stringResource(R.string.audiobooks_add))
@@ -337,9 +347,6 @@ fun AudiobooksScreen(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalArrangement = Arrangement.spacedBy(if (prefs.cards) 18.dp else 0.dp),
         ) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                DropboxCard(what = stringResource(R.string.audiobooks_what), onSignedOut = { nudge.changed(false) }, horizontalPadding = 0.dp)
-            }
             adding?.let { title ->
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Column {
@@ -369,6 +376,15 @@ fun AudiobooksScreen(
                 shelf(items, prefs, CoverShape.SQUARE, emptyPhoneText, streams = true)
             }
         }
+    }
+
+    deleting?.let { b ->
+        DeleteFromDropboxDialog(
+            title = b.title,
+            keepsPhoneCopy = library.onPhone(b),
+            onDelete = { library.deleteFromDropbox(b.id) },
+            onDismiss = { deleting = null },
+        )
     }
 }
 

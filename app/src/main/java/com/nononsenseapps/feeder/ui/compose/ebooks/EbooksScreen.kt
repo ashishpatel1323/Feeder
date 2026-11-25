@@ -35,7 +35,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -46,7 +45,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -147,6 +145,7 @@ fun EbooksScreen(
     val forgetLabel = stringResource(R.string.audiobook_forget)
     val deleteDropboxLabel = stringResource(R.string.ebook_delete_dropbox)
     val newLabel = stringResource(R.string.ebook_new)
+    val booksWhat = stringResource(R.string.ebooks_what)
     val noBooksHere = stringResource(R.string.shelf_no_books_here)
     val items =
         sorted.map { b ->
@@ -168,7 +167,7 @@ fun EbooksScreen(
                 actions =
                     buildList {
                         if (!b.local) add(ShelfAction(downloadLabel) { library.download(b.id) })
-                        if (b.local && b.dropboxPath == null && link != null && jobs.none { it.key == "up:${b.id}" }) add(ShelfAction(uploadLabel) { library.uploadToDropbox(b.id) })
+                        if (b.local && b.dropboxPath == null && jobs.none { it.key == "up:${b.id}" }) add(ShelfAction(uploadLabel) { uploadOrExplain(context, link != null, booksWhat) { library.uploadToDropbox(b.id) } })
                         if (b.local) add(ShelfAction(if (b.uri != null) forgetLabel else if (b.dropboxPath != null) removeLabel else deleteLabel) { library.removeFromDevice(b.id) })
                         if (b.dropboxPath != null) add(ShelfAction(deleteDropboxLabel) { deleting = b })
                     },
@@ -187,6 +186,7 @@ fun EbooksScreen(
                             Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.in_dropbox))
                         }
                     }
+                    DropboxAccountButton(what = booksWhat, folder = DropboxClient.EBOOKS_FOLDER.removePrefix("/"), onSignedOut = { nudge.changed(false) })
                 },
             )
         },
@@ -225,9 +225,6 @@ fun EbooksScreen(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                DropboxCard(what = stringResource(R.string.ebooks_what), onSignedOut = { nudge.changed(false) }, horizontalPadding = 0.dp)
-            }
             items(jobs.filterNot { it.key.startsWith("down:") || it.key.startsWith("up:") }, key = { "job:${it.key}" }, span = { GridItemSpan(maxLineSpan) }) { job ->
                 Column(Modifier.fillMaxWidth()) {
                     Text(job.label, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -262,17 +259,11 @@ fun EbooksScreen(
     }
 
     deleting?.let { book ->
-        AlertDialog(
-            onDismissRequest = { deleting = null },
-            title = { Text(stringResource(R.string.ebook_delete_title, book.title)) },
-            text = { Text(stringResource(R.string.ebook_delete_text)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    library.deleteEverywhere(book.id)
-                    deleting = null
-                }) { Text(stringResource(R.string.ebook_delete)) }
-            },
-            dismissButton = { TextButton(onClick = { deleting = null }) { Text(stringResource(android.R.string.cancel)) } },
+        DeleteFromDropboxDialog(
+            title = book.title,
+            keepsPhoneCopy = book.local,
+            onDelete = { library.deleteFromDropbox(book.id) },
+            onDismiss = { deleting = null },
         )
     }
 }

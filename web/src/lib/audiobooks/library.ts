@@ -9,7 +9,7 @@
  * A one-file book's id is the file's Dropbox content hash; a folder's is a hash of its files'
  * hashes in play order. Positions (kind "audiopos") sync by that id, the same on every device.
  */
-import { AUDIOBOOKS_FOLDER, contentHash, downloadRange, downloadStream, getDropbox, listTree, temporaryLink, uploadFile, type DropboxFile, type Progress } from '../dropbox'
+import { AUDIOBOOKS_FOLDER, contentHash, deleteFile, downloadRange, downloadStream, getDropbox, listTree, temporaryLink, uploadFile, type DropboxFile, type Progress } from '../dropbox'
 import { db, type AudioPos, type AudioTrack, type Audiobook } from '../db'
 import { thisDevice } from '../device'
 import { readTags, type FileTags, type RangeReader } from './tags'
@@ -334,6 +334,19 @@ export async function uploadAudiobook(id: string, onProgress?: Progress): Promis
     await uploadFile(f.path, f.file, (done) => onProgress?.(before + done, total))
     before += f.file.size
   }
+  await refreshAudiobooks()
+}
+
+/**
+ * Deletes the book (its file, or its folder) from Dropbox for every device. When this device has
+ * all its files, the book stays here, as a book only on this device.
+ */
+export async function deleteAudiobookFromDropbox(id: string): Promise<void> {
+  const b = await db.audiobooks.get(id)
+  if (!b?.dropboxPath) return
+  await deleteFile(b.dropboxPath)
+  if (onDevice(b)) await db.audiobooks.update(id, { dropboxPath: null })
+  else await db.audiobooks.delete(id)
   await refreshAudiobooks()
 }
 

@@ -42,6 +42,12 @@
   <string name="dropbox_synced">%1$s sync with Dropbox (%2$s), in Apps › Feeder.</string>
   <string name="dropbox_not_signed_in">To keep %1$s in Dropbox, sign in to Dropbox once on Feeder web (Ebooks tab). This phone follows through sync.</string>
   <string name="dropbox_sign_out">Sign out</string>
+  <string name="dropbox_account">Dropbox account</string>
+  <string name="dropbox_not_connected">Dropbox not connected</string>
+  <string name="dropbox_folder">Apps › Feeder › %1$s</string>
+  <string name="dropbox_sign_in_title">Sign in to Dropbox</string>
+  <string name="delete_from_dropbox_all">This removes it for all your devices.</string>
+  <string name="delete_from_dropbox_all_keep">This removes it for all your devices. The copy on this phone stays.</string>
   <string name="dropbox_sign_out_title">Sign out of Dropbox?</string>
   <string name="dropbox_sign_out_text">This signs out on every device. The files stay in Dropbox.</string>
   <string name="in_dropbox">In Dropbox</string>

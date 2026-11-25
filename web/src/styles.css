@@ -7559,34 +7559,23 @@ mark.sr-mark {
 
 /* ---------------------------------------------------------------- Ebooks tab */
 
-.dbx-panel {
+.dbx-menu {
+  min-width: 240px;
+}
+.dbx-menu-head {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--sp-3);
-  margin: 0 0 var(--sp-4);
-  padding: var(--sp-3) var(--sp-4);
-  border-radius: var(--r-md);
-  background: var(--surface-2);
-  color: var(--text-2);
-  font-size: var(--fs-sm);
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sp-2) 14px var(--sp-3);
 }
-.dbx-text {
-  flex: 1;
-  min-width: 200px;
-}
-.dbx-key {
-  display: flex;
-  gap: var(--sp-2);
-}
-.dbx-key input {
-  height: var(--control-h);
-  padding: 0 var(--sp-3);
-  border: 1px solid var(--border);
-  border-radius: var(--r-pill);
-  background: var(--surface);
+.dbx-menu-name {
   color: var(--text);
-  font: inherit;
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+.dbx-menu-meta {
+  color: var(--text-3);
+  font-size: var(--fs-xs);
 }
 .books-grid {
   display: grid;

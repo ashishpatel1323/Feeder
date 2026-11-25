@@ -328,6 +328,28 @@ class EbookLibrary private constructor(
         if (b.dropboxPath != null) patch(id) { it.copy(local = false, uri = null, source = null) } else change { list -> list.filterNot { it.id == id } }
     }
 
+    /** Deletes the book from Dropbox for every device. A copy on this phone stays, as a phone-only book. */
+    fun deleteFromDropbox(id: String) {
+        val b = get(id) ?: return
+        val path = b.dropboxPath ?: return
+        scope.launch {
+            try {
+                dropbox.delete(path)
+                if (b.local) {
+                    patch(id) { it.copy(dropboxPath = null) }
+                } else {
+                    coverFile(id).delete()
+                    change { list -> list.filterNot { it.id == id } }
+                }
+                _messages.value = "Deleted ${b.title} from Dropbox"
+            } catch (e: Exception) {
+                Log.w(LOG_TAG, "Could not delete ${b.title} from Dropbox", e)
+                _messages.value = e.message ?: "Could not delete from Dropbox"
+            }
+            refresh()
+        }
+    }
+
     /** Deletes the book from Dropbox and the phone. Positions and highlights stay. */
     fun deleteEverywhere(id: String) {
         val b = get(id) ?: return

@@ -6,7 +6,7 @@ import {
   ACCEPT,
   bookFile,
   bookItemId,
-  deleteBook,
+  deleteFromDropbox,
   ebooksSupported,
   importBook,
   uploadBook,
@@ -23,7 +23,7 @@ import { formatBytes } from '../lib/offline'
 import { readAloud, type ReadAloudState } from '../lib/readaloud'
 import type { Settings } from '../lib/settings'
 import type { FoliateView, Location, TocItem } from '../vendor/foliate-js/view.js'
-import { DropboxPanel, useDropbox } from './DropboxPanel'
+import { DeleteFromDropboxDialog, DropboxButton, needsDropbox, useDropbox } from './DropboxPanel'
 import { HighlightBar } from './Highlights'
 import { HistoryList } from './History'
 import { Icon, IconButton } from './Icon'
@@ -78,6 +78,7 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
   const prefs = useShelfPrefs('ebooks', 'cards')
   const fileInput = useRef<HTMLInputElement>(null)
   const dbx = useDropbox()
+  const [deleting, setDeleting] = useState<Book | null>(null)
 
   const refresh = useCallback(() => {
     setBusy(true)
@@ -112,15 +113,14 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
     }
   }
 
-  const act = async (b: Book, what: 'device' | 'everywhere') => {
+  const act = async (b: Book, what: 'device' | 'dropbox') => {
     if (what === 'device') {
       await removeFromDevice(b.id)
       toast(b.dropboxPath ? `Removed ${b.title} from this device; it stays in Dropbox` : `Deleted ${b.title}`)
     } else {
-      if (!confirm(`Delete ${b.title} from Dropbox and this device? Highlights stay.`)) return
       try {
-        await deleteBook(b.id)
-        toast(`Deleted ${b.title}`)
+        await deleteFromDropbox(b.id)
+        toast(`Deleted ${b.title} from Dropbox`)
       } catch (e) {
         toast(e instanceof Error ? e.message : String(e))
       }
@@ -165,9 +165,9 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
     const where = otherDeviceText(pos)
     const actions: ShelfItem['actions'] = []
     if (!b.local) actions.push({ label: 'Download to this device', run: () => void download(b) })
-    if (b.local && !b.dropboxPath && dbx.signedIn && uploading[b.id] === undefined) actions.push({ label: 'Upload to Dropbox', run: () => void upload(b) })
+    if (b.local && !b.dropboxPath && uploading[b.id] === undefined) actions.push({ label: 'Upload to Dropbox', run: () => needsDropbox(dbx.signedIn, toast, () => void upload(b)) })
     if (b.local) actions.push({ label: b.dropboxPath ? 'Remove from this device' : 'Delete', run: () => void act(b, 'device') })
-    if (b.dropboxPath) actions.push({ label: 'Delete from Dropbox', run: () => void act(b, 'everywhere') })
+    if (b.dropboxPath) actions.push({ label: 'Delete from Dropbox', run: () => setDeleting(b) })
     return {
       key: b.id,
       title: b.title,
@@ -201,6 +201,7 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
           <h1>Ebooks</h1>
           <span className="zim-actions">
             {dbx.signedIn ? <IconButton icon="refresh" label="Check Dropbox for new books" onClick={refresh} disabled={busy} /> : null}
+            <DropboxButton folder="Ebooks" toast={toast} />
             <button type="button" className="mf-btn primary" onClick={() => fileInput.current?.click()}>
               <Icon name="upload" size={18} />
               Add book
@@ -218,7 +219,6 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
             }}
           />
         </div>
-        <DropboxPanel what="Books" toast={toast} />
 
         {jobs.length ? (
           <div className="lib-list zim-jobs">
@@ -251,6 +251,7 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
             <Shelf items={items} show={prefs.show} view={prefs.view} shape="book" emptyDevice="No books on this device yet. Books in Dropbox download when you open them." />
           </>
         )}
+        {deleting ? <DeleteFromDropboxDialog title={deleting.title} keepsCopy={deleting.local} onConfirm={() => void act(deleting, 'dropbox')} onClose={() => setDeleting(null)} /> : null}
       </div>
     </section>
   )

@@ -35,6 +35,7 @@ import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -89,7 +90,9 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.runtime.produceState
-import com.nononsenseapps.feeder.ui.compose.ebooks.DropboxCard
+import com.nononsenseapps.feeder.ui.compose.ebooks.DeleteFromDropboxDialog
+import com.nononsenseapps.feeder.ui.compose.ebooks.DropboxAccountButton
+import com.nononsenseapps.feeder.ui.compose.ebooks.uploadOrExplain
 import com.nononsenseapps.feeder.ui.compose.theme.SensibleTopAppBar
 import org.kodein.di.compose.LocalDI
 import org.kodein.di.instance
@@ -126,6 +129,7 @@ fun ZimLibraryScreen(
     val deleteLabel = stringResource(R.string.zim_delete)
     val downloadLabel = stringResource(R.string.shelf_download)
     val noZimsHere = stringResource(R.string.shelf_no_zims_here)
+    val zimWhat = stringResource(R.string.zim_books_what)
     val pagesLabel: (Int) -> String = { n -> context.resources.getString(R.string.zim_pages, n) }
     val uploading: (Int) -> String = { p -> context.getString(R.string.shelf_uploading, p) }
     val downloading: (Int) -> String = { p -> context.getString(R.string.shelf_downloading, p) }
@@ -156,6 +160,12 @@ fun ZimLibraryScreen(
             SensibleTopAppBar(
                 title = stringResource(R.string.zim_library),
                 actions = {
+                    if (link != null && ZimNative.available) {
+                        IconButton(onClick = { library.refreshRemote() }) {
+                            Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.in_dropbox))
+                        }
+                    }
+                    DropboxAccountButton(what = zimWhat, folder = DropboxClient.ZIM_FOLDER.removePrefix("/"), onSignedOut = { nudge.changed(false) })
                     if (ZimNative.available) {
                         IconButton(onClick = { catalogOpen = true }) {
                             Icon(Icons.Outlined.Explore, contentDescription = stringResource(R.string.zim_get_books))
@@ -219,7 +229,7 @@ fun ZimLibraryScreen(
                     onOpen = { onOpenBook(book.id) },
                     actions =
                         buildList {
-                            if (link != null && remote != null && copy == null) add(ShelfAction(uploadLabel) { library.uploadToDropbox(book) })
+                            if ((link == null || remote != null) && copy == null && up == null) add(ShelfAction(uploadLabel) { uploadOrExplain(context, link != null, zimWhat) { library.uploadToDropbox(book) } })
                             if (copy != null) add(ShelfAction(deleteDropboxLabel) { deletingRemote = copy to true })
                             add(ShelfAction(if (copy != null) removeLabel else deleteLabel) { deleting = book })
                         },
@@ -259,7 +269,6 @@ fun ZimLibraryScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
             }
-            item(span = { GridItemSpan(maxLineSpan) }) { DropboxCard(what = stringResource(R.string.zim_books_what), onSignedOut = { nudge.changed(false) }, horizontalPadding = 0.dp) }
             items(jobs.filterNot { it.key.startsWith("up:") || onlyInDropbox.any { f -> f.name == it.label } }, key = { "job:${it.key}" }, span = { GridItemSpan(maxLineSpan) }) { job ->
                 JobRow(job, onCancel = { library.cancel(job) })
             }
@@ -305,21 +314,11 @@ fun ZimLibraryScreen(
     }
 
     deletingRemote?.let { (f, onPhone) ->
-        AlertDialog(
-            onDismissRequest = { deletingRemote = null },
-            title = { Text(stringResource(R.string.delete_from_dropbox_title, f.name.removeSuffix(".zim").replace('_', ' '))) },
-            text = {
-                Text(
-                    stringResource(if (onPhone) R.string.delete_from_dropbox_keep_phone else R.string.delete_from_dropbox_text, Formatter.formatShortFileSize(context, f.size)),
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    library.deleteFromDropbox(f)
-                    deletingRemote = null
-                }) { Text(stringResource(R.string.zim_delete)) }
-            },
-            dismissButton = { TextButton(onClick = { deletingRemote = null }) { Text(stringResource(android.R.string.cancel)) } },
+        DeleteFromDropboxDialog(
+            title = f.name.removeSuffix(".zim").replace('_', ' '),
+            keepsPhoneCopy = onPhone,
+            onDelete = { library.deleteFromDropbox(f) },
+            onDismiss = { deletingRemote = null },
         )
     }
 
