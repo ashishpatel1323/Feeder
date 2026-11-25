@@ -16,7 +16,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.filled.DynamicFeed
 import androidx.compose.material.icons.filled.Explore
@@ -67,6 +69,7 @@ enum class MainTab {
     DISCOVER,
     PLAYLISTS,
     LIBRARY,
+    EBOOKS,
     ZIM,
 }
 
@@ -80,6 +83,7 @@ fun NavBackStackEntry.mainTab(): MainTab? =
         PlaylistsDestination.route -> MainTab.PLAYLISTS
         LibraryDestination.route, DownloadsDestination.route, HighlightsDestination.route -> MainTab.LIBRARY
         ZimDestination.route -> MainTab.ZIM
+        EbooksDestination.route -> MainTab.EBOOKS
         else -> null
     }
 
@@ -92,6 +96,7 @@ fun NavBackStackEntry.wantsSharedMiniPlayer(): Boolean =
         DownloadsDestination.route,
         HighlightsDestination.route,
         ZimDestination.route,
+        EbooksDestination.route,
         -> true
         else -> false
     }
@@ -146,6 +151,7 @@ fun NavController.openTab(
             MainTab.PLAYLISTS -> "playlists"
             MainTab.LIBRARY -> LibraryDestination.route
             MainTab.ZIM -> ZimDestination.route
+            MainTab.EBOOKS -> EbooksDestination.route
             MainTab.FEEDS -> HomeDestination.route
         }
     if (tab == current) {
@@ -187,6 +193,7 @@ private fun MainTab.look(): Triple<ImageVector, ImageVector, Int> =
         MainTab.PLAYLISTS -> Triple(Icons.AutoMirrored.Filled.QueueMusic, Icons.AutoMirrored.Outlined.QueueMusic, R.string.playlists)
         MainTab.LIBRARY -> Triple(Icons.Filled.VideoLibrary, Icons.Outlined.VideoLibrary, R.string.tab_library)
         MainTab.ZIM -> Triple(Icons.Filled.Public, Icons.Outlined.Public, R.string.tab_zim)
+        MainTab.EBOOKS -> Triple(Icons.AutoMirrored.Filled.MenuBook, Icons.AutoMirrored.Outlined.MenuBook, R.string.tab_ebooks)
     }
 
 /** What the tab screens need from the app shell, so they don't each take these as parameters. */

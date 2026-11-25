@@ -8,6 +8,8 @@ import android.util.Log
 import android.util.Xml
 import androidx.core.content.edit
 import androidx.core.net.toUri
+import com.nononsenseapps.feeder.dropbox.DropboxClient
+import com.nononsenseapps.feeder.dropbox.DropboxFile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -100,6 +102,12 @@ class ZimLibrary private constructor(
     /** A one-off message for the user (an import finished or failed). */
     val messages: StateFlow<String?> = _messages.asStateFlow()
 
+    private val dropbox = DropboxClient.get(context)
+    private val _remote = MutableStateFlow<List<DropboxFile>?>(null)
+
+    /** ZIM files in Dropbox's /ZIM folder (the shared library), or null when not signed in. */
+    val remote: StateFlow<List<DropboxFile>?> = _remote.asStateFlow()
+
     private val archives = HashMap<String, Archive>()
     private val described = HashMap<String, ZimBook>()
     private val imports = HashMap<String, Job>()
@@ -118,6 +126,85 @@ class ZimLibrary private constructor(
 
     fun refresh() {
         scope.launch { load() }
+    }
+
+    /** Reads Dropbox's /ZIM folder again. */
+    fun refreshRemote() {
+        scope.launch {
+            if (dropbox.link.value == null) {
+                _remote.value = null
+                return@launch
+            }
+            try {
+                _remote.value = dropbox.listFolder(DropboxClient.ZIM_FOLDER).filter { it.name.endsWith(".zim", ignoreCase = true) }
+            } catch (e: Exception) {
+                Log.w(LOG_TAG, "Could not read Dropbox", e)
+                _messages.value = e.message
+            }
+        }
+    }
+
+    /** Whether a book here is the same file as one in Dropbox (same name and size). */
+    fun sameZim(
+        book: ZimBook,
+        f: DropboxFile,
+    ): Boolean = book.size == f.size && (book.file.name.equals(f.name, ignoreCase = true) || book.file.name == "${safeName(f.name)}.zim")
+
+    /** Puts a book that is on this phone into Dropbox too, for the other devices. */
+    fun uploadToDropbox(book: ZimBook) = uploadFile(book.file, book.title)
+
+    private fun uploadFile(
+        file: File,
+        label: String,
+    ) {
+        val key = "up:${file.name}"
+        if (_jobs.value.any { it.key == key }) return
+        _jobs.update { it + ZimJob(key, "Uploading $label to Dropbox", 0, file.length()) }
+        scope.launch {
+            try {
+                dropbox.upload("${DropboxClient.ZIM_FOLDER}/${file.name}", file) { done, total ->
+                    _jobs.update { jobs -> jobs.map { if (it.key == key) it.copy(done = done, total = total) else it } }
+                }
+                _messages.value = "$label is in Dropbox"
+            } catch (e: Exception) {
+                Log.w(LOG_TAG, "Upload failed", e)
+                _messages.value = e.message ?: "Upload failed"
+            } finally {
+                _jobs.update { jobs -> jobs.filterNot { it.key == key } }
+                refreshRemote()
+            }
+        }
+    }
+
+    /** New books go to Dropbox too when it is signed in. */
+    private fun shareNew(
+        name: String,
+        label: String,
+    ) {
+        if (dropbox.link.value != null) uploadFile(File(dir, name), label)
+    }
+
+    /** Downloads a book from Dropbox into the phone's library. */
+    fun downloadFromDropbox(f: DropboxFile) {
+        val name = uniqueName(f.name)
+        val key = name
+        _jobs.update { it + ZimJob(key, f.name, 0, f.size) }
+        imports[key] =
+            scope.launch {
+                try {
+                    dropbox.download(f.path, File(dir, name)) { done, total ->
+                        _jobs.update { jobs -> jobs.map { if (it.key == key) it.copy(done = done, total = total) else it } }
+                    }
+                    _messages.value = "${f.name} is ready to read"
+                } catch (e: Exception) {
+                    File(dir, "$name.part").delete()
+                    if (e !is kotlinx.coroutines.CancellationException) _messages.value = e.message ?: "Download failed"
+                } finally {
+                    imports.remove(key)
+                    _jobs.update { jobs -> jobs.filterNot { it.key == key } }
+                    load()
+                }
+            }
     }
 
     private suspend fun load() {
@@ -183,14 +270,16 @@ class ZimLibrary private constructor(
         }
     }
 
+    private fun safeName(base: String): String =
+        base
+            .removeSuffix(".zim")
+            .replace(Regex("[^\\w.-]+"), "_")
+            .trim('_')
+            .take(120)
+            .ifEmpty { "book" }
+
     private fun uniqueName(base: String): String {
-        val safe =
-            base
-                .removeSuffix(".zim")
-                .replace(Regex("[^\\w.-]+"), "_")
-                .trim('_')
-                .take(120)
-                .ifEmpty { "book" }
+        val safe = safeName(base)
         var i = 0
         while (true) {
             val name = if (i == 0) "$safe.zim" else "$safe-$i.zim"
@@ -244,6 +333,7 @@ class ZimLibrary private constructor(
                     }
                     check(part.renameTo(File(dir, name))) { "Could not save $name" }
                     _messages.value = "$displayName is ready to read"
+                    shareNew(name, displayName)
                 } catch (e: Exception) {
                     part.delete()
                     if (e !is kotlinx.coroutines.CancellationException) {
@@ -308,6 +398,7 @@ class ZimLibrary private constructor(
                     DownloadManager.STATUS_SUCCESSFUL -> {
                         File(dir, "$name.part").renameTo(File(dir, name))
                         _messages.value = "$title is ready to read"
+                        shareNew(name, title)
                     }
 
                     DownloadManager.STATUS_FAILED -> {

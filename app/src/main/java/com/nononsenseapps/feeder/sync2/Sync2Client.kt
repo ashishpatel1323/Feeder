@@ -10,6 +10,9 @@ import com.nononsenseapps.feeder.db.room.HiddenItem
 import com.nononsenseapps.feeder.db.room.Sync2Dao
 import com.nononsenseapps.feeder.db.room.Sync2ItemKey
 import com.nononsenseapps.feeder.db.room.Sync2Known
+import com.nononsenseapps.feeder.dropbox.DropboxClient
+import com.nononsenseapps.feeder.dropbox.DropboxLink
+import com.nononsenseapps.feeder.model.ebooks.BookPositions
 import com.nononsenseapps.feeder.model.highlights.Highlight
 import com.nononsenseapps.feeder.model.highlights.HighlightStore
 import com.nononsenseapps.feeder.model.offline.OfflineFiles
@@ -57,6 +60,8 @@ const val SYNC2_SERVER = "https://feeder-web-snowy.vercel.app"
  *   video   feedUrl \n guid     { t, d }: where a video or podcast episode was left, in seconds
  *   playlist (key: playlist id) [SyncedPlaylist], or {"deleted": true} after deleting it
  *   highlight (key: highlight id) [highlightValue], or {"deleted": true} after deleting it
+ *   bookpos (key: ebook id)       { cfi, f }: where an ebook was left (newest wins)
+ *   dropbox "main"                [DropboxLink], or {"deleted": true} after signing out
  *
  * The device remembers the last value exchanged for every record (sync2_known) and sends
  * whatever differs locally, then applies what other devices changed. Unknown kinds (Read later
@@ -74,6 +79,8 @@ class Sync2Client(
     private val offlineFiles: OfflineFiles by instance()
     private val playlistStore: PlaylistStore by instance()
     private val highlightStore: HighlightStore by instance()
+    private val bookPositions: BookPositions by instance()
+    private val dropbox: DropboxClient by instance()
     private val mutex = Mutex()
 
     // Episode positions that arrived in this exchange, copied to the podcast player's store after it
@@ -467,6 +474,23 @@ class Sync2Client(
                 out += Pending("video", key, value, maxOf(pos.ts, (kn?.ts ?: 0) + 1))
             }
         }
+
+        // Where ebooks were left, saved here since they were last exchanged
+        val knownBooks = dao.getKnownWithPrefix("bookpos\n").associateBy { it.k.removePrefix("bookpos\n") }
+        for ((id, pos) in bookPositions.all.value) {
+            val kn = knownBooks[id]
+            if (kn == null || pos.ts > kn.ts) {
+                out += Pending("bookpos", id, linkedMapOf<String, Any?>("cfi" to pos.cfi, "f" to pos.f), maxOf(pos.ts, (kn?.ts ?: 0) + 1))
+            }
+        }
+
+        // The Dropbox sign-in (signing in or out on this phone)
+        val link = dropbox.link.value
+        val linkValue: Any? = link?.let { dropboxValue(it) } ?: mapOf("deleted" to true)
+        val kd = dao.getKnown(knownKey("dropbox", DROPBOX_KEY))
+        if (if (kd == null) link != null else parse(kd.v) != parse(canonical(linkValue))) {
+            out += Pending("dropbox", DROPBOX_KEY, linkValue, maxOf(dropbox.changedAt.takeIf { it > 0 } ?: now, (kd?.ts ?: 0) + 1))
+        }
         return out
     }
 
@@ -631,6 +655,27 @@ class Sync2Client(
                         highlightFromValue(key, v, ts)?.let { highlightStore.putFromSync(it) }
                     }
                 }
+
+                "bookpos" -> {
+                    if (v is Map<*, *>) {
+                        val cfi = v["cfi"] as? String
+                        if (!cfi.isNullOrBlank()) bookPositions.applyRemote(key, cfi, (v["f"] as? Number)?.toDouble() ?: 0.0, ts)
+                    }
+                }
+
+                "dropbox" -> {
+                    if (key == DROPBOX_KEY) {
+                        if (isDeleted(v) || v == null) {
+                            dropbox.applyFromSync(null, ts)
+                        } else if (v is Map<*, *>) {
+                            val appKey = v["appKey"] as? String
+                            val refresh = v["refreshToken"] as? String
+                            if (!appKey.isNullOrBlank() && !refresh.isNullOrBlank()) {
+                                dropbox.applyFromSync(DropboxLink(appKey, refresh, v["name"] as? String ?: "", v["email"] as? String ?: ""), ts)
+                            }
+                        }
+                    }
+                }
                 // layout and kinds from newer versions are only remembered
             }
         } catch (e: Exception) {
@@ -731,7 +776,13 @@ class Sync2Client(
                 "color" to h.color,
                 "note" to h.note,
                 "createdAt" to h.createdAt,
-            )
+            ).apply { h.cfi?.takeIf { it.isNotBlank() }?.let { put("cfi", it) } }
+
+        const val DROPBOX_KEY = "main"
+
+        /** The Dropbox sign-in as synced, in the same field order as the web app's DropboxLink. */
+        fun dropboxValue(l: DropboxLink): Map<String, Any?> =
+            linkedMapOf("appKey" to l.appKey, "refreshToken" to l.refreshToken, "name" to l.name, "email" to l.email)
 
         /** A highlight from another device; null when it has no article or text. */
         fun highlightFromValue(
@@ -759,6 +810,7 @@ class Sync2Client(
                 note = v["note"] as? String ?: "",
                 createdAt = (v["createdAt"] as? Number)?.toLong() ?: ts,
                 modifiedAt = ts,
+                cfi = (v["cfi"] as? String)?.takeIf { it.isNotBlank() },
             )
         }
 

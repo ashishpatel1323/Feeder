@@ -1,0 +1,1 @@
+var e=async()=>{throw Error(`PDF books are not supported yet`)};export{e as makePDF};
