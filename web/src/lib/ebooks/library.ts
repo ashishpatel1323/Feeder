@@ -6,12 +6,13 @@
  */
 import { contentHash, deleteFile, downloadStream, EBOOKS_FOLDER, getDropbox, listFolder, uploadFile, type DropboxFile, type Progress } from '../dropbox'
 import { db, type Book } from '../db'
+import { loadFoliate } from './foliate'
 import { authorString, langString } from './reader'
 
 export { authorString, langString }
 
-/** Formats foliate-js reads (PDF is left out: see vendor/foliate-js/README.md). */
-export const BOOK_EXTENSIONS = ['epub', 'mobi', 'azw3', 'azw', 'kf8', 'fb2', 'fbz', 'cbz']
+/** Formats foliate-js reads (PDF through PDF.js). */
+export const BOOK_EXTENSIONS = ['epub', 'mobi', 'azw3', 'azw', 'kf8', 'fb2', 'fbz', 'cbz', 'pdf']
 export const ACCEPT = BOOK_EXTENSIONS.map((e) => `.${e}`).join(',') + ',.fb2.zip'
 
 export const BOOK_ITEM_PREFIX = 'ebook:\n'
@@ -89,7 +90,7 @@ async function writeLocal(b: Pick<Book, 'id' | 'ext'>, data: Blob | ReadableStre
 
 /** Title, author and a small cover, read with foliate-js. */
 export async function describeFile(file: File): Promise<{ title: string; author: string; cover: string | null }> {
-  const { makeBook } = await import('../../vendor/foliate-js/view.js')
+  const { makeBook } = await loadFoliate()
   const book = await makeBook(file)
   const title = langString(book.metadata?.title) || titleFromName(file.name)
   const author = authorString(book.metadata?.author)
@@ -189,7 +190,7 @@ async function upload(b: Book, onProgress?: Progress) {
 /** Adds a book file from this device: kept here, and uploaded to Dropbox when signed in. */
 export async function importBook(file: File, onProgress?: Progress): Promise<Book> {
   const ext = extOf(file.name)
-  if (!BOOK_EXTENSIONS.includes(ext)) throw new Error(`${file.name}: Feeder reads EPUB, MOBI, AZW3, FB2 and CBZ books`)
+  if (!BOOK_EXTENSIONS.includes(ext)) throw new Error(`${file.name}: Feeder reads EPUB, MOBI, AZW3, FB2, CBZ and PDF books`)
   const id = await contentHash(file)
   const existing = await db.books.get(id)
   const meta = await describeFile(file)

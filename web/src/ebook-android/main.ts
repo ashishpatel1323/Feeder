@@ -9,11 +9,14 @@
  * Talks to the app through `FeederBook` (a JavaScript interface) and is driven through
  * `window.feeder` (evaluateJavascript).
  */
+// PDF.js finds its worker, fonts and character maps next to this page (assets/ebook/pdfjs)
+;(globalThis as { FEEDER_PDFJS_BASE?: string }).FEEDER_PDFJS_BASE = './pdfjs/'
 import '../vendor/foliate-js/view.js'
 import type { FoliateView, Location, TocItem } from '../vendor/foliate-js/view.js'
 import { Overlayer } from '../vendor/foliate-js/overlayer.js'
 import { authorString, bookCss, injectCsp, langString, type ReaderPrefs } from '../lib/ebooks/reader'
 import { indexText, rangeFor, type TextIndex } from './textindex'
+import { atEnd, atStart, drawFixedHighlights, markFixedPage, readableContent, redrawFixedHighlights, nextSection, prevSection, reveal, setStyles } from '../lib/ebooks/nav'
 
 interface Bridge {
   onOpened(json: string): void
@@ -48,7 +51,7 @@ function showMessage(text: string) {
 function applyPrefs() {
   if (!view?.renderer) return
   view.renderer.setAttribute('flow', prefs.flow)
-  view.renderer.setStyles(bookCss(prefs, appDark))
+  setStyles(view, bookCss(prefs, appDark))
   const bg = { light: '#ffffff', sepia: '#f4ecd8', dark: '#111412' }[prefs.theme === 'auto' ? (appDark ? 'dark' : 'light') : prefs.theme]
   document.documentElement.style.setProperty('--bg', bg)
 }
@@ -118,15 +121,23 @@ async function smallCover(blob: Blob): Promise<string | null> {
 }
 
 function listen(v: FoliateView) {
+  let lastFixedIndex = -1
   v.addEventListener('relocate', (e) => {
     const l = (e as CustomEvent<Location>).detail
+    // Fixed-layout pages (PDF) may already be loaded: tell the app a new page shows, for read aloud
+    const index = l.section?.current ?? -1
+    if (v.isFixedLayout && index !== lastFixedIndex) {
+      lastFixedIndex = index
+      tts = null
+      bridge.onSectionLoaded()
+    }
     bridge.onRelocate(
       JSON.stringify({
         cfi: l.cfi,
         fraction: Number.isFinite(l.fraction) ? l.fraction : 0,
         chapter: l.tocItem?.label?.trim() ?? '',
-        atStart: v.renderer.atStart,
-        atEnd: v.renderer.atEnd,
+        atStart: atStart(v),
+        atEnd: atEnd(v),
       }),
     )
   })
@@ -140,6 +151,8 @@ function listen(v: FoliateView) {
   v.addEventListener('show-annotation', (e) => bridge.onHighlightTap((e as CustomEvent<{ value: string }>).detail.value))
   v.addEventListener('load', (e) => {
     const { doc, index } = (e as CustomEvent<{ doc: Document; index: number }>).detail
+    markFixedPage(v, doc)
+    drawFixedHighlights(v, doc, index, [...highlights].map(([cfi, color]) => ({ cfi, color })))
     let selTimer = 0
     doc.addEventListener('selectionchange', () => {
       window.clearTimeout(selTimer)
@@ -171,7 +184,7 @@ function listen(v: FoliateView) {
 
 /** Text of the shown chapter for read aloud, and where the page on screen starts in it. */
 function ttsText() {
-  const c = view?.renderer.getContents()[0]
+  const c = readableContent(view)
   if (!view || !c?.doc.body) return
   const index = indexText(c.doc.body)
   tts = { index, doc: c.doc }
@@ -204,7 +217,7 @@ function ttsMark(start: number, end: number, wordStart: number, wordEnd: number)
   } catch {
     // a range from another chapter
   }
-  void view.renderer.scrollToAnchor(anchor)
+  void reveal(view, anchor)
 }
 
 function ttsClear() {
@@ -227,14 +240,15 @@ function ttsClear() {
       for (const cfi of highlights.keys()) if (!next.has(cfi)) void view.deleteAnnotation({ value: cfi })
     }
     highlights = next
+    redrawFixedHighlights(view, [...next].map(([cfi, color]) => ({ cfi, color })))
   },
   goTo: (target: string) => void view?.goTo(target),
   goToFraction: (f: number) => void view?.goToFraction(f),
   next: () => void view?.goRight(),
   prev: () => void view?.goLeft(),
-  nextSection: () => void view?.renderer.nextSection(),
-  prevSection: () => void view?.renderer.prevSection(),
-  clearSelection: () => view?.renderer.getContents()[0]?.doc.getSelection()?.removeAllRanges(),
+  nextSection: () => void nextSection(view),
+  prevSection: () => void prevSection(view),
+  clearSelection: () => view?.deselect(),
   ttsText,
   ttsMark,
   ttsClear,

@@ -71,7 +71,7 @@ class EbooksTest {
             )
         val merged =
             EbookLibrary
-                .merge(books, listOf(file("kept.epub", "kept"), file("New_Book.epub", "new"), file("new.mobi", "moved"), file("notes.pdf", "pdf"), file("dupe.epub", "new")))
+                .merge(books, listOf(file("kept.epub", "kept"), file("New_Book.epub", "new"), file("new.mobi", "moved"), file("notes.txt", "txt"), file("dupe.epub", "new")))
                 .books
                 .associateBy { it.id }
         assertEquals("New Book", merged["new"]!!.title)
@@ -79,7 +79,7 @@ class EbooksTest {
         assertEquals("/Ebooks/new.mobi", merged["moved"]!!.dropboxPath)
         assertNull(merged["gone-local"]!!.dropboxPath)
         assertNull(merged["gone-remote"])
-        assertNull(merged["pdf"])
+        assertNull(merged["txt"])
         assertEquals("kept", merged["kept"]!!.title)
         assertEquals(true, merged["local-only"]!!.local)
     }

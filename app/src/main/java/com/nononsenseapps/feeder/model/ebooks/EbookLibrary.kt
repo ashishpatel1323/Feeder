@@ -161,7 +161,7 @@ class EbookLibrary private constructor(
         }
         val ext = extOf(displayName)
         if (ext !in EXTENSIONS) {
-            _messages.value = "$displayName: Feeder reads EPUB, MOBI, AZW3, FB2 and CBZ books"
+            _messages.value = "$displayName: Feeder reads EPUB, MOBI, AZW3, FB2, CBZ and PDF books"
             return
         }
         val key = "add:$displayName:${System.nanoTime()}"
@@ -251,7 +251,7 @@ class EbookLibrary private constructor(
         private const val LOG_TAG = "FEEDER_EBOOKS"
         private const val KEY = "books_v1"
         const val ITEM_PREFIX = "ebook:\n"
-        val EXTENSIONS = setOf("epub", "mobi", "azw3", "azw", "kf8", "fb2", "fbz", "cbz")
+        val EXTENSIONS = setOf("epub", "mobi", "azw3", "azw", "kf8", "fb2", "fbz", "cbz", "pdf")
 
         fun itemKey(id: String) = "$ITEM_PREFIX$id"
 

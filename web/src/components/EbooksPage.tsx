@@ -13,6 +13,8 @@ import {
   removeFromDevice,
   savePosition,
 } from '../lib/ebooks/library'
+import { loadFoliate } from '../lib/ebooks/foliate'
+import { atEnd, atStart, drawFixedHighlights, markFixedPage, readableContent, redrawFixedHighlights, nextSection, prevSection, reveal, setStyles } from '../lib/ebooks/nav'
 import { bookCss, injectCsp, loadReaderPrefs, saveReaderPrefs, type ReaderPrefs } from '../lib/ebooks/reader'
 import { deleteHighlight, HIGHLIGHT_COLORS, quoteText, saveHighlight, updateHighlight } from '../lib/highlights'
 import { formatBytes } from '../lib/offline'
@@ -177,7 +179,7 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
           <div className="zim-empty">
             <Icon name="book" size={40} />
             <p>
-              No books yet. Add an EPUB, MOBI, AZW3, FB2 or CBZ file (you can also drop it here)
+              No books yet. Add an EPUB, MOBI, AZW3, FB2, CBZ or PDF file (you can also drop it here)
               {dbx.signedIn ? ', or put books in Dropbox › Apps › Feeder › Ebooks' : ''}.
             </p>
           </div>
@@ -270,10 +272,10 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
     const abort = new AbortController()
     const el = host.current!
     ;(async () => {
-      await import('../vendor/foliate-js/view.js')
+      await loadFoliate()
       const file = await bookFile(id, (done, total) => live && setStatus((s) => ({ ...s, done, total })), abort.signal)
       if (!live) return
-      const { makeBook } = await import('../vendor/foliate-js/view.js')
+      const { makeBook } = await loadFoliate()
       const b = await makeBook(file)
       // Books can carry scripts; never run them (they'd share this app's storage)
       b.transformTarget?.addEventListener('data', (e) => {
@@ -292,11 +294,16 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
       view.renderer.setAttribute('flow', loadReaderPrefs().flow)
       view.renderer.setAttribute('max-inline-size', '720px')
       view.renderer.setAttribute('gap', '6%')
-      view.renderer.setStyles(bookCss(loadReaderPrefs()))
+      setStyles(view, bookCss(loadReaderPrefs()))
 
       view.addEventListener('relocate', (e) => {
         const l = (e as CustomEvent<Location>).detail
         setLoc(l)
+        // Fixed-layout pages (PDF) may already be loaded: carry on reading aloud once the page shows
+        if (continueNext.current && view.isFixedLayout) {
+          continueNext.current = false
+          window.setTimeout(() => startListening(0), 300)
+        }
         window.clearTimeout(saveTimer)
         saveTimer = window.setTimeout(() => void savePosition(id, l.cfi, l.fraction ?? 0), 800)
       })
@@ -318,6 +325,8 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
       })
       view.addEventListener('load', (e) => {
         const { doc, index } = (e as CustomEvent<{ doc: Document; index: number }>).detail
+        markFixedPage(view, doc)
+        drawFixedHighlights(view, doc, index, highlightsRef.current)
         const checkSelection = () =>
           window.setTimeout(() => {
             const sel = doc.getSelection()
@@ -384,10 +393,11 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
     for (const [cfi, color] of now) if (drawn.current.get(cfi) !== color) void view.addAnnotation({ value: cfi, color })
     for (const cfi of drawn.current.keys()) if (!now.has(cfi)) void view.deleteAnnotation({ value: cfi })
     drawn.current = now
+    redrawFixedHighlights(view, highlights)
   }, [highlights, status.loading])
 
   useEffect(() => {
-    viewRef.current?.renderer?.setStyles(bookCss(prefs))
+    setStyles(viewRef.current, bookCss(prefs))
     viewRef.current?.renderer?.setAttribute('flow', prefs.flow)
     saveReaderPrefs(prefs)
   }, [prefs])
@@ -416,7 +426,7 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
   /** Read aloud from the top of the current page (or `offset` into the chapter). */
   const startListening = (offset?: number) => {
     const view = viewRef.current
-    const c = view?.renderer.getContents()[0]
+    const c = readableContent(view)
     if (!view || !c?.doc.body) return
     readAloud.title = titleRef.current
     readAloud.artist = view.lastLocation?.tocItem?.label ?? ''
@@ -428,15 +438,15 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
       } catch {
         // a range from a chapter that's no longer shown
       }
-      void viewRef.current?.renderer.scrollToAnchor(r)
+      void reveal(viewRef.current, r)
       return true
     }
     readAloud.onFinished = (done) => {
       if (done !== itemId) return
       const v = viewRef.current
-      if (!v || v.renderer.atEnd) return
+      if (!v || atEnd(v)) return
       continueNext.current = true
-      void v.renderer.nextSection()
+      void nextSection(v)
     }
     let from = offset
     if (from === undefined) {
@@ -464,7 +474,7 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
       cfi: pending.cfi,
     }
     await saveHighlight(h)
-    viewRef.current?.renderer.getContents()[0]?.doc.getSelection()?.removeAllRanges()
+    viewRef.current?.deselect()
     setPending(null)
     toast('Highlighted')
   }
@@ -617,18 +627,18 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
           state={ra}
           settings={settings}
           currentTitle={chapter || (book?.title ?? '')}
-          hasPrev={!viewRef.current?.renderer.atStart}
-          hasNext={!viewRef.current?.renderer.atEnd}
+          hasPrev={!atStart(viewRef.current)}
+          hasNext={!atEnd(viewRef.current)}
           nextTitle={null}
           onPrev={() => {
             continueNext.current = true
             readAloud.stop()
-            void viewRef.current?.renderer.prevSection()
+            void prevSection(viewRef.current)
           }}
           onNext={() => {
             continueNext.current = true
             readAloud.stop()
-            void viewRef.current?.renderer.nextSection()
+            void nextSection(viewRef.current)
           }}
         />
       ) : null}
