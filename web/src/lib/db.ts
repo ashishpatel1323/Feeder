@@ -128,6 +128,19 @@ export interface VideoPos {
   dn?: string
 }
 
+/** What YouTube says about one video (server/youtube.ts meta), cached for the YouTube tab. Local only. */
+export interface YouTubeMeta {
+  /** The video id */
+  id: string
+  /** Seconds, 0 = not known (or live) */
+  duration: number
+  views: number | null
+  isLive: boolean
+  isShort: boolean
+  /** When it was looked up (ms) */
+  at: number
+}
+
 /** An ebook in the Ebooks tab (ebooks/library.ts). */
 export interface Book {
   /** Dropbox content hash of the file (dropbox.ts contentHash): the same on every device. */
@@ -262,6 +275,7 @@ class FeederDb extends Dexie {
   audiobooks!: EntityTable<Audiobook, 'id'>
   audioPos!: EntityTable<AudioPos, 'id'>
   history!: EntityTable<HistoryEvent, 'id'>
+  ytMeta!: EntityTable<YouTubeMeta, 'id'>
 
   constructor() {
     super('feeder-web')
@@ -301,6 +315,8 @@ class FeederDb extends Dexie {
     this.version(7).stores({ audiobooks: '&id, lastOpenedAt', audioPos: '&id' })
     // History of plays, pauses, opens and closes (history.ts)
     this.version(8).stores({ history: '&id, [item+at], at, synced' })
+    // The YouTube tab: lengths, views and Shorts flags looked up per video (youtubeTab.ts), local only
+    this.version(9).stores({ ytMeta: '&id' })
   }
 }
 

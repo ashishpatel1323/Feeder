@@ -44,6 +44,9 @@ import { DROPBOX_TS_KEY } from './lib/dropbox'
 import { feedsViewIsLatest, FeedsSwitch, type FeedsView, LibraryPage, rememberFeedsView, TabBar, useTabShortcuts, type Tab } from './components/Tabs'
 import { useVideoJobs, useVideoSavingAvailable } from './lib/offline'
 import { createItemReuser } from './lib/itemreuse'
+import { useYouTubeData, YouTubeTab, type YouTubeView } from './components/YouTubeTab'
+import { YouTubeWatch, type WatchTarget } from './components/YouTubeWatch'
+import type { VideoRow } from './lib/youtubeTab'
 
 const NAV_COLLAPSED_KEY = 'feeder.navCollapsed'
 const NO_ITEMS: Item[] = []
@@ -99,6 +102,26 @@ const audiobookFromHash = (): string | null => {
     return ''
   }
 }
+/** The YouTube tab: #/youtube (Subscriptions), #/youtube/channels (the channel manager). */
+const YOUTUBE_HASH = '#/youtube'
+const YOUTUBE_CHANNELS_HASH = '#/youtube/channels'
+const youtubeFromHash = (): YouTubeView | null => (window.location.hash === YOUTUBE_HASH ? 'subs' : window.location.hash === YOUTUBE_CHANNELS_HASH ? 'channels' : null)
+/** The video page: #/watch/<video id> or #/watch/<video id>/<article id>. */
+const WATCH_HASH = '#/watch/'
+const watchHash = (t: WatchTarget) => WATCH_HASH + t.videoId + (t.itemId ? `/${encodeURIComponent(t.itemId)}` : '')
+const watchFromHash = (): WatchTarget | null => {
+  const h = window.location.hash
+  if (!h.startsWith(WATCH_HASH)) return null
+  const [videoId, ...rest] = h.slice(WATCH_HASH.length).split('/')
+  if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) return null
+  try {
+    return { videoId, itemId: rest.length ? decodeURIComponent(rest.join('/')) : null }
+  } catch {
+    return { videoId, itemId: null }
+  }
+}
+const NO_FEEDS: Feed[] = []
+const NO_ROWS: VideoRow[] = []
 const DOWNLOADS_HASH = '#/downloads'
 const isDownloadsHash = () => window.location.hash === DOWNLOADS_HASH
 /** Playlists: #/playlists for all of them, #/playlist/<id> for one. */
@@ -197,6 +220,14 @@ export default function App() {
   const [feedPage, setFeedPage] = useState<string | null>(feedFromHash)
   /** null = not on Playlists; '' = all playlists; else one playlist's id. */
   const [playlistPage, setPlaylistPage] = useState<string | null>(playlistFromHash)
+  /** null = not on the YouTube tab; else Subscriptions or the channel manager. */
+  const [youtubePage, setYoutubePage] = useState<YouTubeView | null>(() => youtubeFromHash() ?? (watchFromHash() ? 'subs' : null))
+  /** The video in the player (full page or mini player), and whether the full page is open. */
+  const [watch, setWatch] = useState<WatchTarget | null>(watchFromHash)
+  const [watchOpen, setWatchOpen] = useState(() => watchFromHash() !== null)
+  const [watchOrder, setWatchOrder] = useState<VideoRow[]>(NO_ROWS)
+  // Whether the video page's address was pushed from inside the app, so collapsing can go Back
+  const watchPushed = useRef(false)
   const queue = useQueue()
   const audiobook = useAudiobookPlayer()
   // Whether the feed page was opened from inside the app, so its Back button can go back there
@@ -222,6 +253,16 @@ export default function App() {
       setBookPage(bookFromHash())
       setAudiobookPage(audiobookFromHash())
       setPlaylistPage(playlistFromHash())
+      const w = watchFromHash()
+      if (w) {
+        setWatch(w)
+        setWatchOpen(true)
+      } else {
+        // Leaving the video page keeps the video playing in the mini player
+        setWatchOpen(false)
+        watchPushed.current = false
+        setYoutubePage(youtubeFromHash())
+      }
     }
     window.addEventListener('hashchange', onHash)
     window.addEventListener('popstate', onHash)
@@ -430,6 +471,55 @@ export default function App() {
       feedPageFromApp.current = false
     }
   }, [])
+  /** Opens the YouTube tab (Subscriptions or the channel manager); null leaves it. */
+  const showYouTube = useCallback((view: YouTubeView | null) => {
+    const want = view === 'subs' ? YOUTUBE_HASH : view === 'channels' ? YOUTUBE_CHANNELS_HASH : null
+    if (want && window.location.hash !== want) window.location.hash = want
+    else if (!want && youtubeFromHash() !== null) history.pushState(null, '', window.location.pathname + window.location.search)
+    setYoutubePage(view)
+    if (view !== null) {
+      setWatchOpen(false)
+      setPlaylistPage(null)
+      setHomePage(false)
+      setDiscoverPage(false)
+      setManaging(false)
+      setHighlightsPage(false)
+      setDownloadsPage(false)
+      setLibraryPage(false)
+      setZimPage(null)
+      setBookPage(null)
+      setAudiobookPage(null)
+      setFeedPage(null)
+      feedPageFromApp.current = false
+    }
+  }, [])
+  /** Opens the video page. From one video to another it replaces the address, so Back collapses. */
+  const openWatch = useCallback((t: WatchTarget) => {
+    if (watchFromHash()) history.replaceState(null, '', window.location.pathname + window.location.search + watchHash(t))
+    else {
+      watchPushed.current = true
+      window.location.hash = watchHash(t)
+    }
+    setWatch(t)
+    setWatchOpen(true)
+  }, [])
+  /** Shrinks the video page into the mini player and goes back to where it was opened from. */
+  const collapseWatch = useCallback(() => {
+    setWatchOpen(false)
+    if (!watchFromHash()) return
+    if (watchPushed.current) {
+      watchPushed.current = false
+      history.back()
+    } else {
+      history.replaceState(null, '', window.location.pathname + window.location.search + YOUTUBE_HASH)
+      setYoutubePage('subs')
+    }
+  }, [])
+  const closeWatch = useCallback(() => {
+    if (watchFromHash()) collapseWatch()
+    setWatch(null)
+    setWatchOpen(false)
+  }, [collapseWatch])
   const openFeedPage = useCallback((url: string) => {
     // Shared links have no feed page: show them in Saved
     if (url === SHARED_FEED_URL) {
@@ -955,6 +1045,7 @@ export default function App() {
     showZim(null)
     showBooks(null)
     showAudiobooks(null)
+    showYouTube(null)
     if (feedPage) leaveFeedPage()
     setFlip(null)
   }
@@ -973,6 +1064,7 @@ export default function App() {
     showDiscover(false)
     showLibrary(false)
     showPlaylists(null)
+    showYouTube(null)
     if (feedPage) leaveFeedPage()
   }
 
@@ -980,7 +1072,7 @@ export default function App() {
   const searchData = useSearchData(items, feeds, allHighlights, settings.readAloudRate, searchActive)
 
   // Opening another page closes the results view
-  const anyPage = managing || highlightsPage || !!feedPage || downloadsPage || homePage || discoverPage || libraryPage || zimPage !== null || bookPage !== null || audiobookPage !== null || playlistPage !== null
+  const anyPage = managing || highlightsPage || !!feedPage || downloadsPage || homePage || discoverPage || libraryPage || zimPage !== null || bookPage !== null || audiobookPage !== null || playlistPage !== null || youtubePage !== null
   useEffect(() => {
     if (anyPage) setSearchView(null)
   }, [anyPage])
@@ -1059,6 +1151,7 @@ export default function App() {
     { id: 'offline', label: settings.offlineMode ? 'Go back online' : 'Go offline', icon: 'offline', keywords: 'offline mode online airplane downloaded', run: () => void updateSettings({ offlineMode: !settings.offlineMode }) },
     { id: 'home', label: 'Go to Feeds: By feed', icon: 'gridView', keywords: 'home start tiles feeds g f', run: () => showFeedsView('byFeed') },
     { id: 'all', label: 'Go to Feeds: Latest', icon: 'viewAgenda', keywords: 'all articles unread list everything', run: () => showFeedsView('latest') },
+    { id: 'youtube', label: 'Go to YouTube', icon: 'subscriptions', keywords: 'youtube subscriptions videos channels shorts g y', run: () => openTab('youtube') },
     { id: 'audiobooks', label: 'Go to Audiobooks', icon: 'headphones', keywords: 'audiobooks listen m4b dropbox g a', run: () => openTab('audiobooks') },
     { id: 'library', label: 'Go to Library', icon: 'library', keywords: 'saved highlights downloads g l', run: () => openTab('library') },
     { id: 'saved', label: 'Go to Saved', icon: 'bookmark', keywords: 'bookmarks read later', run: () => selectList({ kind: 'saved' }) },
@@ -1089,7 +1182,9 @@ export default function App() {
   const onPlaylists = playlistPage !== null
 
   // The tab the screen belongs to, for the sidebar and the bottom bar
-  const currentTab: Tab | null = onPlaylists
+  const currentTab: Tab | null = youtubePage !== null || watchOpen
+    ? 'youtube'
+    : onPlaylists
     ? 'playlists'
     : zimPage !== null
       ? 'zim'
@@ -1129,6 +1224,7 @@ export default function App() {
     leavePages()
     if (t === 'discover') showDiscover(true)
     else if (t === 'playlists') showPlaylists('')
+    else if (t === 'youtube') showYouTube('subs')
     else if (t === 'zim') showZim('')
     else if (t === 'books') showBooks('')
     else if (t === 'audiobooks') showAudiobooks('')
@@ -1142,6 +1238,8 @@ export default function App() {
   const canSaveVideos = useVideoSavingAvailable()
   const downloadCount = items.filter((i) => i.offlineVideo).length + Object.keys(videoJobs).length
   const savedCount = items.filter((i) => i.saved).length
+  // Every subscription video, for the video page's related videos (only worked out while it's open)
+  const ytAll = useYouTubeData(watch ? feedList : NO_FEEDS, watch ? items : NO_ITEMS, null)
   const syncLabel = syncState
     ? syncState.lastError
       ? 'Sync problem, see Settings'
@@ -1151,7 +1249,7 @@ export default function App() {
     : 'Not syncing'
 
   return (
-    <div className={`app pane-${pane}${drawer ? ' drawer-open' : ''}${navCollapsed ? ' nav-collapsed' : ''}${managing || highlightsPage || feedPage || downloadsPage || homePage || discoverPage || libraryPage || zimPage !== null || bookPage !== null || audiobookPage !== null || onPlaylists ? ' page-feeds' : ''}${queue.kind || (audiobook.bookId && audiobookPage !== audiobook.bookId) ? ' has-queue' : ''}`}>
+    <div className={`app pane-${pane}${drawer ? ' drawer-open' : ''}${navCollapsed ? ' nav-collapsed' : ''}${managing || highlightsPage || feedPage || downloadsPage || homePage || discoverPage || libraryPage || zimPage !== null || bookPage !== null || audiobookPage !== null || onPlaylists || youtubePage !== null ? ' page-feeds' : ''}${queue.kind || (audiobook.bookId && audiobookPage !== audiobook.bookId) ? ' has-queue' : ''}${watch && !watchOpen ? ' has-ytmini' : ''}${watch && watchOpen ? ' watching' : ''}`}>
       <div className="drawer-scrim" onClick={() => setDrawer(false)} />
       <Sidebar
         feeds={feedList}
@@ -1201,6 +1299,19 @@ export default function App() {
           onDelete={deleteFromList}
           onOpenFeed={openFeedPage}
           onOrder={setSearchOrder}
+        />
+      ) : youtubePage !== null ? (
+        <YouTubeTab
+          view={youtubePage}
+          feeds={feedList}
+          items={items}
+          onView={showYouTube}
+          onOpenVideo={(row, order) => {
+            setWatchOrder(order)
+            openWatch({ videoId: row.videoId, itemId: row.item.id })
+          }}
+          onMenu={() => setDrawer(true)}
+          toast={toast}
         />
       ) : onPlaylists ? (
         <PlaylistsPage
@@ -1289,6 +1400,7 @@ export default function App() {
           onManageFeeds={() => showManage(true)}
           onSearch={() => setPaletteOpen(true)}
           onMenu={() => setDrawer(true)}
+          onTab={openTab}
         />
       ) : discoverPage ? (
         <DiscoverPage feeds={feedList} onOpenFeed={openFeedPage} onMenu={() => setDrawer(true)} toast={toast} feedsSwitch={<FeedsSwitch view="discover" onChange={showFeedsView} />} />
@@ -1334,7 +1446,7 @@ export default function App() {
         feedsSwitch={feedsLatest ? <FeedsSwitch view="latest" onChange={showFeedsView} /> : null}
         />
       )}
-      {managing || highlightsPage || feedPage || downloadsPage || homePage || discoverPage || libraryPage || zimPage !== null || bookPage !== null || audiobookPage !== null || onPlaylists || flip ? null : openItem ? (
+      {managing || highlightsPage || feedPage || downloadsPage || homePage || discoverPage || libraryPage || zimPage !== null || bookPage !== null || audiobookPage !== null || onPlaylists || youtubePage !== null || flip ? null : openItem ? (
         <Reader
           item={openItem}
           feed={feeds.get(openItem.feedUrl)}
@@ -1356,7 +1468,7 @@ export default function App() {
         />
       ) : (
         <section className="reader-pane empty-reader">
-          <p>Select an article. Keyboard: ⌘K or / search everything, G then F, D, P, L, B or Z switch tabs, J / K next and previous, F flip mode, R read aloud, S save, M unread, O open original, [ hide or show feeds.</p>
+          <p>Select an article. Keyboard: ⌘K or / search everything, G then F, Y, D, P, L, B or Z switch tabs, J / K next and previous, F flip mode, R read aloud, S save, M unread, O open original, [ hide or show feeds.</p>
         </section>
       )}
       {dialog?.kind === 'settings' ? <SettingsDialog
@@ -1396,6 +1508,7 @@ export default function App() {
         onReadRate={(r) => void updateSettings({ readAloudRate: r })}
         onOpenArticle={(id) => {
           showPlaylists(null)
+          showYouTube(null)
           showManage(false)
           showHighlights(false)
           showDownloads(false)
@@ -1406,6 +1519,23 @@ export default function App() {
         }}
       />
       {!queue.kind && audiobook.bookId && audiobookPage !== audiobook.bookId ? <AudiobookBar onOpen={(id) => { leavePages(); setSearchView(null); showAudiobooks(id) }} /> : null}
+      {watch ? (
+        <YouTubeWatch
+          target={watch}
+          mini={!watchOpen}
+          item={watch.itemId ? items.find((i) => i.id === watch.itemId) : undefined}
+          feeds={feedList}
+          order={watchOrder}
+          rows={ytAll.videos}
+          onOpen={openWatch}
+          onCollapse={collapseWatch}
+          onExpand={() => {
+            if (!watchFromHash()) openWatch(watch)
+          }}
+          onClose={closeWatch}
+          toast={toast}
+        />
+      ) : null}
       {flip ? null : <TabBar current={currentTab} onTab={openTab} />}
       <AddToPlaylistMenu toast={toast} />
       {paletteOpen ? (

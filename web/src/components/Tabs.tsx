@@ -1,15 +1,19 @@
-import { useEffect } from 'react'
+import { Fragment, useEffect, useSyncExternalStore } from 'react'
 import { Icon, IconButton, type IconName } from './Icon'
 
 /**
- * The places, as on Android: Feeds (Latest, By feed or Discover), Playlists, Library, Ebooks,
- * Audiobooks and ZIM. Search is not a tab: ⌘K, /, and the "Search everything" bars open it.
+ * The places, as on Android: Feeds (Latest, By feed or Discover), YouTube, Playlists, Library,
+ * Ebooks, Audiobooks and ZIM. Search is not a tab: ⌘K, /, and the "Search everything" bars open it.
  * Discover lives inside Feeds; it is a Tab value only for its G then D shortcut.
+ * Which tabs the bottom bar (and the sidebar) shows is picked in Settings > Bottom bar tabs;
+ * the others open from rows on Library.
  */
-export type Tab = 'feeds' | 'discover' | 'playlists' | 'library' | 'books' | 'audiobooks' | 'zim'
+export type Tab = 'feeds' | 'discover' | 'youtube' | 'playlists' | 'library' | 'books' | 'audiobooks' | 'zim'
+export type BarTab = Exclude<Tab, 'discover'>
 
-export const TABS: { tab: Tab; label: string; icon: IconName; key: string; hint: string }[] = [
+export const TABS: { tab: BarTab; label: string; icon: IconName; key: string; hint: string }[] = [
   { tab: 'feeds', label: 'Feeds', icon: 'dynamicFeed', key: 'f', hint: 'Latest, By feed and Discover' },
+  { tab: 'youtube', label: 'YouTube', icon: 'subscriptions', key: 'y', hint: 'Your YouTube subscriptions' },
   { tab: 'playlists', label: 'Playlists', icon: 'queue', key: 'p', hint: 'Smart and hand-made playlists' },
   { tab: 'library', label: 'Library', icon: 'library', key: 'l', hint: 'Saved, Highlights and Downloads' },
   { tab: 'books', label: 'Ebooks', icon: 'book', key: 'b', hint: 'Books from Dropbox and this device' },
@@ -41,16 +45,78 @@ export function rememberFeedsView(latest: boolean) {
   }
 }
 
+const BAR_KEY = 'feeder.barTabs'
+/** At most this many tabs in the bottom bar. */
+export const MAX_BAR_TABS = 5
+export const DEFAULT_BAR_TABS: BarTab[] = ['feeds', 'youtube', 'playlists', 'library']
+/** Always in the bar, so every screen stays reachable: left-out tabs open from rows on Library. */
+export const ALWAYS_TABS: BarTab[] = ['feeds', 'library']
+
+/** Saved order without unknown names, Feeds and Library added back, at most MAX_BAR_TABS (as Android's BottomBarTabs). */
+export function normalizeBarTabs(tabs: string[]): BarTab[] {
+  const known = new Set<string>(TABS.map((t) => t.tab))
+  const out = [...new Set(tabs.filter((t) => known.has(t)))] as BarTab[]
+  for (const t of ALWAYS_TABS) if (!out.includes(t)) out.push(t)
+  while (out.length > MAX_BAR_TABS) {
+    const drop = [...out].reverse().find((t) => !ALWAYS_TABS.includes(t))!
+    out.splice(out.lastIndexOf(drop), 1)
+  }
+  return out
+}
+
+let barTabs: BarTab[] | null = null
+const barListeners = new Set<() => void>()
+
+export function loadBarTabs(): BarTab[] {
+  if (barTabs) return barTabs
+  try {
+    const raw = localStorage.getItem(BAR_KEY)
+    barTabs = raw ? normalizeBarTabs(JSON.parse(raw) as string[]) : DEFAULT_BAR_TABS
+  } catch {
+    barTabs = DEFAULT_BAR_TABS
+  }
+  return barTabs
+}
+
+/** Saves the bottom bar's tabs for this browser. */
+export function saveBarTabs(tabs: BarTab[]) {
+  barTabs = normalizeBarTabs(tabs)
+  try {
+    localStorage.setItem(BAR_KEY, JSON.stringify(barTabs))
+  } catch {
+    /* private mode */
+  }
+  barListeners.forEach((l) => l())
+}
+
+export function useBarTabs(): BarTab[] {
+  return useSyncExternalStore(
+    (l) => {
+      barListeners.add(l)
+      return () => barListeners.delete(l)
+    },
+    loadBarTabs,
+  )
+}
+
+/** The tab to light up: a screen whose tab isn't in the bar belongs to Library. */
+export function shownTab(current: Tab | null, bar: BarTab[]): Tab | null {
+  if (!current || current === 'discover') return current === 'discover' ? 'feeds' : null
+  return bar.includes(current) ? current : 'library'
+}
+
 /** The bottom bar on narrow screens (phones, small windows). Wide screens use the sidebar's tabs. */
 export function TabBar({ current, onTab }: { current: Tab | null; onTab: (t: Tab) => void }) {
+  const bar = useBarTabs()
+  const shown = shownTab(current, bar)
   return (
     <nav className="tabbar" aria-label="Main">
-      {TABS.map((t) => (
+      {bar.map((tab) => TABS.find((t) => t.tab === tab)!).map((t) => (
         <button
           key={t.tab}
           type="button"
-          className={`tabbar-item${current === t.tab ? ' selected' : ''}`}
-          aria-current={current === t.tab ? 'page' : undefined}
+          className={`tabbar-item${shown === t.tab ? ' selected' : ''}`}
+          aria-current={shown === t.tab ? 'page' : undefined}
           title={`${t.label}: ${t.hint} (${tabKeys(t.tab)})`}
           onClick={() => onTab(t.tab)}
         >
@@ -95,7 +161,7 @@ export function SearchEverything({ onSearch }: { onSearch: () => void }) {
   )
 }
 
-/** G then F / D / P / L / B / A / Z switches tabs, when not typing (as in Gmail). */
+/** G then F / Y / D / P / L / B / A / Z switches tabs, when not typing (as in Gmail). */
 export function useTabShortcuts(onTab: (t: Tab) => void, disabled: boolean) {
   useEffect(() => {
     if (disabled) return
@@ -139,7 +205,11 @@ export function LibraryPage(p: {
   onManageFeeds: () => void
   onSearch: () => void
   onMenu: () => void
+  /** Opens a tab that is not in the bottom bar */
+  onTab: (t: Tab) => void
 }) {
+  const bar = useBarTabs()
+  const elsewhere = TABS.filter((t) => !bar.includes(t.tab))
   const row = (icon: IconName, title: string, desc: string, count: number | null, onClick: () => void) => (
     <button type="button" className="lib-row" onClick={onClick}>
       <Icon name={icon} size={22} />
@@ -164,6 +234,9 @@ export function LibraryPage(p: {
           {row('bookmark', 'Saved', 'Read later and shared links', p.savedCount, p.onSaved)}
           {row('highlight', 'Highlights', 'Notes and quotes', p.highlightCount, p.onHighlights)}
           {p.showDownloads ? row('download', 'Downloads', 'Videos saved for offline', p.downloadCount, p.onDownloads) : null}
+          {elsewhere.map((t) => (
+            <Fragment key={t.tab}>{row(t.icon, t.label, t.hint, null, () => p.onTab(t.tab))}</Fragment>
+          ))}
         </div>
         <h2 className="lib-section">App</h2>
         <div className="lib-list">

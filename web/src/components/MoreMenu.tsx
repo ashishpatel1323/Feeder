@@ -20,7 +20,7 @@ export type MoreMenuEntry =
  * A ⋮ button with a Material 3 style menu: the home for an item's less used actions, so a bar
  * keeps only its everyday ones. Opens below the button, aligned to its right edge.
  */
-export function MoreMenu({ label = 'More', entries }: { label?: string; entries: MoreMenuEntry[] }) {
+export function MoreMenu({ label = 'More', entries, pill }: { label?: string; entries: MoreMenuEntry[]; /** A tonal pill with this text and ▾ instead of ⋮ */ pill?: string }) {
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null)
   const wrap = useRef<HTMLSpanElement>(null)
   const menu = useRef<HTMLDivElement>(null)
@@ -49,7 +49,14 @@ export function MoreMenu({ label = 'More', entries }: { label?: string; entries:
 
   return (
     <span ref={wrap} className="more-menu">
-      <IconButton icon="moreVert" label={label} title={`${label} actions`} onClick={() => (pos ? setPos(null) : open())} active={!!pos} />
+      {pill ? (
+        <button type="button" className={`menu-pill${pos ? ' active' : ''}`} aria-haspopup="menu" aria-expanded={!!pos} aria-label={label} onClick={() => (pos ? setPos(null) : open())}>
+          {pill}
+          <Icon name="dropDown" size={18} />
+        </button>
+      ) : (
+        <IconButton icon="moreVert" label={label} title={`${label} actions`} onClick={() => (pos ? setPos(null) : open())} active={!!pos} />
+      )}
       {pos ? (
         <div className="ctx-backdrop" onPointerDown={(e) => e.target === e.currentTarget && setPos(null)} onWheel={() => setPos(null)}>
           <div

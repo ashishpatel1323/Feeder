@@ -51,7 +51,20 @@ function loadApi(): Promise<YTNamespace> {
  * YouTube's own player for one article's video. Remembers where it was left (per article,
  * synced) and starts there next time, a few seconds back. Give it key={itemId}.
  */
-export function YouTubeFrame({ itemId, videoId, title, onEnded }: { itemId: string; videoId: string; title: string; onEnded?: () => void }) {
+export function YouTubeFrame({
+  itemId,
+  videoId,
+  title,
+  onEnded,
+  autoplay,
+}: {
+  /** The article the video belongs to; null (a related video) keeps no position */
+  itemId: string | null
+  videoId: string
+  title: string
+  onEnded?: () => void
+  autoplay?: boolean
+}) {
   const endedRef = useRef(onEnded)
   endedRef.current = onEnded
   // The start position goes in the embed URL, so wait for it before showing the player
@@ -60,6 +73,10 @@ export function YouTubeFrame({ itemId, videoId, title, onEnded }: { itemId: stri
 
   useEffect(() => {
     let live = true
+    if (!itemId) {
+      setStart(0)
+      return
+    }
     db.videoPos
       .get(itemId)
       .then((p) => live && setStart(resumeAt(p)))
@@ -90,7 +107,7 @@ export function YouTubeFrame({ itemId, videoId, title, onEnded }: { itemId: stri
     /** Writes the position down; when it stopped (pause, end, leaving) also sends it to other devices. */
     const save = (send = false) => {
       lastSaved = Date.now()
-      if (!last) return
+      if (!last || !itemId) return
       const done = saveVideoPos(itemId, last.t, last.d)
       if (send) void done.then(() => syncNow()).catch(() => undefined)
     }
@@ -143,7 +160,7 @@ export function YouTubeFrame({ itemId, videoId, title, onEnded }: { itemId: stri
           The embed needs the referrer, so no no-referrer policy here. */}
       <iframe
         ref={frame}
-        src={youtubeEmbedUrl(videoId, { start, origin: window.location.origin })}
+        src={youtubeEmbedUrl(videoId, { start, origin: window.location.origin, autoplay })}
         title={title}
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
         referrerPolicy="strict-origin-when-cross-origin"
