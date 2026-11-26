@@ -42,7 +42,8 @@ import { AudiobooksPage, AudiobookBar } from './components/AudiobooksPage'
 import { useAudiobookPlayer } from './lib/audiobooks/player'
 import { bookIdOfItem } from './lib/ebooks/library'
 import { DROPBOX_TS_KEY } from './lib/dropbox'
-import { feedsViewIsLatest, FeedsSwitch, type FeedsView, LibraryPage, rememberFeedsView, TabBar, useTabShortcuts, type Tab } from './components/Tabs'
+import { feedsViewIsLatest, FeedsSwitch, type FeedsView, lastBookTab, LibraryPage, rememberFeedsView, TabBar, useTabShortcuts, type Tab } from './components/Tabs'
+import { OPEN_SEARCH_EVENT } from './components/Shelf'
 import { useVideoJobs, useVideoSavingAvailable } from './lib/offline'
 import { createItemReuser } from './lib/itemreuse'
 import { useYouTubeData, YouTubeTab, type YouTubeView } from './components/YouTubeTab'
@@ -1268,7 +1269,10 @@ export default function App() {
     { id: 'home', label: 'Go to Feeds: By feed', icon: 'gridView', keywords: 'home start tiles feeds g f', run: () => showFeedsView('byFeed') },
     { id: 'all', label: 'Go to Feeds: Latest', icon: 'viewAgenda', keywords: 'all articles unread list everything', run: () => showFeedsView('latest') },
     { id: 'youtube', label: 'Go to YouTube', icon: 'subscriptions', keywords: 'youtube subscriptions videos channels shorts g y', run: () => openTab('youtube') },
-    { id: 'audiobooks', label: 'Go to Audiobooks', icon: 'headphones', keywords: 'audiobooks listen m4b dropbox g a', run: () => openTab('audiobooks') },
+    { id: 'books', label: 'Go to Books', icon: 'book', keywords: 'books ebooks audiobooks zim shelf g b', run: () => openTab('books') },
+    { id: 'ebooks', label: 'Go to Books: Ebooks', icon: 'menuBook', keywords: 'ebooks epub pdf read g e', run: () => openTab('ebooks') },
+    { id: 'audiobooks', label: 'Go to Books: Audiobooks', icon: 'headphones', keywords: 'audiobooks listen m4b dropbox g a', run: () => openTab('audiobooks') },
+    { id: 'zim', label: 'Go to Books: ZIM', icon: 'public', keywords: 'zim offline websites wikipedia kiwix g z', run: () => openTab('zim') },
     { id: 'history', label: 'Go to History', icon: 'history', keywords: 'recent opened watched read listened log g h', run: () => openTab('history') },
     { id: 'library', label: 'Go to Library', icon: 'library', keywords: 'saved highlights downloads g l', run: () => openTab('library') },
     { id: 'saved', label: 'Go to Saved', icon: 'bookmark', keywords: 'bookmarks read later', run: () => selectList({ kind: 'saved' }) },
@@ -1277,6 +1281,13 @@ export default function App() {
     { id: 'manage', label: 'Manage feeds', icon: 'tune', keywords: 'folders organize edit rename', run: () => showManage(true) },
     { id: 'settings', label: 'Settings', icon: 'settings', keywords: 'preferences options sync voice', run: () => setDialog({ kind: 'settings' }) },
   ]
+
+  // Books' "Search inside books and everything else" opens the palette
+  useEffect(() => {
+    const open = () => setPaletteOpen(true)
+    window.addEventListener(OPEN_SEARCH_EVENT, open)
+    return () => window.removeEventListener(OPEN_SEARCH_EVENT, open)
+  }, [])
 
   // ⌘K / Ctrl+K anywhere, and / when not typing, open the palette
   useEffect(() => {
@@ -1303,12 +1314,8 @@ export default function App() {
     ? 'youtube'
     : onPlaylists
     ? 'playlists'
-    : zimPage !== null
-      ? 'zim'
-    : bookPage !== null
+    : zimPage !== null || bookPage !== null || audiobookPage !== null
       ? 'books'
-    : audiobookPage !== null
-      ? 'audiobooks'
     : historyPage
       ? 'history'
       : libraryPage || highlightsPage || downloadsPage || (selection.kind === 'saved' && !anyPage && !searchView)
@@ -1344,8 +1351,9 @@ export default function App() {
     if (t === 'discover') showDiscover(true)
     else if (t === 'playlists') showPlaylists('')
     else if (t === 'youtube') showYouTube('subs')
+    else if (t === 'books') openTab(lastBookTab())
     else if (t === 'zim') showZim('')
-    else if (t === 'books') showBooks('')
+    else if (t === 'ebooks') showBooks('')
     else if (t === 'audiobooks') showAudiobooks('')
     else if (t === 'history') showHistory(true)
     else showLibrary(true)

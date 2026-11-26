@@ -47,7 +47,6 @@ import com.nononsenseapps.feeder.ui.compose.navigation.SearchFeedDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.SettingsDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.SyncScreenDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.TextSettingsDestination
-import com.nononsenseapps.feeder.ui.compose.navigation.ZimDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.ZimReaderDestination
 import com.nononsenseapps.feeder.ui.compose.playlists.AddToPlaylistHost
 import com.nononsenseapps.feeder.ui.compose.utils.withAllProviders
@@ -227,7 +226,8 @@ class MainActivity : DIAwareComponentActivity() {
                 PlaylistsDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
                 HighlightsDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
                 LibraryDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
-                ZimDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
+                com.nononsenseapps.feeder.ui.compose.navigation.BooksDestination
+                    .register(this, navController, navDrawerListState, mainActivityViewModel)
                 com.nononsenseapps.feeder.ui.compose.navigation.YouTubeDestination
                     .register(this, navController, navDrawerListState, mainActivityViewModel)
                 com.nononsenseapps.feeder.ui.compose.navigation.YouTubeManageDestination
@@ -236,11 +236,7 @@ class MainActivity : DIAwareComponentActivity() {
                     .register(this, navController, navDrawerListState, mainActivityViewModel)
                 com.nononsenseapps.feeder.ui.compose.navigation.BottomBarTabsDestination
                     .register(this, navController, navDrawerListState, mainActivityViewModel)
-                com.nononsenseapps.feeder.ui.compose.navigation.EbooksDestination
-                    .register(this, navController, navDrawerListState, mainActivityViewModel)
                 com.nononsenseapps.feeder.ui.compose.navigation.EbookReaderDestination
-                    .register(this, navController, navDrawerListState, mainActivityViewModel)
-                com.nononsenseapps.feeder.ui.compose.navigation.AudiobooksDestination
                     .register(this, navController, navDrawerListState, mainActivityViewModel)
                 com.nononsenseapps.feeder.ui.compose.navigation.AudiobookPlayerDestination
                     .register(this, navController, navDrawerListState, mainActivityViewModel)

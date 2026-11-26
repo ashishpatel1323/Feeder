@@ -53,7 +53,7 @@ export interface ZimJump {
 }
 
 export function ZimPage(p: { book: string | null; jump?: ZimJump | null; settings: Settings; onOpen: (id: string | null) => void; onMenu: () => void; toast: (m: string) => void }) {
-  if (!zimSupported()) return <ListingUnavailable title="ZIM library" />
+  if (!zimSupported()) return <ListingUnavailable title="ZIM library" bookTab="zim" />
   return p.book ? <ZimReader key={p.book} id={p.book} jump={p.jump ?? null} settings={p.settings} onBack={() => p.onOpen(null)} toast={p.toast} /> : <ZimLibrary onOpen={p.onOpen} onMenu={p.onMenu} toast={p.toast} />
 }
 
@@ -255,6 +255,7 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
 
   return (
     <LibraryListing
+      bookTab="zim"
       title="ZIM library"
       prefs={prefs}
       items={items}

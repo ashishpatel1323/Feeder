@@ -406,7 +406,7 @@ export async function applyRecent(key: string, v: unknown, ts: number): Promise<
 // ---------------------------------------------------------------------------------------------
 // Showing it
 
-export type RecentFilter = 'all' | 'article' | 'youtube' | 'podcast' | 'playlist' | 'audiobook' | 'ebook' | 'zim' | 'marks' | 'feed'
+export type RecentFilter = 'all' | 'article' | 'youtube' | 'podcast' | 'playlist' | 'books' | 'marks' | 'feed'
 
 export const FILTERS: { id: RecentFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -414,9 +414,7 @@ export const FILTERS: { id: RecentFilter; label: string }[] = [
   { id: 'youtube', label: 'YouTube' },
   { id: 'podcast', label: 'Podcasts' },
   { id: 'playlist', label: 'Playlists' },
-  { id: 'audiobook', label: 'Audiobooks' },
-  { id: 'ebook', label: 'Ebooks' },
-  { id: 'zim', label: 'ZIM' },
+  { id: 'books', label: 'Books' },
   { id: 'marks', label: 'Highlights & notes' },
   { id: 'feed', label: 'Feeds' },
 ]
@@ -425,6 +423,7 @@ export function matchesFilter(e: Pick<RecentEntry, 't' | 'pl'>, f: RecentFilter)
   if (f === 'all') return true
   if (f === 'playlist') return !!e.pl
   if (f === 'marks') return e.t === 'highlight' || e.t === 'note'
+  if (f === 'books') return e.t === 'audiobook' || e.t === 'ebook' || e.t === 'zim'
   return e.t === f
 }
 

@@ -20,9 +20,7 @@
     <string name="central_history_filter_youtube">YouTube</string>
     <string name="central_history_filter_podcasts">Podcasts</string>
     <string name="central_history_filter_playlists">Playlists</string>
-    <string name="central_history_filter_audiobooks">Audiobooks</string>
-    <string name="central_history_filter_ebooks">Ebooks</string>
-    <string name="central_history_filter_zim">ZIM</string>
+    <string name="central_history_filter_books">Books</string>
     <string name="central_history_filter_marks">Highlights &amp; notes</string>
     <string name="central_history_filter_feeds">Feeds</string>
     <string name="central_history_highlighted">Highlighted in %1$s</string>

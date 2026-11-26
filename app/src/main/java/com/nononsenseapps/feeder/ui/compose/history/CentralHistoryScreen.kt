@@ -126,9 +126,7 @@ enum class RecentFilter(
     YOUTUBE(R.string.central_history_filter_youtube),
     PODCAST(R.string.central_history_filter_podcasts),
     PLAYLIST(R.string.central_history_filter_playlists),
-    AUDIOBOOK(R.string.central_history_filter_audiobooks),
-    EBOOK(R.string.central_history_filter_ebooks),
-    ZIM(R.string.central_history_filter_zim),
+    BOOKS(R.string.central_history_filter_books),
     MARKS(R.string.central_history_filter_marks),
     FEED(R.string.central_history_filter_feeds),
     ;
@@ -141,9 +139,7 @@ enum class RecentFilter(
             ARTICLE -> e.t == CentralHistory.ARTICLE
             YOUTUBE -> e.t == CentralHistory.YOUTUBE
             PODCAST -> e.t == CentralHistory.PODCAST
-            AUDIOBOOK -> e.t == CentralHistory.AUDIOBOOK
-            EBOOK -> e.t == CentralHistory.EBOOK
-            ZIM -> e.t == CentralHistory.ZIM
+            BOOKS -> e.t == CentralHistory.AUDIOBOOK || e.t == CentralHistory.EBOOK || e.t == CentralHistory.ZIM
             FEED -> e.t == CentralHistory.FEED
         }
 }
