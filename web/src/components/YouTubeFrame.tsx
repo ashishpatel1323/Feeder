@@ -96,6 +96,8 @@ export function YouTubeFrame({
   const [initial, setInitial] = useState<{ videoId: string; start: number } | null>(null)
   const frame = useRef<HTMLIFrameElement>(null)
   const playerRef = useRef<YTPlayer | null>(null)
+  /** A video asked for before the player was ready: it plays from onReady. */
+  const queued = useRef<{ itemId: string | null; videoId: string; start: number } | null>(null)
   /** The video in the player now and its article: positions are saved for it. */
   const shown = useRef<{ itemId: string | null; videoId: string } | null>(null)
   /** Last position seen while it played here; nothing is saved until it has played. */
@@ -114,6 +116,22 @@ export function YouTubeFrame({
     if (send) void done.then(() => syncNow()).catch(() => undefined)
   }).current
 
+  /** Plays [t] in the ready player; positions count for it only once it is in. */
+  const switchTo = useRef((player: YTPlayer, t: { itemId: string | null; videoId: string; start: number }) => {
+    try {
+      const opts = { videoId: t.videoId, startSeconds: t.start }
+      if (autoplayRef.current) player.loadVideoById(opts)
+      else player.cueVideoById(opts)
+    } catch (e) {
+      console.warn(e)
+      return
+    }
+    // Where the previous video stopped
+    save(true)
+    last.current = null
+    shown.current = { itemId: t.itemId, videoId: t.videoId }
+  }).current
+
   // Another video (or article): the same player plays it
   useEffect(() => {
     let live = true
@@ -128,18 +146,12 @@ export function YouTubeFrame({
         setInitial({ videoId, start })
         return
       }
-      // Where the previous video stopped
-      save(true)
-      last.current = null
-      shown.current = { itemId, videoId }
       const player = playerRef.current
       if (player) {
-        const opts = { videoId, startSeconds: start }
-        if (autoplayRef.current) player.loadVideoById(opts)
-        else player.cueVideoById(opts)
+        switchTo(player, { itemId, videoId, start })
       } else {
-        // The API is not ready yet: a new address loads the new video
-        setInitial({ videoId, start })
+        // The player is not ready yet: it plays the latest one asked for once it is
+        queued.current = { itemId, videoId, start }
       }
     })
     return () => {
@@ -175,8 +187,15 @@ export function YouTubeFrame({
     loadApi()
       .then((YT) => {
         if (stopped) return
-        playerRef.current = new YT.Player(el, {
+        new YT.Player(el, {
           events: {
+            onReady: (e) => {
+              if (stopped) return
+              playerRef.current = e.target
+              const next = queued.current
+              queued.current = null
+              if (next) switchTo(e.target, next)
+            },
             onStateChange: (e) => {
               if (e.data !== PAUSED && e.data !== ENDED) return void read()
               // Paused or ended: write down where it stopped and send it

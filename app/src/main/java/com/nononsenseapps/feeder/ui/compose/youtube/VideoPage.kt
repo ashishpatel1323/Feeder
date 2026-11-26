@@ -286,7 +286,9 @@ fun YouTubeVideoPage(
             }
         }
 
-        val details = (loaded as? Loaded.Ready)?.details
+        // What yt-dlp's standby adds while it plays (chapters, followers) shows once it is in
+        val playing by playback.state.collectAsState()
+        val details = playing?.takeIf { it.videoId == videoId }?.details ?: (loaded as? Loaded.Ready)?.details
         val listState = rememberLazyListState()
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
             item(key = "info") {

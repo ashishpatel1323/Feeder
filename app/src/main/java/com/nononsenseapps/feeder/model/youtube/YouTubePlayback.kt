@@ -280,7 +280,6 @@ class YouTubePlayback(
         val pending = standby ?: return false
         youTubeStreams.forget(current.videoId)
         val position = exo.currentPosition
-        val playWhenReady = exo.playWhenReady
         YouTubeTiming.log(current.videoId, "fast streams failed at ${position / 1000} s: switching to yt-dlp's")
         // Skip the standby's wait: it is needed now
         applicationCoroutineScope.launch(Dispatchers.Main) {
@@ -318,9 +317,9 @@ class YouTubePlayback(
                     audio = full.audios.firstOrNull { it.language == now.audio?.language } ?: full.audios.firstOrNull(),
                 )
             _state.value = next
+            // playWhenReady stays as it is now: a sleep timer may have paused it meanwhile
             exo.setMediaSource(buildSource(next), position)
             exo.prepare()
-            exo.playWhenReady = playWhenReady
         }
         return true
     }

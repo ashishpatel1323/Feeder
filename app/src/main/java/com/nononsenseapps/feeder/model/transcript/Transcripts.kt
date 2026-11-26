@@ -245,12 +245,13 @@ class Transcripts(
             ?.let { return it }
         // The player's streams list the captions too (no yt-dlp run); yt-dlp when they don't
         val fast = offlineVideos.playbackDetails(videoId)
-        val details =
-            if (fast.fromInnerTube && bestCaptions(fast.subtitles) == null) {
-                offlineVideos.videoDetails(youtubeWatchUrl(videoId))
-            } else {
-                fast
+        if (fast.fromInnerTube) {
+            bestCaptions(fast.subtitles)?.let { track ->
+                val cues = runCatching { fetchText(track.url, fast.userAgent)?.let(::parseYouTube) }.getOrNull()
+                if (!cues.isNullOrEmpty()) return cues
             }
+        }
+        val details = if (fast.fromInnerTube) offlineVideos.videoDetails(youtubeWatchUrl(videoId)) else fast
         val track = bestCaptions(details.subtitles) ?: return emptyList()
         val content = fetchText(track.url, details.userAgent) ?: return emptyList()
         return parseYouTube(content)
