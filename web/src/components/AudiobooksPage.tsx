@@ -7,7 +7,8 @@ import { formatBytes } from '../lib/offline'
 import { ACCEPT_AUDIO, addLocal, deleteAudiobookFromDropbox, downloadAudiobook, isAudioName, localSupported, onDevice, pickedFromFolder, refreshAudiobooks, removeFromDevice, uploadAudiobook, type Picked } from '../lib/audiobooks/library'
 import { audiobookPlayer, useAudiobookPlayer, type BookPlayerState } from '../lib/audiobooks/player'
 import { bookLengthMs, chaptersOf, clock, lengthText } from '../lib/audiobooks/timeline'
-import { DeleteFromDropboxDialog, DropboxButton, needsDropbox, useDropbox } from './DropboxPanel'
+import { confirmDropboxDelete, DropboxButton, needsDropbox, useDropbox } from './DropboxPanel'
+import { confirmDelete } from '../lib/confirmDelete'
 import { HistoryList } from './History'
 import { Icon, IconButton } from './Icon'
 import { formatSpeed } from './Player'
@@ -65,7 +66,6 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
   const folderInput = useRef<HTMLInputElement>(null)
   const prefs = useShelfPrefs('audiobooks', 'cards')
   const dbx = useDropbox()
-  const [deleting, setDeleting] = useState<Audiobook | null>(null)
   const ab = useAudiobookPlayer()
 
   const refresh = useCallback(() => {
@@ -155,12 +155,22 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
     if (here || b.tracks.some((t) => t.local))
       actions.push({
         label: b.dropboxPath ? 'Remove from this device' : 'Delete',
-        run: () => {
-          if (!b.dropboxPath && !confirm(`Delete ${b.title} from this device? It is not in Dropbox. Where you were stays.`)) return
+        run: async () => {
+          const ok = await confirmDelete(
+            b.dropboxPath
+              ? { title: 'Remove from this device?', itemName: b.title, scope: 'this-device', confirmLabel: 'Remove', extra: 'It stays in Dropbox.' }
+              : { title: 'Delete audiobook?', itemName: b.title, scope: 'this-device', extra: "It isn't in Dropbox, so this is the only copy. Where you were stays." },
+          )
+          if (!ok) return
           void removeFromDevice(b.id).then(() => toast(b.dropboxPath ? `Removed ${b.title} from this device; it stays in Dropbox` : `Deleted ${b.title}`))
         },
       })
-    if (b.dropboxPath && !j) actions.push({ label: 'Delete from Dropbox', run: () => setDeleting(b) })
+    if (b.dropboxPath && !j) actions.push({ label: 'Delete from Dropbox', run: async () => {
+      if (!(await confirmDropboxDelete(b.title, here))) return
+      void deleteAudiobookFromDropbox(b.id)
+        .then(() => toast(`Deleted ${b.title} from Dropbox`))
+        .catch((e) => toast(e instanceof Error ? e.message : String(e)))
+    } })
     return {
       key: b.id,
       title: b.title,
@@ -251,19 +261,6 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
             }}
           />
         </div>
-        {deleting ? (
-          <DeleteFromDropboxDialog
-            title={deleting.title}
-            keepsCopy={onDevice(deleting)}
-            onConfirm={() => {
-              const b = deleting
-              void deleteAudiobookFromDropbox(b.id)
-                .then(() => toast(`Deleted ${b.title} from Dropbox`))
-                .catch((e) => toast(e instanceof Error ? e.message : String(e)))
-            }}
-            onClose={() => setDeleting(null)}
-          />
-        ) : null}
 
         {adding ? (
           <div className="lib-list zim-jobs">

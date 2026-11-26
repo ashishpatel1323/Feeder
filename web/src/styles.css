@@ -9545,3 +9545,49 @@ mark.sr-mark {
     padding: 0 var(--sp-3);
   }
 }
+
+/* ------------------------------------------------ delete confirmation (lib/confirmDelete.ts) */
+/* M3 basic dialog: title, item in bold, where it is deleted, then Cancel + red text button. */
+.confirm-delete-backdrop {
+  z-index: 200;
+  align-items: center;
+}
+.modal.confirm-delete {
+  max-width: 400px;
+  padding: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.confirm-delete h2 {
+  margin: 0;
+  font-size: var(--fs-xl);
+  font-weight: 600;
+}
+.confirm-delete-body p {
+  margin: 0;
+  font-size: var(--fs-md);
+  color: var(--text-2);
+}
+.confirm-delete-body .confirm-delete-name {
+  margin-bottom: var(--sp-2);
+  color: var(--text);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.confirm-delete-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+.confirm-delete-actions .mf-btn {
+  font-weight: 600;
+}
+.confirm-delete-actions .mf-btn.confirm-delete-ok {
+  color: var(--danger);
+}
+.confirm-delete-actions .mf-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

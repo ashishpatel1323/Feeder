@@ -23,13 +23,14 @@ import { formatBytes } from '../lib/offline'
 import { readAloud, type ReadAloudState } from '../lib/readaloud'
 import type { Settings } from '../lib/settings'
 import type { FoliateView, Location, TocItem } from '../vendor/foliate-js/view.js'
-import { DeleteFromDropboxDialog, DropboxButton, needsDropbox, useDropbox } from './DropboxPanel'
+import { confirmDropboxDelete, DropboxButton, needsDropbox, useDropbox } from './DropboxPanel'
 import { HighlightBar } from './Highlights'
 import { HistoryList } from './History'
 import { Icon, IconButton } from './Icon'
 import { Player } from './Player'
 import { otherDeviceText } from '../lib/device'
 import { Shelf, ShelfControls, useShelfPrefs, type ShelfItem } from './Shelf'
+import { confirmDelete, confirmDeleteHighlight } from '../lib/confirmDelete'
 
 /**
  * The Ebooks tab: books from Dropbox (/Ebooks) and this device, read with foliate-js.
@@ -78,7 +79,6 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
   const prefs = useShelfPrefs('ebooks', 'cards')
   const fileInput = useRef<HTMLInputElement>(null)
   const dbx = useDropbox()
-  const [deleting, setDeleting] = useState<Book | null>(null)
 
   const refresh = useCallback(() => {
     setBusy(true)
@@ -115,9 +115,16 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
 
   const act = async (b: Book, what: 'device' | 'dropbox') => {
     if (what === 'device') {
+      const ok = await confirmDelete(
+        b.dropboxPath
+          ? { title: 'Remove from this device?', itemName: b.title, scope: 'this-device', confirmLabel: 'Remove', extra: 'It stays in Dropbox.' }
+          : { title: 'Delete book?', itemName: b.title, scope: 'this-device', extra: "It isn't in Dropbox, so this is the only copy." },
+      )
+      if (!ok) return
       await removeFromDevice(b.id)
       toast(b.dropboxPath ? `Removed ${b.title} from this device; it stays in Dropbox` : `Deleted ${b.title}`)
     } else {
+      if (!(await confirmDropboxDelete(b.title, b.local))) return
       try {
         await deleteFromDropbox(b.id)
         toast(`Deleted ${b.title} from Dropbox`)
@@ -167,7 +174,7 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
     if (!b.local) actions.push({ label: 'Download to this device', run: () => void download(b) })
     if (b.local && !b.dropboxPath && uploading[b.id] === undefined) actions.push({ label: 'Upload to Dropbox', run: () => needsDropbox(dbx.signedIn, toast, () => void upload(b)) })
     if (b.local) actions.push({ label: b.dropboxPath ? 'Remove from this device' : 'Delete', run: () => void act(b, 'device') })
-    if (b.dropboxPath) actions.push({ label: 'Delete from Dropbox', run: () => setDeleting(b) })
+    if (b.dropboxPath) actions.push({ label: 'Delete from Dropbox', run: () => void act(b, 'dropbox') })
     return {
       key: b.id,
       title: b.title,
@@ -251,7 +258,6 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
             <Shelf items={items} show={prefs.show} view={prefs.view} shape="book" emptyDevice="No books on this device yet. Books in Dropbox download when you open them." />
           </>
         )}
-        {deleting ? <DeleteFromDropboxDialog title={deleting.title} keepsCopy={deleting.local} onConfirm={() => void act(deleting, 'dropbox')} onClose={() => setDeleting(null)} /> : null}
       </div>
     </section>
   )
@@ -664,6 +670,7 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
           }}
           onDelete={async () => {
             if (!editing) return
+            if (!(await confirmDeleteHighlight(editing.text))) return
             await deleteHighlight(editing.id)
             setEditing(null)
             toast('Highlight deleted')

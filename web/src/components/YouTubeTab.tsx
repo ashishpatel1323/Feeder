@@ -31,6 +31,7 @@ import { timeAgo } from '../lib/feedstats'
 import { Icon, IconButton } from './Icon'
 import { MoreMenu } from './MoreMenu'
 import { Modal } from './Dialogs'
+import { confirmDelete, itemCount } from '../lib/confirmDelete'
 
 const sync = () => syncNow().catch(() => undefined)
 /** Rows drawn at first; more as the list is scrolled. */
@@ -324,7 +325,7 @@ function GroupsDialog(p: { channels: Channel[]; groups: string[]; current: strin
               icon="delete"
               label={`Delete ${g}`}
               onClick={async () => {
-                if (!confirm(`Delete ${g}? Its channels stay subscribed and move out of the group (the folder in Feeds).`)) return
+                if (!(await confirmDelete({ title: 'Delete group?', itemName: g, scope: 'all-devices', extra: 'Its channels stay subscribed and move out of the group (the folder in Feeds).' }))) return
                 for (const c of p.channels) if (c.tag === g) await updateFeed(c.url, { tag: '' })
                 if (p.current === g) p.onCurrent(null)
                 void sync()
@@ -356,7 +357,7 @@ const SORTS: { sort: ChannelSort; label: string }[] = [
 /** Unsubscribe: deletes the feed, as everywhere else in Feeder (after asking). */
 export async function unsubscribe(feed: Pick<Feed, 'url'>, title: string): Promise<boolean> {
   const n = await db.items.where('feedUrl').equals(feed.url).count()
-  if (!confirm(`Unsubscribe from ${title}? This deletes the feed and its ${n} video${n === 1 ? '' : 's'} here and on your other devices.`)) return false
+  if (!(await confirmDelete({ title: 'Unsubscribe from channel?', itemName: title, scope: 'all-devices', confirmLabel: 'Unsubscribe', extra: `Its feed and ${itemCount(n, 'video')} are deleted too.` }))) return false
   await deleteFeeds([feed.url])
   void sync()
   return true

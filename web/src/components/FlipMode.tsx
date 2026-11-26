@@ -15,6 +15,7 @@ import { articleVideoId } from '../lib/youtube'
 import { playQueue, useQueue } from '../lib/playqueue'
 import { itemFacts } from '../lib/itemview'
 import { TypeBadge, usePlaylistContext } from './ItemRow'
+import { confirmDelete } from '../lib/confirmDelete'
 
 /**
  * Flip mode for desktop: one article per page, turned like a magazine page. The page sits in the
@@ -254,6 +255,7 @@ export function FlipMode(p: Props) {
   const remove = useCallback(async () => {
     if (!item) return
     const copy = item
+    if (!(await confirmDelete({ title: 'Delete article?', itemName: copy.title || 'Untitled', scope: 'all-devices' }))) return
     readAloud.stop()
     const after = queue[idx + 1] ?? queue[idx - 1] ?? null
     if (pageRef.current && queue[idx + 1]) setLeaf({ html: pageRef.current.innerHTML, key: Date.now() })
@@ -261,7 +263,7 @@ export function FlipMode(p: Props) {
     setCurId(after)
     await hideItems([copy.id])
     syncNow().catch(() => undefined)
-    p.toast('Article deleted on all devices', {
+    p.toast('Article deleted', {
       label: 'Undo',
       run: () => {
         setGone((g) => {
@@ -480,7 +482,7 @@ export function FlipMode(p: Props) {
                   <Icon name="article" size={18} /> {kind === 'article' ? 'Read full article' : 'Open in reader'}
                 </button>
                 <span className="flip-spacer" />
-                <button className="flip-btn del" onClick={remove} title="Delete on all devices (Delete)">
+                <button className="flip-btn del" onClick={remove} title="Delete (Delete)">
                   <Icon name="delete" size={18} /> Delete
                 </button>
               </div>

@@ -32,6 +32,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -41,6 +42,8 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.nononsenseapps.feeder.R
+import com.nononsenseapps.feeder.ui.compose.components.ConfirmDeleteDialog
+import com.nononsenseapps.feeder.ui.compose.components.DeleteScope
 import com.nononsenseapps.feeder.ui.compose.components.safeSemantics
 import com.nononsenseapps.feeder.ui.compose.minimumTouchSize
 import com.nononsenseapps.feeder.ui.compose.utils.ImmutableHolder
@@ -61,6 +64,25 @@ fun DeleteFeedDialog(
             feeds.item.all { feed -> feedsToDelete[feed.id] ?: false }
         }
     }
+    // After OK: the shared confirmation, saying it deletes on every synced device
+    var confirming by rememberSaveable { mutableStateOf(false) }
+    if (confirming) {
+        val chosen = feeds.item.filter { feedsToDelete[it.id] == true }
+        val names = chosen.take(5).joinToString(", ") { it.title } + if (chosen.size > 5) ", …" else ""
+        ConfirmDeleteDialog(
+            title = stringResource(if (chosen.size == 1) R.string.confirm_delete_title_feed else R.string.confirm_delete_title_feeds),
+            itemName = if (chosen.size == 1) names else pluralStringResource(R.plurals.confirm_delete_n_feeds, chosen.size, chosen.size) + ": " + names,
+            scope = DeleteScope.ALL_DEVICES,
+            extra = stringResource(R.string.confirm_delete_extra_feed_articles),
+            onConfirm = {
+                onDelete(chosen.map { it.id })
+                onDismiss()
+            },
+            onDismiss = onDismiss,
+            modifier = modifier,
+        )
+        return
+    }
     DeleteFeedDialog(
         feeds = feeds,
         isChecked = { feedId ->
@@ -69,8 +91,7 @@ fun DeleteFeedDialog(
         selectAllSelected = selectAllSelected,
         onDismiss = onDismiss,
         onOk = {
-            onDelete(feedsToDelete.filterValues { it }.keys)
-            onDismiss()
+            if (feedsToDelete.none { it.value }) onDismiss() else confirming = true
         },
         onToggleFeed = { feedId, checked ->
             feedsToDelete = feedsToDelete + (feedId to (checked ?: !feedsToDelete.contains(feedId)))

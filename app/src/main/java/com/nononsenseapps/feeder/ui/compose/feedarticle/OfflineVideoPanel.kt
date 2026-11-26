@@ -48,6 +48,10 @@ import com.nononsenseapps.feeder.model.offline.OfflineVideos
 import com.nononsenseapps.feeder.model.offline.SavedVideo
 import com.nononsenseapps.feeder.model.offline.VideoPhase
 import com.nononsenseapps.feeder.model.offline.isYouTubeLink
+import com.nononsenseapps.feeder.ui.compose.components.DeleteRequest
+import com.nononsenseapps.feeder.ui.compose.components.DeleteScope
+import com.nononsenseapps.feeder.ui.compose.components.DeleteVerb
+import com.nononsenseapps.feeder.ui.compose.components.rememberDeleteConfirmer
 import com.nononsenseapps.feeder.ui.compose.settings.formatBytes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -72,6 +76,7 @@ fun OfflineVideoPanel(
     val videos: OfflineVideos by di.instance()
     val repository: Repository by di.instance()
     val coroutineScope = rememberCoroutineScope()
+    val deleteConfirmer = rememberDeleteConfirmer()
 
     val jobs by videos.jobs.collectAsState()
     val changes by videos.changes.collectAsState()
@@ -106,7 +111,18 @@ fun OfflineVideoPanel(
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.weight(1f),
                     )
-                    TextButton(onClick = { coroutineScope.launch { videos.remove(itemId) } }) {
+                    TextButton(onClick = {
+                        deleteConfirmer.ask(
+                            DeleteRequest(
+                                title = R.string.confirm_delete_title_offline_copy,
+                                itemName = "",
+                                scope = DeleteScope.THIS_DEVICE,
+                                verb = DeleteVerb.REMOVE,
+                                extra = R.string.confirm_delete_extra_download,
+                                onConfirm = { coroutineScope.launch { videos.remove(itemId) } },
+                            ),
+                        )
+                    }) {
                         Icon(Icons.Default.Delete, contentDescription = null)
                         Text(stringResource(R.string.offline_video_remove), modifier = Modifier.padding(start = 4.dp))
                     }

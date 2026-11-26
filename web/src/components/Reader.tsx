@@ -3,6 +3,7 @@ import { hasEpisode, PodcastEpisode } from './Podcast'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, feedDisplayTitle, hideItems, unhideItems, type Feed, type Highlight, type HighlightColor, type Item } from '../lib/db'
 import { anchorOf, articlePicture, applyHighlights, deleteHighlight, newHighlight, quoteText, saveHighlight, updateHighlight } from '../lib/highlights'
+import { confirmDelete, confirmDeleteHighlight } from '../lib/confirmDelete'
 import { syncNow } from '../lib/sync2'
 import type { Toast } from '../lib/toast'
 import { copyText, HighlightBar, HighlightsRail } from './Highlights'
@@ -253,6 +254,7 @@ export function Reader(p: Props) {
   }
 
   const removeHighlight = async (h: Highlight) => {
+    if (!(await confirmDeleteHighlight(h.text))) return
     await deleteHighlight(h.id)
     if (bar?.kind === 'edit' && bar.id === h.id) setBar(null)
     p.toast('Highlight deleted')
@@ -376,11 +378,12 @@ export function Reader(p: Props) {
   /** Deletes the article for good on every device, then moves on to the next one. */
   const remove = async () => {
     const copy = item
+    if (!(await confirmDelete({ title: 'Delete article?', itemName: copy.title || 'Untitled', scope: 'all-devices' }))) return
     if (p.hasNext) p.onNext()
     else p.onBack()
     await hideItems([copy.id])
     syncNow().catch(() => undefined)
-    p.toast('Article deleted on all devices', { label: 'Undo', run: () => void unhideItems([copy]).then(() => syncNow().catch(() => undefined)) })
+    p.toast('Article deleted', { label: 'Undo', run: () => void unhideItems([copy]).then(() => syncNow().catch(() => undefined)) })
   }
 
   const shareLink = async () => {
@@ -472,7 +475,7 @@ export function Reader(p: Props) {
             { icon: 'formatBold', label: 'Bold word starts', kbd: 'B', checked: fastReading, onClick: () => updateSettings({ fastReading: !fastReading }), hidden: !isArticle },
             { icon: 'autoScroll', label: 'Auto scroll', kbd: 'A', checked: auto.active, onClick: auto.toggle, disabled: playing, hidden: !isArticle },
             'separator',
-            { icon: 'delete', label: 'Delete on all devices', kbd: 'Del', onClick: () => void remove(), danger: true },
+            { icon: 'delete', label: 'Delete', kbd: 'Del', onClick: () => void remove(), danger: true },
           ]}
         />
       </header>

@@ -18,10 +18,10 @@ import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -88,15 +88,17 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.archmodel.Repository
 import com.nononsenseapps.feeder.model.PlaybackStatus
+import com.nononsenseapps.feeder.model.ReadAloudNeighbors
 import com.nononsenseapps.feeder.model.TTSStateHolder
 import com.nononsenseapps.feeder.model.ebooks.BookPositions
 import com.nononsenseapps.feeder.model.ebooks.EbookLibrary
 import com.nononsenseapps.feeder.model.highlights.Highlight
-import com.nononsenseapps.feeder.model.history.HistoryWhere
-import com.nononsenseapps.feeder.model.history.ItemHistory
 import com.nononsenseapps.feeder.model.highlights.HighlightColor
 import com.nononsenseapps.feeder.model.highlights.HighlightStore
-import com.nononsenseapps.feeder.model.ReadAloudNeighbors
+import com.nononsenseapps.feeder.model.history.HistoryWhere
+import com.nononsenseapps.feeder.model.history.ItemHistory
+import com.nononsenseapps.feeder.ui.compose.components.askHighlight
+import com.nononsenseapps.feeder.ui.compose.components.rememberDeleteConfirmer
 import com.nononsenseapps.feeder.ui.compose.history.historyItems
 import com.nononsenseapps.feeder.ui.compose.history.rememberHistory
 import com.nononsenseapps.feeder.ui.compose.history.rememberOpenTracker
@@ -185,6 +187,7 @@ fun EbookReaderScreen(
 ) {
     HideMainBar()
     val context = LocalContext.current
+    val deleteConfirmer = rememberDeleteConfirmer()
     val di = LocalDI.current
     val highlightStore: HighlightStore by di.instance()
     val ttsStateHolder: TTSStateHolder by di.instance()
@@ -474,8 +477,12 @@ fun EbookReaderScreen(
                                 context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, quote), null))
                             },
                             onDelete = {
-                                editing?.let { highlightStore.delete(it.id) }
-                                editing = null
+                                editing?.let { h ->
+                                    deleteConfirmer.askHighlight(h.text) {
+                                        highlightStore.delete(h.id)
+                                        editing = null
+                                    }
+                                }
                             },
                             onClose = {
                                 if (selection != null) js("feeder.clearSelection()")

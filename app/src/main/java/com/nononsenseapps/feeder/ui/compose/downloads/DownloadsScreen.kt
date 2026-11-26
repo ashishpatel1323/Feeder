@@ -45,7 +45,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.outlined.ClosedCaption
 import androidx.compose.material.icons.outlined.DownloadForOffline
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -107,6 +106,10 @@ import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.db.room.ItemStatus
 import com.nononsenseapps.feeder.model.offline.VideoPhase
 import com.nononsenseapps.feeder.model.playlists.ItemKind
+import com.nononsenseapps.feeder.ui.compose.components.ConfirmDeleteDialog
+import com.nononsenseapps.feeder.ui.compose.components.DeleteRequest
+import com.nononsenseapps.feeder.ui.compose.components.DeleteScope
+import com.nononsenseapps.feeder.ui.compose.components.rememberDeleteConfirmer
 import com.nononsenseapps.feeder.ui.compose.item.ItemActionButton
 import com.nononsenseapps.feeder.ui.compose.item.ItemCommands
 import com.nononsenseapps.feeder.ui.compose.item.ItemRow
@@ -205,19 +208,16 @@ fun DownloadsScreen(
     }
 
     if (confirmDeleteAll) {
-        AlertDialog(
-            onDismissRequest = { confirmDeleteAll = false },
-            title = { Text(stringResource(R.string.downloads_delete_all)) },
-            text = { Text(stringResource(R.string.downloads_delete_all_message)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmDeleteAll = false
-                    viewModel.deleteAll()
-                }) { Text(stringResource(R.string.downloads_delete_all_confirm)) }
+        ConfirmDeleteDialog(
+            title = stringResource(R.string.confirm_delete_title_downloads),
+            itemName = stringResource(R.string.downloads_delete_all),
+            scope = DeleteScope.THIS_DEVICE,
+            onConfirm = {
+                confirmDeleteAll = false
+                viewModel.deleteAll()
             },
-            dismissButton = {
-                TextButton(onClick = { confirmDeleteAll = false }) { Text(stringResource(android.R.string.cancel)) }
-            },
+            onDismiss = { confirmDeleteAll = false },
+            extra = stringResource(R.string.downloads_delete_all_message),
         )
     }
 }
@@ -232,6 +232,7 @@ private fun DownloadsList(
     val listState = rememberLazyListState()
     val status by viewModel.status.collectAsStateWithLifecycle()
     val commands = rememberItemCommands()
+    val deleteConfirmer = rememberDeleteConfirmer()
     // The list being dragged; the view model's order otherwise
     val order = remember { mutableStateListOf<DownloadedVideo>() }
     var draggingId by remember { mutableStateOf<Long?>(null) }
@@ -276,7 +277,17 @@ private fun DownloadsList(
                 snackbar = snackbar,
                 playing = state.playingId == video.id && state.playingAudio == state.audioTab,
                 onPlay = { viewModel.play(video.id) },
-                onDelete = { viewModel.delete(video.id) },
+                onDelete = {
+                    deleteConfirmer.ask(
+                        DeleteRequest(
+                            title = R.string.confirm_delete_title_download,
+                            itemName = video.info.title,
+                            scope = DeleteScope.THIS_DEVICE,
+                            extra = R.string.confirm_delete_extra_download,
+                            onConfirm = { viewModel.delete(video.id) },
+                        ),
+                    )
+                },
                 onMoveUp = { viewModel.move(video.id, -1) },
                 onMoveDown = { viewModel.move(video.id, 1) },
                 dragHandleModifier =

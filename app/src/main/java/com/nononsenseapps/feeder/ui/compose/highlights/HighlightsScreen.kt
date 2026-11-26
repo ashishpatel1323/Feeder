@@ -59,14 +59,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nononsenseapps.feeder.R
-import com.nononsenseapps.feeder.model.ebooks.EbookLibrary
-import com.nononsenseapps.feeder.model.zim.ZimLibrary
 import com.nononsenseapps.feeder.db.room.Sync2Dao
+import com.nononsenseapps.feeder.model.ebooks.EbookLibrary
 import com.nononsenseapps.feeder.model.highlights.Highlight
 import com.nononsenseapps.feeder.model.highlights.HighlightColor
 import com.nononsenseapps.feeder.model.highlights.HighlightStore
 import com.nononsenseapps.feeder.model.highlights.allQuotesText
 import com.nononsenseapps.feeder.model.highlights.quoteText
+import com.nononsenseapps.feeder.model.zim.ZimLibrary
+import com.nononsenseapps.feeder.ui.compose.components.askHighlight
+import com.nononsenseapps.feeder.ui.compose.components.rememberDeleteConfirmer
 import com.nononsenseapps.feeder.ui.compose.theme.FeederTokens
 import com.nononsenseapps.feeder.ui.compose.theme.SensibleTopAppBar
 import kotlinx.coroutines.launch
@@ -96,6 +98,7 @@ fun HighlightsScreen(
     val store: HighlightStore by di.instance()
     val dao: Sync2Dao by di.instance()
     val context = LocalContext.current
+    val deleteConfirmer = rememberDeleteConfirmer()
     val scope = rememberCoroutineScope()
     val all by store.highlights.collectAsStateWithLifecycle()
     var filter by remember { mutableStateOf<HlFilter>(HlFilter.All) }
@@ -263,8 +266,10 @@ fun HighlightsScreen(
                         onShare = { share = h.shareSubject() },
                         onCopy = { copyText(context, quoteText(h.text, h.itemTitle, h.feedTitle, h.itemLink, h.note), copied) },
                         onDelete = {
-                            store.delete(h.id)
-                            toast(context, R.string.highlight_deleted)
+                            deleteConfirmer.askHighlight(h.text) {
+                                store.delete(h.id)
+                                toast(context, R.string.highlight_deleted)
+                            }
                         },
                     )
                 }
