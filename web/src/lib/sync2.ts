@@ -38,7 +38,7 @@ import { b64encode, decodeKey, decryptString, encryptString, type SecretKeys } f
 import { applyDropboxLink, dropboxLink, DROPBOX_TS_KEY, type DropboxLink } from './dropbox'
 import { eventFromValue, historyValue } from './history'
 import { applyRecent, recentValue } from './recent'
-import { PLAYLISTS_KEY, STARTER_IDS, loadPlaylists, type Playlist } from './playlists'
+import { DELETED_PLAYLISTS_KEY, PLAYLISTS_KEY, STARTER_IDS, loadPlaylists, type Playlist } from './playlists'
 import {
   db,
   EMPTY_FOLDERS_KEY,
@@ -499,17 +499,38 @@ export async function collectChanges(now = Date.now()): Promise<Pending[]> {
 
   // Playlists: new, edited (newest edit wins) and deleted ones
   const knownLists = new Map((await db.syncKnown.where('k').startsWith('playlist\n').toArray()).map((r) => [r.k.slice('playlist\n'.length), r]))
+  const deletedHere = await getKv<Record<string, number>>(DELETED_PLAYLISTS_KEY, {})
   const before = await loadPlaylists()
-  const lists = adoptStarterIds(before, new Set(knownLists.keys()))
-  if (lists.some((p, n) => p.id !== before[n].id)) await setKv(PLAYLISTS_KEY, lists)
+  let lists = adoptStarterIds(before, new Set(knownLists.keys()))
+  // Synced playlists missing here that weren't deleted here come back from what was last
+  // exchanged. Only a delete made in this browser goes out as a delete, so one device can't
+  // wipe them everywhere.
+  const back = [...knownLists]
+    .filter(([id, kn]) => !(id in deletedHere) && !lists.some((p) => p.id === id) && !isDeleted(kn.v) && kn.v && typeof kn.v === 'object')
+    .map(([id, kn]) => playlistFromValue(id, kn.v as Partial<PlaylistValue>, kn.ts))
+  if (back.length) {
+    console.warn('Putting back synced playlists missing here', back.map((p) => p.id))
+    lists = [...lists, ...back]
+  }
+  if (back.length || lists.some((p, n) => p.id !== before[n].id)) await setKv(PLAYLISTS_KEY, lists)
   for (const pl of lists) {
     const v = playlistValue(pl)
     const kn = knownLists.get(pl.id)
     if (!kn || !same(kn.v, v)) out.push({ k: 'playlist', key: pl.id, v, ts: Math.max(pl.modifiedAt || pl.createdAt || 1, (kn?.ts ?? 0) + 1) })
   }
   const localLists = new Set(lists.map((p) => p.id))
-  for (const [id, kn] of knownLists) {
-    if (!localLists.has(id) && !isDeleted(kn.v)) out.push({ k: 'playlist', key: id, v: { deleted: true }, ts: Math.max(now, kn.ts + 1) })
+  const done: string[] = []
+  for (const [id, deletedAt] of Object.entries(deletedHere)) {
+    const kn = knownLists.get(id)
+    // Back here, never synced, or the delete already went out
+    if (localLists.has(id) || !kn || isDeleted(kn.v)) done.push(id)
+    else out.push({ k: 'playlist', key: id, v: { deleted: true }, ts: Math.max(deletedAt, kn.ts + 1) })
+  }
+  if (done.length) {
+    await db.transaction('rw', db.kv, async () => {
+      const cur = await getKv<Record<string, number>>(DELETED_PLAYLISTS_KEY, {})
+      await setKv(DELETED_PLAYLISTS_KEY, Object.fromEntries(Object.entries(cur).filter(([id]) => !done.includes(id))))
+    })
   }
 
   // Highlights: new, recolored or noted (newest edit wins) and deleted ones

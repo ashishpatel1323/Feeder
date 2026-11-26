@@ -86,7 +86,36 @@ class PlaylistStore(
             }
             return starters
         }
-        return runCatching { json.decodeFromString(listSerializer, raw.orEmpty()) }.getOrDefault(emptyList())
+        return runCatching { json.decodeFromString(listSerializer, raw.orEmpty()) }.getOrElse {
+            // Kept, not overwritten by the next save; sync puts synced playlists back
+            if (raw != null && prefs.getString(PREF_PLAYLISTS_UNREADABLE, null) == null) prefs.edit { putString(PREF_PLAYLISTS_UNREADABLE, raw) }
+            emptyList()
+        }
+    }
+
+    private val deletedSerializer = MapSerializer(String.serializer(), Long.serializer())
+
+    // Playlist id to when it was deleted on this device, until sync has sent the delete
+    private var deleted: Map<String, Long> =
+        runCatching { json.decodeFromString(deletedSerializer, prefs.getString(PREF_DELETED, null) ?: "{}") }.getOrDefault(emptyMap())
+
+    /**
+     * Playlists deleted on this device (id to when) that sync hasn't sent yet. Only these go out
+     * as deletes: a playlist that is only missing here is never deleted on the other devices.
+     */
+    @Synchronized
+    fun deletedHere(): Map<String, Long> = deleted
+
+    /** Sync sent (or no longer needs) the delete of these playlists. */
+    @Synchronized
+    fun forgetDeleted(ids: Collection<String>) {
+        if (ids.none { it in deleted }) return
+        putDeleted(deleted - ids.toSet())
+    }
+
+    private fun putDeleted(next: Map<String, Long>) {
+        deleted = next
+        prefs.edit { putString(PREF_DELETED, json.encodeToString(deletedSerializer, next)) }
     }
 
     private fun loadPositions(): Map<Long, Triple<Long, Long, Long>> =
@@ -100,14 +129,27 @@ class PlaylistStore(
     @Synchronized
     fun change(fn: (List<Playlist>) -> List<Playlist>) {
         val before = _playlists.value
-        val next = stampChanged(before, fn(before), System.currentTimeMillis())
+        val now = System.currentTimeMillis()
+        val next = stampChanged(before, fn(before), now)
+        // Removed by the person here: remembered, so sync deletes them on the other devices too
+        val nextIds = next.map { it.id }.toSet()
+        val removed = before.map { it.id }.filterNot { it in nextIds }
+        if (removed.isNotEmpty() || nextIds.any { it in deleted }) {
+            putDeleted(deleted.filterKeys { it !in nextIds } + removed.associateWith { now })
+        }
         write(next)
         onChanged?.invoke(false)
     }
 
     /** Playlists as another device left them (sync): stored as they are, not stamped or sent back. */
     @Synchronized
-    fun replaceFromSync(fn: (List<Playlist>) -> List<Playlist>) = write(fn(_playlists.value))
+    fun replaceFromSync(fn: (List<Playlist>) -> List<Playlist>) {
+        val next = fn(_playlists.value)
+        // A newer version from another device brings back a playlist deleted here
+        val ids = next.map { it.id }.toSet()
+        if (ids.any { it in deleted }) putDeleted(deleted.filterKeys { it !in ids })
+        write(next)
+    }
 
     private fun write(next: List<Playlist>) {
         _playlists.value = next
@@ -226,6 +268,8 @@ class PlaylistStore(
     companion object {
         private const val PREF_PLAYLISTS = "playlists_json"
         private const val PREF_SEEDED = "playlists_seeded"
+        private const val PREF_DELETED = "playlists_deleted_here"
+        private const val PREF_PLAYLISTS_UNREADABLE = "playlists_json_unreadable"
         private const val PREF_POSITIONS = "playlists_positions"
         private const val PREF_POSITION_DEVICES = "playlists_position_devices"
         private const val PREF_AUDIO_SPEED = "playlists_audio_speed"
