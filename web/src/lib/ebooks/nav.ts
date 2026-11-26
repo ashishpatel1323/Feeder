@@ -3,6 +3,7 @@
  * styles, chapters and scrolling to a range; fixed-layout ones (PDF, comics) only turn pages.
  */
 import type { FoliateView, Location } from '../../vendor/foliate-js/view.js'
+import { injectSketchStyles, parseSketch, placeStrip, removeStrips, sketchStrip, type SketchColor } from '../sketch'
 
 export const isFixed = (v: FoliateView | null | undefined) => !!v?.isFixedLayout
 
@@ -107,4 +108,36 @@ export function pageNumbers(l: Pick<Location, 'location' | 'section'> | null | u
   const src = fixedLayout ? l?.section : l?.location
   if (!src || !(src.total > 0)) return null
   return { page: Math.min(src.total, Math.max(1, src.current + 1)), pages: src.total }
+}
+
+/**
+ * Margin sketches in a reflowable book: a strip at the end of the paragraph the sketch's text
+ * ends in. Added inside the paragraph, so CFIs of everything after it stay the same. Fixed-layout
+ * pages (PDF) can't make room, so there the passage shows as a highlight that opens the sketch.
+ */
+export function placeBookSketches(v: FoliateView | null | undefined, doc: Document, index: number, highlights: { id: string; cfi?: string; color: string; sketch?: string }[]) {
+  if (!v || isFixed(v) || !doc.body) return
+  removeStrips(doc.body)
+  const mine = highlights.filter((h) => h.sketch && h.cfi)
+  if (!mine.length) return
+  injectSketchStyles(doc)
+  for (const h of mine) {
+    const sk = parseSketch(h.sketch)
+    if (!sk) continue
+    try {
+      const r = v.resolveNavigation(h.cfi!)
+      if (r?.index !== index || !r.anchor) continue
+      const range = r.anchor(doc)
+      if (!range || !('endContainer' in range)) continue
+      placeStrip(doc.body, range.endContainer, sketchStrip(doc, h.id, (['yellow', 'green', 'blue', 'pink'].includes(h.color) ? h.color : 'pink') as SketchColor, sk))
+    } catch {
+      // a sketch from another edition of the file
+    }
+  }
+}
+
+/** Places the sketches again in the chapters on screen (after a sketch is added, edited or synced). */
+export function replaceBookSketches(v: FoliateView | null | undefined, highlights: { id: string; cfi?: string; color: string; sketch?: string }[]) {
+  if (!v || isFixed(v)) return
+  for (const { doc, index } of v.renderer.getContents()) if (doc && index !== undefined) placeBookSketches(v, doc, index, highlights)
 }

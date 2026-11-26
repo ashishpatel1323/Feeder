@@ -94,6 +94,8 @@ export interface Highlight {
   modifiedAt?: number
   /** Ebook highlights (itemId "ebook:\n<book id>"): where the text is, as an EPUB CFI. */
   cfi?: string
+  /** A margin sketch tied to the text instead of a colored highlight (JSON, see lib/sketch.ts). */
+  sketch?: string
 }
 
 export type HighlightColor = 'yellow' | 'green' | 'blue' | 'pink'

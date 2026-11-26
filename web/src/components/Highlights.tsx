@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Highlight, HighlightColor } from '../lib/db'
 import { allQuotesText, HIGHLIGHT_COLORS, quoteText } from '../lib/highlights'
 import { Icon, IconButton } from './Icon'
+import { parseSketch, sketchSvg } from '../lib/sketch'
 
 /** Docked bar under the article: shown for a fresh selection or when an existing highlight is tapped. */
 export function HighlightBar(p: {
@@ -13,6 +14,8 @@ export function HighlightBar(p: {
   onCopyText: (note: string) => void
   onDelete: () => void
   onClose: () => void
+  /** Draw a margin sketch for the selected text instead (new selections only). */
+  onSketch?: () => void
 }) {
   const [color, setColor] = useState<HighlightColor>(p.existing?.color ?? 'yellow')
   const [note, setNote] = useState(p.existing?.note ?? '')
@@ -73,6 +76,11 @@ export function HighlightBar(p: {
             <Icon name="highlight" size={20} /> Highlight
           </button>
         )}
+        {!p.existing && p.onSketch ? (
+          <button type="button" className="hl-btn" onMouseDown={(e) => e.preventDefault()} onClick={p.onSketch}>
+            <Icon name="draw" size={20} /> Sketch
+          </button>
+        ) : null}
         <button type="button" className="hl-btn" onMouseDown={(e) => e.preventDefault()} onClick={() => p.onShare(color, note)}>
           <Icon name="share" size={20} /> Share image
         </button>
@@ -113,6 +121,7 @@ export function HighlightCard(p: {
       <button type="button" className="hl-card-quote" onClick={p.onOpen} disabled={!p.onOpen} title={p.onOpen ? 'Show in the article' : undefined}>
         {h.text}
       </button>
+      {h.sketch ? <SketchPreview sketch={h.sketch} color={h.color} onClick={p.onEdit ?? p.onOpen} /> : null}
       {h.note ? <div className="hl-card-note">{h.note}</div> : null}
       <div className="hl-card-foot">
         {p.showDate ? <span className="hl-card-date">{new Date(h.createdAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}</span> : null}
@@ -124,7 +133,7 @@ export function HighlightCard(p: {
           <Icon name="link" size={16} /> Copy
         </button>
         {p.onEdit ? (
-          <button type="button" className="hl-mini" onClick={p.onEdit} title="Change the color or note">
+          <button type="button" className="hl-mini" onClick={p.onEdit} title={h.sketch ? 'Edit the sketch' : 'Change the color or note'}>
             <Icon name="edit" size={16} /> Edit
           </button>
         ) : null}
@@ -326,4 +335,20 @@ export async function copyText(text: string, toast: (msg: string) => void, done 
   } catch {
     toast("Couldn't copy to the clipboard")
   }
+}
+
+/** A margin sketch drawn as its strip (on cards and lists). */
+export function SketchPreview(p: { sketch: string; color: string; onClick?: () => void }) {
+  const sk = parseSketch(p.sketch)
+  if (!sk) return null
+  return (
+    <span
+      className="feeder-sketch"
+      role={p.onClick ? 'button' : undefined}
+      aria-label="Sketch"
+      style={{ ['--feeder-sketch-edge' as string]: `var(--feeder-ink-${p.color})` }}
+      onClick={p.onClick}
+      dangerouslySetInnerHTML={{ __html: sketchSvg(sk) }}
+    />
+  )
 }
