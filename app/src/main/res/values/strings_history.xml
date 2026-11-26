@@ -24,4 +24,5 @@
     <string name="history_reason_closed">Player closed</string>
     <string name="history_reason_background">Left the app</string>
     <string name="history_reason_system">System</string>
+    <string name="history_reason_widget">Home screen widget</string>
 </resources>

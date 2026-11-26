@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The Continue home screen widget: last playlist, audiobook, ebook and ZIM page -->
+    <string name="continue_widget_name">Continue</string>
+    <string name="continue_widget_description">Pick up your last playlist, audiobook, ebook and offline site</string>
+    <string name="continue_widget_empty">Play a playlist or open a book and it shows up here</string>
+    <string name="continue_widget_minutes_left">%1$d min left</string>
+    <string name="continue_widget_hours_left">%1$d h %2$02d m left</string>
+    <string name="continue_widget_finished">Finished</string>
+    <string name="continue_widget_play">Play</string>
+    <string name="continue_widget_pause">Pause</string>
+    <string name="continue_widget_back_10">Back 10 seconds</string>
+    <string name="continue_widget_forward_30">Forward 30 seconds</string>
+    <string name="continue_widget_open">Open</string>
+    <string name="continue_widget_playlist">Playlist</string>
+    <string name="continue_widget_audiobook">Audiobook</string>
+    <string name="continue_widget_ebook">Ebook</string>
+    <string name="continue_widget_zim">Offline site</string>
+</resources>
