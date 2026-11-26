@@ -56,6 +56,7 @@ class DiscoverViewModel(
     di: DI,
 ) : DIAwareViewModel(di) {
     private val repository: Repository by instance()
+    private val history: com.nononsenseapps.feeder.model.history.CentralHistoryRecorder by instance()
     private val feedDao: FeedDao by instance()
     private val feedParser: FeedParser by instance()
     private val okHttpClient: OkHttpClient by instance()
@@ -267,6 +268,7 @@ class DiscoverViewModel(
                             whenModified = Instant.now(),
                         ),
                     )
+                if (existing == null) history.feedSubscribed(feedUrl, r.title, r.image)
                 prefs.edit { putString(PREF_LAST_FOLDER, tag) }
                 runOnceRssSync(di = di, feedId = feedId, triggeredByUser = false)
                 _state.update { it.copy(added = it.added + (r.feedUrl to Added(feedId, tag)), adding = it.adding - r.feedUrl) }

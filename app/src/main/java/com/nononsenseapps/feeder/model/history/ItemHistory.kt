@@ -117,6 +117,10 @@ class ItemHistory private constructor(
     @Volatile
     var onChanged: (() -> Unit)? = null
 
+    /** Told about each event noted here, for History ([CentralHistory]). */
+    @Volatile
+    var onRecorded: ((HistoryEvent) -> Unit)? = null
+
     private fun load(): List<HistoryEvent> =
         try {
             if (file.exists()) json.decodeFromString(ListSerializer(HistoryEvent.serializer()), file.readText()) else emptyList()
@@ -160,6 +164,7 @@ class ItemHistory private constructor(
                 ev
             }
         onChanged?.invoke()
+        onRecorded?.invoke(ev)
         return ev
     }
 

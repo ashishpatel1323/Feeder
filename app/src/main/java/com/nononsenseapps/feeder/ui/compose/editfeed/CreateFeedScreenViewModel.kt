@@ -29,6 +29,7 @@ class CreateFeedScreenViewModel(
 ) : DIAwareViewModel(di),
     EditFeedScreenState {
     private val repository: Repository by instance()
+    private val history: com.nononsenseapps.feeder.model.history.CentralHistoryRecorder by instance()
 
     // These three are updated as a result of url/uri updating
     override var isNotValidUrl by mutableStateOf(false)
@@ -115,6 +116,8 @@ class CreateFeedScreenViewModel(
                         allowRules = allowRules,
                     ),
                 )
+
+            history.feedSubscribed(feedUrl, feedTitle, feedImage)
 
             runOnceRssSync(
                 di = di,

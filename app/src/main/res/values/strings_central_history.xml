@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- History: everything opened, and highlights, notes and feeds made or deleted (fork only, English) -->
+<resources>
+    <string name="tab_history">History</string>
+    <string name="library_history_desc">Everything you opened, on all your devices</string>
+    <string name="central_history_clear">Clear history</string>
+    <string name="central_history_clear_title">Clear all history?</string>
+    <string name="central_history_clear_body">This removes all history on all your devices. No articles, videos, books, highlights or feeds are deleted.</string>
+    <string name="central_history_remove">Remove from history</string>
+    <string name="central_history_remove_title">Remove “%1$s” from history?</string>
+    <string name="central_history_remove_body">It is removed from history on all your devices. The %1$s itself is not deleted.</string>
+    <string name="central_history_remove_confirm">Remove</string>
+    <string name="central_history_clear_confirm">Clear</string>
+    <string name="central_history_empty">Nothing here yet. Articles, videos, episodes, books and pages you open show up here, with highlights, notes and feeds you add.</string>
+    <string name="central_history_empty_filter">Nothing of this kind in your history.</string>
+    <string name="central_history_not_here">It isn’t on this device</string>
+    <string name="central_history_more">More options</string>
+    <string name="central_history_filter_all">All</string>
+    <string name="central_history_filter_articles">Articles</string>
+    <string name="central_history_filter_youtube">YouTube</string>
+    <string name="central_history_filter_podcasts">Podcasts</string>
+    <string name="central_history_filter_playlists">Playlists</string>
+    <string name="central_history_filter_audiobooks">Audiobooks</string>
+    <string name="central_history_filter_ebooks">Ebooks</string>
+    <string name="central_history_filter_zim">ZIM</string>
+    <string name="central_history_filter_marks">Highlights &amp; notes</string>
+    <string name="central_history_filter_feeds">Feeds</string>
+    <string name="central_history_highlighted">Highlighted in %1$s</string>
+    <string name="central_history_highlight_deleted">Deleted highlight in %1$s</string>
+    <string name="central_history_noted">Added note on %1$s</string>
+    <string name="central_history_note_deleted">Deleted note on %1$s</string>
+    <string name="central_history_subscribed">Subscribed to %1$s</string>
+    <string name="central_history_feed_deleted">Deleted feed %1$s</string>
+    <string name="central_history_read">Read</string>
+    <string name="central_history_watched">Watched</string>
+    <string name="central_history_played">Played</string>
+    <string name="central_history_finished">Finished</string>
+    <string name="central_history_untitled">(untitled)</string>
+    <string name="central_history_resubscribe_title">Subscribe to “%1$s” again?</string>
+    <string name="central_history_resubscribe_body">The feed is added back and its articles are fetched again.</string>
+    <string name="central_history_resubscribe">Subscribe again</string>
+    <string name="central_history_thing_article">article</string>
+    <string name="central_history_thing_youtube">video</string>
+    <string name="central_history_thing_podcast">episode</string>
+    <string name="central_history_thing_audiobook">audiobook</string>
+    <string name="central_history_thing_ebook">ebook</string>
+    <string name="central_history_thing_zim">page</string>
+    <string name="central_history_thing_highlight">highlight</string>
+    <string name="central_history_thing_note">note</string>
+    <string name="central_history_thing_feed">feed</string>
+</resources>

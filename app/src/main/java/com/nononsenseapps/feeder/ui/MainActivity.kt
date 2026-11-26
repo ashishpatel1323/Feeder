@@ -245,6 +245,8 @@ class MainActivity : DIAwareComponentActivity() {
                 com.nononsenseapps.feeder.ui.compose.navigation.AudiobookPlayerDestination
                     .register(this, navController, navDrawerListState, mainActivityViewModel)
                 ZimReaderDestination.register(this, navController, navDrawerListState, mainActivityViewModel)
+                com.nononsenseapps.feeder.ui.compose.navigation.HistoryDestination
+                    .register(this, navController, navDrawerListState, mainActivityViewModel)
             }
         }
         // "Playlist" on any article, episode or video opens this sheet

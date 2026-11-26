@@ -81,6 +81,7 @@ class Repository(
     private val syncClient: SyncRestClient by instance()
     private val sync2Client: Sync2Client by instance()
     private val fontStore: FontStore by instance()
+    private val centralHistory: com.nononsenseapps.feeder.model.history.CentralHistoryRecorder by instance()
 
     init {
         addFeederNewsIfInitialStart()
@@ -810,6 +811,8 @@ class Repository(
         }
 
     suspend fun deleteFeeds(feedIds: List<Long>) {
+        // History: feeds deleted here (sync deletes with deleteFeed)
+        runCatching { centralHistory.feedsDeleted(feedIds.mapNotNull { feedStore.getFeed(it) }) }
         feedStore.deleteFeeds(feedIds)
         androidSystemStore.removeDynamicShortcuts(feedIds)
         if (currentFeedAndTag.value.first in feedIds) {

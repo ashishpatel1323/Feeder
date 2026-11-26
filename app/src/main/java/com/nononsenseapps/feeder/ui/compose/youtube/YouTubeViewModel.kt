@@ -108,6 +108,7 @@ class YouTubeViewModel(
 ) : DIAwareViewModel(di) {
     private val app: Application by instance()
     private val repository: Repository by instance()
+    private val history: com.nononsenseapps.feeder.model.history.CentralHistoryRecorder by instance()
     private val dao: YouTubeVideoMetaDao by instance()
     private val metaStore: YouTubeMetaStore by instance()
     private val videoPositions: VideoPositions by instance()
@@ -342,6 +343,8 @@ class YouTubeViewModel(
                     feedParser.parseFeedUrl(url).getOrNull()?.title
                 } ?: url.toString()
             newIds += repository.saveFeed(Feed(url = url, title = name, tag = tag, whenModified = Instant.now()))
+            // One channel added by hand (not a Takeout import)
+            if (feeds.size == 1) history.feedSubscribed(url.toString(), name)
             added++
         }
         if (added > 0) {

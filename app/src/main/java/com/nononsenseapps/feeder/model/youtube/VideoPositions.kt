@@ -44,6 +44,9 @@ class VideoPositions(
     // Sends where a video is to other devices while it plays, not only when it stops
     private val syncNudge: SyncNudge? by instanceOrNull()
 
+    // History follows where videos were left
+    private val history: com.nononsenseapps.feeder.model.history.CentralHistoryRecorder? by instanceOrNull()
+
     private val _all = MutableStateFlow<Map<String, VideoPos>>(emptyMap())
     private var loaded = false
 
@@ -78,6 +81,7 @@ class VideoPositions(
         val next = nextPos(old, t, d, now)?.copy(by = ThisDevice.get(app).stamp()) ?: return false
         put(key, next)
         syncNudge?.changed(positionOnly = true)
+        history?.keyProgress(key, next.t.toLong(), next.d.toLong())
         return true
     }
 

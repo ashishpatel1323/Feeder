@@ -43,6 +43,9 @@ class PodcastPlayerStateHolder(
      */
     var otherDevicePosition: ((Long) -> Long?)? = null
 
+    /** Told the item id of each episode started here, for History. */
+    var onPlay: ((Long) -> Unit)? = null
+
     /**
      * Plays [link]; [itemId] is the article it belongs to (for its transcript and its saved
      * position). Starts [startAtSeconds] in (Resume).
@@ -70,6 +73,7 @@ class PodcastPlayerStateHolder(
             )
 
         initializePlayer(link)
+        itemId?.let { onPlay?.invoke(it) }
     }
 
     init {

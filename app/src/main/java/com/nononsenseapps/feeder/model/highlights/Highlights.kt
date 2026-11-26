@@ -102,6 +102,10 @@ class HighlightStore(
     @Volatile
     var onChanged: (() -> Unit)? = null
 
+    /** Told how a highlight was and is after a change made here (null = none), for History. */
+    @Volatile
+    var onEdit: ((before: Highlight?, after: Highlight?) -> Unit)? = null
+
     private fun load(): List<Highlight> = runCatching { json.decodeFromString(serializer, prefs.getString(PREF_KEY, null) ?: "[]") }.getOrDefault(emptyList())
 
     private fun write(next: List<Highlight>) {
@@ -113,8 +117,10 @@ class HighlightStore(
 
     @Synchronized
     fun add(h: Highlight) {
+        val before = get(h.id)
         write(_highlights.value.filterNot { it.id == h.id } + h)
         onChanged?.invoke()
+        onEdit?.invoke(before, h)
     }
 
     /** Changes the color and note, stamped with the time so this edit wins on other devices. */
@@ -125,18 +131,22 @@ class HighlightStore(
         note: String,
     ) {
         val now = System.currentTimeMillis()
+        val before = get(id)
         write(
             _highlights.value.map {
                 if (it.id == id) it.copy(color = color.id, note = note.trim(), modifiedAt = maxOf(now, it.modifiedAt + 1)) else it
             },
         )
         onChanged?.invoke()
+        if (before != null) onEdit?.invoke(before, get(id))
     }
 
     @Synchronized
     fun delete(id: String) {
+        val before = get(id)
         write(_highlights.value.filterNot { it.id == id })
         onChanged?.invoke()
+        if (before != null) onEdit?.invoke(before, null)
     }
 
     /** As another device left it (sync): stored as it is and not sent back. */

@@ -113,6 +113,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import org.kodein.di.compose.LocalDI
+import org.kodein.di.direct
 import org.kodein.di.instance
 import kotlin.math.roundToInt
 
@@ -168,6 +169,7 @@ fun YouTubeVideoPage(
     LaunchedEffect(itemId) {
         if (itemId > 0) {
             repository.markAsReadAndNotified(itemId)
+            di.direct.instance<com.nononsenseapps.feeder.model.history.CentralHistoryRecorder>().itemOpened(itemId)
             runOnceSyncChainSendRead(di)
         }
     }

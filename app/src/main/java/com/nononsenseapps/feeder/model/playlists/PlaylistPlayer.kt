@@ -92,6 +92,7 @@ class PlaylistPlayer(
     private val offlineFiles: OfflineFiles by instance()
     private val downloadsPlayback: DownloadsPlayback by instance()
     private val scope: ApplicationCoroutineScope by instance()
+    private val history: com.nononsenseapps.feeder.model.history.CentralHistoryRecorder by instance()
 
     private val _state = MutableStateFlow(QueueState(audioSpeed = store.audioSpeed))
     val state: StateFlow<QueueState> = _state.asStateFlow()
@@ -205,6 +206,7 @@ class PlaylistPlayer(
                     return@launch playCurrent()
                 }
                 val kind = itemKind(article.link, article.enclosure.link.takeIf { article.enclosure.present }, article.enclosure.type)
+                _state.value.let { s -> history.itemOpened(id, s.playlistId, s.name) }
                 installNavigator()
                 downloadsPlayback.stop()
                 com.nononsenseapps.feeder.model.audiobooks.AudioFocusHooks.pauseAudiobook
