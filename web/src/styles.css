@@ -10060,4 +10060,31 @@ mark.sr-mark {
     justify-content: center;
     padding: var(--sp-3) var(--sp-2);
   }
+
+/* One folder filter chip with a menu of check boxes, in place of a row of folder chips */
+.folder-filter {
+  display: inline-flex;
+  flex: none;
+}
+.folder-filter-chip {
+  cursor: pointer;
+  max-width: 240px;
+  padding-right: 6px;
+}
+.folder-filter-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.folder-filter-menu {
+  min-width: 220px;
+  max-width: 260px;
+  overflow-y: auto;
+}
+.folder-filter-menu .ctx-item.checked {
+  font-weight: 600;
+}
+.folder-filter-menu .folder-filter-done {
+  justify-content: flex-end;
+  color: var(--accent);
+  font-weight: 600;
 }
