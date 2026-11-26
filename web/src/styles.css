@@ -821,8 +821,13 @@ a {
   overflow-y: auto;
   position: relative;
   overscroll-behavior: contain;
+  /* Wide enough for margins: sketches move beside their paragraph (see .feeder-sketch) */
+  container: reader / inline-size;
 }
 .article {
+  /* Read by margin sketches to sit just outside the text column */
+  --article-w: 720px;
+  --article-pad-x: 20px;
   max-width: 720px;
   margin: 0 auto;
   padding: 24px 20px 48px;
@@ -2373,6 +2378,21 @@ details summary {
 }
 .feeder-sketch.flash {
   animation: hl-flash 1.2s ease-out;
+}
+/* Room beside the article (each margin about 180px or more): the strip
+   sits in the right margin, level with the top of its paragraph, like a note in a book's margin */
+@container reader (min-width: 1140px) {
+  .article-body :has(> .feeder-sketch) {
+    position: relative;
+  }
+  .article-body .feeder-sketch {
+    position: absolute;
+    top: 0;
+    left: calc(100% + var(--article-pad-x, 20px) + var(--sp-3));
+    /* As wide as the margin beside the article allows, up to 260px */
+    width: min(260px, calc((100cqw - var(--article-w, 720px)) / 2 - 2 * var(--sp-3)));
+    margin: 0;
+  }
 }
 mark.hl {
   color: inherit;
@@ -3932,6 +3952,8 @@ label.check.inline {
     isolation: isolate;
   }
   .reader-pane .article {
+    --article-w: 780px;
+    --article-pad-x: 56px;
     position: relative;
     max-width: 780px;
     margin: 0 auto;
