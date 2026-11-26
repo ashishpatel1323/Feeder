@@ -433,53 +433,13 @@ data object LibraryDestination : NavigationDestination(
             onOpenSaved = { FeedDestination.navigate(navController, feedId = ID_SAVED_ARTICLES, keepBackStack = true) },
             onHighlights = { HighlightsDestination.navigate(navController) },
             onDownloads = { DownloadsDestination.navigate(navController) },
-            onEbooks = { navController.navigate(EbooksDestination.route) { launchSingleTop = true } },
-            onAudiobooks = { navController.navigate(AudiobooksDestination.route) { launchSingleTop = true } },
-            onZim = { navController.navigate(ZimDestination.route) { launchSingleTop = true } },
+            onBooks = { BooksDestination.navigate(navController) },
             onHistory = { HistoryDestination.navigate(navController) },
             barTabs = BottomBarTabs.tabs(LocalContext.current).collectAsState().value ?: BottomBarTabs.DEFAULT,
             onYouTube = { navController.navigate(YouTubeDestination.route) { launchSingleTop = true } },
             onPlaylists = { navController.navigate("playlists") { launchSingleTop = true } },
             onSettings = { SettingsDestination.navigate(navController) },
             onSync = { SyncScreenDestination.navigate(navController, syncCode = "", secretKey = "") },
-        )
-    }
-}
-
-/** The Ebooks tab: books from Dropbox and the phone, read with foliate-js like on the web. */
-data object EbooksDestination : NavigationDestination(
-    path = "ebooks",
-    navArguments = emptyList(),
-    deepLinks = emptyList(),
-) {
-    @Composable
-    override fun RegisterScreen(
-        navController: NavController,
-        backStackEntry: NavBackStackEntry,
-        navDrawerListState: LazyListState,
-        mainActivityViewModel: MainActivityViewModel,
-    ) {
-        com.nononsenseapps.feeder.ui.compose.ebooks.EbooksScreen(
-            onOpenBook = { EbookReaderDestination.navigate(navController, it, null) },
-        )
-    }
-}
-
-/** The Audiobooks tab: books from Dropbox's /Audiobooks, streamed or downloaded. */
-data object AudiobooksDestination : NavigationDestination(
-    path = "audiobooks",
-    navArguments = emptyList(),
-    deepLinks = emptyList(),
-) {
-    @Composable
-    override fun RegisterScreen(
-        navController: NavController,
-        backStackEntry: NavBackStackEntry,
-        navDrawerListState: LazyListState,
-        mainActivityViewModel: MainActivityViewModel,
-    ) {
-        com.nononsenseapps.feeder.ui.compose.audiobooks.AudiobooksScreen(
-            onOpenBook = { AudiobookPlayerDestination.navigate(navController, it) },
         )
     }
 }
@@ -560,12 +520,28 @@ data object EbookReaderDestination : NavigationDestination(
     }
 }
 
-/** The ZIM tab: offline websites (Wikipedia, Stack Exchange, zimit copies…) kept on the phone. */
-data object ZimDestination : NavigationDestination(
-    path = "zim",
-    navArguments = emptyList(),
+/** Books: Ebooks, Audiobooks and ZIM as subtabs, opening on the one used last (or [BookTab] in "tab"). */
+data object BooksDestination : NavigationDestination(
+    path = "books",
+    navArguments =
+        listOf(
+            QueryParamArgument("tab") {
+                type = NavType.StringType
+                defaultValue = ""
+            },
+        ),
     deepLinks = emptyList(),
 ) {
+    /** The route to open Books on its last subtab */
+    const val ROOT = "books"
+
+    fun navigate(
+        navController: NavController,
+        tab: com.nononsenseapps.feeder.ui.compose.books.BookTab? = null,
+    ) {
+        navController.navigate(if (tab == null) ROOT else "$ROOT?tab=${tab.name}") { launchSingleTop = true }
+    }
+
     @Composable
     override fun RegisterScreen(
         navController: NavController,
@@ -573,8 +549,12 @@ data object ZimDestination : NavigationDestination(
         navDrawerListState: LazyListState,
         mainActivityViewModel: MainActivityViewModel,
     ) {
-        com.nononsenseapps.feeder.ui.compose.zim.ZimLibraryScreen(
-            onOpenBook = { ZimReaderDestination.navigate(navController, it) },
+        val asked = backStackEntry.arguments?.getString("tab").orEmpty()
+        com.nononsenseapps.feeder.ui.compose.books.BooksScreen(
+            askedTab = com.nononsenseapps.feeder.ui.compose.books.BookTab.entries.firstOrNull { it.name == asked },
+            onOpenEbook = { EbookReaderDestination.navigate(navController, it, null) },
+            onOpenAudiobook = { AudiobookPlayerDestination.navigate(navController, it) },
+            onOpenZim = { ZimReaderDestination.navigate(navController, it) },
         )
     }
 }

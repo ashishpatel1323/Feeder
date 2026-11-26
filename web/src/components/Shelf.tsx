@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { formatBytes } from '../lib/offline'
 import { DropboxButton } from './DropboxPanel'
 import { Icon, IconButton, type IconName } from './Icon'
+import { BOOK_TABS, bookCounts, rememberBookCount, rememberBookTab, tabKeys, type BookTab } from './Tabs'
 
 /**
  * The shared listing of the Audiobooks, Ebooks and ZIM tabs: what is on this device (ready, also
@@ -110,7 +111,7 @@ export function Availability({ where, size, busy }: { where: Where; size: number
   )
 }
 
-export function ShelfControls(p: { show: Show; setShow: (s: Show) => void; view: ShelfView; setView: (v: ShelfView) => void; items: ShelfItem[] }) {
+export function ShelfControls(p: { show: Show; setShow: (s: Show) => void; view: ShelfView; setView: (v: ShelfView) => void; items: ShelfItem[]; hideView?: boolean }) {
   const cloud = p.items.filter((i) => i.where === 'cloud').length
   const counts = { all: p.items.length, device: p.items.length - cloud, cloud }
   return (
@@ -132,7 +133,7 @@ export function ShelfControls(p: { show: Show; setShow: (s: Show) => void; view:
       ) : (
         <span />
       )}
-      <span className="feeds-switch" role="radiogroup" aria-label="View">
+      {p.hideView ? null : <span className="feeds-switch" role="radiogroup" aria-label="View">
         <button type="button" role="radio" aria-checked={p.view === 'cards'} className={p.view === 'cards' ? 'on' : ''} onClick={() => p.setView('cards')}>
           <Icon name="gridView" size={16} />
           Cards
@@ -141,7 +142,7 @@ export function ShelfControls(p: { show: Show; setShow: (s: Show) => void; view:
           <Icon name="viewAgenda" size={16} />
           List
         </button>
-      </span>
+      </span>}
     </div>
   )
 }
@@ -351,13 +352,14 @@ export interface ShelfJob {
 }
 
 /**
- * The one listing page of the Audiobooks, Ebooks and ZIM tabs: header (title, refresh, Dropbox
- * account, Add menu), jobs, then the filter chips, the Cards | List switch and the shelf, or the
- * empty state. [children] go in the header (hidden file inputs); [extra] goes under it (the ZIM
- * catalog).
+ * The one listing page of Books' subtabs (Ebooks, Audiobooks, ZIM): the Books header (search,
+ * Dropbox account, ⋮ with Add, Check Dropbox and Cards / List), the subtabs, jobs, then the filter
+ * chips and the shelf, or the empty state. [children] go in the header (hidden file inputs);
+ * [extra] goes under it (the ZIM catalog). [ and ] switch subtabs. Same as Android's Books screen.
  */
 export function LibraryListing(p: {
   title: string
+  bookTab: BookTab
   prefs: ReturnType<typeof useShelfPrefs>
   items: ShelfItem[]
   emptyIcon: IconName
@@ -384,8 +386,17 @@ export function LibraryListing(p: {
   onDropFiles?: (files: File[]) => void
   children?: ReactNode
 }) {
-  const [addMenu, setAddMenu] = useState(false)
+  const [menu, setMenu] = useState(false)
+  const [query, setQuery] = useState('')
   const jobs = p.jobs ?? []
+  const tabInfo = BOOK_TABS.find((b) => b.tab === p.bookTab)!
+  useEffect(() => rememberBookTab(p.bookTab), [p.bookTab])
+  useEffect(() => {
+    if (!p.loading) rememberBookCount(p.bookTab, p.items.length)
+  }, [p.bookTab, p.items.length, p.loading])
+  useBookTabKeys(p.bookTab)
+  const q = query.trim().toLowerCase()
+  const shown = q ? p.items.filter((i) => i.title.toLowerCase().includes(q) || !!i.subtitle?.toLowerCase().includes(q)) : p.items
   return (
     <section
       className="manage-pane shelf-page"
@@ -405,39 +416,50 @@ export function LibraryListing(p: {
           <span className="only-narrow">
             <IconButton icon="menu" label="Feeds" onClick={p.onMenu} />
           </span>
-          <h1>{p.title}</h1>
+          <h1>Books</h1>
           <span className="shelf-actions">
-            {p.signedIn && p.onRefresh ? <IconButton icon="refresh" label={p.refreshLabel ?? 'Check Dropbox for new files'} onClick={p.onRefresh} disabled={p.refreshing} /> : null}
+            <label className="books-search">
+              <Icon name="search" size={18} />
+              <input type="search" value={query} placeholder={tabInfo.search} aria-label={tabInfo.search} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && setQuery('')} />
+              {query ? <IconButton icon="close" label="Clear search" onClick={() => setQuery('')} /> : null}
+            </label>
             <DropboxButton folder={p.dropboxFolder} toast={p.toast} />
-            {p.addActions.length ? (
-              <span className="shelf-add-wrap">
-                <button
-                  type="button"
-                  className="mf-btn primary"
-                  aria-haspopup={p.addActions.length > 1 ? 'menu' : undefined}
-                  aria-expanded={p.addActions.length > 1 ? addMenu : undefined}
-                  onClick={() => (p.addActions.length > 1 ? setAddMenu((o) => !o) : p.addActions[0].run())}
-                  disabled={p.addDisabled}
-                  title={p.addTitle}
-                >
-                  <Icon name="add" size={18} />
-                  {p.addLabel}
-                </button>
-                {addMenu ? (
-                  <span className="book-menu shelf-add-menu" role="menu" onMouseLeave={() => setAddMenu(false)}>
-                    {p.addActions.map((a) => (
-                      <button key={a.label} type="button" role="menuitem" onClick={() => (setAddMenu(false), a.run())}>
-                        <Icon name={a.icon} size={18} />
-                        {a.label}
-                      </button>
-                    ))}
-                  </span>
-                ) : null}
-              </span>
-            ) : null}
+            <span className="shelf-add-wrap">
+              <IconButton icon="moreVert" label="More" onClick={() => setMenu((o) => !o)} />
+              {menu ? (
+                <span className="book-menu shelf-add-menu" role="menu" onMouseLeave={() => setMenu(false)}>
+                  {p.addActions.map((a) => (
+                    <button key={a.label} type="button" role="menuitem" onClick={() => (setMenu(false), a.run())} disabled={p.addDisabled} title={p.addTitle}>
+                      <Icon name={a.icon} size={18} />
+                      {a.label}
+                    </button>
+                  ))}
+                  {p.signedIn && p.onRefresh ? (
+                    <button type="button" role="menuitem" onClick={() => (setMenu(false), p.onRefresh?.())} disabled={p.refreshing}>
+                      <Icon name="refresh" size={18} />
+                      {p.refreshLabel ?? 'Check Dropbox for new files'}
+                    </button>
+                  ) : null}
+                  <span className="book-menu-label">View</span>
+                  {(
+                    [
+                      ['cards', 'gridView', 'Cards'],
+                      ['list', 'viewAgenda', 'List'],
+                    ] as const
+                  ).map(([v, icon, label]) => (
+                    <button key={v} type="button" role="menuitemradio" aria-checked={p.prefs.view === v} onClick={() => (setMenu(false), p.prefs.setView(v))}>
+                      <Icon name={icon} size={18} />
+                      {label}
+                      {p.prefs.view === v ? <span className="book-menu-check"><Icon name="check" size={18} /></span> : null}
+                    </button>
+                  ))}
+                </span>
+              ) : null}
+            </span>
           </span>
           {p.children}
         </div>
+        <BooksTabs current={p.bookTab} />
         {p.extra}
 
         {jobs.length ? (
@@ -476,10 +498,22 @@ export function LibraryListing(p: {
             </div>
           )
         ) : (
-          <>
-            <ShelfControls {...p.prefs} items={p.items} />
-            <Shelf items={p.items} show={p.prefs.show} view={p.prefs.view} streams={p.streams} emptyDevice={p.emptyDevice} />
-          </>
+          !shown.length ? (
+            <div className="shelf-empty">
+              <p>Nothing on this shelf matches “{query.trim()}”</p>
+              <span className="shelf-empty-actions">
+                <button type="button" className="mf-btn" onClick={() => window.dispatchEvent(new Event(OPEN_SEARCH_EVENT))}>
+                  <Icon name="search" size={18} />
+                  Search inside books and everything else
+                </button>
+              </span>
+            </div>
+          ) : (
+            <>
+              <ShelfControls {...p.prefs} items={shown} hideView />
+              <Shelf items={shown} show={p.prefs.show} view={p.prefs.view} streams={p.streams} emptyDevice={p.emptyDevice} />
+            </>
+          )
         )}
         {p.footer}
       </div>
@@ -487,14 +521,53 @@ export function LibraryListing(p: {
   )
 }
 
+/** Asks the app to open the command palette (global search). */
+export const OPEN_SEARCH_EVENT = 'feeder:open-search'
+
+/** Ebooks · Audiobooks · ZIM under the Books header; links, so Back and new tabs work. */
+export function BooksTabs({ current }: { current: BookTab }) {
+  const counts = bookCounts()
+  return (
+    <nav className="books-tabs" aria-label="Books sections">
+      {BOOK_TABS.map((b) => (
+        <a key={b.tab} href={b.hash} className={b.tab === current ? 'on' : ''} aria-current={b.tab === current ? 'page' : undefined} title={`${b.label} (${tabKeys(b.tab)})`}>
+          <Icon name={b.icon} size={18} />
+          {b.label}
+          {counts[b.tab] ? <span className="books-tab-count">{counts[b.tab]}</span> : null}
+        </a>
+      ))}
+    </nav>
+  )
+}
+
+/** [ and ] go to the previous / next Books subtab, when not typing. */
+function useBookTabKeys(current: BookTab) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || (e.key !== '[' && e.key !== ']')) return
+      const t = e.target as HTMLElement
+      if (/INPUT|TEXTAREA|SELECT/.test(t.tagName) || t.isContentEditable || document.querySelector('[aria-modal="true"]')) return
+      const i = BOOK_TABS.findIndex((b) => b.tab === current)
+      const next = BOOK_TABS[(i + (e.key === ']' ? 1 : BOOK_TABS.length - 1)) % BOOK_TABS.length]
+      e.preventDefault()
+      window.location.hash = next.hash
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [current])
+}
+
 /** The page shown instead of a listing when this browser can't keep files at all. */
-export function ListingUnavailable({ title }: { title: string }) {
+export function ListingUnavailable({ title, bookTab }: { title: string; bookTab: BookTab }) {
+  useEffect(() => rememberBookTab(bookTab), [bookTab])
+  useBookTabKeys(bookTab)
   return (
     <section className="manage-pane shelf-page" aria-label={title}>
       <div className="mf-page">
         <div className="mf-head">
-          <h1>{title}</h1>
+          <h1>Books</h1>
         </div>
+        <BooksTabs current={bookTab} />
         <p className="muted">This browser cannot keep files on the device. Use a current Chrome, Edge, Safari or Firefox.</p>
       </div>
     </section>

@@ -1,5 +1,6 @@
 package com.nononsenseapps.feeder.ui.compose.youtube
 
+import com.nononsenseapps.feeder.ui.compose.components.pickedFolders
 import android.app.Application
 import android.content.Context
 import android.net.Uri
@@ -74,8 +75,8 @@ data class YouTubeViewState(
     val channels: List<YouTubeChannel> = emptyList(),
     /** Folders that hold YouTube feeds, A to Z. */
     val groups: List<String> = emptyList(),
-    /** null = All. */
-    val group: String? = null,
+    /** Groups picked in the filter that still exist; empty = All. */
+    val picked: List<String> = emptyList(),
     val grid: Boolean = false,
     val videos: List<VideoRow> = emptyList(),
     val shorts: List<VideoRow> = emptyList(),
@@ -126,7 +127,7 @@ class YouTubeViewModel(
     private val local =
         MutableStateFlow(
             Local(
-                group = prefs.getString(KEY_GROUP, null),
+                groups = loadGroups(),
                 grid = prefs.getBoolean(KEY_GRID, false),
                 sort = prefs.getString(KEY_SORT, null)?.let { s -> ChannelSort.entries.firstOrNull { it.name == s } } ?: ChannelSort.NAME,
             ),
@@ -136,7 +137,7 @@ class YouTubeViewModel(
     val messages: SharedFlow<String> = _messages.asSharedFlow()
 
     private data class Local(
-        val group: String?,
+        val groups: Set<String>,
         val grid: Boolean,
         val sort: ChannelSort,
         val refreshing: Boolean = false,
@@ -168,8 +169,8 @@ class YouTubeViewModel(
                 .filter { it.isNotBlank() }
                 .distinct()
                 .sortedWith(String.CASE_INSENSITIVE_ORDER)
-        val group = l.group?.takeIf { it in groups }
-        val inGroup = if (group == null) null else channels.filter { it.tag == group }.map { it.id }.toSet()
+        val picked = pickedFolders(l.groups, groups)
+        val inGroup = if (picked.isEmpty()) null else channels.filter { it.tag in picked }.map { it.id }.toSet()
         val byId = channels.associateBy { it.id }
         val rows =
             items
@@ -200,7 +201,7 @@ class YouTubeViewModel(
             loaded = true,
             channels = channels,
             groups = groups,
-            group = group,
+            picked = picked,
             grid = l.grid,
             videos = rows.filterNot { it.isShort },
             shorts = rows.filter { it.isShort }.take(MAX_SHORTS),
@@ -215,10 +216,20 @@ class YouTubeViewModel(
         metaStore.want(rows.filter { it.duration == 0 || it.views == null }.map { it.videoId to it.item.link })
     }
 
-    fun selectGroup(group: String?) {
-        prefs.edit { putString(KEY_GROUP, group) }
-        local.value = local.value.copy(group = group)
+    /** The groups the tab shows; empty = All. Saved as a set; older versions kept one name. */
+    fun selectGroups(groups: Collection<String>) {
+        val set = groups.toSet()
+        prefs.edit {
+            putStringSet(KEY_GROUPS, set)
+            remove(KEY_GROUP)
+        }
+        local.value = local.value.copy(groups = set)
     }
+
+    private fun loadGroups(): Set<String> =
+        prefs.getStringSet(KEY_GROUPS, null)?.toSet()
+            ?: prefs.getString(KEY_GROUP, null)?.let { setOf(it) }
+            ?: emptySet()
 
     fun toggleGrid() {
         val grid = !local.value.grid
@@ -274,7 +285,7 @@ class YouTubeViewModel(
         val leaving = channels.filter { (it.tag == oldName || it.tag == newName) && it.id !in feedIds }.map { it.id }
         updateFeedsNow(leaving) { it.copy(tag = "") }
         updateFeedsNow(feedIds) { it.copy(tag = newName) }
-        if (local.value.group == oldName) selectGroup(newName)
+        if (oldName != null && oldName in local.value.groups) selectGroups(local.value.groups - oldName + newName)
     }
 
     /** Deletes a group: its channels move to no folder (the feeds stay). */
@@ -285,7 +296,7 @@ class YouTubeViewModel(
                     .filter { it.tag == name }
                     .map { it.id },
             ) { it.copy(tag = "") }
-            if (local.value.group == name) selectGroup(null)
+            if (name in local.value.groups) selectGroups(local.value.groups - name)
         }
 
     /** How many articles go with a feed when it is deleted, for the confirmation. */
@@ -368,7 +379,8 @@ class YouTubeViewModel(
 
     private suspend fun addFeeds(feeds: List<Pair<URL, String?>>): Int {
         var added = 0
-        val tag = local.value.group ?: ""
+        // New channels go into the picked group when exactly one is picked
+        val tag = viewState.value.picked.singleOrNull() ?: ""
         val newIds = mutableListOf<Long>()
         for ((url, title) in feeds) {
             if (repository.getFeed(url) != null) continue
@@ -457,6 +469,7 @@ class YouTubeViewModel(
 
         private const val PREFS = "youtube_tab"
         private const val KEY_GROUP = "group"
+        private const val KEY_GROUPS = "groups"
         private const val KEY_GRID = "grid"
         private const val KEY_SORT = "channel_sort"
         private const val MAX_ITEMS = 1500

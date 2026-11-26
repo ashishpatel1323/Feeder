@@ -130,6 +130,8 @@ describe('History log', () => {
     const all = await recentEntries()
     expect(all.find((e) => e.t === 'audiobook')).toMatchObject({ n: 'Dune', s: 'Herbert', f: 0.25, x: '1:5000' })
     expect(all.find((e) => e.t === 'zim')).toMatchObject({ i: 'wiki\nA/Paris', n: 'Paris', x: 'A/Paris' })
+    // One Books chip covers audiobooks, ebooks and ZIM
+    expect(all.filter((e) => matchesFilter(e, 'books')).map((e) => e.t).sort()).toEqual(['audiobook', 'zim'])
   })
 
   it('round-trips values and rejects broken ones', () => {

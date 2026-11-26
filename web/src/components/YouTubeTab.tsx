@@ -34,6 +34,7 @@ import { Icon, IconButton } from './Icon'
 import { MoreMenu, type MoreMenuEntry } from './MoreMenu'
 import { toggleSaved } from './ItemRow'
 import { Modal } from './Dialogs'
+import { FolderFilter } from './FolderFilter'
 import { preloadYouTubePlayer } from './YouTubeFrame'
 import { ShortsPlayer } from './ShortsPlayer'
 import { confirmDelete, itemCount } from '../lib/confirmDelete'
@@ -45,12 +46,12 @@ const PAGE = 40
 export type YouTubeView = 'subs' | 'channels'
 
 /** The tab's data, shared by the screens and the video page (prev/next, Subscribe). */
-export function useYouTubeData(feeds: Feed[], items: Item[], group: string | null) {
+export function useYouTubeData(feeds: Feed[], items: Item[], groups: readonly string[]) {
   const meta = useLiveQuery(() => db.ytMeta.toArray(), [])
   const positions = useLiveQuery(() => db.videoPos.toArray(), [])
   return useMemo(
-    () => buildTab(feeds, items, new Map((meta ?? []).map((m) => [m.id, m])), new Map((positions ?? []).map((p) => [p.id, p])), group),
-    [feeds, items, meta, positions, group],
+    () => buildTab(feeds, items, new Map((meta ?? []).map((m) => [m.id, m])), new Map((positions ?? []).map((p) => [p.id, p])), groups),
+    [feeds, items, meta, positions, groups],
   )
 }
 
@@ -78,7 +79,7 @@ export function YouTubeTab(p: {
   onDelete: (items: Item[]) => void
 }) {
   const [prefs, setPrefs] = useTabPrefs()
-  const state = useYouTubeData(p.feeds, p.items, prefs.group)
+  const state = useYouTubeData(p.feeds, p.items, prefs.groups)
   if (p.view === 'channels') return <ChannelManager channels={state.channels} groups={state.groups} prefs={prefs} setPrefs={setPrefs} onBack={() => p.onView('subs')} toast={p.toast} />
   return <Subscriptions state={state} prefs={prefs} setPrefs={setPrefs} {...p} />
 }
@@ -125,7 +126,7 @@ function Subscriptions(p: {
     return () => io.disconnect()
   }, [shown, videos.length])
 
-  useEffect(() => setShown(PAGE), [prefs.group, query])
+  useEffect(() => setShown(PAGE), [state.picked.join('\n'), query])
 
   // YouTube's player script loads while the list shows, so the first video starts sooner
   useEffect(() => preloadYouTubePlayer(), [])
@@ -140,7 +141,7 @@ function Subscriptions(p: {
     setPicked(new Set())
     anchor.current = null
   }
-  useEffect(() => clearSelection(), [prefs.group, query])
+  useEffect(() => clearSelection(), [state.picked.join('\n'), query])
   const toggle = (id: string) =>
     setPicked((prev) => {
       const next = new Set(prev)
@@ -268,12 +269,8 @@ function Subscriptions(p: {
       ) : null}
       {state.channels.length ? (
         <>
-          <div className="yt-chips" role="radiogroup" aria-label="Groups">
-            {[null, ...state.groups].map((g) => (
-              <button key={g ?? ''} type="button" role="radio" aria-checked={state.group === g} className={`chip${state.group === g ? ' on' : ''}`} onClick={() => p.setPrefs({ group: g })}>
-                {g ?? 'All'}
-              </button>
-            ))}
+          <div className="yt-chips">
+            <FolderFilter folders={state.groups} picked={state.picked} onChange={(groups) => p.setPrefs({ groups })} label="Filter by group" allLabel="All groups" noun="group" />
             <IconButton icon="edit" label="Edit groups" onClick={() => setEditGroups(true)} />
           </div>
           <p className="yt-status">
@@ -345,7 +342,7 @@ function Subscriptions(p: {
           </button>
         </div>
       )}
-      {editGroups ? <GroupsDialog channels={state.channels} groups={state.groups} current={state.group} onCurrent={(g) => p.setPrefs({ group: g })} onClose={() => setEditGroups(false)} /> : null}
+      {editGroups ? <GroupsDialog channels={state.channels} groups={state.groups} current={state.picked} onCurrent={(groups) => p.setPrefs({ groups })} onClose={() => setEditGroups(false)} /> : null}
     </section>
   )
 }
@@ -463,7 +460,7 @@ async function saveGroup(channels: Channel[], oldName: string | null, name: stri
   void sync()
 }
 
-function GroupsDialog(p: { channels: Channel[]; groups: string[]; current: string | null; onCurrent: (g: string | null) => void; onClose: () => void }) {
+function GroupsDialog(p: { channels: Channel[]; groups: string[]; current: string[]; onCurrent: (g: string[]) => void; onClose: () => void }) {
   const [editing, setEditing] = useState<{ old: string | null; name: string; urls: Set<string> } | null>(null)
   const [filter, setFilter] = useState('')
   const counts = (g: string) => p.channels.filter((c) => c.tag === g).length
@@ -508,7 +505,7 @@ function GroupsDialog(p: { channels: Channel[]; groups: string[]; current: strin
             disabled={!editing.name.trim()}
             onClick={async () => {
               await saveGroup(p.channels, editing.old, editing.name, editing.urls)
-              if (editing.old && p.current === editing.old) p.onCurrent(editing.name.trim())
+              if (editing.old && p.current.includes(editing.old)) p.onCurrent(p.current.map((g) => (g === editing.old ? editing.name.trim() : g)))
               setEditing(null)
             }}
           >
@@ -535,7 +532,7 @@ function GroupsDialog(p: { channels: Channel[]; groups: string[]; current: strin
               onClick={async () => {
                 if (!(await confirmDelete({ title: 'Delete group?', itemName: g, scope: 'all-devices', extra: 'Its channels stay subscribed and move out of the group (the folder in Feeds).' }))) return
                 for (const c of p.channels) if (c.tag === g) await updateFeed(c.url, { tag: '' })
-                if (p.current === g) p.onCurrent(null)
+                if (p.current.includes(g)) p.onCurrent(p.current.filter((x) => x !== g))
                 void sync()
               }}
             />
@@ -653,7 +650,7 @@ function ChannelManager(p: { channels: Channel[]; groups: string[]; prefs: TabPr
         ))}
       </ul>
       {!list.length ? <p className="yt-empty-line">{query ? 'No channels match.' : music ? 'No music channels. Move a channel here from its Subscribed menu.' : 'No channels yet.'}</p> : null}
-      {adding ? <AddChannelsDialog group={p.prefs.group} onClose={() => setAdding(false)} toast={p.toast} /> : null}
+      {adding ? <AddChannelsDialog group={p.prefs.groups.length === 1 && p.groups.includes(p.prefs.groups[0]) ? p.prefs.groups[0] : null} onClose={() => setAdding(false)} toast={p.toast} /> : null}
       {moving ? <MoveToGroupDialog channel={moving} groups={p.groups} onClose={() => setMoving(null)} /> : null}
     </section>
   )

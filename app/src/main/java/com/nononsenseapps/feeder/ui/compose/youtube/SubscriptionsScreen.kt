@@ -1,5 +1,6 @@
 package com.nononsenseapps.feeder.ui.compose.youtube
 
+import com.nononsenseapps.feeder.ui.compose.components.FolderFilterChip
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -48,7 +49,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -186,8 +186,8 @@ fun SubscriptionsScreen(
                             Column {
                                 GroupChips(
                                     groups = state.groups,
-                                    selected = state.group,
-                                    onSelect = viewModel::selectGroup,
+                                    picked = state.picked,
+                                    onChange = viewModel::selectGroups,
                                     onEdit = { editGroups = true },
                                 )
                                 RefreshStatus(state)
@@ -268,8 +268,8 @@ private fun SubscriptionsTopBar(
 @Composable
 private fun GroupChips(
     groups: List<String>,
-    selected: String?,
-    onSelect: (String?) -> Unit,
+    picked: List<String>,
+    onChange: (List<String>) -> Unit,
     onEdit: () -> Unit,
 ) {
     Row(
@@ -281,10 +281,15 @@ private fun GroupChips(
                 .horizontalScroll(rememberScrollState())
                 .padding(horizontal = FeederTokens.Space.md, vertical = FeederTokens.Space.xs),
     ) {
-        FilterChip(selected = selected == null, onClick = { onSelect(null) }, label = { Text(stringResource(R.string.youtube_group_all)) })
-        groups.forEach { g ->
-            FilterChip(selected = selected == g, onClick = { onSelect(g) }, label = { Text(g) })
-        }
+        val res = LocalContext.current.resources
+        FolderFilterChip(
+            folders = groups,
+            picked = picked,
+            onChange = onChange,
+            allLabel = stringResource(R.string.youtube_group_all),
+            several = { n -> res.getQuantityString(R.plurals.youtube_groups_picked, n, n) },
+            contentDescription = stringResource(R.string.youtube_filter_groups),
+        )
         IconButton(onClick = onEdit, modifier = Modifier.size(36.dp)) {
             Icon(
                 Icons.Default.Edit,
@@ -509,7 +514,7 @@ private fun rememberVideoActions(
     val undoText = stringResource(R.string.undo_delete_article)
     val deleteConfirmer = rememberDeleteConfirmer()
     var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
-    LaunchedEffect(state.group) { selectedIds = emptySet() }
+    LaunchedEffect(state.picked) { selectedIds = emptySet() }
     BackHandler(enabled = selectedIds.isNotEmpty()) { selectedIds = emptySet() }
 
     val rows = state.videos + state.shorts

@@ -44,7 +44,7 @@ export function EbooksPage(p: {
   onMenu: () => void
   toast: (m: string) => void
 }) {
-  if (!ebooksSupported()) return <ListingUnavailable title="Ebooks" />
+  if (!ebooksSupported()) return <ListingUnavailable title="Ebooks" bookTab="ebooks" />
   return p.book ? (
     <BookReader key={p.book} id={p.book} at={p.at} settings={p.settings} onBack={() => p.onOpen(null)} toast={p.toast} />
   ) : (
@@ -185,6 +185,7 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
 
   return (
     <LibraryListing
+      bookTab="ebooks"
       title="Ebooks"
       prefs={prefs}
       items={items}

@@ -580,7 +580,12 @@
   <string name="youtube_view_list">Show as list</string>
   <string name="youtube_search_subscriptions">Search subscriptions</string>
   <string name="youtube_search_subscriptions_hint">Search subscriptions…</string>
-  <string name="youtube_group_all">All</string>
+  <string name="youtube_group_all">All groups</string>
+  <string name="youtube_filter_groups">Filter by group</string>
+  <plurals name="youtube_groups_picked">
+    <item quantity="one">%d group</item>
+    <item quantity="other">%d groups</item>
+  </plurals>
   <string name="youtube_edit_groups">Edit groups</string>
   <string name="youtube_edit_group">Edit %1$s</string>
   <string name="youtube_delete_group">Delete %1$s?</string>
