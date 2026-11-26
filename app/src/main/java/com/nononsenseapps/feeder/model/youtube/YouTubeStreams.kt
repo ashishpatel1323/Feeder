@@ -125,8 +125,9 @@ class YouTubeStreams(
     private suspend fun fetch(videoId: String): VideoDetails? =
         withContext(Dispatchers.IO) {
             val started = System.currentTimeMillis()
-            // Likes and the upload date are only in the web client's answer: asked alongside
-            val extras = async { webExtras(videoId) }
+            // Likes and the upload date are only in the web client's answer: asked alongside, outside
+            // this scope, so a slow answer never holds up the streams
+            val extras = applicationCoroutineScope.async(Dispatchers.IO) { webExtras(videoId) }
             // YouTube asks unknown visitors to sign in ("not a bot"): once, again as a new visitor
             for (attempt in 0..1) {
                 val visitor = visitor(fresh = attempt > 0)
@@ -139,7 +140,8 @@ class YouTubeStreams(
                     val meta = withTimeoutOrNull(EXTRAS_WAIT_MS) { extras.await() }
                     extras.cancel()
                     val full = details.copy(likeCount = meta?.likes, uploadDate = meta?.uploadDate)
-                    cache[videoId] = keepUntil(response) to full
+                    val until = keepUntil(response)
+                    if (until > System.currentTimeMillis()) cache[videoId] = until to full
                     YouTubeTiming.log(videoId, "streams via ${c.name} in ${System.currentTimeMillis() - started} ms")
                     return@withContext full
                 }
@@ -386,7 +388,8 @@ class YouTubeStreams(
                     }?.let { it * 1000 }
                     ?: streaming?.str("expiresInSeconds")?.toLongOrNull()?.let { now + it * 1000 }
                     ?: (now + 60 * 60 * 1000L)
-            return (expire - EXPIRY_MARGIN_MS).coerceAtLeast(now + 60_000L)
+            // Already within the margin: not kept at all
+            return expire - EXPIRY_MARGIN_MS
         }
 
         /** The player endpoint's answer as [VideoDetails], or null when it gives no playable streams. */
