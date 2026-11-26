@@ -166,6 +166,9 @@ export function Shelf(p: { items: ShelfItem[]; show: Show; view: ShelfView; empt
   const [menu, setMenu] = useState<string | null>(null)
   const onDevice = p.items.filter((i) => i.where !== 'cloud')
   const cloud = p.items.filter((i) => i.where === 'cloud')
+  // The chips are hidden while nothing is only in Dropbox: a filter chosen before (say In Dropbox,
+  // then its last book was deleted) must not keep hiding everything with no chip to undo it
+  const show: Show = cloud.length ? p.show : 'all'
 
   const more = (i: ShelfItem) =>
     i.actions.length ? (
@@ -269,7 +272,7 @@ export function Shelf(p: { items: ShelfItem[]; show: Show; view: ShelfView; empt
 
   return (
     <>
-      {p.show !== 'cloud' && onDevice.length ? (
+      {show !== 'cloud' && onDevice.length ? (
         <>
           {cloud.length ? (
             <h2 className="lib-section shelf-section">
@@ -280,8 +283,8 @@ export function Shelf(p: { items: ShelfItem[]; show: Show; view: ShelfView; empt
           {group(onDevice)}
         </>
       ) : null}
-      {p.show === 'device' && !onDevice.length ? <p className="muted shelf-none">{p.emptyDevice}</p> : null}
-      {p.show !== 'device' && cloud.length ? (
+      {show === 'device' && !onDevice.length ? <p className="muted shelf-none">{p.emptyDevice}</p> : null}
+      {show !== 'device' && cloud.length ? (
         <>
           <h2 className="lib-section shelf-section">
             <Icon name="cloud" size={18} />

@@ -267,7 +267,10 @@ fun LazyGridScope.shelf(
 ) {
     val onPhone = items.filter { it.where != Where.CLOUD }
     val cloud = items.filter { it.where == Where.CLOUD }
-    if (prefs.show != Show.CLOUD && onPhone.isNotEmpty()) {
+    // The chips are hidden while nothing is only in Dropbox: a filter chosen before (say In Dropbox,
+    // then its last book was deleted) must not keep hiding everything with no chip to undo it
+    val show = if (cloud.isEmpty()) Show.ALL else prefs.show
+    if (show != Show.CLOUD && onPhone.isNotEmpty()) {
         if (cloud.isNotEmpty()) {
             item(key = "head:phone", span = {
                 GridItemSpan(maxLineSpan)
@@ -275,12 +278,12 @@ fun LazyGridScope.shelf(
         }
         items(onPhone, key = { it.key }) { ShelfEntry(it, prefs.cards, streams) }
     }
-    if (prefs.show == Show.DEVICE && onPhone.isEmpty()) {
+    if (show == Show.DEVICE && onPhone.isEmpty()) {
         item(key = "empty:phone", span = { GridItemSpan(maxLineSpan) }) {
             Text(emptyDevice, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(16.dp))
         }
     }
-    if (prefs.show != Show.DEVICE && cloud.isNotEmpty()) {
+    if (show != Show.DEVICE && cloud.isNotEmpty()) {
         item(
             key = "head:cloud",
             span = { GridItemSpan(maxLineSpan) },
