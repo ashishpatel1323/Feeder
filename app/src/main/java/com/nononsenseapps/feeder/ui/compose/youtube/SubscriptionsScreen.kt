@@ -68,9 +68,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.model.youtube.VideoDetails
+import com.nononsenseapps.feeder.model.youtube.YouTubeStreams
 import com.nononsenseapps.feeder.model.youtube.youtubeWatchUrl
 import com.nononsenseapps.feeder.ui.compose.theme.FeederTokens
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import org.kodein.di.compose.LocalDI
+import org.kodein.di.instance
 
 /**
  * The YouTube tab, after Flow's Subscriptions: folder chips, when the feeds were last fetched, a
@@ -85,6 +90,13 @@ fun SubscriptionsScreen(
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.viewState.collectAsState()
+    val streams: YouTubeStreams by LocalDI.current.instance()
+    // Opens the connection to YouTube before the first video is tapped
+    LaunchedEffect(Unit) { streams.warmUp() }
+    val open: (VideoRow) -> Unit = { row ->
+        streams.prefetch(listOf(row.videoId))
+        onOpenVideo(row)
+    }
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(viewModel) { viewModel.messages.collect { snackbar.showSnackbar(it) } }
     var editGroups by rememberSaveable { mutableStateOf(false) }
@@ -99,6 +111,23 @@ fun SubscriptionsScreen(
         }.distinctUntilChanged()
             .collect { last ->
                 viewModel.onRowsShown(state.shorts.take(12) + state.videos.take(last + 20))
+            }
+    }
+    // The first few videos on screen start at once when tapped: their streams are fetched ahead
+    LaunchedEffect(gridState, state.videos) {
+        snapshotFlow {
+            gridState.layoutInfo.visibleItemsInfo
+                .firstOrNull()
+                ?.index ?: 0
+        }.distinctUntilChanged()
+            .collectLatest { first ->
+                delay(PREFETCH_SETTLE_MS)
+                streams.prefetch(
+                    state.videos
+                        .drop((first - 1).coerceAtLeast(0))
+                        .take(PREFETCH_ROWS)
+                        .map { it.videoId },
+                )
             }
     }
 
@@ -136,14 +165,14 @@ fun SubscriptionsScreen(
                         }
                         if (state.shorts.isNotEmpty()) {
                             item(key = "shorts", span = { GridItemSpan(maxLineSpan) }) {
-                                ShortsShelf(state.shorts, onOpenVideo)
+                                ShortsShelf(state.shorts, open)
                             }
                         }
                         items(state.videos, key = { it.item.id }) { row ->
                             if (state.grid) {
-                                VideoCard(row, onClick = { onOpenVideo(row) })
+                                VideoCard(row, onClick = { open(row) })
                             } else {
-                                VideoListRow(row, onClick = { onOpenVideo(row) })
+                                VideoListRow(row, onClick = { open(row) })
                             }
                         }
                     }
@@ -449,3 +478,9 @@ private fun EmptySubscriptions(onManage: () -> Unit) {
         Button(onClick = onManage) { Text(stringResource(R.string.youtube_add_channels)) }
     }
 }
+
+/** Rows whose streams are fetched ahead, from the first one on screen. */
+private const val PREFETCH_ROWS = 3
+
+/** Scrolling settles this long before prefetching: no requests for rows flung past. */
+private const val PREFETCH_SETTLE_MS = 600L

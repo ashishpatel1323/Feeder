@@ -20,18 +20,18 @@ import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.selection.DisableSelection
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
@@ -50,10 +50,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,12 +71,13 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.background.runOnceSyncChainSendRead
 import com.nononsenseapps.feeder.model.offline.OfflineVideos
+import com.nononsenseapps.feeder.model.transcript.Transcripts
 import com.nononsenseapps.feeder.model.youtube.VideoDetails
 import com.nononsenseapps.feeder.model.youtube.VideoPositions
 import com.nononsenseapps.feeder.model.youtube.YouTubePlayback
+import com.nononsenseapps.feeder.model.youtube.YouTubeTiming
 import com.nononsenseapps.feeder.model.youtube.youtubeWatchUrl
 import com.nononsenseapps.feeder.ui.compose.theme.FeedListItemDateStyle
-import com.nononsenseapps.feeder.model.transcript.Transcripts
 import com.nononsenseapps.feeder.ui.compose.transcript.TranscriptPanel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -162,9 +163,10 @@ fun YouTubeVideoBlock(
                         ?.let { DetailsState.Ready(it.details) } ?: DetailsState.Loading,
                 ) {
                     if (value is DetailsState.Ready) return@produceState
+                    YouTubeTiming.start(videoId)
                     value =
                         try {
-                            DetailsState.Ready(offlineVideos.videoDetails(youtubeWatchUrl(videoId)))
+                            DetailsState.Ready(offlineVideos.playbackDetails(videoId).also { YouTubeTiming.log(videoId, "details ready (${it.source})") })
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {

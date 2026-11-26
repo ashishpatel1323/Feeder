@@ -17,6 +17,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
@@ -24,8 +25,11 @@ import androidx.media3.exoplayer.source.MergingMediaSource
 import com.nononsenseapps.feeder.ApplicationCoroutineScope
 import com.nononsenseapps.feeder.background.runOnceSyncChainSendRead
 import com.nononsenseapps.feeder.model.offline.OfflineVideos
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -105,6 +109,7 @@ class YouTubePlayback(
     private val videoPositions: VideoPositions by instance()
     private val offlineVideos: OfflineVideos by instance()
     private val sponsorBlock: SponsorBlock by instance()
+    private val youTubeStreams: YouTubeStreams by instance()
     private val applicationCoroutineScope: ApplicationCoroutineScope by instance()
 
     private val prefs by lazy { app.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
@@ -173,9 +178,11 @@ class YouTubePlayback(
                 speed = p.speed,
                 background = true,
             )
+        YouTubeTiming.log(videoId, "player prepare (${details.source})")
         val exo =
             ExoPlayer
                 .Builder(app)
+                .apply { if (!YouTubeStreams.slowMode()) setLoadControl(fastStartLoadControl()) }
                 .setSeekBackIncrementMs(SEEK_MS)
                 .setSeekForwardIncrementMs(SEEK_MS)
                 .build()
@@ -213,6 +220,109 @@ class YouTubePlayback(
                 _state.update { if (it?.key == key) it.copy(segments = segments) else it }
             }
         }
+        if (details.fromInnerTube) standBy(key, videoId)
+    }
+
+    /**
+     * yt-dlp's details, asked for once the video plays: what YouTube's player endpoint leaves out
+     * (chapters without timestamps in the description, followers, download qualities), and
+     * streams to carry on with if YouTube stops serving the fast ones mid-video.
+     */
+    private var standby: Deferred<VideoDetails?>? = null
+
+    private fun standBy(
+        key: String,
+        videoId: String,
+    ) {
+        standby?.cancel()
+        standby =
+            applicationCoroutineScope.async(Dispatchers.Main) {
+                // Not while the video starts: Python takes a lot of the phone for seconds
+                delay(STANDBY_DELAY_MS)
+                val full =
+                    try {
+                        offlineVideos.videoDetails(youtubeWatchUrl(videoId))
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w(LOG_TAG, "yt-dlp standby failed for $videoId: ${e.message}")
+                        null
+                    }
+                YouTubeTiming.log(videoId, "yt-dlp standby ${if (full != null) "ready" else "failed"}")
+                if (full != null) {
+                    _state.update { s ->
+                        if (s?.key != key) return@update s
+                        s.copy(
+                            details =
+                                s.details.copy(
+                                    chapters = s.details.chapters.ifEmpty { full.chapters },
+                                    channelFollowers = s.details.channelFollowers ?: full.channelFollowers,
+                                    likeCount = s.details.likeCount ?: full.likeCount,
+                                    uploadDate = s.details.uploadDate ?: full.uploadDate,
+                                    downloadOptions = full.downloadOptions,
+                                ),
+                        )
+                    }
+                }
+                full
+            }
+    }
+
+    /**
+     * The fast streams stopped (YouTube refuses them after a while for some visitors): carries on
+     * where it was with yt-dlp's. False when there is nothing to carry on with.
+     */
+    private fun recover(
+        exo: ExoPlayer,
+        current: PlaybackState,
+    ): Boolean {
+        if (!current.details.fromInnerTube) return false
+        val pending = standby ?: return false
+        youTubeStreams.forget(current.videoId)
+        val position = exo.currentPosition
+        val playWhenReady = exo.playWhenReady
+        YouTubeTiming.log(current.videoId, "fast streams failed at ${position / 1000} s: switching to yt-dlp's")
+        // Skip the standby's wait: it is needed now
+        applicationCoroutineScope.launch(Dispatchers.Main) {
+            val full =
+                if (pending.isActive && !pending.isCompleted) {
+                    pending.cancel()
+                    try {
+                        offlineVideos.videoDetails(youtubeWatchUrl(current.videoId))
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        null
+                    }
+                } else {
+                    runCatching { pending.await() }.getOrNull()
+                }
+            val now = _state.value
+            if (now?.key != current.key || _player.value !== exo) return@launch
+            if (full == null || !full.hasStreams) {
+                _errors.tryEmit(current.key)
+                stop()
+                return@launch
+            }
+            val p = _prefs.value
+            val video = full.videoFor(p.quality)
+            val next =
+                now.copy(
+                    details =
+                        full.copy(
+                            chapters = full.chapters.ifEmpty { now.details.chapters },
+                            likeCount = full.likeCount ?: now.details.likeCount,
+                            uploadDate = full.uploadDate ?: now.details.uploadDate,
+                        ),
+                    height = if (full.audios.isNotEmpty()) video?.height ?: 0 else 0,
+                    audio = full.audios.firstOrNull { it.language == now.audio?.language } ?: full.audios.firstOrNull(),
+                )
+            _state.value = next
+            exo.setMediaSource(buildSource(next), position)
+            exo.prepare()
+            exo.playWhenReady = playWhenReady
+        }
+        return true
     }
 
     private var keepKey: String? = null
@@ -253,6 +363,12 @@ class YouTubePlayback(
         }
         tick?.cancel()
         tick = null
+        standby?.let { pending ->
+            // Its yt-dlp run would slow the next video's start
+            if (pending.isActive) _state.value?.let { offlineVideos.stopDetails(youtubeWatchUrl(it.videoId)) }
+            pending.cancel()
+        }
+        standby = null
         reporter = null
         _player.value = null
         stopService()
@@ -351,6 +467,21 @@ class YouTubePlayback(
         exo.playWhenReady = playWhenReady
     }
 
+    /**
+     * Starts playing once 0.75 s is buffered instead of ExoPlayer's 2.5 s, like Flow; after a
+     * stall it waits for 2 s so it doesn't stutter.
+     */
+    private fun fastStartLoadControl() =
+        DefaultLoadControl
+            .Builder()
+            .setBufferDurationsMs(
+                MIN_BUFFER_MS,
+                MAX_BUFFER_MS,
+                START_BUFFER_MS,
+                REBUFFER_MS,
+            ).setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+
     private fun buildSource(state: PlaybackState): MediaSource {
         val details = state.details
         val http =
@@ -415,7 +546,18 @@ class YouTubePlayback(
                 }
             }
 
+            private var firstFrame = false
+
+            override fun onRenderedFirstFrame() {
+                if (firstFrame) return
+                firstFrame = true
+                _state.value?.let { YouTubeTiming.log(it.videoId, "first frame") }
+            }
+
             override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_READY && !firstFrame) {
+                    _state.value?.let { YouTubeTiming.log(it.videoId, "ready to play") }
+                }
                 if (playbackState == Player.STATE_ENDED) {
                     reporter?.ended(exo.durationSeconds())
                     _state.update { if (it?.sleepAt == PlaybackState.SLEEP_AT_END) it.copy(sleepAt = 0) else it }
@@ -427,6 +569,7 @@ class YouTubePlayback(
             override fun onPlayerError(error: PlaybackException) {
                 val current = _state.value ?: return
                 Log.w(LOG_TAG, "Stream failed for ${current.videoId}", error)
+                if (recover(exo, current)) return
                 offlineVideos.forgetDetails(youtubeWatchUrl(current.videoId))
                 _errors.tryEmit(current.key)
                 stop()
@@ -503,6 +646,11 @@ class YouTubePlayback(
         private const val LOG_TAG = "FEEDER_YOUTUBE"
         private const val PREFS = "youtube_player"
         private const val TICK_MS = 250L
+        private const val MIN_BUFFER_MS = 15_000
+        private const val MAX_BUFFER_MS = 50_000
+        private const val START_BUFFER_MS = 750
+        private const val REBUFFER_MS = 2_000
+        private const val STANDBY_DELAY_MS = 8_000L
         const val SEEK_MS = 10_000L
         const val SLEEP_END_OF_VIDEO = -1
     }

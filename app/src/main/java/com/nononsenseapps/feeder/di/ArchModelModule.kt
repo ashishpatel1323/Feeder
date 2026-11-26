@@ -66,6 +66,11 @@ val archModelModule =
         bind<VideoPositions>() with singleton { VideoPositions(di) }
         bind<SponsorBlock>() with singleton { SponsorBlock(instance()) }
         bind<YouTubePlayback>() with singleton { YouTubePlayback(di) }
+        bind<com.nononsenseapps.feeder.model.youtube.YouTubeStreams>() with
+            singleton {
+                com.nononsenseapps.feeder.model.youtube
+                    .YouTubeStreams(di)
+            }
         bind<com.nononsenseapps.feeder.model.youtube.InnerTube>() with
             singleton {
                 com.nononsenseapps.feeder.model.youtube
