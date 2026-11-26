@@ -11,6 +11,9 @@ import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { handle } from '../server/handler'
 import { ytdlMiddleware } from '../server/ytdl'
+import { configureMcp, disableMcp, enableMcp, mcpStatus, resumeMcp, stopMcp } from './mcp'
+
+export { stopMcp }
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -75,9 +78,42 @@ async function file(root: string, req: IncomingMessage, res: ServerResponse) {
   createReadStream(full).pipe(res)
 }
 
-export function startServer(root: string, port: number): Promise<number> {
+/**
+ * /api/mcp/status|enable|disable: the AI agents (MCP) switch in Settings. Only this app's own page
+ * may call it (it hands over the sync key and edits Claude Desktop's config), so other origins and
+ * simple cross-site posts are refused.
+ */
+async function mcpApi(req: IncomingMessage, res: ServerResponse, origin: string) {
+  const send = (status: number, body: unknown) => {
+    res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+    res.end(JSON.stringify(body))
+  }
+  const sameOrigin = req.headers.origin === origin || (!req.headers.origin && req.headers['sec-fetch-site'] === 'same-origin')
+  if (!sameOrigin || req.headers['x-feeder-app'] !== '1') return send(403, { error: 'Forbidden' })
+  const path = new URL(req.url ?? '/', 'http://x').pathname
+  try {
+    if (path === '/api/mcp/status' && req.method === 'GET') return send(200, await mcpStatus())
+    if (req.method !== 'POST' || !String(req.headers['content-type']).startsWith('application/json')) return send(405, { error: 'Use POST with JSON' })
+    const chunks: Buffer[] = []
+    for await (const c of req) chunks.push(c as Buffer)
+    const body = chunks.length ? (JSON.parse(Buffer.concat(chunks).toString('utf8')) as { syncCode?: string; secretKey?: string }) : {}
+    if (path === '/api/mcp/enable') return send(200, await enableMcp(String(body.syncCode ?? ''), String(body.secretKey ?? '')))
+    if (path === '/api/mcp/disable') return send(200, await disableMcp())
+    return send(404, { error: 'Not found' })
+  } catch (e) {
+    return send(400, { error: (e as Error).message ?? String(e) })
+  }
+}
+
+export function startServer(root: string, port: number, opts: { mcpDir?: string; nodeBin?: string } = {}): Promise<number> {
+  const origin = `http://127.0.0.1:${port}`
+  if (opts.mcpDir) {
+    configureMcp(opts.mcpDir, opts.nodeBin)
+    void resumeMcp()
+  }
   const server = createServer((req, res) => {
     const run = async () => {
+      if (req.url?.startsWith('/api/mcp/')) return mcpApi(req, res, origin)
       if (req.url?.startsWith('/api/ytdl/')) return ytdlMiddleware(req, res, () => undefined)
       if (req.url?.startsWith('/api/')) return api(req, res)
       return file(root, req, res)

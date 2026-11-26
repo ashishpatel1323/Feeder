@@ -27,3 +27,18 @@ Auto-generated subtitles are an IINA setting, not part of the link. With IINA's 
 plugin: Settings → Plugins → Online Media → turn on *Include auto-generated subtitles*, and
 set *Raw options* to `--sub-langs en.*,hi` (otherwise yt-dlp lists every auto-translated
 language). Pick the track from IINA's subtitle menu if it does not show on its own.
+
+## AI agents (MCP)
+
+Settings › **AI agents (MCP)** has one switch: "Let AI agents read my Feeder library". It runs Feeder's
+MCP server (`web/mcp`, copied into `Feeder.app/Contents/Resources/mcp` by `after-pack.cjs`) with the
+app's own binary as Node (`ELECTRON_RUN_AS_NODE=1`), so nothing else needs installing.
+
+- On: the sync code and key go into the macOS Keychain (service `feeder-mcp`), an HTTP MCP endpoint
+  starts on `127.0.0.1:47816` (token in the URL; "Copy Claude Code command" in Settings), and a
+  `feeder` entry is added to Claude Desktop's config that starts the same server over stdio, so it
+  works even when Feeder is closed. The switch stays on across restarts.
+- Off: stops the server, removes the Claude Desktop entry (only the one this app wrote) and the
+  Keychain item. The index in `~/Library/Application Support/feeder-mcp` is kept.
+- `/api/mcp/*` on the app's local server only answers the app's own page (Origin check plus an
+  `x-feeder-app` header and a JSON body), since it hands over the sync key.

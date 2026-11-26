@@ -7,7 +7,7 @@
   "license": "GPL-3.0-or-later",
   "main": "main.cjs",
   "scripts": {
-    "bundle": "cd .. && npm run build && npx vite build --config mac/vite.server.config.ts && rm -rf mac/web && cp -R dist mac/web",
+    "bundle": "cd ../mcp && npm install --no-audit --no-fund && npm run build && npm prune --omit=dev && cd .. && npm run build && npx vite build --config mac/vite.server.config.ts && rm -rf mac/web && cp -R dist mac/web",
     "start": "npm run bundle && electron .",
     "build": "npm run bundle && electron-builder --mac dir --arm64"
   },
@@ -18,12 +18,20 @@
   "build": {
     "appId": "com.ashishpatel.feeder.mac",
     "productName": "Feeder",
-    "directories": { "output": "release" },
-    "files": ["main.cjs", "dist/**/*", "web/**/*", "package.json"],
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.cjs",
+      "dist/**/*",
+      "web/**/*",
+      "package.json"
+    ],
     "mac": {
       "category": "public.app-category.news",
       "icon": "assets/icon.icns",
       "identity": null
-    }
+    },
+    "afterPack": "./after-pack.cjs"
   }
 }
