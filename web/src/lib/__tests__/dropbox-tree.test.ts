@@ -55,7 +55,80 @@ describe('uploadFile', () => {
       'files/upload_session/append_v2',
       'files/upload_session/append_v2',
       'files/upload_session/append_v2',
+      'files/upload_session/append_v2',
       'files/upload_session/finish',
     ])
+  })
+
+  /** A Dropbox that keeps how many bytes each session has; [fail] can make a request fail. */
+  function fakeDropbox(fail: (what: string, offset: number) => 'network' | 'lost' | number | null = () => null) {
+    const sessions = new Map<string, number>()
+    const sent: number[] = []
+    let n = 0
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
+      const what = url.split('/').pop()!
+      const arg = JSON.parse((init.headers as Record<string, string>)['Dropbox-API-Arg'])
+      const size = (init.body as Blob).size
+      const offset = arg.cursor?.offset ?? 0
+      const f = fail(what, offset)
+      if (f === 'network') throw new TypeError('Failed to fetch')
+      if (typeof f === 'number') return new Response('{"error_summary":"oops"}', { status: f })
+      if (what === 'start') {
+        sessions.set(`s${++n}`, 0)
+        return json({ session_id: `s${n}` })
+      }
+      const have = sessions.get(arg.cursor.session_id)
+      if (have === undefined) return new Response(JSON.stringify({ error_summary: 'lookup_failed/not_found/' }), { status: 409 })
+      if (have !== offset) return new Response(JSON.stringify({ error_summary: 'incorrect_offset/', error: { '.tag': 'incorrect_offset', correct_offset: have } }), { status: 409 })
+      sent.push(offset)
+      sessions.set(arg.cursor.session_id, have + size)
+      if (f === 'lost') throw new TypeError('Failed to fetch')
+      return what === 'finish' ? json(entry('file', '/Audiobooks/Big.m4b')) : json(null)
+    })
+    return { sent }
+  }
+
+  it('tries a piece again when the network drops, without sending it twice', async () => {
+    const { uploadFile, uploadWaits } = await import('../dropbox')
+    uploadWaits.ms = [1, 1, 1, 1]
+    let drops = 0
+    const { sent } = fakeDropbox((what, offset) => {
+      if (what === 'append_v2' && offset === 8 * 1024 * 1024 && drops < 2) return ++drops === 1 ? 'network' : 'lost'
+      return null
+    })
+    const f = await uploadFile('/Audiobooks/Big.m4b', new File([new Uint8Array(20 * 1024 * 1024)], 'Big.m4b'))
+    expect(f.path).toBe('/Audiobooks/Big.m4b')
+    expect(sent).toEqual([0, 8 * 1024 * 1024, 16 * 1024 * 1024])
+  })
+
+  it('goes on where it stopped when the upload is tried again later', async () => {
+    const { uploadFile, uploadWaits, hasUnfinishedUpload } = await import('../dropbox')
+    uploadWaits.ms = [1]
+    const MB = 1024 * 1024
+    const file = new File([new Uint8Array(30 * MB)], 'Big.m4b', { lastModified: 1 })
+    let offline = false
+    let wentOffline = false
+    const { sent } = fakeDropbox((what, offset) => {
+      if (what === 'append_v2' && offset === 16 * MB && !wentOffline) offline = wentOffline = true
+      return offline ? 'network' : null
+    })
+    await expect(uploadFile('/Audiobooks/Big.m4b', file)).rejects.toThrow('could not reach')
+    expect(hasUnfinishedUpload('/Audiobooks/Big.m4b', file)).toBe(true)
+    offline = false
+    sent.length = 0
+    const progress: number[] = []
+    await uploadFile('/Audiobooks/Big.m4b', file, (d) => progress.push(d))
+    expect(sent).toEqual([16 * MB, 24 * MB])
+    expect(progress[0]).toBe(16 * MB)
+    expect(hasUnfinishedUpload('/Audiobooks/Big.m4b', file)).toBe(false)
+  })
+
+  it('gives up at once on errors that do not go away', async () => {
+    const { uploadFile, uploadWaits } = await import('../dropbox')
+    uploadWaits.ms = [1, 1, 1]
+    let tries = 0
+    fakeDropbox((what) => (what === 'append_v2' ? (tries++, 409) : null))
+    await expect(uploadFile('/Audiobooks/Big.m4b', new File([new Uint8Array(20 * 1024 * 1024)], 'x'))).rejects.toThrow('oops')
+    expect(tries).toBe(1)
   })
 })

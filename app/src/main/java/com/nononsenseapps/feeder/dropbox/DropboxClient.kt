@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -59,6 +60,8 @@ data class DropboxFile(
 class DropboxException(
     val status: Int,
     val summary: String,
+    /** The whole error answer (JSON), for details such as an upload's correct_offset */
+    val body: String = "",
 ) : IOException(if (status == 401) "Dropbox sign-in expired: sign in again on Feeder web" else "Dropbox: ${summary.ifBlank { status.toString() }}")
 
 /**
@@ -174,7 +177,7 @@ class DropboxClient private constructor(
                 val text = res.body.string()
                 res.close()
                 val summary = runCatching { json.parseToJsonElement(text).jsonObject["error_summary"]?.jsonPrimitive?.contentOrNull }.getOrNull() ?: text
-                throw DropboxException(res.code, summary.take(200))
+                throw DropboxException(res.code, summary.take(200), text.take(2000))
             }
             return res
         }
@@ -361,6 +364,49 @@ class DropboxClient private constructor(
         }
     }
 
+    /** Uploads going on now (path → bytes done, bytes in all), for the notification. */
+    private val _uploads = MutableStateFlow<Map<String, Pair<Long, Long>>>(emptyMap())
+    val uploads: StateFlow<Map<String, Pair<Long, Long>>> = _uploads.asStateFlow()
+
+    private val appContext = context.applicationContext
+
+    /** Work of several uploads (an audiobook's tracks) that keeps the app running between them */
+    private val _holds = MutableStateFlow(0)
+    val holds: StateFlow<Int> = _holds.asStateFlow()
+
+    /** Runs [block] (uploads one after another) with the app kept running all through it. */
+    suspend fun <T> keepRunning(block: suspend () -> T): T {
+        _holds.update { it + 1 }
+        UploadService.start(appContext)
+        try {
+            return block()
+        } finally {
+            _holds.update { it - 1 }
+        }
+    }
+
+    /** Unfinished upload sessions, so an upload tried again goes on where it stopped. */
+    private val sessions =
+        object : UploadStore {
+            private val up = context.getSharedPreferences("dropbox_uploads", Context.MODE_PRIVATE)
+
+            override fun get(key: String) = up.getString(key, null)?.let { runCatching { json.decodeFromString(UploadSession.serializer(), it) }.getOrNull() }
+
+            override fun put(
+                key: String,
+                session: UploadSession,
+            ) = up.edit { putString(key, json.encodeToString(UploadSession.serializer(), session)) }
+
+            override fun remove(key: String) = up.edit { remove(key) }
+        }
+
+    /** True when an earlier try of this upload left a session to go on with. */
+    fun hasUnfinishedUpload(
+        path: String,
+        size: Long,
+        id: String,
+    ) = sessions.get(uploadKey(path, size, id)) != null
+
     /**
      * Uploads [file] into the app folder at [path]. A different file with the same name gets a
      * numbered name (Dropbox's autorename); the same file is kept as it is.
@@ -370,17 +416,24 @@ class DropboxClient private constructor(
         file: File,
         onProgress: (Long, Long) -> Unit = { _, _ -> },
     ): DropboxFile =
-        upload(path, file.length(), { from -> java.io.FileInputStream(file).also { it.channel.position(from) } }, onProgress)
+        upload(path, file.length(), { from -> java.io.FileInputStream(file).also { it.channel.position(from) } }, onProgress, id = file.lastModified().toString())
 
     /**
      * Uploads [size] bytes read with [open], which gives a stream positioned at a byte offset
      * (e.g. a document picked on the phone, read in place), like [upload] of a file.
+     *
+     * Big files go up in 8 MB pieces. A piece that fails because of the network or Dropbox is
+     * tried again, with growing waits, for about four minutes; when it still fails, the upload
+     * stops but remembers how far it got (keyed by [path], [size] and [id], which says which
+     * file it is), and the next upload of the same file goes on from there. While uploading the
+     * app keeps running in the background (with a notification), so leaving it does not stop it.
      */
     suspend fun upload(
         path: String,
         size: Long,
         open: (from: Long) -> InputStream,
         onProgress: (Long, Long) -> Unit = { _, _ -> },
+        id: String = "",
     ): DropboxFile =
         withContext(Dispatchers.IO) {
             val commit =
@@ -406,52 +459,74 @@ class DropboxClient private constructor(
                     .build()
             }
 
-            if (size <= SINGLE_MAX) {
-                val res = content("https://content.dropboxapi.com/2/files/upload", commit, 0, size).use { json.parseToJsonElement(it.body.string()).jsonObject }
-                onProgress(size, size)
-                return@withContext toFile(res)
+            fun cursor(
+                sessionId: String,
+                offset: Long,
+            ) = buildJsonObject {
+                put("session_id", sessionId)
+                put("offset", offset)
             }
-            val sessionId =
-                content("https://content.dropboxapi.com/2/files/upload_session/start", buildJsonObject { put("close", false) }, 0, CHUNK)
-                    .use { json.parseToJsonElement(it.body.string()).jsonObject["session_id"]!!.jsonPrimitive.content }
-            var offset = CHUNK
-            onProgress(offset, size)
-            while (size - offset > CHUNK) {
-                val cursor =
-                    buildJsonObject {
-                        put("session_id", sessionId)
-                        put("offset", offset)
-                    }
-                content(
-                    "https://content.dropboxapi.com/2/files/upload_session/append_v2",
-                    buildJsonObject {
-                        put("cursor", cursor)
-                        put("close", false)
-                    },
-                    offset,
-                    CHUNK,
-                ).close()
-                offset += CHUNK
-                onProgress(offset, size)
-            }
-            val cursor =
-                buildJsonObject {
-                    put("session_id", sessionId)
-                    put("offset", offset)
+
+            val transport =
+                object : UploadTransport {
+                    override fun start() =
+                        content("https://content.dropboxapi.com/2/files/upload_session/start", buildJsonObject { put("close", false) }, 0, 0)
+                            .use { json.parseToJsonElement(it.body.string()).jsonObject["session_id"]!!.jsonPrimitive.content }
+
+                    override fun append(
+                        sessionId: String,
+                        offset: Long,
+                        length: Long,
+                    ) = content(
+                        "https://content.dropboxapi.com/2/files/upload_session/append_v2",
+                        buildJsonObject {
+                            put("cursor", cursor(sessionId, offset))
+                            put("close", false)
+                        },
+                        offset,
+                        length,
+                    ).close()
+
+                    override fun finish(
+                        sessionId: String,
+                        offset: Long,
+                        length: Long,
+                    ) = content(
+                        "https://content.dropboxapi.com/2/files/upload_session/finish",
+                        buildJsonObject {
+                            put("cursor", cursor(sessionId, offset))
+                            put("commit", commit)
+                        },
+                        offset,
+                        length,
+                    ).use { json.parseToJsonElement(it.body.string()).jsonObject }
                 }
-            val res =
-                content(
-                    "https://content.dropboxapi.com/2/files/upload_session/finish",
-                    buildJsonObject {
-                        put("cursor", cursor)
-                        put("commit", commit)
-                    },
-                    offset,
-                    size - offset,
-                ).use { json.parseToJsonElement(it.body.string()).jsonObject }
-            onProgress(size, size)
-            toFile(res)
+            val progress: (Long, Long) -> Unit = { done, total ->
+                _uploads.update { it + (path to (done to total)) }
+                onProgress(done, total)
+            }
+            _uploads.update { it + (path to (0L to size)) }
+            UploadService.start(appContext)
+            try {
+                val upload = ResumableUpload(transport, sessions)
+                val res =
+                    if (size <= ResumableUpload.CHUNK) {
+                        upload.retrying { content("https://content.dropboxapi.com/2/files/upload", commit, 0, size).use { json.parseToJsonElement(it.body.string()).jsonObject } }
+                    } else {
+                        upload.run(uploadKey(path, size, id), size, progress)
+                    }
+                progress(size, size)
+                toFile(res)
+            } finally {
+                _uploads.update { it - path }
+            }
         }
+
+    private fun uploadKey(
+        path: String,
+        size: Long,
+        id: String,
+    ) = "$path|$size|$id"
 
     suspend fun delete(path: String) =
         withContext(Dispatchers.IO) {
@@ -496,8 +571,6 @@ class DropboxClient private constructor(
         private const val KEY_TS = "ts"
         private const val KEY_ACCESS = "access"
         private const val KEY_EXPIRES = "expires"
-        private const val CHUNK = 8L * 1024 * 1024
-        private const val SINGLE_MAX = 32L * 1024 * 1024
         private val JSON = "application/json".toMediaType()
         private val OCTET = "application/octet-stream".toMediaType()
 

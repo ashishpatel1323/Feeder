@@ -170,6 +170,8 @@ export class DropboxError extends Error {
   constructor(
     public status: number,
     public summary: string,
+    /** The whole error answer (JSON), for details such as an upload's correct_offset */
+    public body = '',
   ) {
     super(status === 401 ? 'Dropbox sign-in expired: sign in again in Settings' : `Dropbox: ${summary || status}`)
   }
@@ -228,7 +230,7 @@ async function call(url: string, init: (token: string) => RequestInit, signal?: 
       } catch {
         // plain text error
       }
-      throw new DropboxError(res.status, summary.slice(0, 200))
+      throw new DropboxError(res.status, summary.slice(0, 200), text.slice(0, 2000))
     }
     return res
   }
@@ -374,11 +376,87 @@ export async function downloadStream(path: string, signal?: AbortSignal): Promis
 }
 
 const CHUNK = 8 * 1024 * 1024
-const SINGLE_MAX = 32 * 1024 * 1024
+
+/** Waits between tries of an upload piece: about four minutes in all (tests make them short). */
+export const uploadWaits = { ms: [1, 2, 4, 8, 15, 30, 30, 30, 30, 30, 30].map((s) => s * 1000) }
+
+const transient = (e: unknown) => e instanceof DropboxError && (e.status === 0 || e.status === 408 || e.status === 429 || e.status >= 500)
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(resolve, ms)
+    signal?.addEventListener('abort', () => {
+      clearTimeout(t)
+      reject(signal.reason ?? new DOMException('Aborted', 'AbortError'))
+    })
+  })
+}
+
+/** Runs [fn] again when the network or Dropbox failed for a moment. */
+async function retrying<T>(fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn()
+    } catch (e) {
+      if (signal?.aborted || !transient(e) || attempt >= uploadWaits.ms.length) throw e
+      await sleep(uploadWaits.ms[attempt], signal)
+    }
+  }
+}
+
+/** correct_offset from an incorrect_offset error, wherever Dropbox nests it. */
+export function correctOffset(e: unknown): number | null {
+  if (!(e instanceof DropboxError) || !(e.summary + e.body).includes('incorrect_offset')) return null
+  const find = (v: unknown): number | null => {
+    if (!v || typeof v !== 'object') return null
+    const o = v as Record<string, unknown>
+    if (typeof o.correct_offset === 'number') return o.correct_offset
+    for (const x of Object.values(o)) {
+      const n = find(x)
+      if (n !== null) return n
+    }
+    return null
+  }
+  try {
+    return find(JSON.parse(e.body))
+  } catch {
+    return null
+  }
+}
+
+type UploadSession = { sessionId: string; offset: number; size: number; startedAt: number }
+const SESSION_MAX_AGE = 6 * 24 * 3600e3
+const sessionKey = (path: string, blob: Blob) => `feeder.dropboxUpload:${path}|${blob.size}|${blob instanceof File ? blob.lastModified : ''}`
+
+function loadSession(key: string, size: number): UploadSession | null {
+  try {
+    const s = JSON.parse(localStorage.getItem(key) || 'null') as UploadSession | null
+    return s && s.size === size && Date.now() - s.startedAt < SESSION_MAX_AGE ? s : null
+  } catch {
+    return null
+  }
+}
+const saveSession = (key: string, s: UploadSession | null) => {
+  try {
+    if (s) localStorage.setItem(key, JSON.stringify(s))
+    else localStorage.removeItem(key)
+  } catch {
+    // private mode: no resuming, still uploads
+  }
+}
+
+/** True when an earlier try of this upload stopped part way (the next one goes on from there). */
+export function hasUnfinishedUpload(path: string, blob: Blob): boolean {
+  return loadSession(sessionKey(path, blob), blob.size) !== null
+}
 
 /**
  * Uploads a file into the app folder. An existing file with the same name and contents is kept as
  * is; a different one with the same name gets a numbered name (Dropbox's autorename).
+ *
+ * Big files go up in 8 MB pieces. A piece that fails because of the network or Dropbox is tried
+ * again with growing waits (about four minutes); when it still fails, how far it got is kept, and
+ * the next upload of the same file goes on from there instead of from zero.
  */
 export async function uploadFile(path: string, blob: Blob, onProgress?: Progress, signal?: AbortSignal): Promise<DropboxFile> {
   const commit = { path, mode: 'add', autorename: true, mute: true, strict_conflict: false }
@@ -387,27 +465,73 @@ export async function uploadFile(path: string, blob: Blob, onProgress?: Progress
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/octet-stream', 'Dropbox-API-Arg': headerArg(arg) },
     body,
   })
-  if (blob.size <= SINGLE_MAX) {
-    const res = await call('https://content.dropboxapi.com/2/files/upload', (t) => content(t, commit, blob), signal)
+  if (blob.size <= CHUNK) {
+    const res = await retrying(() => call('https://content.dropboxapi.com/2/files/upload', (t) => content(t, commit, blob), signal), signal)
     onProgress?.(blob.size, blob.size)
     return toFile((await res.json()) as RawEntry)
   }
-  const start = await call('https://content.dropboxapi.com/2/files/upload_session/start', (t) => content(t, { close: false }, blob.slice(0, CHUNK)), signal)
-  const { session_id } = (await start.json()) as { session_id: string }
-  let offset = Math.min(CHUNK, blob.size)
-  onProgress?.(offset, blob.size)
-  while (blob.size - offset > CHUNK) {
-    await call('https://content.dropboxapi.com/2/files/upload_session/append_v2', (t) => content(t, { cursor: { session_id, offset }, close: false }, blob.slice(offset, offset + CHUNK)), signal)
-    offset += CHUNK
-    onProgress?.(offset, blob.size)
+  const key = sessionKey(path, blob)
+  let session = loadSession(key, blob.size)
+  let restarts = 0
+  let fixes = 0
+  for (;;) {
+    if (!session) {
+      const start = await retrying(() => call('https://content.dropboxapi.com/2/files/upload_session/start', (t) => content(t, { close: false }, new Blob([])), signal), signal)
+      session = { sessionId: ((await start.json()) as { session_id: string }).session_id, offset: 0, size: blob.size, startedAt: Date.now() }
+      saveSession(key, session)
+    }
+    const s: UploadSession = session
+    onProgress?.(s.offset, blob.size)
+    try {
+      while (blob.size - s.offset > CHUNK) {
+        const offset = s.offset
+        await retrying(
+          () =>
+            call(
+              'https://content.dropboxapi.com/2/files/upload_session/append_v2',
+              (t) => content(t, { cursor: { session_id: s.sessionId, offset }, close: false }, blob.slice(offset, offset + CHUNK)),
+              signal,
+            ),
+          signal,
+        )
+        s.offset = offset + CHUNK
+        saveSession(key, s)
+        fixes = 0
+        onProgress?.(s.offset, blob.size)
+      }
+      const offset = s.offset
+      const res = await retrying(
+        () =>
+          call(
+            'https://content.dropboxapi.com/2/files/upload_session/finish',
+            (t) => content(t, { cursor: { session_id: s.sessionId, offset }, commit }, blob.slice(offset)),
+            signal,
+          ),
+        signal,
+      )
+      saveSession(key, null)
+      onProgress?.(blob.size, blob.size)
+      return toFile((await res.json()) as RawEntry)
+    } catch (e) {
+      if (signal?.aborted) throw e
+      // A piece got there but the answer did not: Dropbox says where it really is
+      const correct = correctOffset(e)
+      if (correct !== null && correct >= 0 && correct <= blob.size && fixes < 5) {
+        fixes++
+        s.offset = correct
+        saveSession(key, s)
+        continue
+      }
+      // The session is gone (too old, or already finished): start over
+      if (e instanceof DropboxError && e.status === 409 && restarts < 2 && /not_found|closed/.test(e.summary)) {
+        restarts++
+        saveSession(key, null)
+        session = null
+        continue
+      }
+      throw e
+    }
   }
-  const res = await call(
-    'https://content.dropboxapi.com/2/files/upload_session/finish',
-    (t) => content(t, { cursor: { session_id, offset }, commit }, blob.slice(offset)),
-    signal,
-  )
-  onProgress?.(blob.size, blob.size)
-  return toFile((await res.json()) as RawEntry)
 }
 
 export async function deleteFile(path: string): Promise<void> {

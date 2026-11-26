@@ -250,6 +250,12 @@
       android:exported="false"
       android:foregroundServiceType="dataSync" />
 
+    <!-- Uploads to Dropbox (an audiobook takes minutes) -->
+    <service
+      android:name=".dropbox.UploadService"
+      android:exported="false"
+      android:foregroundServiceType="dataSync" />
+
     <service
       android:name=".background.FeederJobService"
       android:permission="android.permission.BIND_JOB_SERVICE" />

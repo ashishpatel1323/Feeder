@@ -32,6 +32,13 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
+/** An upload to Dropbox that has not finished: the book's folder there and the tracks done (hash → path). */
+@kotlinx.serialization.Serializable
+data class PendingUpload(
+    val bookPath: String,
+    val done: Map<String, String> = emptyMap(),
+)
+
 /** A download to the phone (or an upload to Dropbox, [up]) in progress: bytes done of all the book's bytes. */
 data class AudiobookJob(
     val bookId: String,
@@ -495,40 +502,13 @@ class AudiobookLibrary private constructor(
         _jobs.update { it + (id to AudiobookJob(id, 0, b.size, up = true)) }
         scope.launch {
             try {
-                val root = DropboxClient.AUDIOBOOKS_FOLDER
-                val taken =
-                    dropbox
-                        .listTree(root)
-                        .map { it.path.substring(root.length + 1).substringBefore('/').lowercase() }
-                        .toSet()
-                val single = !b.folder && b.tracks.size == 1
-                val base = if (single) b.tracks[0].name else safeName(b.title)
-                val name = freeName(base, taken, keepExt = single)
-                val bookPath = "$root/$name"
-                var before = 0L
-                val tracks =
-                    b.tracks.map { t ->
-                        val dest = if (single) bookPath else "$bookPath/${t.path.removePrefix("local:").ifBlank { t.name }}"
-                        val file = localFile(t)
-                        val progress: (Long, Long) -> Unit = { done, _ -> _jobs.update { it + (id to AudiobookJob(id, before + done, b.size, up = true)) } }
-                        val up =
-                            if (file != null) {
-                                dropbox.upload(dest, file, progress)
-                            } else {
-                                val uri = Uri.parse(t.uri ?: throw IllegalStateException("${t.name} is no longer on this phone"))
-                                dropbox.upload(dest, t.size, { from ->
-                                    val fd = context.contentResolver.openFileDescriptor(uri, "r") ?: throw IllegalStateException("Could not read ${t.name}")
-                                    android.os.ParcelFileDescriptor.AutoCloseInputStream(fd).also { it.channel.position(from) }
-                                }, progress)
-                            }
-                        before += t.size
-                        t.copy(path = up.path)
-                    }
-                patch(id) { it.copy(dropboxPath = bookPath, tracks = tracks) }
+                dropbox.keepRunning { uploadBook(b) }
                 _messages.value = "${b.title} is in Dropbox"
             } catch (e: Exception) {
                 Log.w(LOG_TAG, "Upload failed", e)
-                _messages.value = e.message ?: "Upload failed"
+                val done = pendingUpload(id)?.done?.size ?: 0
+                _messages.value = "Upload of ${b.title} stopped (${e.message ?: "no connection"}). " +
+                    "Tap Resume upload to go on from " + (if (done > 0) "track ${done + 1}" else "where it stopped")
             } finally {
                 _jobs.update { it - id }
                 _version.update { it + 1 }
@@ -536,6 +516,89 @@ class AudiobookLibrary private constructor(
             refresh()
         }
     }
+
+    /**
+     * Uploads the book's tracks one after another. What got there is saved as it goes (the book's
+     * folder in Dropbox, the tracks done, and inside a track the pieces done), so after a failure
+     * the next try goes on from there instead of from the first byte, into the same folder.
+     */
+    private suspend fun uploadBook(b: Audiobook) {
+        val id = b.id
+        val root = DropboxClient.AUDIOBOOKS_FOLDER
+        val single = !b.folder && b.tracks.size == 1
+        var pending = pendingUpload(id)
+        if (pending == null) {
+            val taken =
+                dropbox
+                    .listTree(root)
+                    .map { it.path.substring(root.length + 1).substringBefore('/').lowercase() }
+                    .toSet()
+            val base = if (single) b.tracks[0].name else safeName(b.title)
+            pending = PendingUpload("$root/${freeName(base, taken, keepExt = single)}")
+            savePendingUpload(id, pending)
+        }
+        val bookPath = pending.bookPath
+        var before = b.tracks.filter { it.hash in pending.done }.sumOf { it.size }
+        _jobs.update { it + (id to AudiobookJob(id, before, b.size, up = true)) }
+        val tracks =
+            b.tracks.map { t ->
+                pending!!.done[t.hash]?.let { return@map t.copy(path = it) }
+                val dest = if (single) bookPath else "$bookPath/${t.path.removePrefix("local:").ifBlank { t.name }}"
+                val file = localFile(t)
+                val progress: (Long, Long) -> Unit = { done, _ -> _jobs.update { it + (id to AudiobookJob(id, before + done, b.size, up = true)) } }
+                val up =
+                    if (file != null) {
+                        dropbox.upload(dest, file, progress)
+                    } else {
+                        val uri = Uri.parse(t.uri ?: throw IllegalStateException("${t.name} is no longer on this phone"))
+                        // The size the phone has now (what the stream really gives), not the one noted when picked
+                        val size =
+                            context.contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize.takeIf { s -> s > 0 } }
+                                ?: t.size
+                        dropbox.upload(dest, size, { from -> openAt(uri, from, t.name) }, progress, id = t.hash)
+                    }
+                before += t.size
+                pending = pending!!.copy(done = pending!!.done + (t.hash to up.path)).also { savePendingUpload(id, it) }
+                t.copy(path = up.path)
+            }
+        patch(id) { it.copy(dropboxPath = bookPath, tracks = tracks) }
+        prefs.edit { remove(KEY_UPLOAD + id) }
+    }
+
+    /** A picked file as a stream from byte [from]. */
+    private fun openAt(
+        uri: Uri,
+        from: Long,
+        name: String,
+    ): java.io.InputStream {
+        val fd = context.contentResolver.openFileDescriptor(uri, "r") ?: throw IllegalStateException("Could not read $name")
+        val input = android.os.ParcelFileDescriptor.AutoCloseInputStream(fd)
+        if (from == 0L) return input
+        try {
+            input.channel.position(from)
+        } catch (e: Exception) {
+            // Not a seekable file (some document providers give a pipe): read up to there
+            var left = from
+            val buf = ByteArray(1 shl 16)
+            while (left > 0) {
+                val n = input.read(buf, 0, minOf(buf.size.toLong(), left).toInt())
+                if (n < 0) throw java.io.EOFException("$name is shorter than before")
+                left -= n
+            }
+        }
+        return input
+    }
+
+    /** True when an upload of the book stopped part way (the next one goes on from there). */
+    fun hasPendingUpload(id: String) = prefs.contains(KEY_UPLOAD + id)
+
+    private fun pendingUpload(id: String): PendingUpload? =
+        prefs.getString(KEY_UPLOAD + id, null)?.let { runCatching { json.decodeFromString(PendingUpload.serializer(), it) }.getOrNull() }
+
+    private fun savePendingUpload(
+        id: String,
+        p: PendingUpload,
+    ) = prefs.edit { putString(KEY_UPLOAD + id, json.encodeToString(PendingUpload.serializer(), p)) }
 
     /**
      * Deletes the book (its file, or its folder) from Dropbox for every device. When this phone
@@ -595,6 +658,7 @@ class AudiobookLibrary private constructor(
         private const val KEY = "books"
         private const val KEY_PICKS = "picks"
         private const val KEY_HIDDEN = "hidden"
+        private const val KEY_UPLOAD = "upload:"
         private const val LOG_TAG = "FEEDER_AUDIOBOOKS"
 
         @Volatile
