@@ -557,6 +557,25 @@ class Sync2Client(
             val renamed = before.zip(adopted).filter { (a, b) -> a.id != b.id }.associate { (a, b) -> a.id to b.id }
             playlistStore.replaceFromSync { list -> list.map { p -> renamed[p.id]?.let { p.copy(id = it) } ?: p } }
         }
+        // Synced playlists missing here that weren't deleted here (an unreadable store, an update
+        // that lost them, a change that didn't save) come back from what was last exchanged. Only a
+        // delete made on this device goes out as a delete, so a device can't wipe them everywhere.
+        val deletedHere = playlistStore.deletedHere()
+        val missing =
+            known.filter { (id, kn) ->
+                id !in deletedHere && playlistStore.playlists.value.none { it.id == id } && !isDeleted(parse(kn.v))
+            }
+        if (missing.isNotEmpty()) {
+            val feedIds = repository.getFeedsOrderedByUrl().associate { it.url.toString() to it.id }
+            val back =
+                missing.mapNotNull { (id, kn) ->
+                    val synced = (parse(kn.v) as? Map<*, *>)?.let { SyncedPlaylist.fromMap(it) } ?: return@mapNotNull null
+                    val itemIds = synced.items.associateWith { itemIdOf(it) }
+                    synced.toPlaylist(id, kn.ts, feedIdOf = { feedIds[it] }, itemIdOf = { itemIds[it] })
+                }
+            Log.w(LOG_TAG, "Putting back ${back.size} synced playlists missing here: ${back.map { it.id }}")
+            playlistStore.replaceFromSync { list -> list + back.filter { b -> list.none { it.id == b.id } } }
+        }
         val lists = playlistStore.playlists.value
         val feeds = repository.getFeedsOrderedByUrl()
         val feedUrls = feeds.associate { it.id to it.url.toString() }
@@ -593,9 +612,16 @@ class Sync2Client(
             }
         }
         val here = lists.map { it.id }.toSet()
-        for ((id, kn) in known) {
-            if (id !in here && !isDeleted(parse(kn.v))) out += Pending("playlist", id, mapOf("deleted" to true), maxOf(now, kn.ts + 1))
+        val done = mutableListOf<String>()
+        for ((id, deletedAt) in deletedHere) {
+            val kn = known[id]
+            when {
+                id in here -> done += id
+                kn == null || isDeleted(parse(kn.v)) -> done += id // never synced, or the delete went out
+                else -> out += Pending("playlist", id, mapOf("deleted" to true), maxOf(deletedAt, kn.ts + 1))
+            }
         }
+        playlistStore.forgetDeleted(done)
         return out
     }
 

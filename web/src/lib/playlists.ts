@@ -64,6 +64,11 @@ export interface Playlist {
 
 export const PLAYLISTS_KEY = 'playlists'
 const SEEDED_KEY = 'playlistsSeeded'
+/**
+ * Playlist id to when it was deleted in this browser, until sync has sent the delete. Only these
+ * go out as deletes: a playlist that is only missing here is never deleted on the other devices.
+ */
+export const DELETED_PLAYLISTS_KEY = 'playlistsDeletedHere'
 /** At most this many items in a smart playlist, so a broad rule still plays sensibly. */
 export const SMART_LIMIT = 200
 
@@ -320,7 +325,16 @@ export function stampChanged(before: Playlist[], next: Playlist[], now = Date.no
 async function change(fn: (list: Playlist[]) => Playlist[]): Promise<Playlist[]> {
   return db.transaction('rw', db.kv, async () => {
     const before = await loadPlaylists()
-    const next = stampChanged(before, fn(before))
+    const now = Date.now()
+    const next = stampChanged(before, fn(before), now)
+    // Removed by the person here: remembered, so sync deletes them on the other devices too
+    const nextIds = new Set(next.map((p) => p.id))
+    const removed = before.filter((p) => !nextIds.has(p.id)).map((p) => p.id)
+    const deleted = await getKv<Record<string, number>>(DELETED_PLAYLISTS_KEY, {})
+    if (removed.length || Object.keys(deleted).some((id) => nextIds.has(id))) {
+      const kept = Object.fromEntries(Object.entries(deleted).filter(([id]) => !nextIds.has(id)))
+      await setKv(DELETED_PLAYLISTS_KEY, { ...kept, ...Object.fromEntries(removed.map((id) => [id, now])) })
+    }
     await setKv(PLAYLISTS_KEY, next)
     await setKv(SEEDED_KEY, true)
     return next
