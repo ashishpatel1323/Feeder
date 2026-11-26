@@ -9,4 +9,8 @@
   <string name="library_highlights_desc">Notes and quotes</string>
   <string name="library_downloads_desc">Offline videos and episodes</string>
   <string name="library_app">App</string>
+  <string name="tab_youtube">YouTube</string>
+  <string name="library_ebooks_desc">Books from Dropbox and this phone</string>
+  <string name="library_audiobooks_desc">Listen to audiobooks</string>
+  <string name="library_zim_desc">Offline websites (ZIM files)</string>
 </resources>

@@ -16,21 +16,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
-import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.filled.DynamicFeed
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.Headphones
-import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Subscriptions
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.outlined.DynamicFeed
-import androidx.compose.material.icons.outlined.Headphones
-import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material.icons.outlined.Subscriptions
 import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.Icon
 import androidx.compose.foundation.text.TextAutoSize
@@ -69,11 +65,9 @@ import com.nononsenseapps.feeder.db.room.ID_SAVED_ARTICLES
  */
 enum class MainTab {
     FEEDS,
+    YOUTUBE,
     PLAYLISTS,
     LIBRARY,
-    EBOOKS,
-    AUDIOBOOKS,
-    ZIM,
 }
 
 /** The Feeds tab's views: Latest, By feed (the tiles) and Discover. */
@@ -88,9 +82,9 @@ fun NavBackStackEntry.mainTab(): MainTab? =
         DiscoverDestination.route -> MainTab.FEEDS
         PlaylistsDestination.route -> MainTab.PLAYLISTS
         LibraryDestination.route, DownloadsDestination.route, HighlightsDestination.route -> MainTab.LIBRARY
-        ZimDestination.route -> MainTab.ZIM
-        EbooksDestination.route -> MainTab.EBOOKS
-        AudiobooksDestination.route -> MainTab.AUDIOBOOKS
+        YouTubeDestination.route -> MainTab.YOUTUBE
+        // Ebooks, Audiobooks and ZIM open from rows on the Library screen
+        ZimDestination.route, EbooksDestination.route, AudiobooksDestination.route -> MainTab.LIBRARY
         else -> null
     }
 
@@ -102,6 +96,7 @@ fun NavBackStackEntry.wantsSharedMiniPlayer(): Boolean =
         LibraryDestination.route,
         DownloadsDestination.route,
         HighlightsDestination.route,
+        YouTubeDestination.route,
         ZimDestination.route,
         EbooksDestination.route,
         AudiobooksDestination.route,
@@ -166,11 +161,9 @@ fun NavController.openTab(
     }
     val root =
         when (tab) {
+            MainTab.YOUTUBE -> YouTubeDestination.route
             MainTab.PLAYLISTS -> "playlists"
             MainTab.LIBRARY -> LibraryDestination.route
-            MainTab.ZIM -> ZimDestination.route
-            MainTab.EBOOKS -> EbooksDestination.route
-            MainTab.AUDIOBOOKS -> AudiobooksDestination.route
             MainTab.FEEDS -> HomeDestination.route
         }
     if (tab == current) {
@@ -199,7 +192,7 @@ fun MainBottomBar(
                 selected = selected,
                 onClick = { onSelect(tab) },
                 icon = { Icon(if (selected) filled else outlined, contentDescription = null) },
-                // Six tabs share the width: a long label (Audiobooks) shrinks a little instead of wrapping
+                // A long label shrinks a little instead of wrapping
                 label = {
                     Text(
                         stringResource(label),
@@ -217,10 +210,8 @@ private fun MainTab.look(): Triple<ImageVector, ImageVector, Int> =
     when (this) {
         MainTab.FEEDS -> Triple(Icons.Filled.DynamicFeed, Icons.Outlined.DynamicFeed, R.string.tab_feeds)
         MainTab.PLAYLISTS -> Triple(Icons.AutoMirrored.Filled.QueueMusic, Icons.AutoMirrored.Outlined.QueueMusic, R.string.playlists)
+        MainTab.YOUTUBE -> Triple(Icons.Filled.Subscriptions, Icons.Outlined.Subscriptions, R.string.tab_youtube)
         MainTab.LIBRARY -> Triple(Icons.Filled.VideoLibrary, Icons.Outlined.VideoLibrary, R.string.tab_library)
-        MainTab.ZIM -> Triple(Icons.Filled.Public, Icons.Outlined.Public, R.string.tab_zim)
-        MainTab.EBOOKS -> Triple(Icons.AutoMirrored.Filled.MenuBook, Icons.AutoMirrored.Outlined.MenuBook, R.string.tab_ebooks)
-        MainTab.AUDIOBOOKS -> Triple(Icons.Filled.Headphones, Icons.Outlined.Headphones, R.string.tab_audiobooks)
     }
 
 /** What the tab screens need from the app shell, so they don't each take these as parameters. */

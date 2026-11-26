@@ -431,6 +431,9 @@ data object LibraryDestination : NavigationDestination(
             onOpenSaved = { FeedDestination.navigate(navController, feedId = ID_SAVED_ARTICLES, keepBackStack = true) },
             onHighlights = { HighlightsDestination.navigate(navController) },
             onDownloads = { DownloadsDestination.navigate(navController) },
+            onEbooks = { navController.navigate(EbooksDestination.route) { launchSingleTop = true } },
+            onAudiobooks = { navController.navigate(AudiobooksDestination.route) { launchSingleTop = true } },
+            onZim = { navController.navigate(ZimDestination.route) { launchSingleTop = true } },
             onSettings = { SettingsDestination.navigate(navController) },
             onSync = { SyncScreenDestination.navigate(navController, syncCode = "", secretKey = "") },
         )
