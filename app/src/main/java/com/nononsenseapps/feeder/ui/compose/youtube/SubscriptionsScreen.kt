@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.OpenInBrowser
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -57,6 +58,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -111,6 +113,7 @@ import org.kodein.di.instance
 fun SubscriptionsScreen(
     viewModel: YouTubeViewModel,
     onOpenVideo: (VideoRow) -> Unit,
+    onOpenShorts: (VideoRow) -> Unit,
     onManage: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -192,7 +195,14 @@ fun SubscriptionsScreen(
                         }
                         if (state.shorts.isNotEmpty()) {
                             item(key = "shorts", span = { GridItemSpan(maxLineSpan) }) {
-                                ShortsShelf(state.shorts, open, actions)
+                                ShortsShelf(
+                                    shorts = state.shorts,
+                                    onOpen = { row ->
+                                        streams.prefetch(listOf(row.videoId))
+                                        onOpenShorts(row)
+                                    },
+                                    actions = actions,
+                                )
                             }
                         }
                         items(state.videos, key = { it.item.id }) { row ->
@@ -316,11 +326,22 @@ private fun ShortsShelf(
     actions: VideoActions,
 ) {
     Column(Modifier.padding(top = FeederTokens.Space.sm)) {
-        Text(
-            stringResource(R.string.youtube_shorts),
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(horizontal = FeederTokens.Space.lg, vertical = FeederTokens.Space.sm),
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(start = FeederTokens.Space.lg, end = FeederTokens.Space.sm),
+        ) {
+            Text(
+                stringResource(R.string.youtube_shorts),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f).padding(vertical = FeederTokens.Space.sm),
+            )
+            // Full screen, swiping up and down through the shelf like YouTube Shorts
+            TextButton(onClick = { shorts.firstOrNull()?.let(onOpen) }) {
+                Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(FeederTokens.Space.xs))
+                Text(stringResource(R.string.youtube_shorts_play_all))
+            }
+        }
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(FeederTokens.Space.sm),
             contentPadding = PaddingValues(horizontal = FeederTokens.Space.lg),

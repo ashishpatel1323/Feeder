@@ -10,6 +10,7 @@ import androidx.navigation.NavType
 import androidx.navigation.navDeepLink
 import com.nononsenseapps.feeder.base.diAwareViewModel
 import com.nononsenseapps.feeder.ui.MainActivityViewModel
+import com.nononsenseapps.feeder.ui.compose.youtube.ShortsPlayerScreen
 import com.nononsenseapps.feeder.ui.compose.youtube.SubscriptionsManagerScreen
 import com.nononsenseapps.feeder.ui.compose.youtube.SubscriptionsScreen
 import com.nononsenseapps.feeder.ui.compose.youtube.YouTubeVideoPage
@@ -31,6 +32,7 @@ data object YouTubeDestination : NavigationDestination(
         SubscriptionsScreen(
             viewModel = backStackEntry.diAwareViewModel(),
             onOpenVideo = { YouTubeVideoDestination.navigate(navController, it.item.id, it.videoId) },
+            onOpenShorts = { YouTubeShortsDestination.navigate(navController, it.item.id) },
             onManage = { YouTubeManageDestination.navigate(navController) },
         )
     }
@@ -111,6 +113,42 @@ data object YouTubeVideoDestination : NavigationDestination(
             viewModel = backStackEntry.diAwareViewModel(),
             onCollapse = { navController.popBackStack() },
             onOpenVideo = { item, video -> navigate(navController, item, video) },
+        )
+    }
+}
+
+/** The Shorts shelf in full screen: swipe up and down through it, like YouTube Shorts. */
+data object YouTubeShortsDestination : NavigationDestination(
+    path = "youtube/shorts",
+    navArguments =
+        listOf(
+            QueryParamArgument("item") {
+                type = NavType.LongType
+                defaultValue = 0L
+            },
+        ),
+    deepLinks = emptyList(),
+    enterTransition = { slideInVertically { it } },
+    popExitTransition = { slideOutVertically { it } },
+) {
+    fun navigate(
+        navController: NavController,
+        itemId: Long,
+    ) {
+        navController.navigate("$path?item=$itemId") { launchSingleTop = true }
+    }
+
+    @Composable
+    override fun RegisterScreen(
+        navController: NavController,
+        backStackEntry: NavBackStackEntry,
+        navDrawerListState: LazyListState,
+        mainActivityViewModel: MainActivityViewModel,
+    ) {
+        ShortsPlayerScreen(
+            startItemId = backStackEntry.arguments?.getLong("item") ?: 0L,
+            viewModel = backStackEntry.diAwareViewModel(),
+            onClose = { navController.popBackStack() },
         )
     }
 }

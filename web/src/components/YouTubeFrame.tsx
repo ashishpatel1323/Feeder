@@ -9,6 +9,7 @@ export interface YTPlayer {
   getCurrentTime(): number
   seekTo(seconds: number, allowSeekAhead: boolean): void
   playVideo(): void
+  pauseVideo(): void
   getDuration(): number
   getPlayerState(): number
   loadVideoById(opts: { videoId: string; startSeconds?: number }): void
@@ -85,6 +86,7 @@ export function YouTubeFrame({
   onEnded,
   autoplay,
   onPlayer,
+  fromStart,
 }: {
   /** The article the video belongs to; null (a related video) keeps no position */
   itemId: string | null
@@ -94,6 +96,8 @@ export function YouTubeFrame({
   autoplay?: boolean
   /** The ready player (null when it goes), for a transcript to follow and move it */
   onPlayer?: (player: YTPlayer | null) => void
+  /** Always from the beginning, not where it was left, and without YouTube's controls (Shorts) */
+  fromStart?: boolean
 }) {
   const onPlayerRef = useRef(onPlayer)
   onPlayerRef.current = onPlayer
@@ -144,7 +148,7 @@ export function YouTubeFrame({
     let live = true
     // The player script loads while the saved position is read
     preloadYouTubePlayer()
-    void startFor(itemId).then((start) => {
+    void startFor(fromStart ? null : itemId).then((start) => {
       if (!live) return
       const before = shown.current
       if (before && before.videoId === videoId && before.itemId === itemId) {
@@ -168,7 +172,7 @@ export function YouTubeFrame({
     return () => {
       live = false
     }
-  }, [itemId, videoId, save])
+  }, [itemId, videoId, save, fromStart])
 
   const ready = initial !== null
   useEffect(() => {
@@ -245,7 +249,7 @@ export function YouTubeFrame({
           The embed needs the referrer, so no no-referrer policy here. */}
       <iframe
         ref={frame}
-        src={youtubeEmbedUrl(initial.videoId, { start: initial.start, origin: window.location.origin, autoplay })}
+        src={youtubeEmbedUrl(initial.videoId, { start: initial.start, origin: window.location.origin, autoplay, bare: fromStart })}
         title={title}
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
         referrerPolicy="strict-origin-when-cross-origin"

@@ -36,6 +36,7 @@ import { toggleSaved } from './ItemRow'
 import { Modal } from './Dialogs'
 import { FolderFilter } from './FolderFilter'
 import { preloadYouTubePlayer } from './YouTubeFrame'
+import { ShortsPlayer } from './ShortsPlayer'
 import { confirmDelete, itemCount } from '../lib/confirmDelete'
 
 const sync = () => syncNow().catch(() => undefined)
@@ -148,6 +149,8 @@ function Subscriptions(p: {
       else next.add(id)
       return next
     })
+  // The Shorts shelf in full screen, from this Short (null = closed)
+  const [shortsFrom, setShortsFrom] = useState<string | null>(null)
   const clickTile = (e: React.MouseEvent, r: VideoRow, order: VideoRow[]) => {
     if (e.shiftKey && anchor.current) {
       const a = all.findIndex((x) => x.item.id === anchor.current)
@@ -163,7 +166,8 @@ function Subscriptions(p: {
       toggle(r.item.id)
       return
     }
-    p.onOpenVideo(r, order)
+    if (r.isShort && order === shorts) setShortsFrom(r.item.id)
+    else p.onOpenVideo(r, order)
   }
   const pressStart = (r: VideoRow) => {
     anchor.current = r.item.id
@@ -274,9 +278,15 @@ function Subscriptions(p: {
           </p>
           {shorts.length ? (
             <div className="yt-shorts">
-              <h2 className="yt-section">
-                <Icon name="bolt" size={20} /> Shorts
-              </h2>
+              <div className="yt-shorts-head">
+                <h2 className="yt-section">
+                  <Icon name="bolt" size={20} /> Shorts
+                </h2>
+                {/* Full screen, swiping up and down through the shelf like YouTube Shorts */}
+                <button type="button" className="yt-shorts-play" onClick={() => setShortsFrom(shorts[0].item.id)}>
+                  <Icon name="play" size={18} /> Play all
+                </button>
+              </div>
               <div className="yt-shorts-row">
                 {shorts.map((r) => (
                   <Tile key={r.item.id} row={r} order={shorts} actions={tileActions} picked={picked.has(r.item.id)} className="yt-short-tile">
@@ -292,6 +302,7 @@ function Subscriptions(p: {
               </div>
             </div>
           ) : null}
+          {shortsFrom ? <ShortsPlayer live={state.shorts} startId={shortsFrom} onClose={() => setShortsFrom(null)} onSetRead={p.onSetRead} onDelete={p.onDelete} /> : null}
           {selected.length ? (
             <div className="select-bar yt-select-bar" role="toolbar" aria-label="Selected videos">
               <IconButton icon="close" label="Clear selection (Esc)" onClick={clearSelection} />
