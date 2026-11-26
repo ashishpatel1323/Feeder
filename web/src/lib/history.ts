@@ -11,7 +11,7 @@
  *   i   the item's id (audiobook id, ebook id, ZIM book id)
  *   a   'play' | 'pause' | 'open' | 'close'
  *   r   why, when known: app, notification, media, headset, bluetooth, car, watch, sleep, end,
- *       focus, closed, background, system
+ *       focus, closed, background, system, widget
  *   at  when (ms since epoch)
  *   p   the short position shown as a chip: "Ch. 32 · 01:03", "p. 41 of 310", "37%", an article
  *   s   longer context: the chapter's or the article's title
@@ -177,6 +177,7 @@ const REASONS: Record<string, string> = {
   closed: 'Player closed',
   background: 'Left the app',
   system: 'System',
+  widget: 'Home screen widget',
 }
 
 /** "Bluetooth", "Sleep timer"…, or '' when there's nothing to say. */

@@ -251,6 +251,10 @@ data object PlaylistsDestination : NavigationDestination(
             navDeepLink {
                 uriPattern = "$DEEP_LINK_BASE_URI/playlists"
             },
+            // The Continue widget opens one playlist
+            navDeepLink {
+                uriPattern = "$DEEP_LINK_BASE_URI/playlists?open={open}"
+            },
         ),
 ) {
     fun navigate(
@@ -454,7 +458,13 @@ data object AudiobookPlayerDestination : NavigationDestination(
                 defaultValue = ""
             },
         ),
-    deepLinks = emptyList(),
+    // The Continue widget opens it
+    deepLinks =
+        listOf(
+            navDeepLink {
+                uriPattern = "$DEEP_LINK_BASE_URI/audiobook?book={book}"
+            },
+        ),
 ) {
     fun navigate(
         navController: NavController,
@@ -493,7 +503,13 @@ data object EbookReaderDestination : NavigationDestination(
                 defaultValue = ""
             },
         ),
-    deepLinks = emptyList(),
+    // The Continue widget opens it
+    deepLinks =
+        listOf(
+            navDeepLink {
+                uriPattern = "$DEEP_LINK_BASE_URI/ebook?book={book}"
+            },
+        ),
 ) {
     fun navigate(
         navController: NavController,
@@ -603,8 +619,19 @@ data object ZimReaderDestination : NavigationDestination(
                 type = NavType.StringType
                 defaultValue = ""
             },
+            // A page to open at (the Continue widget's last page), "" for where it was left
+            QueryParamArgument("path") {
+                type = NavType.StringType
+                defaultValue = ""
+            },
         ),
-    deepLinks = emptyList(),
+    // The Continue widget opens it
+    deepLinks =
+        listOf(
+            navDeepLink {
+                uriPattern = "$DEEP_LINK_BASE_URI/zim?book={book}&path={path}"
+            },
+        ),
 ) {
     fun navigate(
         navController: NavController,
@@ -622,8 +649,21 @@ data object ZimReaderDestination : NavigationDestination(
         navDrawerListState: LazyListState,
         mainActivityViewModel: MainActivityViewModel,
     ) {
+        val bookId = backStackEntry.arguments?.getString("book").orEmpty()
+        val context = androidx.compose.ui.platform.LocalContext.current
+        // The reader opens where the book was left: a page asked for becomes that place first
+        // (once: turning the phone or coming back must not jump to it again)
+        rememberSaveable(bookId) {
+            val path = backStackEntry.arguments?.getString("path").orEmpty()
+            if (bookId.isNotEmpty() && path.isNotEmpty()) {
+                com.nononsenseapps.feeder.model.zim.ZimLibrary
+                    .get(context)
+                    .rememberPath(bookId, path)
+            }
+            true
+        }
         com.nononsenseapps.feeder.ui.compose.zim.ZimReaderScreen(
-            bookId = backStackEntry.arguments?.getString("book").orEmpty(),
+            bookId = bookId,
             onNavigateUp = { navController.popBackStack() },
         )
     }
