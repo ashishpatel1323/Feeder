@@ -19,7 +19,6 @@ import type { Toast } from '../lib/toast'
 import { openAddToPlaylist } from './AddToPlaylist'
 import { Icon, type IconName } from './Icon'
 import { MoreMenu } from './MoreMenu'
-import { confirmDelete } from '../lib/confirmDelete'
 
 /** Everything a row needs to know besides the item itself (feed kinds, play positions, lengths), kept live. */
 export function usePlaylistContext(feeds: Map<string, Feed>, rate: number): PlaylistContext {
@@ -90,7 +89,6 @@ export async function setItemRead(item: Item, read: boolean) {
 
 /** Deletes for good on every device, with Undo. */
 export async function deleteItemWithUndo(item: Item, toast: Toast) {
-  if (!(await confirmDelete({ title: 'Delete article?', itemName: item.title || 'Untitled', scope: 'all-devices' }))) return
   await hideItems([item.id])
   syncNow().catch(() => undefined)
   toast('Article deleted', { label: 'Undo', run: () => void unhideItems([item]).then(() => syncNow().catch(() => undefined)) })

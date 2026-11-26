@@ -15,7 +15,6 @@ import { articleVideoId } from '../lib/youtube'
 import { playQueue, useQueue } from '../lib/playqueue'
 import { itemFacts } from '../lib/itemview'
 import { TypeBadge, usePlaylistContext } from './ItemRow'
-import { confirmDelete } from '../lib/confirmDelete'
 
 /**
  * Flip mode for desktop: one article per page, turned like a magazine page. The page sits in the
@@ -255,7 +254,6 @@ export function FlipMode(p: Props) {
   const remove = useCallback(async () => {
     if (!item) return
     const copy = item
-    if (!(await confirmDelete({ title: 'Delete article?', itemName: copy.title || 'Untitled', scope: 'all-devices' }))) return
     readAloud.stop()
     const after = queue[idx + 1] ?? queue[idx - 1] ?? null
     if (pageRef.current && queue[idx + 1]) setLeaf({ html: pageRef.current.innerHTML, key: Date.now() })
