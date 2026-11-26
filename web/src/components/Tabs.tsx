@@ -3,27 +3,80 @@ import { Icon, IconButton, type IconName } from './Icon'
 
 /**
  * The places, as on Android: Feeds (Latest, By feed or Discover), YouTube, Playlists, Library,
- * Ebooks, Audiobooks, ZIM and History. Search is not a tab: ⌘K, /, and the "Search everything" bars open it.
- * Discover lives inside Feeds; it is a Tab value only for its G then D shortcut.
+ * Books (Ebooks, Audiobooks and ZIM as subtabs) and History. Search is not a tab: ⌘K, /, and the
+ * "Search everything" bars open it. Discover lives inside Feeds and the Books subtabs inside Books;
+ * they are Tab values only for their G shortcuts.
  * Which tabs the bottom bar (and the sidebar) shows is picked in Settings > Bottom bar tabs;
  * the others open from rows on Library.
  */
-export type Tab = 'feeds' | 'discover' | 'youtube' | 'playlists' | 'library' | 'books' | 'audiobooks' | 'zim' | 'history'
-export type BarTab = Exclude<Tab, 'discover'>
+export type Tab = 'feeds' | 'discover' | 'youtube' | 'playlists' | 'library' | 'books' | BookTab | 'history'
+export type BarTab = Exclude<Tab, 'discover' | BookTab>
+/** The subtabs of Books. */
+export type BookTab = 'ebooks' | 'audiobooks' | 'zim'
 
 export const TABS: { tab: BarTab; label: string; icon: IconName; key: string; hint: string }[] = [
   { tab: 'feeds', label: 'Feeds', icon: 'dynamicFeed', key: 'f', hint: 'Latest, By feed and Discover' },
   { tab: 'youtube', label: 'YouTube', icon: 'subscriptions', key: 'y', hint: 'Your YouTube subscriptions' },
   { tab: 'playlists', label: 'Playlists', icon: 'queue', key: 'p', hint: 'Smart and hand-made playlists' },
   { tab: 'library', label: 'Library', icon: 'library', key: 'l', hint: 'Saved, Highlights and Downloads' },
-  { tab: 'books', label: 'Ebooks', icon: 'book', key: 'b', hint: 'Books from Dropbox and this device' },
-  { tab: 'audiobooks', label: 'Audiobooks', icon: 'headphones', key: 'a', hint: 'Audiobooks from Dropbox' },
-  { tab: 'zim', label: 'ZIM', icon: 'public', key: 'z', hint: 'Offline websites such as Wikipedia' },
+  { tab: 'books', label: 'Books', icon: 'book', key: 'b', hint: 'Ebooks, audiobooks and offline websites' },
   { tab: 'history', label: 'History', icon: 'history', key: 'h', hint: 'Everything you opened, on all your devices' },
 ]
 
 /** Shortcuts to places that are not tabs of their own. */
-const EXTRA_KEYS: { tab: Tab; key: string }[] = [{ tab: 'discover', key: 'd' }]
+const EXTRA_KEYS: { tab: Tab; key: string }[] = [
+  { tab: 'discover', key: 'd' },
+  { tab: 'ebooks', key: 'e' },
+  { tab: 'audiobooks', key: 'a' },
+  { tab: 'zim', key: 'z' },
+]
+
+/** Books' subtabs, in order; [hash] is each one's listing (reader URLs hang off it). */
+export const BOOK_TABS: { tab: BookTab; label: string; icon: IconName; hash: string; search: string }[] = [
+  { tab: 'ebooks', label: 'Ebooks', icon: 'menuBook', hash: '#/books', search: 'Search ebooks' },
+  { tab: 'audiobooks', label: 'Audiobooks', icon: 'headphones', hash: '#/audiobooks', search: 'Search audiobooks' },
+  { tab: 'zim', label: 'ZIM', icon: 'public', hash: '#/zim', search: 'Search ZIM' },
+]
+
+const BOOK_TAB_KEY = 'feeder.booksTab'
+
+/** Books opens on the subtab used last in this browser (not synced). */
+export function lastBookTab(): BookTab {
+  try {
+    const t = localStorage.getItem(BOOK_TAB_KEY)
+    return BOOK_TABS.some((b) => b.tab === t) ? (t as BookTab) : 'ebooks'
+  } catch {
+    return 'ebooks'
+  }
+}
+
+export function rememberBookTab(t: BookTab) {
+  try {
+    localStorage.setItem(BOOK_TAB_KEY, t)
+  } catch {
+    /* private mode */
+  }
+}
+
+/** How many are on each shelf, as last seen, for the subtab labels (only one shelf is open at a time). */
+const BOOK_COUNTS_KEY = 'feeder.booksCounts'
+export function bookCounts(): Partial<Record<BookTab, number>> {
+  try {
+    return JSON.parse(localStorage.getItem(BOOK_COUNTS_KEY) ?? '{}') as Partial<Record<BookTab, number>>
+  } catch {
+    return {}
+  }
+}
+export function rememberBookCount(t: BookTab, n: number) {
+  const all = bookCounts()
+  if (all[t] === n) return
+  all[t] = n
+  try {
+    localStorage.setItem(BOOK_COUNTS_KEY, JSON.stringify(all))
+  } catch {
+    /* private mode */
+  }
+}
 
 export const tabKeys = (t: Tab) => `G then ${([...TABS, ...EXTRA_KEYS].find((x) => x.tab === t)?.key ?? '').toUpperCase()}`
 
@@ -49,14 +102,17 @@ export function rememberFeedsView(latest: boolean) {
 const BAR_KEY = 'feeder.barTabs'
 /** At most this many tabs in the bottom bar. */
 export const MAX_BAR_TABS = 5
-export const DEFAULT_BAR_TABS: BarTab[] = ['feeds', 'youtube', 'playlists', 'library']
+export const DEFAULT_BAR_TABS: BarTab[] = ['feeds', 'youtube', 'playlists', 'books', 'library']
 /** Always in the bar, so every screen stays reachable: left-out tabs open from rows on Library. */
 export const ALWAYS_TABS: BarTab[] = ['feeds', 'library']
 
-/** Saved order without unknown names, Feeds and Library added back, at most MAX_BAR_TABS (as Android's BottomBarTabs). */
+/**
+ * Saved order without unknown names, Feeds and Library added back, at most MAX_BAR_TABS (as Android's
+ * BottomBarTabs). Audiobooks and ZIM tabs saved before Books existed become Books, in the first one's place.
+ */
 export function normalizeBarTabs(tabs: string[]): BarTab[] {
   const known = new Set<string>(TABS.map((t) => t.tab))
-  const out = [...new Set(tabs.filter((t) => known.has(t)))] as BarTab[]
+  const out = [...new Set(tabs.map((t) => (t === 'audiobooks' || t === 'zim' ? 'books' : t)).filter((t) => known.has(t)))] as BarTab[]
   for (const t of ALWAYS_TABS) if (!out.includes(t)) out.push(t)
   while (out.length > MAX_BAR_TABS) {
     const drop = [...out].reverse().find((t) => !ALWAYS_TABS.includes(t))!
@@ -103,7 +159,8 @@ export function useBarTabs(): BarTab[] {
 /** The tab to light up: a screen whose tab isn't in the bar belongs to Library. */
 export function shownTab(current: Tab | null, bar: BarTab[]): Tab | null {
   if (!current || current === 'discover') return current === 'discover' ? 'feeds' : null
-  return bar.includes(current) ? current : 'library'
+  const tab: BarTab = current === 'ebooks' || current === 'audiobooks' || current === 'zim' ? 'books' : current
+  return bar.includes(tab) ? tab : 'library'
 }
 
 /** The bottom bar on narrow screens (phones, small windows). Wide screens use the sidebar's tabs. */
@@ -162,7 +219,7 @@ export function SearchEverything({ onSearch }: { onSearch: () => void }) {
   )
 }
 
-/** G then F / Y / D / P / L / B / A / Z / H switches tabs, when not typing (as in Gmail). */
+/** G then F / Y / D / P / L / B (E / A / Z for a Books subtab) / H switches tabs, when not typing (as in Gmail). */
 export function useTabShortcuts(onTab: (t: Tab) => void, disabled: boolean) {
   useEffect(() => {
     if (disabled) return

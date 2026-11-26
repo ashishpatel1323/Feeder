@@ -216,26 +216,30 @@ fun ShelfControls(
     prefs: ShelfPrefs,
     items: List<ShelfItem>,
     modifier: Modifier = Modifier,
+    /** The Cards | List switch; Books has it in its ⋮ menu instead */
+    showLayout: Boolean = true,
 ) {
     val all = items.size
     val cloud = items.count { it.where == Where.CLOUD }
     val device = all - cloud
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-            SegmentedButton(
-                selected = prefs.cards,
-                onClick = { prefs.updateCards(true) },
-                shape = SegmentedButtonDefaults.itemShape(0, 2),
-                icon = { SegmentedButtonDefaults.Icon(prefs.cards) { Icon(Icons.Outlined.GridView, null, Modifier.size(18.dp)) } },
-                label = { Text(stringResource(R.string.shelf_cards)) },
-            )
-            SegmentedButton(
-                selected = !prefs.cards,
-                onClick = { prefs.updateCards(false) },
-                shape = SegmentedButtonDefaults.itemShape(1, 2),
-                icon = { SegmentedButtonDefaults.Icon(!prefs.cards) { Icon(Icons.Outlined.ViewAgenda, null, Modifier.size(18.dp)) } },
-                label = { Text(stringResource(R.string.shelf_list)) },
-            )
+        if (showLayout) {
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                SegmentedButton(
+                    selected = prefs.cards,
+                    onClick = { prefs.updateCards(true) },
+                    shape = SegmentedButtonDefaults.itemShape(0, 2),
+                    icon = { SegmentedButtonDefaults.Icon(prefs.cards) { Icon(Icons.Outlined.GridView, null, Modifier.size(18.dp)) } },
+                    label = { Text(stringResource(R.string.shelf_cards)) },
+                )
+                SegmentedButton(
+                    selected = !prefs.cards,
+                    onClick = { prefs.updateCards(false) },
+                    shape = SegmentedButtonDefaults.itemShape(1, 2),
+                    icon = { SegmentedButtonDefaults.Icon(!prefs.cards) { Icon(Icons.Outlined.ViewAgenda, null, Modifier.size(18.dp)) } },
+                    label = { Text(stringResource(R.string.shelf_list)) },
+                )
+            }
         }
         if (cloud > 0) {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -17,24 +17,20 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
-import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
+import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.DynamicFeed
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Subscriptions
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.ViewAgenda
+import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.DynamicFeed
-import androidx.compose.material.icons.outlined.Headphones
 import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Subscriptions
 import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.Icon
@@ -79,11 +75,14 @@ enum class MainTab {
     YOUTUBE,
     PLAYLISTS,
     LIBRARY,
-    EBOOKS,
-    AUDIOBOOKS,
-    ZIM,
+
+    /** Ebooks, Audiobooks and ZIM, as subtabs of one destination */
+    BOOKS,
     HISTORY,
 }
+
+/** Bar tab names saved before Books existed: each of them is Books now. */
+private val OLD_BOOK_TABS = setOf("EBOOKS", "AUDIOBOOKS", "ZIM")
 
 /**
  * Which tabs the bottom bar shows, in order (Settings > Bottom bar tabs). Feeds and Library are
@@ -93,7 +92,7 @@ object BottomBarTabs {
     private const val PREFS = "main_tabs"
     private const val KEY = "bar_tabs"
     const val MAX = 5
-    val DEFAULT = listOf(MainTab.FEEDS, MainTab.YOUTUBE, MainTab.PLAYLISTS, MainTab.LIBRARY)
+    val DEFAULT = listOf(MainTab.FEEDS, MainTab.YOUTUBE, MainTab.PLAYLISTS, MainTab.BOOKS, MainTab.LIBRARY)
     val ALWAYS = setOf(MainTab.FEEDS, MainTab.LIBRARY)
 
     private val _tabs = MutableStateFlow<List<MainTab>?>(null)
@@ -120,7 +119,12 @@ object BottomBarTabs {
         if (saved.isNullOrBlank()) {
             DEFAULT
         } else {
-            normalize(saved.split(',').mapNotNull { name -> MainTab.entries.firstOrNull { it.name == name.trim() } })
+            normalize(
+                saved.split(',').mapNotNull { raw ->
+                    val name = raw.trim()
+                    if (name in OLD_BOOK_TABS) MainTab.BOOKS else MainTab.entries.firstOrNull { it.name == name }
+                },
+            )
         }
 
     fun normalize(tabs: List<MainTab>): List<MainTab> {
@@ -140,7 +144,7 @@ enum class FeedsView { LATEST, BY_FEED, DISCOVER }
 
 /**
  * Which tab a screen belongs to, or null for screens that show no bottom bar (reader, settings,
- * search...). Ebooks, Audiobooks, ZIM and History are their own tab when in [bar], else part of Library.
+ * search...). Books and History are their own tab when in [bar], else part of Library.
  */
 fun NavBackStackEntry.mainTab(bar: List<MainTab> = BottomBarTabs.DEFAULT): MainTab? = mainTabOf(destination.route, arguments?.getLong("id"), bar)
 
@@ -159,9 +163,7 @@ fun mainTabOf(
         PlaylistsDestination.route -> own(MainTab.PLAYLISTS)
         LibraryDestination.route, DownloadsDestination.route, HighlightsDestination.route -> MainTab.LIBRARY
         YouTubeDestination.route -> own(MainTab.YOUTUBE)
-        ZimDestination.route -> own(MainTab.ZIM)
-        EbooksDestination.route -> own(MainTab.EBOOKS)
-        AudiobooksDestination.route -> own(MainTab.AUDIOBOOKS)
+        BooksDestination.route -> own(MainTab.BOOKS)
         HistoryDestination.route -> own(MainTab.HISTORY)
         else -> null
     }
@@ -176,9 +178,7 @@ fun NavBackStackEntry.wantsSharedMiniPlayer(): Boolean =
         DownloadsDestination.route,
         HighlightsDestination.route,
         YouTubeDestination.route,
-        ZimDestination.route,
-        EbooksDestination.route,
-        AudiobooksDestination.route,
+        BooksDestination.route,
         HistoryDestination.route,
         -> true
         else -> false
@@ -244,14 +244,17 @@ fun NavController.openTab(
             MainTab.YOUTUBE -> YouTubeDestination.route
             MainTab.PLAYLISTS -> "playlists"
             MainTab.LIBRARY -> LibraryDestination.route
-            MainTab.ZIM -> ZimDestination.route
-            MainTab.EBOOKS -> EbooksDestination.route
-            MainTab.AUDIOBOOKS -> AudiobooksDestination.route
+            MainTab.BOOKS -> BooksDestination.ROOT
             MainTab.HISTORY -> HistoryDestination.route
             MainTab.FEEDS -> HomeDestination.route
         }
     if (tab == current) {
-        val rootRoute = if (tab == MainTab.PLAYLISTS) PlaylistsDestination.route else root
+        val rootRoute =
+            when (tab) {
+                MainTab.PLAYLISTS -> PlaylistsDestination.route
+                MainTab.BOOKS -> BooksDestination.route
+                else -> root
+            }
         popBackStack(rootRoute, inclusive = false)
         return
     }
@@ -297,9 +300,7 @@ internal fun MainTab.look(): Triple<ImageVector, ImageVector, Int> =
         MainTab.PLAYLISTS -> Triple(Icons.AutoMirrored.Filled.QueueMusic, Icons.AutoMirrored.Outlined.QueueMusic, R.string.playlists)
         MainTab.YOUTUBE -> Triple(Icons.Filled.Subscriptions, Icons.Outlined.Subscriptions, R.string.tab_youtube)
         MainTab.LIBRARY -> Triple(Icons.Filled.VideoLibrary, Icons.Outlined.VideoLibrary, R.string.tab_library)
-        MainTab.ZIM -> Triple(Icons.Filled.Public, Icons.Outlined.Public, R.string.tab_zim)
-        MainTab.EBOOKS -> Triple(Icons.AutoMirrored.Filled.MenuBook, Icons.AutoMirrored.Outlined.MenuBook, R.string.tab_ebooks)
-        MainTab.AUDIOBOOKS -> Triple(Icons.Filled.Headphones, Icons.Outlined.Headphones, R.string.tab_audiobooks)
+        MainTab.BOOKS -> Triple(Icons.Filled.AutoStories, Icons.Outlined.AutoStories, R.string.tab_books)
         MainTab.HISTORY -> Triple(Icons.Filled.History, Icons.Outlined.History, R.string.tab_history)
     }
 

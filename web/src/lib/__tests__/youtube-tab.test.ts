@@ -82,8 +82,13 @@ describe('Bottom bar tabs (Tabs.tsx)', () => {
     expect(normalizeBarTabs(['youtube', 'nope'])).toEqual(['youtube', 'feeds', 'library'])
     expect(normalizeBarTabs(['feeds', 'youtube', 'playlists', 'books', 'audiobooks', 'zim', 'library'])).toEqual(['feeds', 'youtube', 'playlists', 'books', 'library'])
   })
+  it('turns old Audiobooks and ZIM tabs into one Books tab in the first one’s place', () => {
+    expect(normalizeBarTabs(['feeds', 'zim', 'playlists', 'audiobooks', 'library'])).toEqual(['feeds', 'books', 'playlists', 'library'])
+  })
   it('lights up Library for a tab that is not in the bar', () => {
     expect(shownTab('zim', ['feeds', 'youtube', 'library'])).toBe('library')
+    expect(shownTab('zim', ['feeds', 'books', 'library'])).toBe('books')
+    expect(shownTab('ebooks', ['feeds', 'books', 'library'])).toBe('books')
     expect(shownTab('youtube', ['feeds', 'youtube', 'library'])).toBe('youtube')
   })
 })

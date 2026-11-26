@@ -194,6 +194,7 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
 
   return (
     <LibraryListing
+      bookTab="audiobooks"
       title="Audiobooks"
       prefs={prefs}
       items={items}

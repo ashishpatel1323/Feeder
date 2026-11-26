@@ -1,0 +1,271 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0" rel="stylesheet">
+<style>
+:root{--bg:#F7FAF2;--surf:#EEF2E8;--surf2:#E5EADF;--on:#1A1C18;--on2:#43483F;--sec:#D4E8CF;--pri:#3B6939;--pc:#BCF0B4;--outline:#C3C8BC}
+body{margin:0;background:#dfe3da;font-family:Roboto,sans-serif;color:var(--on);padding:24px}
+section{display:flex;gap:24px;align-items:flex-start;padding:22px;background:#e9ece4;border-radius:18px;margin-bottom:26px;width:max-content}
+.notes{width:300px;font-size:13.5px;line-height:1.45;color:#333}
+.notes h2{font-size:20px;margin:0 0 4px}.notes .tag{display:inline-block;font-size:12px;font-weight:500;padding:2px 8px;border-radius:8px;background:var(--pc);color:#0b3a10;margin-bottom:10px}
+.notes .tag.warn{background:#ffdad6;color:#690005}.notes .tag.mid{background:#ffe08a;color:#3d2e00}
+.notes h3{font-size:12px;margin:12px 0 4px;text-transform:uppercase;letter-spacing:.04em;color:#555}
+.notes ul{margin:0;padding-left:18px}.notes li{margin:3px 0}
+.col{display:flex;flex-direction:column;align-items:center}
+.phone{width:360px;height:760px;background:var(--bg);border-radius:28px;overflow:hidden;position:relative;box-shadow:0 2px 14px #0002;border:6px solid #222;flex:none}
+.cap{font-size:12px;color:#555;text-align:center;margin-top:8px;width:372px}
+.ms{font-family:'Material Symbols Rounded';font-size:24px;line-height:1;font-variation-settings:'FILL' 0}
+.fill{font-variation-settings:'FILL' 1}
+.status{height:24px;display:flex;justify-content:space-between;padding:4px 18px 0;font-size:12px;color:var(--on2)}
+.pillrow{display:flex;align-items:center;gap:4px;margin:6px 8px 4px 16px}
+.search{flex:1;height:48px;border-radius:24px;background:var(--surf2);display:flex;align-items:center;gap:12px;padding:0 6px 0 16px;color:var(--on2);font-size:15px}
+.search .sp{flex:1}
+.ib{width:40px;height:40px;border-radius:20px;display:flex;align-items:center;justify-content:center;color:var(--on2)}
+.topbar{height:56px;display:flex;align-items:center;padding:0 4px 0 16px;gap:4px}
+.topbar .t{flex:1;font-size:22px}
+.tabs{display:flex;border-bottom:1px solid var(--outline);margin-top:2px}
+.tabs div{flex:1;text-align:center;font-size:14px;font-weight:500;color:var(--on2);padding:12px 0 11px;position:relative}
+.tabs .on{color:var(--pri)}
+.tabs .on:after{content:'';position:absolute;bottom:-1px;left:50%;transform:translateX(-50%);width:56%;height:3px;border-radius:3px 3px 0 0;background:var(--pri)}
+.tabs .n{font-size:12px;font-weight:400;margin-left:4px;color:var(--on2)}
+.chips{display:flex;gap:8px;padding:10px 16px 6px;overflow:hidden}
+.chip{height:32px;border:1px solid var(--outline);border-radius:8px;display:flex;align-items:center;gap:6px;padding:0 12px;font-size:13.5px;font-weight:500;color:var(--on2);white-space:nowrap}
+.chip .ms{font-size:18px}
+.chip.on{background:var(--sec);border-color:var(--sec);color:var(--on)}
+.sec{font-size:13px;font-weight:500;color:var(--pri);padding:10px 16px 6px;display:flex;justify-content:space-between}
+.sec span{color:var(--on2);font-weight:400}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px 12px;padding:4px 16px}
+.cov{aspect-ratio:1;border-radius:10px;position:relative;overflow:hidden;color:#fff;font-size:11px;font-weight:700;padding:8px;box-sizing:border-box;line-height:1.2;display:flex;align-items:flex-end}
+.cov .ms.badge{position:absolute;top:6px;right:6px;font-size:16px;background:#0006;border-radius:10px;padding:2px}
+.cov .prog{position:absolute;left:0;right:0;bottom:0;height:4px;background:#0003}.cov .prog i{display:block;height:4px;background:#BCF0B4}
+.bt{font-size:12.5px;font-weight:500;margin-top:6px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bs{font-size:11.5px;color:var(--on2);margin-top:1px}
+.bar{position:absolute;left:0;right:0;bottom:0;height:80px;background:var(--surf);display:flex;justify-content:space-around;align-items:flex-start;padding-top:12px;box-sizing:border-box}
+.bar .tb{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px;font-weight:500;color:var(--on2);width:68px}
+.bar .tb .pill{width:56px;height:32px;border-radius:16px;display:flex;align-items:center;justify-content:center}
+.bar .tb.on .pill{background:var(--sec)}.bar .tb.on{color:var(--on)}
+.gesture{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);width:110px;height:4px;border-radius:2px;background:#1a1c18aa}
+.menu{position:absolute;background:#F3F6EE;border-radius:6px;box-shadow:0 4px 14px #0004;padding:6px 0;min-width:220px;font-size:14px;z-index:5}
+.menu .mi{display:flex;align-items:center;gap:14px;padding:0 14px;height:44px;color:var(--on)}
+.menu .mi .ms{color:var(--on2);font-size:22px}
+.menu .div{height:1px;background:var(--outline);margin:4px 0}
+.menu .sub{font-size:12px;color:var(--on2);padding:6px 14px 2px}
+.menu .chk{margin-left:auto;color:var(--pri)}
+.dim{position:absolute;inset:0;background:#0000}
+.row{display:flex;gap:12px;align-items:center;padding:8px 16px}
+.row .cv{width:52px;height:52px;border-radius:8px;flex:none}
+.row .tx{flex:1;min-width:0}.row .t1{font-size:14px;font-weight:500}.row .t2{font-size:12px;color:var(--on2);margin-top:2px}
+.lane{padding:0 0 4px}
+.lane .lh{display:flex;align-items:center;padding:12px 8px 6px 16px;font-size:16px;font-weight:500;gap:8px}
+.lane .lh .sp{flex:1}.lane .lh .all{font-size:13px;color:var(--pri);font-weight:500;display:flex;align-items:center}
+.lane .strip{display:flex;gap:10px;padding:0 16px;overflow:hidden}
+.lane .strip .it{width:96px;flex:none}
+.cont{display:flex;gap:10px;padding:2px 16px 6px;overflow:hidden}
+.cont .c{width:150px;flex:none;background:var(--surf2);border-radius:12px;padding:8px;display:flex;gap:8px;align-items:center}
+.cont .c .cv{width:40px;height:40px;border-radius:6px;flex:none}
+.cont .c .t1{font-size:12px;font-weight:500;line-height:1.2}.cont .c .t2{font-size:11px;color:var(--on2);margin-top:2px}
+/* web */
+.browser{width:980px;height:600px;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 2px 14px #0002;border:1px solid #bbb;position:relative;flex:none}
+.chrome{height:36px;background:#e8eae4;display:flex;align-items:center;gap:8px;padding:0 12px;font-size:12px;color:#555}
+.chrome i{width:11px;height:11px;border-radius:6px;display:inline-block}
+.chrome .url{margin-left:14px;background:#fff;border-radius:14px;padding:4px 14px;flex:1;max-width:340px}
+.side{position:absolute;top:36px;left:0;bottom:0;width:200px;background:var(--surf);padding:12px 8px;box-sizing:border-box}
+.side .r{display:flex;gap:12px;align-items:center;height:40px;padding:0 12px;border-radius:20px;font-size:14px;color:var(--on2)}
+.side .r .k{margin-left:auto;font-size:11px;color:#888}
+.side .r.on{background:var(--sec);color:var(--on);font-weight:500}
+.side .r.subr{height:32px;padding-left:48px;font-size:13px}
+.side .sl{font-size:11px;color:var(--on2);padding:10px 12px 4px}
+.main{position:absolute;top:36px;left:200px;right:0;bottom:0;background:var(--bg);overflow:hidden}
+.wh{display:flex;align-items:center;gap:8px;padding:16px 20px 0}
+.wh .t{font-size:24px;flex:none;margin-right:16px}
+.wh .sp{flex:1}
+.wsearch{height:38px;border-radius:19px;background:var(--surf2);display:flex;align-items:center;gap:8px;padding:0 14px;color:var(--on2);font-size:14px;width:240px}
+.wbtn{height:36px;border-radius:18px;border:1px solid var(--outline);display:flex;align-items:center;gap:6px;padding:0 14px;font-size:13.5px;font-weight:500;color:var(--on2)}
+.wbtn .ms{font-size:20px}
+.wtabs{display:flex;gap:4px;padding:0 20px;border-bottom:1px solid var(--outline);margin-top:10px}
+.wtabs div{padding:12px 16px 11px;font-size:14px;font-weight:500;color:var(--on2);position:relative;display:flex;gap:6px;align-items:center}
+.wtabs div .ms{font-size:20px}
+.wtabs .on{color:var(--pri)}.wtabs .on:after{content:'';position:absolute;bottom:-1px;left:10px;right:10px;height:3px;border-radius:3px 3px 0 0;background:var(--pri)}
+.wgrid{display:grid;grid-template-columns:repeat(6,1fr);gap:18px 16px;padding:8px 20px}
+.kbd{display:inline-block;border:1px solid #999;border-bottom-width:2px;border-radius:5px;padding:0 6px;font-size:11.5px;background:#fff;color:#222;font-weight:500}
+.hint{position:absolute;right:16px;bottom:14px;background:#1a1c18e6;color:#fff;font-size:12.5px;border-radius:10px;padding:8px 12px;line-height:1.7}
+.hint .kbd{background:#333;color:#fff;border-color:#666}
+table.chg{border-collapse:collapse;font-size:13.5px;background:#fff;border-radius:12px;overflow:hidden;width:1000px}
+table.chg th,table.chg td{padding:9px 12px;border-bottom:1px solid #e3e6dd;text-align:left;vertical-align:top}
+table.chg th{background:var(--surf);font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#555}
+table.chg td:first-child{font-weight:500;width:150px}
+.grid>div,.wgrid>div{min-width:0}
+</style></head><body>
+<script>
+// cover helper
+const C={
+ dune:['linear-gradient(160deg,#c9772b,#5a2a0e)','Dune'],
+ sap:['linear-gradient(160deg,#2b5c9e,#0f2240)','Sapiens'],
+ atom:['linear-gradient(160deg,#e3c34a,#8a6a12)','Atomic Habits'],
+ pro:['linear-gradient(160deg,#6b3fa0,#25103d)','Project Hail Mary'],
+ mid:['linear-gradient(160deg,#2f8f6b,#0f3a2a)','The Midnight Library'],
+ thk:['linear-gradient(160deg,#b33a3a,#4a0f0f)','Thinking, Fast and Slow'],
+ wiki:['linear-gradient(160deg,#f2f2f2,#bdbdbd)','Wikipedia'],
+ so:['linear-gradient(160deg,#f48024,#a34e0c)','Stack Overflow'],
+ wb:['linear-gradient(160deg,#3a7bd5,#1d3f73)','Wikibooks'],
+};
+function cov(k,opt={}){const [g,t]=C[k];return `<div class="cov" style="background:${g};${k==='wiki'?'color:#222':''}">${opt.badge?`<span class="ms badge">${opt.badge}</span>`:''}${opt.ico?`<span class="ms" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-60%);font-size:40px;opacity:.85">${opt.ico}</span>`:''}${t}${opt.p!=null?`<div class="prog"><i style="width:${opt.p}%"></i></div>`:''}</div>`}
+function item(k,sub,opt){return `<div>${cov(k,opt)}<div class="bt">${C[k][1]}</div><div class="bs">${sub}</div></div>`}
+function bar(on,tabs){tabs=tabs||[['dynamic_feed','Feeds'],['subscriptions','YouTube'],['queue_music','Playlists'],['auto_stories','Books'],['video_library','Library']];return `<div class="bar">${tabs.map(([i,l])=>`<div class="tb ${l===on?'on':''}"><div class="pill"><span class="ms ${l===on?'fill':''}">${i}</span></div>${l}</div>`).join('')}<div class="gesture"></div></div>`}
+const status='<div class="status"><span>9:41</span><span>▾ ▴ ▮</span></div>';
+function side(on,sub){const rows=[['dynamic_feed','Feeds','F'],['subscriptions','YouTube','Y'],['queue_music','Playlists','P'],['auto_stories','Books','B'],['video_library','Library','L'],['history','History','H']];return `<div class="side">${rows.map(([i,l,k])=>`<div class="r ${l===on?'on':''}"><span class="ms ${l===on?'fill':''}">${i}</span>${l}<span class="k">G ${k}</span></div>${l==='Books'&&sub?sub:''}`).join('')}<div class="sl">FOLDERS</div><div class="r"><span class="ms">folder</span>Tech</div><div class="r"><span class="ms">folder</span>News</div></div>`}
+const chrome=u=>`<div class="chrome"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span class="url">localhost:5173/${u}</span></div>`;
+</script>
+
+<!-- ============ A ============ -->
+<section id="a">
+<div class="notes">
+<span class="tag">Recommended</span>
+<h2>A. Tabs under one header</h2>
+<p>One <b>Books</b> destination. M3 primary tabs <b>Ebooks · Audiobooks · ZIM</b> sit under a single top row. Swipe or tap to switch. Opens on the subtab you used last.</p>
+<h3>Top row (3 controls total)</h3>
+<ul>
+<li><b>Search ebooks</b> pill: filters the current subtab in place. Label follows the subtab.</li>
+<li><b>Dropbox cloud</b> inside the pill: one account, so one icon for all three.</li>
+<li><b>⋮</b>: Add, Check Dropbox, Cards / List, Sort.</li>
+</ul>
+<h3>Challenged</h3>
+<ul>
+<li>The full-width <b>Cards | List</b> row on every listing moves into ⋮. It's a set-once choice and costs ~48 dp above every shelf.</li>
+<li>Refresh and Add (+) leave the top bar. Empty shelves still show Add chips.</li>
+<li>Tabs, not a segmented switch: the three hold different content (M3 tabs). The Feeds switch stays segmented because Latest/By feed are views of the same items.</li>
+</ul>
+</div>
+<div class="col"><div class="phone" id="a1"></div><div class="cap">Android: Books › Ebooks (opened on last-used subtab)</div></div>
+<div class="col"><div class="phone" id="a2"></div><div class="cap">Android: swiped to ZIM, ⋮ open</div></div>
+</section>
+<section id="aw">
+<div class="notes">
+<h2>A on web</h2>
+<p>Sidebar loses three rows (Ebooks, Audiobooks, ZIM become <b>Books</b>). Page header = title, tabs, search, Dropbox button, ⋮. Same grid as PR #151.</p>
+<h3>Shortcuts</h3>
+<ul>
+<li><span class="kbd">G</span> <span class="kbd">B</span> Books (last subtab)</li>
+<li><span class="kbd">G</span> <span class="kbd">E</span> / <span class="kbd">A</span> / <span class="kbd">Z</span> straight to Ebooks / Audiobooks / ZIM</li>
+<li><span class="kbd">[</span> <span class="kbd">]</span> previous / next subtab</li>
+</ul>
+<h3>URLs</h3>
+<ul><li><code>#/books</code> (last), <code>#/books/ebooks</code>, <code>#/books/audiobooks</code>, <code>#/books/zim</code>. Old <code>#/audiobooks</code>, <code>#/zim</code> links redirect; reader URLs don't change.</li></ul>
+</div>
+<div class="col"><div class="browser" id="aweb"></div><div class="cap" style="width:980px">Web: Books › Audiobooks</div></div>
+</section>
+
+<!-- ============ B ============ -->
+<section id="b">
+<div class="notes">
+<span class="tag mid">Alternative</span>
+<h2>B. One shelf with type chips</h2>
+<p>No subtabs: a <b>Continue</b> row across all three types, then one shelf filtered by chips <b>All · Ebooks · Audiobooks · ZIM</b>.</p>
+<h3>Good</h3>
+<ul><li>Pick up whatever you were last in, from one place.</li></ul>
+<h3>Why not</h3>
+<ul>
+<li>Two chip rows: type chips and On phone / In Dropbox chips fight for the same space.</li>
+<li>ZIM archives aren't books. Mixed in one grid, a 90 GB Wikipedia sits next to a novel and sorts oddly.</li>
+<li>Add and Dropbox have to ask "which kind?" every time on All.</li>
+<li>Breaks the three-subtab ask.</li>
+</ul>
+<p>The <b>Continue</b> row is worth borrowing into A later.</p>
+</div>
+<div class="col"><div class="phone" id="b1"></div><div class="cap">Android: Books, All</div></div>
+<div class="col"><div class="browser" id="bweb" style="width:700px;height:520px"></div><div class="cap" style="width:700px">Web: same, type chips in the header</div></div>
+</section>
+
+<!-- ============ C ============ -->
+<section id="c">
+<div class="notes">
+<span class="tag warn">Not recommended</span>
+<h2>C. Books home with shelves</h2>
+<p>Books opens on three swimlanes (like Feeds › By feed). <b>See all</b> opens today's full listing for that type.</p>
+<h3>Good</h3>
+<ul><li>Overview of everything at a glance; reuses the existing listing screens unchanged.</li></ul>
+<h3>Why not</h3>
+<ul>
+<li>Every real task (open a book, filter Dropbox, add) is one tap deeper, and Back has two levels.</li>
+<li>Add / Dropbox / ⋮ either repeat per lane or need a hub menu.</li>
+<li>"Remembered subtab" doesn't fit: you always land on the hub.</li>
+</ul>
+</div>
+<div class="col"><div class="phone" id="c1"></div><div class="cap">Android: Books home</div></div>
+<div class="col"><div class="browser" id="cweb" style="width:700px;height:520px"></div><div class="cap" style="width:700px">Web: same hub</div></div>
+</section>
+
+<!-- ============ changes ============ -->
+<section id="chg" style="flex-direction:column">
+<div class="notes" style="width:1000px"><h2>What else changes (any option)</h2></div>
+<table class="chg">
+<tr><th>Area</th><th>Today</th><th>With Books</th></tr>
+<tr><td>Bottom bar (Android + phone web)</td><td>Ebooks, Audiobooks and ZIM can each be a tab (max 5)</td><td>One <b>Books</b> tab. Your saved bar setting migrates: any of the three become Books in the first one's place. Frees up to 2 slots.</td></tr>
+<tr><td>Library</td><td>Up to three rows (Ebooks, Audiobooks, ZIM) when not in the bar</td><td>One <b>Books</b> row ("Ebooks, audiobooks and offline sites")</td></tr>
+<tr><td>Last subtab</td><td>n/a</td><td>Saved per device (SharedPreferences / localStorage), not synced. Links from History, search, highlights open the right subtab and don't overwrite it.</td></tr>
+<tr><td>Search</td><td>Global search covers ebooks, book highlights, ZIM (PR #128)</td><td>Unchanged. The Books pill only filters the current shelf; typing there offers "Search inside books" which hands off to global search.</td></tr>
+<tr><td>History</td><td>Chips Audiobooks, Ebooks, ZIM (10 chips)</td><td>Rows unchanged (they open the reader directly). Suggest merging the three chips into one <b>Books</b> chip: 8 chips.</td></tr>
+<tr><td>Readers / players</td><td>Own screens</td><td>Unchanged. Back from a book returns to Books on that subtab.</td></tr>
+<tr><td>Radial menu thread</td><td>8 destinations, two arcs</td><td>6 destinations (Feeds, YouTube, Playlists, Books, Library, History) fit one arc. Dwell on Books can fan out its three subtabs.</td></tr>
+<tr><td>Sync / data</td><td>kinds bookpos, dropbox, …</td><td>No change.</td></tr>
+</table>
+</section>
+
+<script>
+const $=id=>document.getElementById(id);
+$('a1').innerHTML=status+`
+<div class="pillrow"><div class="search"><span class="ms">search</span><span class="sp">Search ebooks</span><span class="ib"><span class="ms fill" style="color:#0061fe">cloud_done</span></span></div><div class="ib"><span class="ms">more_vert</span></div></div>
+<div class="tabs"><div class="on">Ebooks<span class="n">12</span></div><div>Audiobooks<span class="n">4</span></div><div>ZIM<span class="n">3</span></div></div>
+<div class="chips"><div class="chip on"><span class="ms">check</span>All 12</div><div class="chip"><span class="ms">check_circle</span>On phone 9</div><div class="chip"><span class="ms">cloud</span>In Dropbox 3</div></div>
+<div class="sec">On this phone <span>9</span></div>
+<div class="grid">${item('dune','42% · page 211',{p:42})}${item('sap','12%',{p:12})}${item('atom','Finished',{p:100})}${item('mid','Not started')}${item('thk','67%',{p:67})}${item('pro','3%',{p:3})}</div>
+<div class="sec">In Dropbox <span>3</span></div>
+<div class="grid" style="opacity:.6">${item('sap','2.1 MB',{badge:'cloud'})}${item('dune','1.4 MB',{badge:'cloud'})}${item('atom','3.0 MB',{badge:'cloud'})}</div>
+`+bar('Books');
+$('a2').innerHTML=status+`
+<div class="pillrow"><div class="search"><span class="ms">search</span><span class="sp">Search ZIM</span><span class="ib"><span class="ms fill" style="color:#0061fe">cloud_done</span></span></div><div class="ib" style="background:var(--surf2)"><span class="ms">more_vert</span></div></div>
+<div class="tabs"><div>Ebooks<span class="n">12</span></div><div>Audiobooks<span class="n">4</span></div><div class="on">ZIM<span class="n">3</span></div></div>
+<div style="padding:8px 0">
+<div class="row"><div class="cv" style="background:${C.wiki[0]}"></div><div class="tx"><div class="t1">Wikipedia (English, no pics)</div><div class="t2">48 GB · On phone</div></div></div>
+<div class="row"><div class="cv" style="background:${C.so[0]}"></div><div class="tx"><div class="t1">Stack Overflow</div><div class="t2">29 GB · On phone</div></div></div>
+<div class="row" style="opacity:.6"><div class="cv" style="background:${C.wb[0]}"></div><div class="tx"><div class="t1">Wikibooks</div><div class="t2">4.2 GB · In Dropbox</div></div><span class="ms">cloud</span></div>
+</div>
+<div class="menu" style="top:76px;right:10px">
+<div class="mi"><span class="ms">add</span>Add ZIM file</div>
+<div class="mi"><span class="ms">refresh</span>Check Dropbox</div>
+<div class="div"></div><div class="sub">View</div>
+<div class="mi"><span class="ms">grid_view</span>Cards</div>
+<div class="mi"><span class="ms">view_agenda</span>List<span class="ms chk">check</span></div>
+<div class="div"></div><div class="sub">Sort</div>
+<div class="mi"><span class="ms">schedule</span>Recently opened<span class="ms chk">check</span></div>
+<div class="mi"><span class="ms">sort_by_alpha</span>Title</div>
+</div>
+`+bar('Books');
+$('aweb').innerHTML=chrome('#/books/audiobooks')+side('Books')+`<div class="main">
+<div class="wh"><span class="t">Books</span><span class="sp"></span><div class="wsearch"><span class="ms">search</span>Search audiobooks</div><div class="wbtn"><span class="ms fill" style="color:#0061fe">cloud_done</span>Dropbox</div><div class="ib"><span class="ms">more_vert</span></div></div>
+<div class="wtabs"><div><span class="ms">menu_book</span>Ebooks 12</div><div class="on"><span class="ms fill">headphones</span>Audiobooks 4</div><div><span class="ms">public</span>ZIM 3</div></div>
+<div class="chips" style="padding:12px 20px 4px"><div class="chip on"><span class="ms">check</span>All 4</div><div class="chip"><span class="ms">check_circle</span>On this computer 2</div><div class="chip"><span class="ms">cloud</span>In Dropbox 2</div></div>
+<div class="sec" style="padding:10px 20px 6px">Listening <span>2</span></div>
+<div class="wgrid">${item('pro','3h 12m left',{p:38,ico:'headphones'})}${item('thk','9h 40m left',{p:12,ico:'headphones'})}${item('sap','In Dropbox · 15h',{ico:'headphones',badge:'cloud'})}${item('mid','In Dropbox · 9h',{ico:'headphones',badge:'cloud'})}</div>
+<div class="hint"><span class="kbd">G</span> <span class="kbd">B</span> Books &nbsp; <span class="kbd">G</span> <span class="kbd">E</span>/<span class="kbd">A</span>/<span class="kbd">Z</span> subtab &nbsp; <span class="kbd">[</span> <span class="kbd">]</span> switch</div>
+</div>`;
+$('b1').innerHTML=status+`
+<div class="pillrow"><div class="search"><span class="ms">search</span><span class="sp">Search books</span><span class="ib"><span class="ms fill" style="color:#0061fe">cloud_done</span></span></div><div class="ib"><span class="ms">more_vert</span></div></div>
+<div class="sec">Continue</div>
+<div class="cont"><div class="c"><div class="cv" style="background:${C.dune[0]}"></div><div><div class="t1">Dune</div><div class="t2">Ebook · 42%</div></div></div><div class="c"><div class="cv" style="background:${C.pro[0]}"></div><div><div class="t1">Project Hail Mary</div><div class="t2">Audio · 3h left</div></div></div></div>
+<div class="chips"><div class="chip on"><span class="ms">check</span>All</div><div class="chip">Ebooks</div><div class="chip">Audiobooks</div><div class="chip">ZIM</div></div>
+<div class="chips" style="padding-top:2px"><div class="chip on">Everywhere</div><div class="chip"><span class="ms">check_circle</span>On phone</div><div class="chip"><span class="ms">cloud</span>Dropbox</div></div>
+<div class="grid">${item('dune','Ebook · 42%',{p:42})}${item('pro','Audio · 38%',{p:38,ico:'headphones'})}${item('wiki','ZIM · 48 GB',{ico:'public'})}${item('sap','Ebook · 12%',{p:12})}${item('so','ZIM · 29 GB',{ico:'public'})}${item('thk','Audio · 12%',{p:12,ico:'headphones'})}</div>
+`+bar('Books');
+$('bweb').innerHTML=chrome('#/books')+side('Books')+`<div class="main">
+<div class="wh"><span class="t">Books</span><span class="sp"></span><div class="wsearch" style="width:180px"><span class="ms">search</span>Search books</div><div class="ib"><span class="ms">more_vert</span></div></div>
+<div class="chips" style="padding:12px 20px 0"><div class="chip on"><span class="ms">check</span>All</div><div class="chip">Ebooks</div><div class="chip">Audiobooks</div><div class="chip">ZIM</div><span style="width:12px"></span><div class="chip">On computer</div><div class="chip">Dropbox</div></div>
+<div class="sec" style="padding:12px 20px 6px">Continue</div>
+<div class="wgrid" style="grid-template-columns:repeat(4,1fr)">${item('dune','Ebook · 42%',{p:42})}${item('pro','Audio · 38%',{p:38,ico:'headphones'})}${item('wiki','ZIM',{ico:'public'})}${item('sap','Ebook · 12%',{p:12})}</div></div>`;
+$('c1').innerHTML=status+`
+<div class="pillrow"><div class="search"><span class="ms">search</span><span class="sp">Search books</span><span class="ib"><span class="ms fill" style="color:#0061fe">cloud_done</span></span></div><div class="ib"><span class="ms">more_vert</span></div></div>
+${[['menu_book','Ebooks',12,['dune','sap','atom','mid']],['headphones','Audiobooks',4,['pro','thk','sap','mid']],['public','ZIM',3,['wiki','so','wb']]].map(([i,l,n,ks])=>`<div class="lane"><div class="lh"><span class="ms">${i}</span>${l}<span class="bs" style="margin:0">${n}</span><span class="sp"></span><span class="all">See all<span class="ms">chevron_right</span></span></div><div class="strip">${ks.map(k=>`<div class="it">${item(k,'',{ico:i==='menu_book'?null:i})}</div>`).join('')}</div></div>`).join('')}
+`+bar('Books');
+$('cweb').innerHTML=chrome('#/books')+side('Books')+`<div class="main">
+<div class="wh"><span class="t">Books</span><span class="sp"></span><div class="wsearch" style="width:180px"><span class="ms">search</span>Search books</div><div class="ib"><span class="ms">more_vert</span></div></div>
+${[['menu_book','Ebooks',['dune','sap','atom','mid','thk']],['headphones','Audiobooks',['pro','thk','sap','mid','dune']],['public','ZIM',['wiki','so','wb']]].map(([i,l,ks])=>`<div class="lane"><div class="lh" style="padding-left:20px"><span class="ms">${i}</span>${l}<span class="sp"></span><span class="all">See all<span class="ms">chevron_right</span></span></div><div class="strip" style="padding:0 20px">${ks.map(k=>`<div class="it" style="width:80px">${cov(k,{ico:i==='menu_book'?null:i})}</div>`).join('')}</div></div>`).join('')}</div>`;
+</script>
+</body></html>

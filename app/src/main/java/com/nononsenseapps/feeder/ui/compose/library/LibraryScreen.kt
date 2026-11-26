@@ -10,14 +10,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
+import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.BorderColor
 import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.Headphones
 import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Subscriptions
 import androidx.compose.material.icons.outlined.Sync
@@ -42,9 +40,7 @@ fun LibraryScreen(
     onOpenSaved: () -> Unit,
     onHighlights: () -> Unit,
     onDownloads: () -> Unit,
-    onEbooks: () -> Unit,
-    onAudiobooks: () -> Unit,
-    onZim: () -> Unit,
+    onBooks: () -> Unit,
     onHistory: () -> Unit = {},
     onSettings: () -> Unit,
     // Tabs in the bottom bar get no row here; the others do, so every screen stays reachable
@@ -72,14 +68,8 @@ fun LibraryScreen(
             if (MainTab.PLAYLISTS !in barTabs) {
                 item { Row(Icons.AutoMirrored.Outlined.QueueMusic, stringResource(R.string.playlists), null, onPlaylists) }
             }
-            if (MainTab.EBOOKS !in barTabs) {
-                item { Row(Icons.AutoMirrored.Outlined.MenuBook, stringResource(R.string.tab_ebooks), stringResource(R.string.library_ebooks_desc), onEbooks) }
-            }
-            if (MainTab.AUDIOBOOKS !in barTabs) {
-                item { Row(Icons.Outlined.Headphones, stringResource(R.string.tab_audiobooks), stringResource(R.string.library_audiobooks_desc), onAudiobooks) }
-            }
-            if (MainTab.ZIM !in barTabs) {
-                item { Row(Icons.Outlined.Public, stringResource(R.string.tab_zim), stringResource(R.string.library_zim_desc), onZim) }
+            if (MainTab.BOOKS !in barTabs) {
+                item { Row(Icons.Outlined.AutoStories, stringResource(R.string.tab_books), stringResource(R.string.library_books_desc), onBooks) }
             }
             item {
                 Text(

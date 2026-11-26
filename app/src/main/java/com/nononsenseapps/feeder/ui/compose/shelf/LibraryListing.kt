@@ -25,6 +25,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -37,6 +38,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,7 +52,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nononsenseapps.feeder.R
+import com.nononsenseapps.feeder.ui.compose.books.LocalBooksPage
 import com.nononsenseapps.feeder.ui.compose.feed.PlainTooltipBox
+import com.nononsenseapps.feeder.ui.compose.navigation.LocalMainNav
 import com.nononsenseapps.feeder.ui.compose.theme.FeederTokens
 import com.nononsenseapps.feeder.ui.compose.theme.SensibleTopAppBar
 
@@ -77,6 +81,9 @@ class ShelfJob(
  * The one listing screen of the Audiobooks, Ebooks and ZIM tabs: top bar (title, refresh, Dropbox
  * account, + add menu), jobs, then the Cards | List switch, the All / On this phone / In Dropbox
  * chips and the shelf, or the empty state. Same as the web app's LibraryListing in Shelf.tsx.
+ *
+ * Inside Books ([LocalBooksPage]) there is no top bar: Add, Check Dropbox, the Dropbox button and
+ * Cards | List go up to the Books header, and its search filters the shelf.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -105,10 +112,58 @@ fun LibraryListingScreen(
     unavailable: String? = null,
 ) {
     var addMenu by remember { mutableStateOf(false) }
+    val page = LocalBooksPage.current
+    if (page != null) {
+        val chrome = page.chrome
+        // Plain fields first, then the state the header reads, so it never sees a stale callback
+        SideEffect {
+            chrome.onRefresh = onRefresh
+            chrome.addActions = addActions
+            chrome.dropbox = dropbox
+            chrome.count = items.size
+            chrome.available = unavailable == null
+            chrome.hasRefresh = onRefresh != null
+            chrome.refreshing = refreshing
+            chrome.refreshLabel = refreshLabel
+            chrome.addLabels = addActions.map { it.label }
+            chrome.prefs = prefs
+            chrome.registered = true
+        }
+    }
+    val query = page?.host?.query?.trim().orEmpty()
+    val shown =
+        if (query.isEmpty()) {
+            items
+        } else {
+            items.filter { it.title.contains(query, ignoreCase = true) || it.subtitle?.contains(query, ignoreCase = true) == true }
+        }
     Scaffold(
         modifier = modifier.windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal)),
         contentWindowInsets = WindowInsets(0),
         topBar = {
+            if (page == null) {
+                ListingTopBar(title, onRefresh, refreshLabel, refreshing, unavailable, dropbox, addActions, addLabel, addMenu) { addMenu = it }
+            }
+        },
+    ) { padding ->
+        ListingBody(padding, prefs, items, shown, query, emptyIcon, emptyText, emptyDevice, addActions, loading, jobs, streams, footer, unavailable, showLayout = page == null)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ListingTopBar(
+    title: String,
+    onRefresh: (() -> Unit)?,
+    refreshLabel: String,
+    refreshing: Boolean,
+    unavailable: String?,
+    dropbox: @Composable () -> Unit,
+    addActions: List<ShelfAdd>,
+    addLabel: String,
+    addMenu: Boolean,
+    setAddMenu: (Boolean) -> Unit,
+) {
             SensibleTopAppBar(
                 title = title,
                 actions = {
@@ -123,17 +178,17 @@ fun LibraryListingScreen(
                     if (unavailable == null && addActions.isNotEmpty()) {
                         Box {
                             PlainTooltipBox(tooltip = { Text(addLabel) }) {
-                                IconButton(onClick = { if (addActions.size == 1) addActions[0].run() else addMenu = true }) {
+                                IconButton(onClick = { if (addActions.size == 1) addActions[0].run() else setAddMenu(true) }) {
                                     Icon(Icons.Outlined.Add, contentDescription = addLabel)
                                 }
                             }
-                            DropdownMenu(expanded = addMenu, onDismissRequest = { addMenu = false }) {
+                            DropdownMenu(expanded = addMenu, onDismissRequest = { setAddMenu(false) }) {
                                 addActions.forEach { a ->
                                     DropdownMenuItem(
                                         text = { Text(a.label) },
                                         leadingIcon = { Icon(a.icon, null) },
                                         onClick = {
-                                            addMenu = false
+                                            setAddMenu(false)
                                             a.run()
                                         },
                                     )
@@ -143,20 +198,38 @@ fun LibraryListingScreen(
                     }
                 },
             )
-        },
-    ) { padding ->
+}
+
+@Composable
+private fun ListingBody(
+    padding: PaddingValues,
+    prefs: ShelfPrefs,
+    items: List<ShelfItem>,
+    shown: List<ShelfItem>,
+    query: String,
+    emptyIcon: ImageVector,
+    emptyText: String,
+    emptyDevice: String,
+    addActions: List<ShelfAdd>,
+    loading: Boolean,
+    jobs: List<ShelfJob>,
+    streams: Boolean,
+    footer: String?,
+    unavailable: String?,
+    showLayout: Boolean,
+) {
         if (unavailable != null) {
             Text(
                 unavailable,
                 modifier = Modifier.padding(padding).padding(FeederTokens.Space.xl),
                 style = MaterialTheme.typography.bodyLarge,
             )
-            return@Scaffold
+            return
         }
         LazyVerticalGrid(
             columns = prefs.columns,
             modifier = Modifier.padding(padding).fillMaxSize(),
-            contentPadding = PaddingValues(start = FeederTokens.Space.lg, end = FeederTokens.Space.lg, bottom = FeederTokens.Space.xl),
+            contentPadding = PaddingValues(start = FeederTokens.Space.lg, end = FeederTokens.Space.lg, top = if (showLayout) 0.dp else FeederTokens.Space.sm, bottom = FeederTokens.Space.xl),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalArrangement = Arrangement.spacedBy(if (prefs.cards) 18.dp else 0.dp),
         ) {
@@ -165,9 +238,11 @@ fun LibraryListingScreen(
                 item(key = "loading", span = { GridItemSpan(maxLineSpan) }) { LinearProgressIndicator(Modifier.fillMaxWidth()) }
             } else if (items.isEmpty() && jobs.isEmpty()) {
                 item(key = "empty", span = { GridItemSpan(maxLineSpan) }) { EmptyLibrary(emptyIcon, emptyText, addActions) }
+            } else if (items.isNotEmpty() && shown.isEmpty()) {
+                item(key = "nomatch", span = { GridItemSpan(maxLineSpan) }) { NoMatch(query) }
             } else if (items.isNotEmpty()) {
-                item(key = "controls", span = { GridItemSpan(maxLineSpan) }) { ShelfControls(prefs, items) }
-                shelf(items, prefs, emptyDevice, streams)
+                item(key = "controls", span = { GridItemSpan(maxLineSpan) }) { ShelfControls(prefs, shown, showLayout = showLayout) }
+                shelf(shown, prefs, emptyDevice, streams)
             }
             footer?.let {
                 item(key = "footer", span = { GridItemSpan(maxLineSpan) }) {
@@ -175,6 +250,24 @@ fun LibraryListingScreen(
                 }
             }
         }
+}
+
+/** The Books search found nothing on this shelf: offer search everywhere (inside books too). */
+@Composable
+private fun NoMatch(query: String) {
+    val nav = LocalMainNav.current
+    Column(
+        Modifier.fillMaxWidth().padding(FeederTokens.Space.xxl),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(FeederTokens.Space.md),
+    ) {
+        Text(
+            stringResource(R.string.books_no_match, query),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        AssistChip(onClick = nav.openSearch, label = { Text(stringResource(R.string.books_search_inside)) }, leadingIcon = { Icon(Icons.Outlined.Search, null) })
     }
 }
 
