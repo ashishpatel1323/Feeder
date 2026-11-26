@@ -225,7 +225,10 @@ export async function deleteFromDropbox(f: DropboxFile): Promise<void> {
 /** Uploads a book on this device to Dropbox's /ZIM folder. */
 export async function uploadToDropbox(file: string, onProgress: Progress, signal?: AbortSignal): Promise<string> {
   const f = await (await (await dir()).getFileHandle(file)).getFile()
-  await uploadFile(`${ZIM_FOLDER}/${file}`, f, onProgress, signal)
+  await uploadFile(`${ZIM_FOLDER}/${file}`, f, onProgress, signal).catch((e) => {
+    if (signal?.aborted) throw e
+    throw new Error(`${e instanceof Error ? e.message : String(e)}. Upload it again to go on where it stopped`)
+  })
   changed()
   return file
 }

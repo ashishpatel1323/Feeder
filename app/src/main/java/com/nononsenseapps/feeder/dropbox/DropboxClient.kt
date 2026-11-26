@@ -414,9 +414,10 @@ class DropboxClient private constructor(
     suspend fun upload(
         path: String,
         file: File,
+        id: String = file.lastModified().toString(),
         onProgress: (Long, Long) -> Unit = { _, _ -> },
     ): DropboxFile =
-        upload(path, file.length(), { from -> java.io.FileInputStream(file).also { it.channel.position(from) } }, onProgress, id = file.lastModified().toString())
+        upload(path, file.length(), { from -> java.io.FileInputStream(file).also { it.channel.position(from) } }, onProgress, id = id)
 
     /**
      * Uploads [size] bytes read with [open], which gives a stream positioned at a byte offset

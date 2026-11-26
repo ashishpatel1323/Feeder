@@ -197,6 +197,9 @@ class ZimLibrary private constructor(
     /** Puts a book that is on this phone into Dropbox too, for the other devices. */
     fun uploadToDropbox(book: ZimBook) = uploadFile(book.file, book.title)
 
+    /** True when an upload of the book stopped part way (the next one goes on from there). */
+    fun hasPendingUpload(book: ZimBook) = dropbox.hasUnfinishedUpload("${DropboxClient.ZIM_FOLDER}/${book.file.name}", book.file.length(), book.file.lastModified().toString())
+
     private fun uploadFile(
         file: File,
         label: String,
@@ -212,7 +215,7 @@ class ZimLibrary private constructor(
                 _messages.value = "$label is in Dropbox"
             } catch (e: Exception) {
                 Log.w(LOG_TAG, "Upload failed", e)
-                _messages.value = e.message ?: "Upload failed"
+                _messages.value = "Upload of $label stopped (${e.message ?: "no connection"}). Tap Resume upload to go on where it stopped"
             } finally {
                 _jobs.update { jobs -> jobs.filterNot { it.key == key } }
                 refreshRemote()

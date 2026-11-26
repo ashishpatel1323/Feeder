@@ -548,7 +548,7 @@ class AudiobookLibrary private constructor(
                 val progress: (Long, Long) -> Unit = { done, _ -> _jobs.update { it + (id to AudiobookJob(id, before + done, b.size, up = true)) } }
                 val up =
                     if (file != null) {
-                        dropbox.upload(dest, file, progress)
+                        dropbox.upload(dest, file, onProgress = progress)
                     } else {
                         val uri = Uri.parse(t.uri ?: throw IllegalStateException("${t.name} is no longer on this phone"))
                         // The size the phone has now (what the stream really gives), not the one noted when picked
