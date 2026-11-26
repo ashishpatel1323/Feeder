@@ -128,6 +128,7 @@ const watchFromHash = (): WatchTarget | null => {
   }
 }
 const NO_FEEDS: Feed[] = []
+const NO_GROUPS: string[] = []
 const NO_ROWS: VideoRow[] = []
 const DOWNLOADS_HASH = '#/downloads'
 const isDownloadsHash = () => window.location.hash === DOWNLOADS_HASH
@@ -1359,7 +1360,7 @@ export default function App() {
   const downloadCount = items.filter((i) => i.offlineVideo).length + Object.keys(videoJobs).length
   const savedCount = items.filter((i) => i.saved).length
   // Every subscription video, for the video page's related videos (only worked out while it's open)
-  const ytAll = useYouTubeData(watch ? feedList : NO_FEEDS, watch ? items : NO_ITEMS, null)
+  const ytAll = useYouTubeData(watch ? feedList : NO_FEEDS, watch ? items : NO_ITEMS, NO_GROUPS)
   const syncLabel = syncState
     ? syncState.lastError
       ? 'Sync problem, see Settings'
