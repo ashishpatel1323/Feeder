@@ -23,6 +23,9 @@
   <string name="transcript_source_youtube">Captions from YouTube</string>
   <string name="transcript_redo">Make again</string>
   <string name="transcript_follow">Follow playback</string>
+  <string name="transcript_now_playing">Now playing</string>
+  <string name="transcript_fold_chapter">Fold chapter</string>
+  <string name="transcript_unfold_chapter">Show chapter lines</string>
   <string name="transcript_notification_channel">Podcast transcripts</string>
   <string name="transcript_notification_title">Making a podcast transcript</string>
   <string name="transcript_notification_progress">%1$d%% done</string>

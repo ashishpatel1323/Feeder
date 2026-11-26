@@ -1,6 +1,27 @@
 package com.nononsenseapps.feeder.ui.compose.feedarticle
 
+import android.graphics.drawable.ColorDrawable
+import android.os.Build
+import android.view.ViewGroup
+import android.view.WindowManager
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material.icons.automirrored.outlined.ViewSidebar
+import androidx.media3.common.VideoSize
+import com.nononsenseapps.feeder.model.transcript.TranscriptChapter
+import com.nononsenseapps.feeder.ui.compose.theme.FeederDarkColors
+import com.nononsenseapps.feeder.ui.compose.transcript.TranscriptPanel
+import android.text.Layout
+import android.view.View
 import android.text.format.DateUtils
+import androidx.media3.common.text.Cue
+import androidx.media3.common.text.CueGroup
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
@@ -227,8 +248,11 @@ internal fun FlowVideo(
         return
     }
 
-    var fullscreen by remember(key) { mutableStateOf(false) }
+    // Saved so turning the phone (the activity is rebuilt) keeps full screen and the panel
+    var fullscreen by rememberSaveable(key) { mutableStateOf(false) }
+    var panelOpen by rememberSaveable(key) { mutableStateOf(true) }
     var sheet by remember(key) { mutableStateOf<PlayerSheet?>(null) }
+    val canShowPanel = itemId > 0
 
     VideoSurface(
         player = exo,
@@ -251,34 +275,159 @@ internal fun FlowVideo(
             onDismissRequest = { fullscreen = false },
             properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
         ) {
-            // Immersive: the video gets the whole screen. Turning the phone (rotation on) gives landscape.
-            val view = LocalView.current
-            DisposableEffect(view) {
-                val window = (view.parent as? DialogWindowProvider)?.window
-                if (window != null) {
-                    WindowCompat.getInsetsController(window, view).apply {
-                        systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                        hide(WindowInsetsCompat.Type.systemBars())
+            FullscreenWindow()
+            BackHandler { fullscreen = false }
+            val aspect = rememberVideoAspect(exo)
+            val chapters =
+                remember(current.details.chapters) {
+                    current.details.chapters.map { TranscriptChapter((it.start * 1000).toLong(), it.title) }
+                }
+            val panelShown = canShowPanel && panelOpen
+            val surface: @Composable (Modifier) -> Unit = { m ->
+                VideoSurface(
+                    player = exo,
+                    state = current,
+                    active = true,
+                    fullscreen = true,
+                    onToggleFullscreen = { fullscreen = false },
+                    onSheet = { sheet = it },
+                    modifier = m,
+                    onPrevious = onPrevious,
+                    onNext = onNext,
+                    qualityAsHeight = onCollapse != null,
+                    panelShown = if (canShowPanel) panelShown else null,
+                    onTogglePanel = { panelOpen = !panelOpen },
+                )
+            }
+            val panel: @Composable (Modifier) -> Unit = { m ->
+                MaterialTheme(colorScheme = FeederDarkColors, typography = MaterialTheme.typography) {
+                    Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = m) {
+                        TranscriptPanel(
+                            itemId = itemId,
+                            positionMs = flowPositionMs(playback, key),
+                            onSeek = { ms ->
+                                playback.seekTo(ms / 1000.0)
+                                exo.play()
+                            },
+                            video = true,
+                            chapters = chapters,
+                            modifier = Modifier.fillMaxSize().padding(top = 4.dp),
+                        )
                     }
                 }
-                onDispose { }
             }
-            BackHandler { fullscreen = false }
-            VideoSurface(
-                player = exo,
-                state = current,
-                active = true,
-                fullscreen = true,
-                onToggleFullscreen = { fullscreen = false },
-                onSheet = { sheet = it },
-                modifier = Modifier.fillMaxSize(),
-                onPrevious = onPrevious,
-                onNext = onNext,
-                qualityAsHeight = onCollapse != null,
-            )
+            BoxWithConstraints(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+                val w = maxWidth
+                val h = maxHeight
+                val landscape = w > h
+                if (landscape) {
+                    // Video on the left at its own shape (never cropped), the panel on the right
+                    Row(modifier = Modifier.fillMaxSize()) {
+                        surface(Modifier.weight(1f).fillMaxHeight())
+                        if (panelShown) {
+                            panel(
+                                Modifier
+                                    .width((w * 0.36f).coerceIn(280.dp, 420.dp))
+                                    .fillMaxHeight()
+                                    .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.End)),
+                            )
+                        }
+                    }
+                } else {
+                    // Video pinned under the status bar with its controls on the picture; the
+                    // space under it is the panel instead of black bars
+                    Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Top))) {
+                        val maxVideo = if (panelShown) h * 0.55f else h
+                        val videoHeight = (w / aspect).coerceAtMost(maxVideo)
+                        surface(Modifier.fillMaxWidth().height(videoHeight))
+                        if (panelShown) {
+                            panel(Modifier.fillMaxWidth().weight(1f).windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)))
+                        } else if (aspect > 1.2f) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth().weight(1f)) {
+                                Text(
+                                    stringResource(R.string.player_turn_for_bigger),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color.White.copy(alpha = 0.6f),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
             sheet?.let { PlayerSheetContent(it, current, exo, onSheet = { next -> sheet = next }) }
         }
     }
+}
+
+/**
+ * Makes the full screen dialog cover the whole display: under the camera cut-out and the
+ * navigation bar, black behind it, system bars hidden until swiped in. Without this the
+ * dialog's window stopped short of the cut-out in landscape and the app showed through.
+ */
+@Composable
+private fun FullscreenWindow() {
+    val view = LocalView.current
+    DisposableEffect(view) {
+        val window = (view.parent as? DialogWindowProvider)?.window
+        if (window != null) {
+            window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            window.setBackgroundDrawable(ColorDrawable(AndroidColor.BLACK))
+            window.setDimAmount(0f)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                window.attributes =
+                    window.attributes.apply {
+                        layoutInDisplayCutoutMode =
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                            } else {
+                                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                            }
+                    }
+            }
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            WindowCompat.getInsetsController(window, view).apply {
+                systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                hide(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+        onDispose { }
+    }
+}
+
+/** A caption cue with its position dropped, so the player puts it centred near the bottom. */
+@OptIn(UnstableApi::class)
+internal fun centredCue(cue: Cue): Cue =
+    if (cue.bitmap != null) {
+        cue
+    } else {
+        cue
+            .buildUpon()
+            .setTextAlignment(Layout.Alignment.ALIGN_CENTER)
+            .setPosition(Cue.DIMEN_UNSET)
+            .setPositionAnchor(Cue.TYPE_UNSET)
+            .setLine(Cue.DIMEN_UNSET, Cue.TYPE_UNSET)
+            .setLineAnchor(Cue.TYPE_UNSET)
+            .setSize(Cue.DIMEN_UNSET)
+            .build()
+    }
+
+/** The video's width / height as the player reports it; 16:9 until it knows. */
+@Composable
+private fun rememberVideoAspect(player: ExoPlayer): Float {
+    fun aspectOf(size: VideoSize): Float? =
+        if (size.width > 0 && size.height > 0) size.width * size.pixelWidthHeightRatio / size.height else null
+    var aspect by remember(player) { mutableFloatStateOf(aspectOf(player.videoSize) ?: 16f / 9f) }
+    DisposableEffect(player) {
+        val listener =
+            object : Player.Listener {
+                override fun onVideoSizeChanged(videoSize: VideoSize) {
+                    aspectOf(videoSize)?.let { aspect = it }
+                }
+            }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener) }
+    }
+    return aspect
 }
 
 @OptIn(UnstableApi::class)
@@ -295,6 +444,9 @@ private fun VideoSurface(
     onPrevious: (() -> Unit)? = null,
     onNext: (() -> Unit)? = null,
     qualityAsHeight: Boolean = onCollapse != null,
+    // Full screen only: the transcript panel button (null = no panel for this video)
+    panelShown: Boolean? = null,
+    onTogglePanel: () -> Unit = {},
 ) {
     val playback: YouTubePlayback by LocalDI.current.instance()
     val prefs by playback.playerPrefs.collectAsState()
@@ -337,6 +489,21 @@ private fun VideoSurface(
         }
     }
 
+    // YouTube's captions come pinned to the left edge (position 0%), which cut them off. The
+    // player's own caption view is hidden and they are drawn here centred along the bottom.
+    var cues by remember { mutableStateOf<List<Cue>>(emptyList()) }
+    DisposableEffect(player, active) {
+        cues = if (active) player.currentCues.cues.map(::centredCue) else emptyList()
+        val listener =
+            object : Player.Listener {
+                override fun onCues(cueGroup: CueGroup) {
+                    if (active) cues = cueGroup.cues.map(::centredCue)
+                }
+            }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener) }
+    }
+
     Box(modifier = modifier.background(Color.Black)) {
         AndroidView(
             factory = { ctx ->
@@ -350,21 +517,27 @@ private fun VideoSurface(
             update = { view ->
                 // One view shows the player at a time (inline or fullscreen)
                 view.player = if (active) player else null
-                view.subtitleView?.apply {
-                    setFractionalTextSize(SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * prefs.subtitleSize.scale)
-                    setStyle(
-                        CaptionStyleCompat(
-                            AndroidColor.WHITE,
-                            if (prefs.subtitleBackground) 0xAA000000.toInt() else AndroidColor.TRANSPARENT,
-                            AndroidColor.TRANSPARENT,
-                            if (prefs.subtitleBackground) CaptionStyleCompat.EDGE_TYPE_NONE else CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW,
-                            AndroidColor.BLACK,
-                            null,
-                        ),
-                    )
-                }
+                view.subtitleView?.visibility = View.GONE
             },
             onRelease = { it.player = null },
+            modifier = Modifier.fillMaxSize(),
+        )
+        AndroidView(
+            factory = { ctx -> SubtitleView(ctx) },
+            update = { view ->
+                view.setFractionalTextSize(SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * prefs.subtitleSize.scale)
+                view.setStyle(
+                    CaptionStyleCompat(
+                        AndroidColor.WHITE,
+                        if (prefs.subtitleBackground) 0xAA000000.toInt() else AndroidColor.TRANSPARENT,
+                        AndroidColor.TRANSPARENT,
+                        if (prefs.subtitleBackground) CaptionStyleCompat.EDGE_TYPE_NONE else CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW,
+                        AndroidColor.BLACK,
+                        null,
+                    ),
+                )
+                view.setCues(cues)
+            },
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -533,6 +706,24 @@ private fun VideoSurface(
                                     },
                                 onClick = { onSheet(PlayerSheet.QUALITY) },
                             )
+                        }
+                        if (panelShown != null) {
+                            Surface(
+                                shape = CircleShape,
+                                color = if (panelShown) MaterialTheme.colorScheme.inversePrimary else PillColor,
+                                contentColor = if (panelShown) MaterialTheme.colorScheme.onPrimaryContainer else Color.White,
+                                onClick = {
+                                    onTogglePanel()
+                                    touchedAt = System.currentTimeMillis()
+                                },
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Outlined.ViewSidebar,
+                                    contentDescription =
+                                        stringResource(if (panelShown) R.string.player_hide_transcript_panel else R.string.player_show_transcript_panel),
+                                    modifier = Modifier.padding(6.dp),
+                                )
+                            }
                         }
                         Surface(shape = CircleShape, color = PillColor, contentColor = Color.White, onClick = onToggleFullscreen) {
                             Icon(
