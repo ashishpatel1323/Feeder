@@ -1,0 +1,35 @@
+{
+  "name": "feeder-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP server that serves Feeder content (articles, playlists, highlights, transcripts, ebooks, ZIM) to an AI agent as chunks",
+  "bin": {
+    "feeder-mcp": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "test": "vitest run",
+    "start": "node dist/index.js",
+    "e2e": "npm run build && node test/e2e.mjs"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@mozilla/readability": "^0.6.0",
+    "fzstd": "^0.1.1",
+    "jsdom": "^29.1.1",
+    "jszip": "^3.10.2",
+    "pdfjs-dist": "^6.5.438",
+    "xz-decompress": "^0.2.3",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^30.0.0",
+    "@types/node": "^26.6.9",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.1"
+  }
+}

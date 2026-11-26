@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Feed } from '../lib/db'
 import { addFeed, deleteFeed, exportOpml, importOpml, refreshFeeds } from '../lib/refresh'
 import { autoDeviceName, deviceName, setDeviceName } from '../lib/device'
+import { McpSection } from './McpSection'
 import { addDeviceLink, createSync, forceSync, getSyncState, joinSync, leaveSync, syncNow } from '../lib/sync2'
 import { parseJoinLink } from '../lib/crypto'
 import { getAccessToken, health, setAccessToken } from '../lib/api'
@@ -405,6 +406,8 @@ export function SettingsDialog({
   return (
     <Modal title="Settings" onClose={onClose} wide>
       <SyncSection toast={toast} />
+
+      <McpSection toast={toast} />
 
       <OfflineSection toast={toast} />
 

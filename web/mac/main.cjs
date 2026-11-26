@@ -90,10 +90,13 @@ app.on('second-instance', () => {
 })
 
 app.whenReady().then(async () => {
-  const { startServer } = require('./dist/server.cjs')
+  const { startServer, stopMcp } = require('./dist/server.cjs')
   const root = path.join(__dirname, 'web')
+  // The MCP server (Settings › AI agents) ships in Resources/mcp; in development it's web/mcp
+  const mcpDir = app.isPackaged ? path.join(process.resourcesPath, 'mcp') : path.join(__dirname, '..', 'mcp')
+  app.on('before-quit', () => stopMcp())
   try {
-    await startServer(root, PORT)
+    await startServer(root, PORT, { mcpDir, nodeBin: process.execPath })
   } catch (e) {
     const { dialog } = require('electron')
     dialog.showErrorBox('Feeder could not start', `Port ${PORT} is in use (${e && e.message}). Quit the other copy of Feeder and try again.`)
