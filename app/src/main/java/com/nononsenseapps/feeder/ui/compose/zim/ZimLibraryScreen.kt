@@ -107,6 +107,7 @@ fun ZimLibraryScreen(
         }
     val shelfPrefs = rememberShelfPrefs("zim", defaultCards = true)
     val uploadLabel = stringResource(R.string.upload_to_dropbox)
+    val resumeUploadLabel = stringResource(R.string.resume_upload_to_dropbox)
     val deleteDropboxLabel = stringResource(R.string.delete_from_dropbox)
     val removeLabel = stringResource(R.string.ebook_remove_from_phone)
     val deleteLabel = stringResource(R.string.zim_delete)
@@ -188,7 +189,7 @@ fun ZimLibraryScreen(
                             copy == null &&
                             up == null
                         ) {
-                            add(ShelfAction(uploadLabel) { uploadOrExplain(context, link != null, zimWhat) { library.uploadToDropbox(book) } })
+                            add(ShelfAction(if (library.hasPendingUpload(book)) resumeUploadLabel else uploadLabel) { uploadOrExplain(context, link != null, zimWhat) { library.uploadToDropbox(book) } })
                         }
                         if (copy != null) add(ShelfAction(deleteDropboxLabel) { deletingRemote = copy to true })
                         add(

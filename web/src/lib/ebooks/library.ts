@@ -172,7 +172,9 @@ async function upload(b: Book, onProgress?: Progress) {
   const file = await localFile(b)
   if (!file) throw new Error(`${b.title} is not on this device`)
   const safe = `${b.title}${b.author ? ` - ${b.author}` : ''}`.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 150)
-  const up = await uploadFile(`${EBOOKS_FOLDER}/${safe}.${b.ext}`, file, onProgress)
+  const up = await uploadFile(`${EBOOKS_FOLDER}/${safe}.${b.ext}`, file, onProgress).catch((e) => {
+    throw new Error(`${e instanceof Error ? e.message : String(e)}. Upload it again to go on where it stopped`)
+  })
   await db.books.update(b.id, { dropboxPath: up.path })
 }
 

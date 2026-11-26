@@ -4,7 +4,7 @@ import { db, type AudioPos, type Audiobook } from '../lib/db'
 import { onDropboxChange } from '../lib/dropbox'
 import { otherDeviceText } from '../lib/device'
 import { formatBytes } from '../lib/offline'
-import { ACCEPT_AUDIO, addLocal, deleteAudiobookFromDropbox, downloadAudiobook, isAudioName, localSupported, onDevice, pickedFromFolder, refreshAudiobooks, removeFromDevice, uploadAudiobook, type Picked } from '../lib/audiobooks/library'
+import { ACCEPT_AUDIO, addLocal, deleteAudiobookFromDropbox, downloadAudiobook, hasPendingUpload, isAudioName, localSupported, onDevice, pickedFromFolder, refreshAudiobooks, removeFromDevice, uploadAudiobook, type Picked } from '../lib/audiobooks/library'
 import { audiobookPlayer, useAudiobookPlayer, type BookPlayerState } from '../lib/audiobooks/player'
 import { bookLengthMs, chaptersOf, clock, lengthText } from '../lib/audiobooks/timeline'
 import { confirmDropboxDelete, needsDropbox, useDropbox } from './DropboxPanel'
@@ -119,7 +119,7 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
     }
   }
 
-  const job = async (b: Audiobook, verb: string, run: (p: (done: number, total: number) => void) => Promise<void>, done: string) => {
+  const job = async (b: Audiobook, verb: string, run: (p: (done: number, total: number) => void) => Promise<void>, done: string, onFail?: string) => {
     if (jobs[b.id]) return
     const set = (j: Job | null) =>
       setJobs((all) => {
@@ -133,7 +133,8 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
       await run(throttled((d, total) => set({ label: b.title, done: d, total, verb })))
       toast(done)
     } catch (e) {
-      toast(e instanceof Error ? e.message : String(e))
+      const msg = e instanceof Error ? e.message : String(e)
+      toast(onFail ? `${verb} ${b.title} stopped (${msg}). ${onFail}` : msg)
     } finally {
       set(null)
     }
@@ -150,7 +151,7 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
     if (!here && b.dropboxPath && localSupported())
       actions.push({ label: 'Download to this device', run: () => void job(b, 'Downloading', (p) => downloadAudiobook(b.id, p), `${b.title} is on this device`) })
     if (here && !b.dropboxPath && !j)
-      actions.push({ label: 'Upload to Dropbox', run: () => needsDropbox(dbx.signedIn, toast, () => void job(b, 'Uploading', (p) => uploadAudiobook(b.id, p), `${b.title} is in Dropbox`)) })
+      actions.push({ label: hasPendingUpload(b.id) ? 'Resume upload to Dropbox' : 'Upload to Dropbox', run: () => needsDropbox(dbx.signedIn, toast, () => void job(b, 'Uploading', (p) => uploadAudiobook(b.id, p), `${b.title} is in Dropbox`, 'Tap Resume upload to go on from where it stopped')) })
     if (here || b.tracks.some((t) => t.local))
       actions.push({
         label: b.dropboxPath ? 'Remove from this device' : 'Delete',

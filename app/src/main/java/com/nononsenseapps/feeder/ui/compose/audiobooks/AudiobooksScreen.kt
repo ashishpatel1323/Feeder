@@ -268,6 +268,7 @@ fun AudiobooksScreen(
     val downloadingText = stringResource(R.string.shelf_downloading)
     val uploadingText = stringResource(R.string.shelf_uploading)
     val uploadText = stringResource(R.string.upload_to_dropbox)
+    val resumeUploadText = stringResource(R.string.resume_upload_to_dropbox)
     val deleteDropboxText = stringResource(R.string.delete_from_dropbox)
     val audiobooksWhat = stringResource(R.string.audiobooks_what)
     val items =
@@ -281,7 +282,7 @@ fun AudiobooksScreen(
             val actions = mutableListOf<ShelfAction>()
             if (b.dropboxPath != null && !downloaded && !b.onPhone && job == null) actions += ShelfAction(downloadText) { library.download(b.id) }
             if (downloaded && b.dropboxPath != null && !b.onPhone) actions += ShelfAction(removeDownloadText) { askRemoveDownload(b) }
-            if (b.dropboxPath == null && job == null) actions += ShelfAction(uploadText) { uploadOrExplain(context, link != null, audiobooksWhat) { library.uploadToDropbox(b.id) } }
+            if (b.dropboxPath == null && job == null) actions += ShelfAction(if (library.hasPendingUpload(b.id)) resumeUploadText else uploadText) { uploadOrExplain(context, link != null, audiobooksWhat) { library.uploadToDropbox(b.id) } }
             if (b.tracks.any { it.uri != null }) actions += ShelfAction(forgetText) { askForget(b) }
             if (b.dropboxPath != null && job == null) actions += ShelfAction(deleteDropboxText) { deleting = b }
             ShelfItem(

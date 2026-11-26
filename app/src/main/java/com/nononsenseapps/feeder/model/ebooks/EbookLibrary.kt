@@ -146,7 +146,7 @@ class EbookLibrary private constructor(
                 _messages.value = "${b.title} is in Dropbox"
             } catch (e: Exception) {
                 Log.w(LOG_TAG, "Could not upload ${b.title}", e)
-                _messages.value = e.message ?: "Upload failed"
+                _messages.value = "Upload of ${b.title} stopped (${e.message ?: "no connection"}). Tap Upload to Dropbox again to go on where it stopped"
             }
         }
     }
@@ -165,7 +165,8 @@ class EbookLibrary private constructor(
         _jobs.update { it + BookJob(key, "Uploading ${b.title}", 0, f.length()) }
         try {
             val up =
-                dropbox.upload("${DropboxClient.EBOOKS_FOLDER}/${uploadName(b)}", f) { done, total ->
+                // A copy made for the upload is new every try: name it by the book, so a retry goes on where it stopped
+                dropbox.upload("${DropboxClient.EBOOKS_FOLDER}/${uploadName(b)}", f, id = if (tmp != null) b.id else f.lastModified().toString()) { done, total ->
                     _jobs.update { jobs -> jobs.map { if (it.key == key) it.copy(done = done, total = total) else it } }
                 }
             patch(b.id) { it.copy(dropboxPath = up.path) }

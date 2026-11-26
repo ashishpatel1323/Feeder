@@ -329,12 +329,29 @@ export async function uploadAudiobook(id: string, onProgress?: Progress): Promis
     files.push({ path: b.tracks.length === 1 && !b.folder ? `${AUDIOBOOKS_FOLDER}/${safe(t.name)}` : `${AUDIOBOOKS_FOLDER}/${safe(b.title)}/${parts.join('/')}`, file })
   }
   const total = files.reduce((s, f) => s + f.file.size, 0)
-  let before = 0
+  // Tracks that got there on an earlier try are not sent again; inside a track, uploadFile goes
+  // on from the last piece that got there
+  const key = pendingKey(id)
+  const done = new Set<string>(JSON.parse(localStorage.getItem(key) || '[]') as string[])
+  let before = files.filter((f) => done.has(f.path)).reduce((s, f) => s + f.file.size, 0)
+  localStorage.setItem(key, JSON.stringify([...done]))
+  onProgress?.(before, total)
   for (const f of files) {
-    await uploadFile(f.path, f.file, (done) => onProgress?.(before + done, total))
+    if (done.has(f.path)) continue
+    await uploadFile(f.path, f.file, (n) => onProgress?.(before + n, total))
     before += f.file.size
+    done.add(f.path)
+    localStorage.setItem(key, JSON.stringify([...done]))
   }
+  localStorage.removeItem(key)
   await refreshAudiobooks()
+}
+
+const pendingKey = (id: string) => `feeder.audiobookUpload:${id}`
+
+/** True when an upload of the book stopped part way (the next one goes on from there). */
+export function hasPendingUpload(id: string): boolean {
+  return localStorage.getItem(pendingKey(id)) !== null
 }
 
 /**
