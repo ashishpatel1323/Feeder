@@ -7,7 +7,7 @@
  * through `FeederZim` (a JavaScript interface) and is driven through `window.feederZim`.
  */
 import { indexText, rangeFor, type TextIndex } from '../ebook-android/textindex'
-import { firstVisibleText, highlightAt, injectMarkStyles, keepInView, paintHighlights, readableRoot, scrollToRange, selectionAnchor, type PageMark } from '../lib/zim/marks'
+import { firstVisibleText, highlightAt, injectMarkStyles, keepInView, paintHighlights, readableRoot, scrollToRange, selectionAnchor, sketchAt, type PageMark } from '../lib/zim/marks'
 
 interface Bridge {
   onSelection(json: string): void
@@ -45,6 +45,12 @@ if (!w.feederZim && document.body) {
     (e) => {
       if (document.getSelection()?.isCollapsed === false) return
       if ((e.target as Element | null)?.closest?.('a[href]')) return
+      // A tap on a margin sketch opens it (sketches are highlights with a drawing)
+      const sketch = sketchAt(e.target)
+      if (sketch) {
+        bridge.onHighlightTap(sketch)
+        return
+      }
       const id = highlightAt(document, e.clientX, e.clientY, painted)
       if (id) bridge.onHighlightTap(id)
     },

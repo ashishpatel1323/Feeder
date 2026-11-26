@@ -54,6 +54,8 @@ data class Highlight(
     val modifiedAt: Long = createdAt,
     /** Ebook highlights (item "ebook:\n<book id>"): where the text is, as an EPUB CFI. */
     val cfi: String? = null,
+    /** A margin sketch tied to the text instead of a colored highlight (JSON, see Sketch.kt). */
+    val sketch: String? = null,
 ) {
     val highlightColor: HighlightColor get() = HighlightColor.of(color)
 }
@@ -135,6 +137,24 @@ class HighlightStore(
         write(
             _highlights.value.map {
                 if (it.id == id) it.copy(color = color.id, note = note.trim(), modifiedAt = maxOf(now, it.modifiedAt + 1)) else it
+            },
+        )
+        onChanged?.invoke()
+        if (before != null) onEdit?.invoke(before, get(id))
+    }
+
+    /** Changes a margin sketch's drawing and color. */
+    @Synchronized
+    fun updateSketch(
+        id: String,
+        sketch: String,
+        color: HighlightColor,
+    ) {
+        val now = System.currentTimeMillis()
+        val before = get(id)
+        write(
+            _highlights.value.map {
+                if (it.id == id) it.copy(sketch = sketch, color = color.id, modifiedAt = maxOf(now, it.modifiedAt + 1)) else it
             },
         )
         onChanged?.invoke()

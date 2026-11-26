@@ -2318,6 +2318,11 @@ details summary {
   --hl-green: #b7ebc8;
   --hl-blue: #bcdcff;
   --hl-pink: #f6c3e0;
+  --feeder-ink-yellow: #b26a00;
+  --feeder-ink-green: #2e7d32;
+  --feeder-ink-blue: #1a56c4;
+  --feeder-ink-pink: #c2185b;
+  --sketch-paper: #fffdf6;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
@@ -2325,6 +2330,11 @@ details summary {
     --hl-green: rgba(92, 197, 131, 0.42);
     --hl-blue: rgba(90, 165, 240, 0.45);
     --hl-pink: rgba(224, 123, 180, 0.45);
+    --feeder-ink-yellow: #ffc857;
+    --feeder-ink-green: #7ed492;
+    --feeder-ink-blue: #8ab4ff;
+    --feeder-ink-pink: #f48fb1;
+    --sketch-paper: #2a2b24;
   }
 }
 :root[data-theme='dark'] {
@@ -2332,6 +2342,37 @@ details summary {
   --hl-green: rgba(92, 197, 131, 0.42);
   --hl-blue: rgba(90, 165, 240, 0.45);
   --hl-pink: rgba(224, 123, 180, 0.45);
+  --feeder-ink-yellow: #ffc857;
+  --feeder-ink-green: #7ed492;
+  --feeder-ink-blue: #8ab4ff;
+  --feeder-ink-pink: #f48fb1;
+  --sketch-paper: #2a2b24;
+}
+/* Margin sketches: a paper strip right after the paragraph (lib/sketch.ts) */
+.feeder-sketch {
+  display: block;
+  margin: var(--sp-2) 0 var(--sp-1);
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-md);
+  background: var(--sketch-paper);
+  border-left: 3px solid var(--feeder-sketch-edge, var(--feeder-ink-pink));
+  cursor: pointer;
+  line-height: 0;
+  text-indent: 0;
+  max-width: 40em;
+  box-sizing: border-box;
+}
+.feeder-sketch svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.feeder-sketch:hover,
+.feeder-sketch:focus-visible {
+  outline: 2px solid var(--accent-soft);
+}
+.feeder-sketch.flash {
+  animation: hl-flash 1.2s ease-out;
 }
 mark.hl {
   color: inherit;
@@ -10371,4 +10412,100 @@ mark.sr-mark {
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+/* ---------------------------------------------------------------- sketch editor (SketchEditor.tsx) */
+.sketch-editor {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.32);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.sketch-sheet {
+  width: min(760px, 100%);
+  height: min(92vh, 900px);
+  background: var(--surface);
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3) var(--sp-3);
+  box-sizing: border-box;
+}
+@media (min-width: 900px) {
+  .sketch-editor { align-items: center; }
+  .sketch-sheet { border-radius: var(--r-xl); }
+}
+.sketch-top {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.sketch-top h2 {
+  flex: 1;
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 500;
+}
+.sketch-top .hl-btn { flex: none; min-width: 0; padding: 0 var(--sp-3); }
+.sketch-quote {
+  margin: 0;
+  padding-left: var(--sp-2);
+  border-left: 3px solid var(--border);
+  font-family: var(--font-read);
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  max-height: 4.5em;
+  overflow: hidden;
+}
+.sketch-paper {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--sketch-paper);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  touch-action: none;
+  cursor: crosshair;
+}
+.sketch-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  font-size: var(--fs-sm);
+  pointer-events: none;
+}
+.sketch-pen {
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+}
+.sketch-vr {
+  width: 1px;
+  height: 24px;
+  background: var(--border);
+  margin: 0 var(--sp-1);
+}
+.sketch-swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-pill);
+  border: none;
+  margin: 0 var(--sp-1);
+  cursor: pointer;
+}
+.sketch-swatch.on {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
 }

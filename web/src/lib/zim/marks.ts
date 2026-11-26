@@ -10,6 +10,7 @@
  * the page's body (every text node, see textOf) and a few characters before it.
  */
 import { anchorOf, locateRange, textOf } from '../textanchor'
+import { injectSketchStyles, parseSketch, placeStrip, removeStrips, sketchStrip, type SketchColor } from '../sketch'
 
 export const ZIM_ITEM_PREFIX = 'zim:\n'
 
@@ -29,6 +30,8 @@ export interface PageMark {
   start: number
   prefix: string
   color: string
+  /** Margin sketches only: the drawing (lib/sketch.ts), shown as a strip after the paragraph. */
+  sketch?: string
 }
 
 type HighlightWindow = Window & { CSS?: typeof CSS; Highlight?: typeof Highlight }
@@ -79,8 +82,10 @@ export function paintHighlights(doc: Document, marks: PageMark[]): Map<string, R
   const root = doc.body
   if (!root) return out
   const full = textOf(root)
+  paintSketches(doc, full, marks.filter((m) => m.sketch))
   const byColor = new Map<string, Range[]>()
   for (const m of marks) {
+    if (m.sketch) continue
     const at = locateRange(full, m)
     if (!at) continue
     const r = rangeAt(root, at[0], at[1])
@@ -185,4 +190,32 @@ export function readableRoot(doc: Document): HTMLElement | null {
     if (el && (el.textContent ?? '').trim().length > Math.min(200, total * 0.3)) return el
   }
   return body
+}
+
+/**
+ * Shows margin sketches as strips after the paragraph their text ends in (a sketch whose text
+ * isn't on the page goes at the end). Strips hold no text, so text offsets stay the same.
+ */
+export function paintSketches(doc: Document, full: string, sketches: PageMark[]) {
+  const root = doc.body
+  if (!root) return
+  removeStrips(root)
+  if (!sketches.length) return
+  injectSketchStyles(doc)
+  const items = sketches
+    .map((m) => ({ m, sk: parseSketch(m.sketch), at: locateRange(full, m) }))
+    .filter((x) => x.sk)
+    .sort((a, b) => (a.at?.[1] ?? Infinity) - (b.at?.[1] ?? Infinity))
+  for (const { m, sk, at } of items) {
+    const strip = sketchStrip(doc, m.id, (COLORS.includes(m.color) ? m.color : 'pink') as SketchColor, sk!)
+    const r = at ? rangeAt(root, at[0], at[1]) : null
+    if (r) placeStrip(root, r.endContainer, strip)
+    else root.append(strip)
+  }
+}
+
+/** The sketch strip under a tap, if any. */
+export function sketchAt(target: EventTarget | null): string | null {
+  const el = (target as Element | null)?.closest?.('.feeder-sketch') as HTMLElement | null
+  return el?.dataset.sketch ?? null
 }

@@ -261,6 +261,8 @@ export interface HighlightValue {
   createdAt: number
   /** Ebook highlights only: where the text is, as an EPUB CFI. */
   cfi?: string
+  /** Margin sketches only: the drawing (JSON, see lib/sketch.ts). Older devices drop it and show a highlight. */
+  sketch?: string
 }
 
 const HIGHLIGHT_COLOR_IDS: HighlightColor[] = ['yellow', 'green', 'blue', 'pink']
@@ -279,6 +281,7 @@ export function highlightValue(h: Highlight): HighlightValue {
     note: h.note,
     createdAt: h.createdAt,
     ...(h.cfi ? { cfi: h.cfi } : {}),
+    ...(h.sketch ? { sketch: h.sketch } : {}),
   }
 }
 
@@ -300,6 +303,7 @@ export function highlightFromValue(id: string, v: Partial<HighlightValue>, ts: n
     createdAt: typeof v.createdAt === 'number' ? v.createdAt : ts,
     modifiedAt: ts,
     ...(typeof v.cfi === 'string' && v.cfi ? { cfi: v.cfi } : {}),
+    ...(typeof v.sketch === 'string' && v.sketch ? { sketch: v.sketch } : {}),
   }
 }
 

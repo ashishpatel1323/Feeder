@@ -16,7 +16,7 @@ import type { FoliateView, Location, TocItem } from '../vendor/foliate-js/view.j
 import { Overlayer } from '../vendor/foliate-js/overlayer.js'
 import { authorString, bookCss, injectCsp, langString, type ReaderPrefs } from '../lib/ebooks/reader'
 import { indexText, rangeFor, type TextIndex } from './textindex'
-import { atEnd, atStart, drawFixedHighlights, markFixedPage, readableContent, redrawFixedHighlights, nextSection, pageNumbers, prevSection, reveal, setStyles } from '../lib/ebooks/nav'
+import { atEnd, atStart, drawFixedHighlights, markFixedPage, placeBookSketches, readableContent, redrawFixedHighlights, replaceBookSketches, nextSection, pageNumbers, prevSection, reveal, setStyles } from '../lib/ebooks/nav'
 
 interface Bridge {
   onOpened(json: string): void
@@ -40,6 +40,18 @@ let view: FoliateView | null = null
 let prefs: ReaderPrefs = { fontSize: 100, lineHeight: 1.5, theme: 'light', flow: 'paginated', publisherFont: true }
 let appDark = false
 let highlights = new Map<string, string>()
+/** Margin sketches: strips after their paragraph in reflowable books (as highlights on PDF pages). */
+type SketchMark = { id: string; cfi: string; color: string; sketch: string }
+let sketches: SketchMark[] = []
+
+type HighlightJson = { id?: string; cfi: string; color: string; sketch?: string }
+/** Splits the app's list: plain highlights by CFI, and sketches. */
+function readHighlights(json: string) {
+  const all = JSON.parse(json) as HighlightJson[]
+  const fixed = !!view?.isFixedLayout
+  sketches = all.filter((h) => h.sketch).map((h) => ({ id: h.id ?? h.cfi, cfi: h.cfi, color: h.color, sketch: h.sketch! }))
+  return new Map(all.filter((h) => !h.sketch || fixed).map((h) => [h.cfi, h.color]))
+}
 let tts: { index: TextIndex; doc: Document } | null = null
 
 function showMessage(text: string) {
@@ -60,7 +72,7 @@ async function open(url: string, name: string, cfi: string | null, prefsJson: st
   try {
     prefs = { ...prefs, ...(JSON.parse(prefsJson) as Partial<ReaderPrefs>) }
     appDark = dark
-    highlights = new Map((JSON.parse(highlightsJson) as { cfi: string; color: string }[]).map((h) => [h.cfi, h.color]))
+    highlights = readHighlights(highlightsJson)
     const res = await fetch(url)
     if (!res.ok) throw new Error(`The book file could not be read (${res.status})`)
     const file = new File([await res.blob()], name)
@@ -155,6 +167,7 @@ function listen(v: FoliateView) {
     const { doc, index } = (e as CustomEvent<{ doc: Document; index: number }>).detail
     markFixedPage(v, doc)
     drawFixedHighlights(v, doc, index, [...highlights].map(([cfi, color]) => ({ cfi, color })))
+    placeBookSketches(v, doc, index, sketches)
     let selTimer = 0
     doc.addEventListener('selectionchange', () => {
       window.clearTimeout(selTimer)
@@ -168,6 +181,10 @@ function listen(v: FoliateView) {
       }, 350)
     })
     doc.addEventListener('click', (c) => {
+      // A tap on a margin sketch opens it (the app finds it by its CFI, like a highlight)
+      const strip = (c.target as Element | null)?.closest?.('.feeder-sketch') as HTMLElement | null
+      const sk = strip?.dataset.sketch ? sketches.find((x) => x.id === strip.dataset.sketch) : undefined
+      if (sk) return bridge.onHighlightTap(sk.cfi)
       if (doc.getSelection()?.isCollapsed === false) return
       if ((c.target as Element | null)?.closest?.('a[href]')) return
 // The page's iframe is as wide as the whole chapter: measure the tap on the screen instead
@@ -236,7 +253,9 @@ function ttsClear() {
     applyPrefs()
   },
   setHighlights(json: string) {
-    const next = new Map((JSON.parse(json) as { cfi: string; color: string }[]).map((h) => [h.cfi, h.color]))
+    const before = JSON.stringify(sketches)
+    const next = readHighlights(json)
+    if (JSON.stringify(sketches) !== before) replaceBookSketches(view, sketches)
     if (view) {
       for (const [cfi, color] of next) if (highlights.get(cfi) !== color) void view.addAnnotation({ value: cfi, color })
       for (const cfi of highlights.keys()) if (!next.has(cfi)) void view.deleteAnnotation({ value: cfi })

@@ -7,6 +7,7 @@ import { confirmDeleteHighlight } from '../lib/confirmDelete'
 import { syncNow } from '../lib/sync2'
 import type { Toast } from '../lib/toast'
 import { copyText, HighlightBar, HighlightsRail } from './Highlights'
+import { SketchEditor } from './SketchEditor'
 import { combinedSubject, ShareDialog, type ShareSubject } from './ShareDialog'
 import { loadFullText, sanitize, summarize } from '../lib/extras'
 import { htmlToText } from '../lib/feedparse'
@@ -131,6 +132,9 @@ export function Reader(p: Props) {
   const [share, setShare] = useState<ShareSubject | null>(null)
   const ordered = useMemo(() => [...(highlights ?? [])].sort((a, b) => a.start - b.start), [highlights])
   const editing = bar?.kind === 'edit' ? (highlights?.find((h) => h.id === bar.id) ?? null) : null
+  // Margin sketch being drawn: for a fresh selection or an existing sketch
+  const [sketching, setSketching] = useState<BarTarget | null>(null)
+  const sketchEditing = sketching?.kind === 'edit' ? (highlights?.find((h) => h.id === sketching.id) ?? null) : null
 
   const clearPending = () => {
     if (pendingHighlightsSupported) CSS.highlights.delete('hl-pending')
@@ -170,7 +174,7 @@ export function Reader(p: Props) {
   }, [])
 
   const flash = (id: string) => {
-    const marks = bodyRef.current?.querySelectorAll<HTMLElement>(`mark[data-hl="${CSS.escape(id)}"]`)
+    const marks = bodyRef.current?.querySelectorAll<HTMLElement>(`mark[data-hl="${CSS.escape(id)}"], .feeder-sketch[data-sketch="${CSS.escape(id)}"]`)
     if (!marks?.length) return false
     marks[0].scrollIntoView({ behavior: 'smooth', block: 'center' })
     marks.forEach((m) => {
@@ -293,6 +297,15 @@ export function Reader(p: Props) {
     const target = e.target as HTMLElement
     if (target.closest('a')) return
     if (window.getSelection()?.toString()) return
+    // Tapping a sketch opens it to edit or delete
+    const strip = target.closest<HTMLElement>('.feeder-sketch')
+    if (strip?.dataset.sketch) {
+      setPill(null)
+      readAloud.showTapWord(null)
+      setBar(null)
+      setSketching({ kind: 'edit', id: strip.dataset.sketch })
+      return
+    }
     // Tapping a highlight opens it in the bar (recolor, note, share, delete)
     const mark = target.closest<HTMLElement>('mark.hl')
     if (mark?.dataset.hl && !(playing && ra.status === 'playing')) {
@@ -596,7 +609,8 @@ export function Reader(p: Props) {
             }}
             onShare={(h) => setShare(subjectOf(h))}
             onEdit={(h) => {
-              setBar({ kind: 'edit', id: h.id })
+              if (h.sketch) setSketching({ kind: 'edit', id: h.id })
+              else setBar({ kind: 'edit', id: h.id })
               flash(h.id)
               if (window.matchMedia('(max-width: 1100px)').matches) setRailOpen(false)
             }}
@@ -616,6 +630,46 @@ export function Reader(p: Props) {
           onCopyText={copyFromBar}
           onDelete={() => editing && removeHighlight(editing)}
           onClose={closeBar}
+          onSketch={
+            bar.kind === 'new'
+              ? () => {
+                  setSketching(bar)
+                  setBar(null)
+                  window.getSelection()?.removeAllRanges()
+                }
+              : undefined
+          }
+        />
+      ) : null}
+      {sketching && (sketching.kind === 'new' || sketchEditing) ? (
+        <SketchEditor
+          quote={sketching.kind === 'new' ? sketching.anchor.text : sketchEditing!.text}
+          initial={sketchEditing?.sketch ?? null}
+          initialColor={sketchEditing?.color ?? 'pink'}
+          onClose={() => {
+            setSketching(null)
+            clearPending()
+          }}
+          onSave={async (sketch, color) => {
+            if (sketching.kind === 'new') {
+              await saveHighlight({ ...newHighlight(item, feed, sketching.anchor, color, '', picture), sketch })
+              p.toast('Sketch saved')
+            } else {
+              await updateHighlight(sketching.id, { sketch, color })
+            }
+            setSketching(null)
+            clearPending()
+          }}
+          onDelete={
+            sketchEditing
+              ? async () => {
+                  if (!(await confirmDeleteHighlight(sketchEditing.text))) return
+                  await deleteHighlight(sketchEditing.id)
+                  setSketching(null)
+                  p.toast('Sketch deleted')
+                }
+              : undefined
+          }
         />
       ) : null}
       {share ? <ShareDialog subject={share} onClose={() => setShare(null)} toast={p.toast} /> : null}

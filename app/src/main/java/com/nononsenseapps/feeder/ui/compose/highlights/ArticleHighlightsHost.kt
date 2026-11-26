@@ -74,16 +74,25 @@ fun ArticleHighlightsHost(
 
     var pending by remember { mutableStateOf<Pair<String, HighlightAnchor?>?>(null) }
     var editing by remember { mutableStateOf<String?>(null) }
+    // A margin sketch being drawn: for a selection (text + place) or an existing sketch (id)
+    var sketchingNew by remember { mutableStateOf<Pair<String, HighlightAnchor?>?>(null) }
+    var sketchingId by remember { mutableStateOf<String?>(null) }
     var showList by remember { mutableStateOf(false) }
     var share by remember { mutableStateOf<ShareSubject?>(null) }
 
-    val userHighlights = remember(mine) { UserHighlights(mine) { editing = it.id } }
+    val userHighlights =
+        remember(mine) {
+            UserHighlights(mine) {
+                if (it.sketch.isNullOrBlank()) editing = it.id else sketchingId = it.id
+            }
+        }
     val currentUser by rememberUpdatedState(userHighlights)
 
     // Highlight in the text selection menu, for this article only. Compose doesn't hand out the
     // selected text, so Highlight runs the menu's own Copy into a clipboard that catches it
     // (the real clipboard is left alone).
     val label = stringResource(R.string.highlight_action)
+    val sketchLabel = stringResource(R.string.sketch_action)
     val selectAllLabel = stringResource(android.R.string.selectAll)
     val copyItem = remember { arrayOfNulls<TextContextMenuItem>(1) }
     val realClipboard = LocalClipboard.current
@@ -100,6 +109,14 @@ fun ArticleHighlightsHost(
                         val copy = copyItem[0]
                         if (copy != null) {
                             clipboard.catchNext(scope) { text -> pending = text to currentUser.locator?.anchorOf(text) }
+                            copy.onClick(this)
+                        }
+                        close()
+                    }
+                    item(key = SketchMenuKey, label = sketchLabel) {
+                        val copy = copyItem[0]
+                        if (copy != null) {
+                            clipboard.catchNext(scope) { text -> sketchingNew = text to currentUser.locator?.anchorOf(text) }
                             copy.onClick(this)
                         }
                         close()
@@ -192,6 +209,48 @@ fun ArticleHighlightsHost(
         }
     }
 
+    sketchingNew?.let { (text, anchor) ->
+        SketchEditorDialog(
+            quote = text.trim(),
+            initial = null,
+            initialColor = com.nononsenseapps.feeder.model.highlights.HighlightColor.PINK,
+            onSave = { sketch, color ->
+                article?.let { a ->
+                    store.add(newHighlight(a, anchor ?: HighlightAnchor(text.trim(), 0, ""), color, "").copy(sketch = sketch))
+                    toast(context, R.string.sketch_added)
+                }
+                sketchingNew = null
+            },
+            onDelete = null,
+            onDismiss = { sketchingNew = null },
+        )
+    }
+
+    sketchingId?.let { id ->
+        val h = mine.firstOrNull { it.id == id }
+        if (h == null) {
+            sketchingId = null
+        } else {
+            SketchEditorDialog(
+                quote = h.text,
+                initial = h.sketch,
+                initialColor = h.highlightColor,
+                onSave = { sketch, color ->
+                    store.updateSketch(h.id, sketch, color)
+                    sketchingId = null
+                },
+                onDelete = {
+                    deleteConfirmer.askHighlight(h.text) {
+                        store.delete(h.id)
+                        toast(context, R.string.sketch_deleted)
+                        sketchingId = null
+                    }
+                },
+                onDismiss = { sketchingId = null },
+            )
+        }
+    }
+
     if (showList) {
         // Reading order in the text shown (each device counts offsets in its own text)
         val locator = userHighlights.locator
@@ -200,7 +259,7 @@ fun ArticleHighlightsHost(
             highlights = inOrder,
             onEdit = {
                 showList = false
-                editing = it.id
+                if (it.sketch.isNullOrBlank()) editing = it.id else sketchingId = it.id
             },
             onShare = { share = it.shareSubject() },
             onShareMany = { hs -> share = combinedSubject(hs) },
@@ -218,6 +277,8 @@ fun ArticleHighlightsHost(
 }
 
 private object HighlightMenuKey
+
+private object SketchMenuKey
 
 private data class MovedMenuKey(
     val key: Any,

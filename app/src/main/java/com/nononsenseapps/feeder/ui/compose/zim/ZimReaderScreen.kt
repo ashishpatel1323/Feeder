@@ -88,6 +88,7 @@ import com.nononsenseapps.feeder.model.PlaybackStatus
 import com.nononsenseapps.feeder.model.ReadAloudNeighbors
 import com.nononsenseapps.feeder.model.TTSStateHolder
 import com.nononsenseapps.feeder.model.highlights.Highlight
+import com.nononsenseapps.feeder.model.highlights.HighlightColor
 import com.nononsenseapps.feeder.model.highlights.HighlightStore
 import com.nononsenseapps.feeder.model.history.HistoryWhere
 import com.nononsenseapps.feeder.model.history.ItemHistory
@@ -97,6 +98,7 @@ import com.nononsenseapps.feeder.ui.compose.components.askHighlight
 import com.nononsenseapps.feeder.ui.compose.components.rememberDeleteConfirmer
 import com.nononsenseapps.feeder.ui.compose.ebooks.HighlightBar
 import com.nononsenseapps.feeder.ui.compose.ebooks.ttsIdOf
+import com.nononsenseapps.feeder.ui.compose.highlights.SketchEditorDialog
 import com.nononsenseapps.feeder.ui.compose.history.HistorySheet
 import com.nononsenseapps.feeder.ui.compose.history.rememberOpenTracker
 import com.nononsenseapps.feeder.ui.compose.navigation.HideMainBar
@@ -167,6 +169,9 @@ fun ZimReaderScreen(
     var pageLoads by remember { mutableStateOf(0) }
     var selection by remember { mutableStateOf<ZimSelection?>(null) }
     var editing by remember { mutableStateOf<Highlight?>(null) }
+    // A margin sketch being drawn: for a selection, or an existing sketch (by id)
+    var sketchingNew by remember { mutableStateOf<ZimSelection?>(null) }
+    var sketchingId by remember { mutableStateOf<String?>(null) }
     var highlightsSheet by remember { mutableStateOf(false) }
     var historySheet by remember { mutableStateOf(false) }
     val allHighlights by highlightStore.highlights.collectAsState()
@@ -197,7 +202,7 @@ fun ZimReaderScreen(
                         "start" to JsonPrimitive(it.start),
                         "prefix" to JsonPrimitive(it.prefix),
                         "color" to JsonPrimitive(it.color),
-                    ),
+                    ) + (it.sketch?.let { sk -> mapOf("sketch" to JsonPrimitive(sk)) } ?: emptyMap()),
                 )
             },
         ).toString()
@@ -232,7 +237,7 @@ fun ZimReaderScreen(
                     main.post {
                         currentPageHighlights.firstOrNull { it.id == id }?.let {
                             selection = null
-                            editing = it
+                            if (it.sketch.isNullOrBlank()) editing = it else sketchingId = it.id
                         }
                     }
 
@@ -467,6 +472,14 @@ fun ZimReaderScreen(
                             selection = null
                             editing = null
                         },
+                        onSketch =
+                            selection?.let { sel ->
+                                {
+                                    sketchingNew = sel
+                                    js("window.feederZim&&feederZim.clearSelection()")
+                                    selection = null
+                                }
+                            },
                     )
                 }
                 HideableCompactTTSPlayer(
@@ -580,6 +593,61 @@ fun ZimReaderScreen(
                     onOpen = { open(it) },
                 )
             }
+        }
+    }
+
+    sketchingNew?.let { sel ->
+        SketchEditorDialog(
+            quote = sel.text,
+            initial = null,
+            initialColor = HighlightColor.PINK,
+            onSave = { sketch, color ->
+                itemKey?.let { key ->
+                    highlightStore.add(
+                        Highlight(
+                            id = UUID.randomUUID().toString(),
+                            itemKey = key,
+                            itemTitle = pageTitle.ifBlank { bookTitle },
+                            itemLink = null,
+                            feedTitle = bookTitle,
+                            imageUrl = null,
+                            text = sel.text,
+                            start = sel.start,
+                            prefix = sel.prefix,
+                            color = color.id,
+                            createdAt = System.currentTimeMillis(),
+                            sketch = sketch,
+                        ),
+                    )
+                    Toast.makeText(context, R.string.sketch_added, Toast.LENGTH_SHORT).show()
+                }
+                sketchingNew = null
+            },
+            onDelete = null,
+            onDismiss = { sketchingNew = null },
+        )
+    }
+    sketchingId?.let { id ->
+        val h = bookHighlights.firstOrNull { it.id == id }
+        if (h == null) {
+            sketchingId = null
+        } else {
+            SketchEditorDialog(
+                quote = h.text,
+                initial = h.sketch,
+                initialColor = h.highlightColor,
+                onSave = { sketch, color ->
+                    highlightStore.updateSketch(h.id, sketch, color)
+                    sketchingId = null
+                },
+                onDelete = {
+                    deleteConfirmer.askHighlight(h.text) {
+                        highlightStore.delete(h.id)
+                        sketchingId = null
+                    }
+                },
+                onDismiss = { sketchingId = null },
+            )
         }
     }
 

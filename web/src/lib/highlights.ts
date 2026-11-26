@@ -18,23 +18,26 @@ export const HIGHLIGHT_INK: Record<HighlightColor, string> = {
 export { anchorOf, locate, locateRange, textOf } from './textanchor'
 import { locateRange, textOf } from './textanchor'
 import { noteHighlightChange } from './recent'
+import { parseSketch, placeStrip, sketchStrip } from './sketch'
 
 /**
  * Wraps each highlight's text in <mark class="hl hl-color" data-hl="id"> elements. Only adds
  * elements, so read aloud and tap-to-read see the same text and offsets.
  */
-export function applyHighlights(html: string, highlights: Highlight[]): string {
-  if (!highlights.length) return html
+export function applyHighlights(html: string, all: Highlight[]): string {
+  if (!all.length) return html
   const template = document.createElement('template')
   template.innerHTML = html
   const root = template.content
   const full = textOf(root)
+  // Sketches go after their paragraph, once the marks are in (wrapping replaces text nodes)
+  const highlights = all.filter((h) => !h.sketch)
+  const sketches = all.filter((h) => h.sketch)
   const spans = highlights
     .map((h) => ({ h, at: locateRange(full, h) }))
     .filter((s): s is { h: Highlight; at: [number, number] } => s.at !== null)
     .map((s) => ({ h: s.h, start: s.at[0], end: s.at[1] }))
     .sort((a, b) => a.start - b.start)
-  if (!spans.length) return html
 
   // Collect text nodes with their offsets first: wrapping changes the tree
   const nodes: { node: Text; start: number }[] = []
@@ -69,7 +72,35 @@ export function applyHighlights(html: string, highlights: Highlight[]): string {
     if (pos < text.length) frag.append(text.slice(pos))
     node.replaceWith(frag)
   }
+  addSketchStrips(root, full, sketches)
   return template.innerHTML
+}
+
+/**
+ * Adds each sketch's strip after the paragraph its text ends in. Sketches whose text isn't in the
+ * article any more go at the end, so they're never lost. Strips hold no text, so offsets stay the same.
+ */
+export function addSketchStrips(root: DocumentFragment | Element, full: string, sketches: Highlight[]) {
+  if (!sketches.length) return
+  const doc = root.ownerDocument ?? document
+  const placed = sketches
+    .map((h) => ({ h, sk: parseSketch(h.sketch), at: locateRange(full, h) }))
+    .filter((x) => x.sk)
+    .sort((a, b) => (a.at?.[1] ?? Infinity) - (b.at?.[1] ?? Infinity))
+  // Text node ends, to find the node each sketch's text ends in
+  const ends: { node: Text; end: number }[] = []
+  let total = 0
+  const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    total += n.nodeValue?.length ?? 0
+    ends.push({ node: n as Text, end: total })
+  }
+  for (const { h, sk, at } of placed) {
+    const strip = sketchStrip(doc, h.id, h.color, sk!)
+    const hit = at ? ends.find((e) => e.end >= at[1]) : undefined
+    if (hit) placeStrip(root, hit.node, strip)
+    else root.append(strip)
+  }
 }
 
 /**
@@ -116,7 +147,7 @@ export async function saveHighlight(h: Highlight) {
   await noteHighlightChange(before, h)
 }
 
-export async function updateHighlight(id: string, patch: Partial<Pick<Highlight, 'color' | 'note'>>) {
+export async function updateHighlight(id: string, patch: Partial<Pick<Highlight, 'color' | 'note' | 'sketch'>>) {
   const before = await db.highlights.get(id)
   const n = await db.highlights.update(id, { ...patch, modifiedAt: Date.now() })
   if (before) await noteHighlightChange(before, { ...before, ...patch })

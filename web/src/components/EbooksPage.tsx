@@ -15,7 +15,7 @@ import {
   savePosition,
 } from '../lib/ebooks/library'
 import { loadFoliate } from '../lib/ebooks/foliate'
-import { atEnd, atStart, drawFixedHighlights, markFixedPage, readableContent, redrawFixedHighlights, nextSection, pageNumbers, prevSection, reveal, setStyles } from '../lib/ebooks/nav'
+import { atEnd, atStart, drawFixedHighlights, markFixedPage, placeBookSketches, readableContent, redrawFixedHighlights, replaceBookSketches, nextSection, pageNumbers, prevSection, reveal, setStyles } from '../lib/ebooks/nav'
 import { bookCss, injectCsp, loadReaderPrefs, saveReaderPrefs, type ReaderPrefs } from '../lib/ebooks/reader'
 import { deleteHighlight, HIGHLIGHT_COLORS, quoteText, saveHighlight, updateHighlight } from '../lib/highlights'
 import { bookChip, trackOpen, type Where } from '../lib/history'
@@ -25,6 +25,7 @@ import type { Settings } from '../lib/settings'
 import type { FoliateView, Location, TocItem } from '../vendor/foliate-js/view.js'
 import { confirmDropboxDelete, needsDropbox, useDropbox } from './DropboxPanel'
 import { HighlightBar } from './Highlights'
+import { SketchEditor } from './SketchEditor'
 import { HistoryList } from './History'
 import { Icon, IconButton } from './Icon'
 import { Player } from './Player'
@@ -266,6 +267,17 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
   const [prefs, setPrefs] = useState<ReaderPrefs>(loadReaderPrefs)
   const [pending, setPending] = useState<Pending | null>(null)
   const [editing, setEditing] = useState<Highlight | null>(null)
+  /** A margin sketch being drawn: for a selection or an existing sketch. */
+  const [sketching, setSketching] = useState<{ pending: Pending } | { id: string } | null>(null)
+  /** Opens a tapped highlight: sketches in the sketch editor, the rest in the highlight bar. */
+  const openHighlight = (h: Highlight) => {
+    if (h.sketch) {
+      setEditing(null)
+      setSketching({ id: h.id })
+    } else setEditing(h)
+  }
+  const openHighlightRef = useRef(openHighlight)
+  openHighlightRef.current = openHighlight
   const [ra, setRa] = useState<ReadAloudState>(readAloud.state)
   useEffect(() => readAloud.subscribe(setRa), [])
   const itemId = bookItemId(id)
@@ -324,7 +336,8 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
         saveTimer = window.setTimeout(() => void savePosition(id, l.cfi, l.fraction ?? 0, pageNumbers(l, view.isFixedLayout)), 800)
       })
       view.addEventListener('create-overlay', () => {
-        for (const h of highlightsRef.current) if (h.cfi) void view.addAnnotation({ value: h.cfi, color: h.color })
+        // Sketches show as strips in reflowable books (placeBookSketches), as highlights on PDF pages
+        for (const h of highlightsRef.current) if (h.cfi && (!h.sketch || view.isFixedLayout)) void view.addAnnotation({ value: h.cfi, color: h.color })
       })
       view.addEventListener('draw-annotation', async (e) => {
         const { draw, annotation } = (e as CustomEvent<{ draw: (f: unknown, o: unknown) => void; annotation: { color?: HighlightColor } }>).detail
@@ -336,13 +349,14 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
         const h = highlightsRef.current.find((x) => x.cfi === value)
         if (h) {
           setPending(null)
-          setEditing(h)
+          openHighlightRef.current(h)
         }
       })
       view.addEventListener('load', (e) => {
         const { doc, index } = (e as CustomEvent<{ doc: Document; index: number }>).detail
         markFixedPage(view, doc)
         drawFixedHighlights(view, doc, index, highlightsRef.current)
+        placeBookSketches(view, doc, index, highlightsRef.current)
         const checkSelection = () =>
           window.setTimeout(() => {
             const sel = doc.getSelection()
@@ -358,6 +372,14 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
         doc.addEventListener('keydown', onKey)
         // Taps near the edges turn pages (swipes are handled by foliate-js)
         doc.addEventListener('click', (c) => {
+          // A tap on a sketch opens it to edit
+          const strip = (c.target as Element | null)?.closest?.('.feeder-sketch') as HTMLElement | null
+          const sk = strip?.dataset.sketch ? highlightsRef.current.find((x) => x.id === strip.dataset.sketch) : undefined
+          if (sk) {
+            setPending(null)
+            openHighlightRef.current(sk)
+            return
+          }
           if (doc.getSelection()?.isCollapsed === false) return
           if ((c.target as Element | null)?.closest?.('a[href]')) return
 // The page's iframe is as wide as the whole chapter: measure the tap on the screen instead
@@ -406,12 +428,19 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
   useEffect(() => {
     const view = viewRef.current
     if (!view || status.loading) return
-    const now = new Map(highlights.filter((h) => h.cfi).map((h) => [h.cfi!, h.color]))
+    const now = new Map(highlights.filter((h) => h.cfi && (!h.sketch || view.isFixedLayout)).map((h) => [h.cfi!, h.color]))
     for (const [cfi, color] of now) if (drawn.current.get(cfi) !== color) void view.addAnnotation({ value: cfi, color })
     for (const cfi of drawn.current.keys()) if (!now.has(cfi)) void view.deleteAnnotation({ value: cfi })
     drawn.current = now
     redrawFixedHighlights(view, highlights)
   }, [highlights, status.loading])
+
+  // Sketches added, edited or synced while reading: place the strips again when they change
+  const sketchKey = highlights.filter((h) => h.sketch).map((h) => `${h.id}:${h.color}:${h.sketch!.length}:${h.modifiedAt ?? 0}`).join('|')
+  useEffect(() => {
+    if (status.loading) return
+    replaceBookSketches(viewRef.current, highlightsRef.current)
+  }, [sketchKey, status.loading])
 
   useEffect(() => {
     setStyles(viewRef.current, bookCss(prefs))
@@ -649,8 +678,62 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
             toast('Highlight deleted')
           }}
           onClose={closeBar}
+          onSketch={
+            pending
+              ? () => {
+                  setSketching({ pending })
+                  setPending(null)
+                  viewRef.current?.deselect()
+                }
+              : undefined
+          }
         />
       ) : null}
+      {sketching ? (() => {
+        const existing = 'id' in sketching ? highlights.find((h) => h.id === sketching.id) : undefined
+        if ('id' in sketching && !existing) return null
+        return (
+          <SketchEditor
+            quote={'pending' in sketching ? sketching.pending.text : existing!.text}
+            initial={existing?.sketch ?? null}
+            initialColor={existing?.color ?? 'pink'}
+            onClose={() => setSketching(null)}
+            onSave={async (sketch, color) => {
+              if (existing) await updateHighlight(existing.id, { sketch, color })
+              else if ('pending' in sketching) {
+                await saveHighlight({
+                  id: crypto.randomUUID(),
+                  itemId,
+                  itemTitle: book?.title ?? '',
+                  itemLink: null,
+                  feedTitle: book?.author ?? '',
+                  imageUrl: null,
+                  text: sketching.pending.text,
+                  start: 0,
+                  prefix: '',
+                  color,
+                  note: '',
+                  createdAt: Date.now(),
+                  cfi: sketching.pending.cfi,
+                  sketch,
+                })
+                toast('Sketch saved')
+              }
+              setSketching(null)
+            }}
+            onDelete={
+              existing
+                ? async () => {
+                    if (!(await confirmDeleteHighlight(existing.text))) return
+                    await deleteHighlight(existing.id)
+                    setSketching(null)
+                    toast('Sketch deleted')
+                  }
+                : undefined
+            }
+          />
+        )
+      })() : null}
 
       {listening ? (
         <Player

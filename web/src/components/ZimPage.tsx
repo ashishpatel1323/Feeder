@@ -6,7 +6,7 @@ import { trackOpen } from '../lib/history'
 import { noteZimPage } from '../lib/recent'
 import { readAloud, type ReadAloudState } from '../lib/readaloud'
 import type { Settings } from '../lib/settings'
-import { firstVisibleText, highlightAt, injectMarkStyles, keepInView, paintHighlights, parseZimItemId, readableRoot, scrollToRange, selectionAnchor, zimItemId } from '../lib/zim/marks'
+import { firstVisibleText, highlightAt, injectMarkStyles, keepInView, paintHighlights, parseZimItemId, readableRoot, scrollToRange, selectionAnchor, sketchAt, zimItemId } from '../lib/zim/marks'
 import { formatBytes } from '../lib/offline'
 import { onDropboxChange, type DropboxFile } from '../lib/dropbox'
 import {
@@ -36,6 +36,7 @@ import { confirmDropboxDelete, needsDropbox, useDropbox } from './DropboxPanel'
 import { LibraryListing, ListingUnavailable, useShelfPrefs, type ShelfItem } from './Shelf'
 import { autoStatus, effectiveStatus, markKey, setStatus } from '../lib/shelfMarks'
 import { HighlightBar } from './Highlights'
+import { SketchEditor } from './SketchEditor'
 import { HistoryList } from './History'
 import { Icon, IconButton } from './Icon'
 import { Player } from './Player'
@@ -406,6 +407,8 @@ function ZimReader({ id, jump, settings, onBack, toast }: { id: string; jump: Zi
   const [loads, setLoads] = useState(0)
   const [pending, setPending] = useState<{ start: number; text: string; prefix: string } | null>(null)
   const [editing, setEditing] = useState<Highlight | null>(null)
+  /** A margin sketch being drawn: for a selection (anchor) or an existing sketch. */
+  const [sketching, setSketching] = useState<{ anchor: { text: string; start: number; prefix: string } } | { id: string } | null>(null)
   const [panel, setPanel] = useState<false | 'highlights' | 'history'>(false)
   const [ra, setRa] = useState<ReadAloudState>(readAloud.state)
   /** History: the page shown now, and when the book was opened and closed */
@@ -532,6 +535,14 @@ function ZimReader({ id, jump, settings, onBack, toast }: { id: string; jump: Zi
       d.addEventListener('click', (e) => {
         const a = (e.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null
         if (!a) {
+          // A tap on a sketch opens it to edit
+          const sk = sketchAt(e.target)
+          if (sk) {
+            setPending(null)
+            setEditing(null)
+            setSketching({ id: sk })
+            return
+          }
           // A tap on a highlight opens it
           if (d.getSelection()?.isCollapsed === false) return
           const hit = highlightAt(d, e.clientX, e.clientY, painted.current)
@@ -586,8 +597,8 @@ function ZimReader({ id, jump, settings, onBack, toast }: { id: string; jump: Zi
     readAloud.play(top ? Math.max(0, readAloud.offsetOf(top.node, top.offset)) : 0)
   }
 
-  const saveNew = async (color: HighlightColor, note: string) => {
-    if (!pending || !itemId) return
+  const saveNew = async (color: HighlightColor, note: string, sketch?: string, anchor = pending) => {
+    if (!anchor || !itemId) return
     await saveHighlight({
       id: crypto.randomUUID(),
       itemId,
@@ -595,16 +606,17 @@ function ZimReader({ id, jump, settings, onBack, toast }: { id: string; jump: Zi
       itemLink: null,
       feedTitle: title,
       imageUrl: null,
-      text: pending.text,
-      start: pending.start,
-      prefix: pending.prefix,
+      text: anchor.text,
+      start: anchor.start,
+      prefix: anchor.prefix,
       color,
       note: note.trim(),
       createdAt: Date.now(),
+      ...(sketch ? { sketch } : {}),
     })
     doc()?.getSelection()?.removeAllRanges()
     setPending(null)
-    toast('Highlighted')
+    toast(sketch ? 'Sketch saved' : 'Highlighted')
   }
   const quote = (text: string, note?: string) => quoteText({ text, itemTitle: pageTitle || title, feedTitle: pageTitle && pageTitle !== title ? title : '', itemLink: null }, note)
 
@@ -750,8 +762,44 @@ function ZimReader({ id, jump, settings, onBack, toast }: { id: string; jump: Zi
             setPending(null)
             setEditing(null)
           }}
+          onSketch={
+            pending
+              ? () => {
+                  setSketching({ anchor: pending })
+                  setPending(null)
+                  doc()?.getSelection()?.removeAllRanges()
+                }
+              : undefined
+          }
         />
       ) : null}
+      {sketching ? (() => {
+        const existing = 'id' in sketching ? highlights.find((h) => h.id === sketching.id) : undefined
+        if ('id' in sketching && !existing) return null
+        return (
+          <SketchEditor
+            quote={'anchor' in sketching ? sketching.anchor.text : existing!.text}
+            initial={existing?.sketch ?? null}
+            initialColor={existing?.color ?? 'pink'}
+            onClose={() => setSketching(null)}
+            onSave={async (sketch, color) => {
+              if (existing) await updateHighlight(existing.id, { sketch, color })
+              else if ('anchor' in sketching) await saveNew(color, '', sketch, sketching.anchor)
+              setSketching(null)
+            }}
+            onDelete={
+              existing
+                ? async () => {
+                    if (!(await confirmDeleteHighlight(existing.text))) return
+                    await deleteHighlight(existing.id)
+                    setSketching(null)
+                    toast('Sketch deleted')
+                  }
+                : undefined
+            }
+          />
+        )
+      })() : null}
 
       {listening ? <Player state={ra} settings={settings} currentTitle={pageTitle || title} hasPrev={false} hasNext={false} nextTitle={null} onPrev={() => undefined} onNext={() => undefined} /> : null}
     </section>
