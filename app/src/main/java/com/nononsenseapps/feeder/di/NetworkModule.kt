@@ -75,6 +75,18 @@ val networkModule =
                     .get(instance<android.app.Application>())
                     .also { store -> store.onChanged = { nudge.changed(true) } }
             }
+        bind<com.nononsenseapps.feeder.model.shelf.ShelfMarks>() with
+            singleton {
+                val nudge = instance<SyncNudge>()
+                val app = instance<android.app.Application>()
+                com.nononsenseapps.feeder.model.shelf.ShelfMarks
+                    .get(app)
+                    .also { store ->
+                        store.onChanged = { nudge.changed(false) }
+                        // A cover picked on another device is fetched here too
+                        store.onRemoteCover = { key, url -> com.nononsenseapps.feeder.model.shelf.BookCovers.fetchInBackground(app, key, url) }
+                    }
+            }
         bind<com.nononsenseapps.feeder.model.audiobooks.AudioPositions>() with
             singleton {
                 val nudge = instance<SyncNudge>()

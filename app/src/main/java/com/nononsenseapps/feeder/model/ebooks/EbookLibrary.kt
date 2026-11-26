@@ -22,6 +22,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import com.nononsenseapps.feeder.model.shelf.BookCovers
+import com.nononsenseapps.feeder.model.shelf.ShelfMarks
+import com.nononsenseapps.feeder.model.shelf.ShelfStatusRules
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -311,7 +314,9 @@ class EbookLibrary private constructor(
         coverDataUrl: String?,
     ) {
         scope.launch {
-            if (coverDataUrl != null && coverDataUrl.startsWith("data:image/")) {
+            // A cover picked from the Internet stays
+            val picked = ShelfMarks.get(context).covers.value.containsKey(ShelfStatusRules.key(ShelfStatusRules.EBOOK, id))
+            if (!picked && coverDataUrl != null && coverDataUrl.startsWith("data:image/")) {
                 runCatching {
                     coverFile(id).writeBytes(Base64.decode(coverDataUrl.substringAfter(','), Base64.DEFAULT))
                     _coverVersion.update { it + 1 }
@@ -319,6 +324,17 @@ class EbookLibrary private constructor(
             }
             patch(id) { it.copy(title = title.ifBlank { it.title }, author = author, described = true) }
         }
+    }
+
+    /** Uses [bytes] (a picture from the Internet) as the book's cover. */
+    fun setCover(
+        id: String,
+        bytes: ByteArray,
+    ): Boolean {
+        val small = BookCovers.small(bytes) ?: return false
+        coverFile(id).writeBytes(small)
+        _coverVersion.update { it + 1 }
+        return true
     }
 
     /** Frees the space on the phone; the book stays in Dropbox. A book read in place leaves the library, its file stays. */

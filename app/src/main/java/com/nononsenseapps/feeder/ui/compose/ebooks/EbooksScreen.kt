@@ -27,6 +27,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.nononsenseapps.feeder.R
+import com.nononsenseapps.feeder.model.shelf.BookStatus
+import com.nononsenseapps.feeder.model.shelf.ShelfMarks
+import com.nononsenseapps.feeder.model.shelf.ShelfStatusRules
+import com.nononsenseapps.feeder.ui.compose.shelf.CoverPickerDialog
 import com.nononsenseapps.feeder.dropbox.DropboxClient
 import com.nononsenseapps.feeder.model.ebooks.Book
 import com.nononsenseapps.feeder.model.ebooks.BookPositions
@@ -116,6 +120,10 @@ fun EbooksScreen(
     }
 
     val shelfPrefs = rememberShelfPrefs("ebooks", defaultCards = true)
+    val marks: ShelfMarks by di.instance()
+    val picked by marks.statuses.collectAsState()
+    var coverFor by remember { mutableStateOf<Book?>(null) }
+    val coverLabel = stringResource(R.string.cover_from_internet)
     val covers by produceState(emptyMap<String, ImageBitmap>(), books, coverVersion) {
         value =
             withContext(Dispatchers.IO) {
@@ -141,7 +149,14 @@ fun EbooksScreen(
             val f = p?.f
             val byOther = p?.let { otherDeviceText(it.by, it.ts, thisDeviceId) }
             val job = jobs.firstOrNull { it.key == "down:${b.id}" || it.key == "up:${b.id}" }
+            val markKey = ShelfStatusRules.key(ShelfStatusRules.EBOOK, b.id)
+            val activity = maxOf(b.lastOpenedAt, p?.ts ?: 0)
+            val auto = ShelfStatusRules.auto(f, opened = b.lastOpenedAt > 0)
+            val status = ShelfStatusRules.effective(auto, picked[markKey], activity)
             ShelfItem(
+                status = status,
+                sortAt = if (status == BookStatus.NEW) b.addedAt else maxOf(activity, picked[markKey]?.ts ?: 0),
+                onStatus = { marks.setStatus(markKey, it) },
                 key = b.id,
                 title = b.title,
                 subtitle = b.author,
@@ -216,6 +231,7 @@ fun EbooksScreen(
                                 ) { askRemove(b) },
                             )
                         }
+                        add(ShelfAction(coverLabel) { coverFor = b })
                         if (b.dropboxPath != null) add(ShelfAction(deleteDropboxLabel) { deleting = b })
                     },
             )
@@ -244,6 +260,16 @@ fun EbooksScreen(
                 .filterNot { it.key.startsWith("down:") || it.key.startsWith("up:") }
                 .map { ShelfJob(it.key, it.label, it.done, it.total) },
     )
+
+    coverFor?.let { b ->
+        CoverPickerDialog(
+            key = ShelfStatusRules.key(ShelfStatusRules.EBOOK, b.id),
+            query = listOf(b.title, b.author).filter { it.isNotBlank() }.joinToString(" "),
+            audiobook = false,
+            marks = marks,
+            onDismiss = { coverFor = null },
+        )
+    }
 
     deleting?.let { book ->
         DeleteFromDropboxDialog(

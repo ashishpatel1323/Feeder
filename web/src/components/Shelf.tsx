@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { formatBytes } from '../lib/offline'
 import { DropboxButton } from './DropboxPanel'
 import { Icon, IconButton, type IconName } from './Icon'
+import { STATUS_LABEL, STATUS_ORDER, type BookStatus } from '../lib/shelfMarks'
 import { BOOK_TABS, bookCounts, rememberBookCount, rememberBookTab, tabKeys, type BookTab } from './Tabs'
 
 /**
@@ -49,6 +50,12 @@ export interface ShelfItem {
   busy?: string
   onOpen: () => void
   actions: ShelfAction[]
+  /** Current, Not started yet or Completed: the shelf groups by it when items have one */
+  status?: BookStatus
+  /** Order inside its group, newest first (last read or played, added, finished) */
+  sortAt?: number
+  /** Picks the status by hand, from the item's ⋮ menu */
+  onStatus?: (s: BookStatus) => void
 }
 
 function useStored<T extends string>(key: string, allowed: readonly T[], fallback: T): [T, (v: T) => void] {
@@ -77,8 +84,12 @@ function useStored<T extends string>(key: string, allowed: readonly T[], fallbac
 export function useShelfPrefs(tab: string, defaultView: ShelfView) {
   const [show, setShow] = useStored<Show>(`feeder.${tab}Show`, ['all', 'device', 'cloud'], 'all')
   const [view, setView] = useStored<ShelfView>(`feeder.${tab}View`, ['cards', 'list'], defaultView)
-  return { show, setShow, view, setView }
+  // The Completed group starts closed, so finished books don't push the rest down
+  const [done, setDone] = useStored<'open' | 'closed'>(`feeder.${tab}Done`, ['open', 'closed'], 'closed')
+  return { show, setShow, view, setView, doneOpen: done === 'open', setDoneOpen: (o: boolean) => setDone(o ? 'open' : 'closed') }
 }
+
+const STATUS_ICON: Record<BookStatus, IconName> = { new: 'hourglass', current: 'book', done: 'check' }
 
 /** Where an item is, in words and an icon. */
 export function Availability({ where, size, busy }: { where: Where; size: number; busy?: string }) {
@@ -163,7 +174,7 @@ export function GeneratedCover({ title, icon, small }: { title: string; icon: Ic
  * "On this device" and "In Dropbox" sections, filtered by [show], as cards or rows. [streams]:
  * what is in Dropbox plays from there right away (audiobooks), so it isn't dimmed.
  */
-export function Shelf(p: { items: ShelfItem[]; show: Show; view: ShelfView; emptyDevice: string; streams?: boolean }) {
+export function Shelf(p: { items: ShelfItem[]; show: Show; view: ShelfView; emptyDevice: string; streams?: boolean; doneOpen?: boolean; setDoneOpen?: (o: boolean) => void }) {
   const [menu, setMenu] = useState<string | null>(null)
   const onDevice = p.items.filter((i) => i.where !== 'cloud')
   const cloud = p.items.filter((i) => i.where === 'cloud')
@@ -172,11 +183,31 @@ export function Shelf(p: { items: ShelfItem[]; show: Show; view: ShelfView; empt
   const show: Show = cloud.length ? p.show : 'all'
 
   const more = (i: ShelfItem) =>
-    i.actions.length ? (
+    i.actions.length || i.onStatus ? (
       <span className="book-more" onClick={(e) => e.stopPropagation()}>
         <IconButton icon="moreVert" label={`More for ${i.title}`} onClick={() => setMenu(menu === i.key ? null : i.key)} />
         {menu === i.key ? (
-          <span className="book-menu" role="menu">
+          <span className="book-menu" role="menu" onMouseLeave={() => setMenu(null)} ref={keepInPage}>
+            {i.onStatus ? (
+              <span className="status-picker" role="radiogroup" aria-label="Status">
+                {(['new', 'current', 'done'] as const).map((st) => (
+                  <button
+                    key={st}
+                    type="button"
+                    role="radio"
+                    aria-checked={(i.status ?? 'new') === st}
+                    className={(i.status ?? 'new') === st ? 'on' : ''}
+                    onClick={() => {
+                      setMenu(null)
+                      i.onStatus?.(st)
+                    }}
+                  >
+                    <Icon name={STATUS_ICON[st]} size={20} />
+                    {STATUS_LABEL[st]}
+                  </button>
+                ))}
+              </span>
+            ) : null}
             {i.actions.map((a) => (
               <button
                 key={a.label}
@@ -194,6 +225,16 @@ export function Shelf(p: { items: ShelfItem[]; show: Show; view: ShelfView; empt
         ) : null}
       </span>
     ) : null
+
+  /** A menu that would stick out past the page's left edge opens to the right instead */
+  const keepInPage = (el: HTMLSpanElement | null) => {
+    if (!el) return
+    const page = el.closest('.manage-pane')?.getBoundingClientRect()
+    if (page && el.getBoundingClientRect().left < page.left) {
+      el.style.right = 'auto'
+      el.style.left = '0'
+    }
+  }
 
   const quick = (i: ShelfItem, cls: string) =>
     i.quick ? (
@@ -270,6 +311,42 @@ export function Shelf(p: { items: ShelfItem[]; show: Show; view: ShelfView; empt
   )
 
   const group = (list: ShelfItem[]) => (p.view === 'cards' ? <div className="books-grid">{list.map(card)}</div> : <div className="lib-list">{list.map(row)}</div>)
+
+  if (p.items.some((i) => i.status)) {
+    // Grouped like the Voice app; where a book is stays the chips' filter and each cover's badge
+    const shown = show === 'all' ? p.items : show === 'device' ? onDevice : cloud
+    if (!shown.length && show === 'device') return <p className="muted shelf-none">{p.emptyDevice}</p>
+    return (
+      <>
+        {STATUS_ORDER.map((st) => {
+          const list = shown.filter((i) => (i.status ?? 'new') === st).sort((a, b) => (b.sortAt ?? 0) - (a.sortAt ?? 0))
+          if (!list.length) return null
+          const collapsible = st === 'done'
+          const open = !collapsible || !!p.doneOpen
+          const head = (
+            <>
+              {STATUS_LABEL[st]} <span className="status-count">{list.length}</span>
+              {collapsible ? <Icon name={open ? 'expandLess' : 'expandMore'} size={20} /> : null}
+            </>
+          )
+          return (
+            <section key={st} className="status-group" aria-label={STATUS_LABEL[st]}>
+              <h2 className="status-head">
+                {collapsible ? (
+                  <button type="button" aria-expanded={open} onClick={() => p.setDoneOpen?.(!open)}>
+                    {head}
+                  </button>
+                ) : (
+                  head
+                )}
+              </h2>
+              {open ? group(list) : null}
+            </section>
+          )
+        })}
+      </>
+    )
+  }
 
   return (
     <>
@@ -511,7 +588,7 @@ export function LibraryListing(p: {
           ) : (
             <>
               <ShelfControls {...p.prefs} items={shown} hideView />
-              <Shelf items={shown} show={p.prefs.show} view={p.prefs.view} streams={p.streams} emptyDevice={p.emptyDevice} />
+              <Shelf items={shown} show={p.prefs.show} view={p.prefs.view} streams={p.streams} emptyDevice={p.emptyDevice} doneOpen={p.prefs.doneOpen} setDoneOpen={p.prefs.setDoneOpen} />
             </>
           )
         )}

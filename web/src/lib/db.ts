@@ -162,6 +162,22 @@ export interface Book {
   lastOpenedAt: number
 }
 
+/** A Books status picked by hand (shelfMarks.ts): key "ebook:<id>", "audiobook:<id>" or "zim:<id>". */
+export interface ShelfStatusMark {
+  key: string
+  /** "new", "current" or "done" */
+  s: string
+  ts: number
+}
+
+/** A cover picked from the Internet (shelfMarks.ts): [url] syncs, [data] is this device's small copy. */
+export interface BookCoverMark {
+  key: string
+  url: string
+  ts: number
+  data: string | null
+}
+
 /** Where an ebook was left (synced as kind "bookpos"). */
 export interface BookPos {
   id: string
@@ -311,6 +327,8 @@ class FeederDb extends Dexie {
   history!: EntityTable<HistoryEvent, 'id'>
   recent!: EntityTable<RecentEntry, 'key'>
   ytMeta!: EntityTable<YouTubeMeta, 'id'>
+  shelfStatus!: EntityTable<ShelfStatusMark, 'key'>
+  bookCovers!: EntityTable<BookCoverMark, 'key'>
 
   constructor() {
     super('feeder-web')
@@ -354,6 +372,8 @@ class FeederDb extends Dexie {
     this.version(9).stores({ ytMeta: '&id' })
     // History: everything opened, and highlights, notes and feeds made or deleted (recent.ts)
     this.version(10).stores({ recent: '&key, at, synced' })
+    // Books: statuses and covers picked by hand (shelfMarks.ts; synced as "shelfstatus" / "bookcover")
+    this.version(11).stores({ shelfStatus: '&key', bookCovers: '&key' })
   }
 }
 

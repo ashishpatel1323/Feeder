@@ -25,16 +25,22 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.HourglassEmpty
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.ViewAgenda
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -63,6 +69,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -70,6 +78,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import coil3.compose.AsyncImage
 import com.nononsenseapps.feeder.R
+import com.nononsenseapps.feeder.model.shelf.BookStatus
 import com.nononsenseapps.feeder.ui.compose.theme.FeederTokens
 
 /**
@@ -122,6 +131,12 @@ class ShelfItem(
     val quick: ShelfQuick? = null,
     val onOpen: () -> Unit,
     val actions: List<ShelfAction> = emptyList(),
+    /** Current, Not started yet or Completed: the shelf groups by it when items have one */
+    val status: BookStatus? = null,
+    /** Order inside its group, newest first (last read or played, added, finished) */
+    val sortAt: Long = 0,
+    /** Picks the status by hand, from the item's ⋮ menu */
+    val onStatus: ((BookStatus) -> Unit)? = null,
 )
 
 /** What to show and how, remembered per tab ("ebooks", "zim"). */
@@ -140,6 +155,15 @@ class ShelfPrefs(
     fun updateShow(s: Show) {
         show = s
         prefs.edit { putString("$tab.show", s.name) }
+    }
+
+    /** Whether the Completed group is open (it starts closed, so finished books don't push the rest down) */
+    var doneOpen by mutableStateOf(prefs.getBoolean("$tab.doneOpen", false))
+        private set
+
+    fun updateDoneOpen(open: Boolean) {
+        doneOpen = open
+        prefs.edit { putBoolean("$tab.doneOpen", open) }
     }
 
     fun updateCards(c: Boolean) {
@@ -269,6 +293,10 @@ fun LazyGridScope.shelf(
     /** What is in Dropbox plays from there right away (audiobooks), so it isn't dimmed */
     streams: Boolean = false,
 ) {
+    if (items.any { it.status != null }) {
+        statusShelf(items, prefs, emptyDevice, streams)
+        return
+    }
     val onPhone = items.filter { it.where != Where.CLOUD }
     val cloud = items.filter { it.where == Where.CLOUD }
     // The chips are hidden while nothing is only in Dropbox: a filter chosen before (say In Dropbox,
@@ -296,6 +324,121 @@ fun LazyGridScope.shelf(
     }
 }
 
+/**
+ * The shelf grouped like the Voice app: Current, Not started yet, Completed (closed until tapped).
+ * Where a book is (phone or Dropbox) is the chips' filter and each cover's badge.
+ */
+private fun LazyGridScope.statusShelf(
+    items: List<ShelfItem>,
+    prefs: ShelfPrefs,
+    emptyDevice: String,
+    streams: Boolean,
+) {
+    val anyCloud = items.any { it.where == Where.CLOUD }
+    val show = if (!anyCloud) Show.ALL else prefs.show
+    val shown =
+        when (show) {
+            Show.ALL -> items
+            Show.DEVICE -> items.filter { it.where != Where.CLOUD }
+            Show.CLOUD -> items.filter { it.where == Where.CLOUD }
+        }
+    if (shown.isEmpty() && show == Show.DEVICE) {
+        item(key = "empty:phone", span = { GridItemSpan(maxLineSpan) }) {
+            Text(emptyDevice, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(16.dp))
+        }
+        return
+    }
+    BookStatus.entries.forEach { status ->
+        val group = shown.filter { (it.status ?: BookStatus.NEW) == status }.sortedByDescending { it.sortAt }
+        if (group.isEmpty()) return@forEach
+        val open = status != BookStatus.DONE || prefs.doneOpen
+        item(key = "head:${status.code}", span = { GridItemSpan(maxLineSpan) }) {
+            StatusHead(status, group.size, collapsible = status == BookStatus.DONE, open = open) { prefs.updateDoneOpen(!prefs.doneOpen) }
+        }
+        if (open) items(group, key = { it.key }) { ShelfEntry(it, prefs.cards, streams) }
+    }
+}
+
+fun BookStatus.label(): Int =
+    when (this) {
+        BookStatus.CURRENT -> R.string.shelf_status_current
+        BookStatus.NEW -> R.string.shelf_status_new
+        BookStatus.DONE -> R.string.shelf_status_done
+    }
+
+fun BookStatus.icon(): ImageVector =
+    when (this) {
+        BookStatus.CURRENT -> Icons.Outlined.AutoStories
+        BookStatus.NEW -> Icons.Outlined.HourglassEmpty
+        BookStatus.DONE -> Icons.Outlined.Check
+    }
+
+/** "Current  2", as in Voice: a title and a count, Completed with an arrow to open or close it. */
+@Composable
+private fun StatusHead(
+    status: BookStatus,
+    count: Int,
+    collapsible: Boolean,
+    open: Boolean,
+    onToggle: () -> Unit,
+) {
+    val label = stringResource(status.label())
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .then(if (collapsible) Modifier.clickable(onClickLabel = label, onClick = onToggle) else Modifier)
+                .padding(top = 16.dp, bottom = 6.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.titleLarge)
+        Spacer(Modifier.width(10.dp))
+        Text(
+            count.toString(),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier.background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 2.dp),
+        )
+        if (collapsible) {
+            Spacer(Modifier.weight(1f))
+            Icon(if (open) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, contentDescription = null)
+        }
+    }
+}
+
+/** Not started yet · Current · Completed, as three toggle tiles at the top of a book's ⋮ menu (as in Voice). */
+@Composable
+private fun StatusPicker(
+    current: BookStatus,
+    onPick: (BookStatus) -> Unit,
+) {
+    Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        listOf(BookStatus.NEW, BookStatus.CURRENT, BookStatus.DONE).forEach { st ->
+            val on = st == current
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier =
+                    Modifier
+                        .width(84.dp)
+                        .background(if (on) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(16.dp))
+                        .clickable(role = androidx.compose.ui.semantics.Role.RadioButton) { onPick(st) }
+                        .semantics { selected = on }
+                        .padding(vertical = 10.dp, horizontal = 4.dp),
+            ) {
+                Icon(st.icon(), contentDescription = null, tint = if (on) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    stringResource(st.label()),
+                    style = MaterialTheme.typography.labelMedium,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    color = if (on) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun SectionHead(
     icon: ImageVector,
@@ -320,7 +463,7 @@ private fun ShelfEntry(
 ) {
     var menu by remember { mutableStateOf(false) }
     val more: @Composable () -> Unit = {
-        if (item.actions.isNotEmpty()) {
+        if (item.actions.isNotEmpty() || item.onStatus != null) {
             Box {
                 IconButton(onClick = { menu = true }, modifier = Modifier.size(40.dp)) {
                     Icon(
@@ -330,6 +473,13 @@ private fun ShelfEntry(
                     )
                 }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    item.onStatus?.let { pick ->
+                        StatusPicker(item.status ?: BookStatus.NEW) {
+                            menu = false
+                            pick(it)
+                        }
+                        if (item.actions.isNotEmpty()) HorizontalDivider(Modifier.padding(top = 4.dp))
+                    }
                     item.actions.forEach { a ->
                         DropdownMenuItem(text = { Text(a.label) }, onClick = {
                             menu = false

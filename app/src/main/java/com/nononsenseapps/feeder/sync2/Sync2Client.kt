@@ -69,6 +69,8 @@ const val SYNC2_SERVER = "https://feeder-web-snowy.vercel.app"
  *   bookpos (key: ebook id)       { cfi, f }: where an ebook was left (newest wins)
  *   audiopos (key: audiobook id) { i, h, ms, f }: where an audiobook was left (newest wins):
  *     file index and content hash, ms into that file, 0–1 through the book
+ *   shelfstatus (key: kind:id)    { s }: a Books status picked by hand, "new" / "current" / "done"
+ *   bookcover (key: kind:id)      { url }: a cover picked from the Internet for an ebook or audiobook
  *   dropbox "main"                [DropboxLink], or {"deleted": true} after signing out
  *   history (key: event id)       [HistoryEvent.toValue]: one play, pause, open or close. Never
  *     changes, so events from every device add up; not kept in sync2_known ([HistoryEvent.synced])
@@ -93,6 +95,7 @@ class Sync2Client(
     private val playlistStore: PlaylistStore by instance()
     private val highlightStore: HighlightStore by instance()
     private val bookPositions: BookPositions by instance()
+    private val shelfMarks: com.nononsenseapps.feeder.model.shelf.ShelfMarks by instance()
     private val audioPositions: AudioPositions by instance()
     private val history: ItemHistory by instance()
     private val recent: CentralHistory by instance()
@@ -540,6 +543,18 @@ class Sync2Client(
             }
         }
 
+        // Books statuses and covers picked here since they were last exchanged
+        val knownStatus = dao.getKnownWithPrefix("shelfstatus\n").associateBy { it.k.removePrefix("shelfstatus\n") }
+        for ((key, v) in shelfMarks.statuses.value) {
+            val kn = knownStatus[key]
+            if (kn == null || v.ts > kn.ts) out += Pending("shelfstatus", key, linkedMapOf<String, Any?>("s" to v.s), maxOf(v.ts, (kn?.ts ?: 0) + 1))
+        }
+        val knownCovers = dao.getKnownWithPrefix("bookcover\n").associateBy { it.k.removePrefix("bookcover\n") }
+        for ((key, v) in shelfMarks.covers.value) {
+            val kn = knownCovers[key]
+            if (kn == null || v.ts > kn.ts) out += Pending("bookcover", key, linkedMapOf<String, Any?>("url" to v.url), maxOf(v.ts, (kn?.ts ?: 0) + 1))
+        }
+
         // History events noted here and not sent yet
         for (e in history.unsynced()) out += Pending(HISTORY, e.id, e.toValue(), maxOf(1L, e.at))
 
@@ -757,6 +772,14 @@ class Sync2Client(
                         val cfi = v["cfi"] as? String
                         if (!cfi.isNullOrBlank()) bookPositions.applyRemote(key, cfi, (v["f"] as? Number)?.toDouble() ?: 0.0, ts, DeviceStamp.fromMap(v), (v["p"] as? Number)?.toInt() ?: 0, (v["n"] as? Number)?.toInt() ?: 0)
                     }
+                }
+
+                "shelfstatus" -> {
+                    (v as? Map<*, *>)?.let { m -> (m["s"] as? String)?.let { shelfMarks.applyRemoteStatus(key, it, ts) } }
+                }
+
+                "bookcover" -> {
+                    (v as? Map<*, *>)?.let { m -> (m["url"] as? String)?.let { shelfMarks.applyRemoteCover(key, it, ts) } }
                 }
 
                 "audiopos" -> {

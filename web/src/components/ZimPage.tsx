@@ -34,6 +34,7 @@ import {
 } from '../lib/zim/library'
 import { confirmDropboxDelete, needsDropbox, useDropbox } from './DropboxPanel'
 import { LibraryListing, ListingUnavailable, useShelfPrefs, type ShelfItem } from './Shelf'
+import { autoStatus, effectiveStatus, markKey, setStatus } from '../lib/shelfMarks'
 import { HighlightBar } from './Highlights'
 import { HistoryList } from './History'
 import { Icon, IconButton } from './Icon'
@@ -75,6 +76,18 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
   const fileInput = useRef<HTMLInputElement>(null)
   const dbx = useDropbox()
   const prefs = useShelfPrefs('zim', 'cards')
+  const picked = useLiveQuery(() => db.shelfStatus.where('key').startsWith('zim:').toArray(), []) ?? []
+  // When each site was last opened, on any device (History syncs)
+  const opens = useLiveQuery(() => db.recent.filter((e) => e.t === 'zim' && !e.del).toArray(), []) ?? []
+  const statusOf = useMemo(() => new Map(picked.map((x) => [x.key, x])), [picked])
+  const openedAt = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const e of opens) {
+      const book = e.i.split('\n')[0]
+      m.set(book, Math.max(m.get(book) ?? 0, e.at))
+    }
+    return m
+  }, [opens])
   const [icons, setIcons] = useState<Record<string, string>>({})
   // Landing-page covers come from the service worker, like the reader's pages
   const [swReady, setSwReady] = useState(false)
@@ -213,7 +226,15 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
       if ((!dbx.signedIn || remote) && !remoteCopy && !uploadingNow) actions.push({ label: 'Upload to Dropbox', run: () => needsDropbox(dbx.signedIn, toast, () => upload(b.file, b.title)) })
       if (remoteCopy) actions.push({ label: 'Delete from Dropbox', run: () => void removeFromDropbox(remoteCopy, true) })
       actions.push({ label: remoteCopy ? 'Remove from this device' : 'Delete', run: () => void remove(b) })
+      const mk = markKey('zim', b.id)
+      const mine = statusOf.get(mk)
+      const opened = openedAt.get(b.id) ?? 0
+      // A site has no end, so it never becomes Completed by itself
+      const status = effectiveStatus(autoStatus(null, opened > 0 || !!lastPath(b.id), false), mine, opened)
       return {
+        status,
+        sortAt: Math.max(opened, mine?.ts ?? 0),
+        onStatus: (st) => void setStatus(mk, st),
         key: `local:${b.file}`,
         title: b.title,
         subtitle: b.description,
@@ -233,6 +254,7 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
     ...onlyInDropbox.map(
       (f): ShelfItem => ({
         key: `dbx:${f.id}`,
+        status: 'new',
         title: f.name.replace(/\.zim$/i, '').replace(/_/g, ' '),
         detail: formatBytes(f.size),
         cover: icons[f.name] || null,

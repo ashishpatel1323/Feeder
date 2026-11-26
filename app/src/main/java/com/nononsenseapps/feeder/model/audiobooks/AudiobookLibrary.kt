@@ -1,6 +1,8 @@
 package com.nononsenseapps.feeder.model.audiobooks
 
 import android.content.Context
+import com.nononsenseapps.feeder.model.shelf.ShelfMarks
+import com.nononsenseapps.feeder.model.shelf.ShelfStatusRules
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
@@ -302,7 +304,9 @@ class AudiobookLibrary private constructor(
                 }
             }
         }
-        cover?.let {
+        // A cover picked from the Internet stays
+        val picked = ShelfMarks.get(context).covers.value.containsKey(ShelfStatusRules.key(ShelfStatusRules.AUDIOBOOK, b.id))
+        cover?.takeUnless { picked }?.let {
             coverFile(b.id).writeBytes(it)
             _version.update { v -> v + 1 }
         }
@@ -319,6 +323,17 @@ class AudiobookLibrary private constructor(
             small.compress(Bitmap.CompressFormat.JPEG, 85, out)
             out.toByteArray()
         }
+    }
+
+    /** Uses [bytes] (a picture from the Internet) as the book's cover. */
+    fun setCover(
+        id: String,
+        bytes: ByteArray,
+    ): Boolean {
+        val small = smallCover(bytes) ?: return false
+        coverFile(id).writeBytes(small)
+        _version.update { it + 1 }
+        return true
     }
 
     fun markOpened(id: String) = patch(id) { it.copy(lastOpenedAt = System.currentTimeMillis()) }
