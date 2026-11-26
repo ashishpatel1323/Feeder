@@ -26,6 +26,7 @@ import com.nononsenseapps.feeder.db.COL_TAG
 import com.nononsenseapps.feeder.db.COL_TITLE
 import com.nononsenseapps.feeder.db.COL_URL
 import com.nononsenseapps.feeder.db.COL_WHEN_MODIFIED
+import com.nononsenseapps.feeder.db.COL_YOUTUBE_MUSIC
 import com.nononsenseapps.feeder.db.FEEDS_TABLE_NAME
 import java.net.URL
 import java.time.Instant
@@ -67,6 +68,8 @@ data class Feed
         @ColumnInfo(name = COL_FETCH_OG_IMAGES) var fetchOgImages: Boolean = false,
         @ColumnInfo(name = COL_BLOCK_RULES) var blockRules: String = "",
         @ColumnInfo(name = COL_ALLOW_RULES) var allowRules: String = "",
+        // A YouTube channel listed under Music subscriptions in the YouTube tab (synced with the feed)
+        @ColumnInfo(name = COL_YOUTUBE_MUSIC) var youtubeMusic: Boolean = false,
     ) {
         constructor() : this(id = ID_UNSET)
 

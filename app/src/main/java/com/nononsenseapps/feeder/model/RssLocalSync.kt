@@ -71,6 +71,8 @@ class RssLocalSync(
         minFeedAgeMinutes: Int = 5,
         // Used in tests to force network without having to wait
         debugReallyForceNetwork: Boolean = false,
+        // Only these feeds (the YouTube tab refreshes its channels only); null = feedId/feedTag decide
+        onlyFeedIds: Set<Long>? = null,
     ): Boolean {
         // Offline mode: nothing is fetched or synced
         if (repository.offlineMode.value) return false
@@ -87,6 +89,7 @@ class RssLocalSync(
                         forceNetwork = forceNetwork,
                         minFeedAgeMinutes = minFeedAgeMinutes,
                         debugReallyForceNetwork = debugReallyForceNetwork,
+                        onlyFeedIds = onlyFeedIds,
                     )
                 } finally {
                     repository.setSyncWorkerRunning(false)
@@ -103,6 +106,7 @@ class RssLocalSync(
         minFeedAgeMinutes: Int = 5,
         // Used in tests to force network without having to wait
         debugReallyForceNetwork: Boolean = false,
+        onlyFeedIds: Set<Long>? = null,
     ): Boolean {
         var result = false
         var needFullTextSync = false
@@ -134,6 +138,7 @@ class RssLocalSync(
 
                         val feedsToFetch =
                             feedsToSync(feedId, feedTag, staleTime = staleTime)
+                                .let { feeds -> if (onlyFeedIds == null) feeds else feeds.filter { it.id in onlyFeedIds } }
 
                         logDebug(LOG_TAG, "Syncing ${feedsToFetch.size} feeds")
 

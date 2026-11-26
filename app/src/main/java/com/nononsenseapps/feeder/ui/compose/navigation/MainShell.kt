@@ -53,6 +53,10 @@ fun MainShell(
     val audiobook: com.nononsenseapps.feeder.model.audiobooks.AudiobookPlayer by di.instance()
     val audiobookState by audiobook.state.collectAsState()
     val showAudiobook = showBar && !showPlayer && audiobookState.active && entry?.wantsSharedMiniPlayer() == true
+    // A YouTube video collapsed from its page (or still playing from the reader) shows above every tab
+    val youtube: com.nononsenseapps.feeder.model.youtube.YouTubePlayback by di.instance()
+    val youtubeState by youtube.state.collectAsState()
+    val showYouTube = showBar && youtubeState != null
 
     // The Feeds tab opens on the view used last; Home is the start screen, so switch once to Latest
     LaunchedEffect(navController) {
@@ -81,6 +85,11 @@ fun MainShell(
             bottomBar = {
                 if (showBar) {
                     Column {
+                        if (showYouTube) {
+                            com.nononsenseapps.feeder.ui.compose.youtube.YouTubeMiniPlayer(
+                                onOpen = { YouTubeVideoDestination.navigate(navController, if (it.articleKey.isNotEmpty()) it.itemId else 0L, it.videoId) },
+                            )
+                        }
                         if (showPlayer) {
                             PodcastPlayerBar(
                                 viewState = playerState,

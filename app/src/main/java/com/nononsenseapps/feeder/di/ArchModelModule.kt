@@ -66,6 +66,16 @@ val archModelModule =
         bind<VideoPositions>() with singleton { VideoPositions(di) }
         bind<SponsorBlock>() with singleton { SponsorBlock(instance()) }
         bind<YouTubePlayback>() with singleton { YouTubePlayback(di) }
+        bind<com.nononsenseapps.feeder.model.youtube.InnerTube>() with
+            singleton {
+                com.nononsenseapps.feeder.model.youtube
+                    .InnerTube(instance())
+            }
+        bind<com.nononsenseapps.feeder.model.youtube.YouTubeMetaStore>() with
+            singleton {
+                com.nononsenseapps.feeder.model.youtube
+                    .YouTubeMetaStore(di)
+            }
         bind<OnDeviceSummarizer>() with singleton { GeminiNanoSummarizer(instance<Application>()) }
         bind<FlipCardTexts>() with singleton { FlipCardTexts(di) }
         bindFactory<OpenAISettings, OpenAIClient> { settings -> OpenAIClientDefault(settings) }
@@ -106,4 +116,5 @@ val archModelModule =
         bindWithComposableViewModelScope<com.nononsenseapps.feeder.ui.compose.discover.DiscoverViewModel>()
         bindWithComposableViewModelScope<com.nononsenseapps.feeder.ui.compose.playlists.PlaylistsViewModel>()
         bindWithComposableViewModelScope<com.nononsenseapps.feeder.ui.compose.managefeeds.ManageFeedsViewModel>()
+        bindWithComposableViewModelScope<com.nononsenseapps.feeder.ui.compose.youtube.YouTubeViewModel>()
     }

@@ -215,9 +215,23 @@ class YouTubePlayback(
         }
     }
 
+    private var keepKey: String? = null
+
+    /**
+     * The YouTube tab's video page collapses into the mini player: [key] keeps playing (or stays
+     * paused, ready) when its page goes away next.
+     */
+    fun keepOnClose(key: String) {
+        keepKey = key
+    }
+
     /** The reader's player went away: stops, unless it plays in the background. */
     fun close(key: String) {
         if (attached == key) attached = null
+        if (keepKey == key) {
+            keepKey = null
+            return
+        }
         val current = _state.value ?: return
         if (current.key != key) return
         if (current.background && _player.value?.playWhenReady == true) return

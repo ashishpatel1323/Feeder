@@ -891,7 +891,8 @@ class Sync2Client(
                 "fetchOgImages" to f.fetchOgImages,
                 "blockRules" to f.blockRules,
                 "allowRules" to f.allowRules,
-            )
+                // Only when on, so feeds that aren't music keep the value older versions send
+            ).apply { if (f.youtubeMusic) put("music", true) }
 
         fun applyFeedValue(
             v: Map<*, *>,
@@ -909,6 +910,7 @@ class Sync2Client(
                 fetchOgImages = v["fetchOgImages"] as? Boolean ?: false,
                 blockRules = v["blockRules"] as? String ?: "",
                 allowRules = v["allowRules"] as? String ?: "",
+                youtubeMusic = v["music"] as? Boolean ?: false,
                 whenModified = Instant.ofEpochMilli(ts),
             )
 
