@@ -63,6 +63,7 @@ const val COL_HN_ID = "hn_id"
 const val COL_HN_CHECKED_TIME = "hn_checked_time"
 const val COL_OFFLINE_TIME = "offline_time"
 const val COL_ENCLOSURE_DURATION = "enclosure_duration"
+const val COL_YOUTUBE_MUSIC = "youtube_music"
 
 // year 5000
 val FAR_FUTURE = Instant.ofEpochSecond(95635369646)

@@ -135,6 +135,7 @@ fun SettingsScreen(
     onNavigateToTextSettingsScreen: () -> Unit,
     settingsViewModel: SettingsViewModel,
     modifier: Modifier = Modifier,
+    onNavigateToBottomBarTabs: () -> Unit = {},
 ) {
     val viewState by settingsViewModel.viewState.collectAsStateWithLifecycle()
 
@@ -248,6 +249,7 @@ fun SettingsScreen(
             translateArticlesByDefault = viewState.translateArticlesByDefault,
             onTranslateArticlesByDefault = settingsViewModel::setTranslateArticlesByDefault,
             onTextSettings = onNavigateToTextSettingsScreen,
+            onBottomBarTabs = onNavigateToBottomBarTabs,
             currentFontSelection = viewState.font,
             isPagingMode = viewState.isPagingMode,
             onIsPagingModeChange = settingsViewModel::setIsPagingMode,
@@ -456,6 +458,7 @@ fun SettingsList(
     justifyText: Boolean,
     onJustifyTextChange: (Boolean) -> Unit,
     onTextSettings: () -> Unit,
+    onBottomBarTabs: () -> Unit = {},
     onSendFeedback: () -> Unit,
     downloadedLanguagePairs: List<LanguagePairInfo>,
     onDeleteLanguagePair: (source: String, target: String) -> Unit,
@@ -595,6 +598,11 @@ fun SettingsList(
                 currentUiFontOption.name,
                 title = stringResource(R.string.text_settings),
                 onClick = onTextSettings,
+            )
+            ExternalSetting(
+                currentValue = stringResource(R.string.bottom_bar_tabs_summary),
+                title = stringResource(R.string.bottom_bar_tabs),
+                onClick = onBottomBarTabs,
             )
         }
 

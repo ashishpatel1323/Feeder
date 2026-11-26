@@ -39,10 +39,13 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.outlined.Audiotrack
 import androidx.compose.material.icons.outlined.Bedtime
 import androidx.compose.material.icons.outlined.BookmarkBorder
@@ -164,6 +167,11 @@ internal fun FlowVideo(
     details: VideoDetails,
     start: Int,
     modifier: Modifier = Modifier,
+    // The YouTube tab's video page: a collapse chevron, previous/next videos and the quality as "720p"
+    onCollapse: (() -> Unit)? = null,
+    onPrevious: (() -> Unit)? = null,
+    onNext: (() -> Unit)? = null,
+    autoPlay: Boolean = false,
 ) {
     val playback: YouTubePlayback by LocalDI.current.instance()
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -173,7 +181,8 @@ internal fun FlowVideo(
     DisposableEffect(key) {
         // An article's own video is ready to play; videos inside an article's text wait for a
         // tap, so several on one page don't take the one player from each other
-        if (articleKey.isNotEmpty()) open()
+        if (articleKey.isNotEmpty() || autoPlay) open()
+        if (autoPlay) playback.player.value?.play()
         onDispose { playback.close(key) }
     }
     DisposableEffect(lifecycleOwner, key) {
@@ -229,6 +238,9 @@ internal fun FlowVideo(
         onToggleFullscreen = { fullscreen = true },
         onSheet = { sheet = it },
         modifier = modifier,
+        onCollapse = onCollapse,
+        onPrevious = onPrevious,
+        onNext = onNext,
     )
     if (!fullscreen) {
         sheet?.let { PlayerSheetContent(it, current, exo, onSheet = { next -> sheet = next }) }
@@ -260,6 +272,9 @@ internal fun FlowVideo(
                 onToggleFullscreen = { fullscreen = false },
                 onSheet = { sheet = it },
                 modifier = Modifier.fillMaxSize(),
+                onPrevious = onPrevious,
+                onNext = onNext,
+                qualityAsHeight = onCollapse != null,
             )
             sheet?.let { PlayerSheetContent(it, current, exo, onSheet = { next -> sheet = next }) }
         }
@@ -276,6 +291,10 @@ private fun VideoSurface(
     onToggleFullscreen: () -> Unit,
     onSheet: (PlayerSheet?) -> Unit,
     modifier: Modifier = Modifier,
+    onCollapse: (() -> Unit)? = null,
+    onPrevious: (() -> Unit)? = null,
+    onNext: (() -> Unit)? = null,
+    qualityAsHeight: Boolean = onCollapse != null,
 ) {
     val playback: YouTubePlayback by LocalDI.current.instance()
     val prefs by playback.playerPrefs.collectAsState()
@@ -387,6 +406,11 @@ private fun VideoSurface(
 
         AnimatedVisibility(visible = controls, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.fillMaxSize().background(Scrim)) {
+                if (onCollapse != null) {
+                    IconButton(onClick = onCollapse, modifier = Modifier.align(Alignment.TopStart).padding(4.dp)) {
+                        Icon(Icons.Filled.KeyboardArrowDown, contentDescription = stringResource(R.string.player_collapse), tint = Color.White)
+                    }
+                }
                 // Top: sleep timer and settings
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -423,11 +447,17 @@ private fun VideoSurface(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.align(Alignment.Center),
                 ) {
-                    IconButton(onClick = {
-                        player.seekBack()
-                        touchedAt = System.currentTimeMillis()
-                    }) {
-                        Icon(Icons.Filled.Replay10, contentDescription = stringResource(R.string.skip_back_10), tint = Color.White, modifier = Modifier.size(32.dp))
+                    if (onPrevious != null) {
+                        IconButton(onClick = onPrevious) {
+                            Icon(Icons.Filled.SkipPrevious, contentDescription = stringResource(R.string.player_previous), tint = Color.White, modifier = Modifier.size(36.dp))
+                        }
+                    } else {
+                        IconButton(onClick = {
+                            player.seekBack()
+                            touchedAt = System.currentTimeMillis()
+                        }) {
+                            Icon(Icons.Filled.Replay10, contentDescription = stringResource(R.string.skip_back_10), tint = Color.White, modifier = Modifier.size(32.dp))
+                        }
                     }
                     Surface(
                         shape = CircleShape,
@@ -458,11 +488,17 @@ private fun VideoSurface(
                             }
                         }
                     }
-                    IconButton(onClick = {
-                        player.seekForward()
-                        touchedAt = System.currentTimeMillis()
-                    }) {
-                        Icon(Icons.Filled.Forward10, contentDescription = stringResource(R.string.skip_forward_10), tint = Color.White, modifier = Modifier.size(32.dp))
+                    if (onNext != null) {
+                        IconButton(onClick = onNext) {
+                            Icon(Icons.Filled.SkipNext, contentDescription = stringResource(R.string.player_next), tint = Color.White, modifier = Modifier.size(36.dp))
+                        }
+                    } else {
+                        IconButton(onClick = {
+                            player.seekForward()
+                            touchedAt = System.currentTimeMillis()
+                        }) {
+                            Icon(Icons.Filled.Forward10, contentDescription = stringResource(R.string.skip_forward_10), tint = Color.White, modifier = Modifier.size(32.dp))
+                        }
                     }
                 }
 
@@ -486,7 +522,17 @@ private fun VideoSurface(
                         }
                         Spacer(Modifier.weight(1f))
                         if (state.height > 0) {
-                            Pill(text = if (state.isHd) "HD" else "SD", onClick = { onSheet(PlayerSheet.QUALITY) })
+                            Pill(
+                                text =
+                                    if (qualityAsHeight) {
+                                        "${state.height}p"
+                                    } else if (state.isHd) {
+                                        "HD"
+                                    } else {
+                                        "SD"
+                                    },
+                                onClick = { onSheet(PlayerSheet.QUALITY) },
+                            )
                         }
                         Surface(shape = CircleShape, color = PillColor, contentColor = Color.White, onClick = onToggleFullscreen) {
                             Icon(
@@ -772,7 +818,7 @@ private fun PlayerSheetContent(
 }
 
 @Composable
-private fun ChapterList(
+internal fun ChapterList(
     chapters: List<Chapter>,
     current: Chapter?,
     onClick: (Chapter) -> Unit,
@@ -1138,7 +1184,7 @@ private fun subtitleSizeLabel(size: SubtitleSize): String =
         },
     )
 
-private fun relativeDate(yyyymmdd: String?): String? {
+internal fun relativeDate(yyyymmdd: String?): String? {
     if (yyyymmdd == null || yyyymmdd.length != 8) return null
     return try {
         val time = SimpleDateFormat("yyyyMMdd", Locale.ROOT).parse(yyyymmdd)?.time ?: return null

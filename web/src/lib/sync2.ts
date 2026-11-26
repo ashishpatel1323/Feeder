@@ -93,6 +93,8 @@ export interface FeedValue {
   fetchOgImages: boolean
   blockRules: string
   allowRules: string
+  /** Only sent when true */
+  music?: boolean
 }
 
 export interface BookPosValue {
@@ -360,6 +362,7 @@ export function feedValue(f: Feed): FeedValue {
     fetchOgImages: f.fetchOgImages,
     blockRules: f.blockRules,
     allowRules: f.allowRules,
+    ...(f.youtubeMusic ? { music: true } : {}),
   }
 }
 
@@ -376,6 +379,7 @@ function applyFeedValue(v: Partial<FeedValue>, base: Feed, ts: number): Feed {
     fetchOgImages: v.fetchOgImages ?? false,
     blockRules: v.blockRules ?? '',
     allowRules: v.allowRules ?? '',
+    youtubeMusic: v.music ?? false,
     whenModified: ts,
   }
 }

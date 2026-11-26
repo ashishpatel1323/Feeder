@@ -52,11 +52,12 @@ private const val LOG_TAG = "FEEDER_APPDB"
         SyncDevice::class,
         Sync2Known::class,
         HiddenItem::class,
+        YouTubeVideoMeta::class,
     ],
     views = [
         FeedsWithItemsForNavDrawer::class,
     ],
-    version = 44,
+    version = 45,
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -77,6 +78,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun syncDeviceDao(): SyncDeviceDao
 
     abstract fun sync2Dao(): Sync2Dao
+
+    abstract fun youTubeVideoMetaDao(): YouTubeVideoMetaDao
 
     companion object {
         // For Singleton instantiation
@@ -147,6 +150,7 @@ fun getAllMigrations(di: DI) =
         MIGRATION_41_42,
         MigrationFrom42To43,
         MigrationFrom43To44,
+        MigrationFrom44To45,
     )
 
 /*
@@ -277,6 +281,22 @@ object MIGRATION_41_42 : Migration(41, 42) {
         db.execSQL(
             """
             CREATE TABLE IF NOT EXISTS `hidden_items` (`feed_url` TEXT NOT NULL, `guid` TEXT NOT NULL, `ts` INTEGER NOT NULL, PRIMARY KEY(`feed_url`, `guid`))
+            """.trimIndent(),
+        )
+    }
+}
+
+/** YouTube tab: the music flag on feeds, and video lengths/views looked up for subscription rows. */
+object MigrationFrom44To45 : Migration(44, 45) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            ALTER TABLE feeds ADD COLUMN youtube_music INTEGER NOT NULL DEFAULT 0
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `youtube_video_meta` (`video_id` TEXT NOT NULL, `duration` INTEGER NOT NULL, `views` INTEGER, `likes` INTEGER, `is_short` INTEGER NOT NULL, `is_live` INTEGER NOT NULL, `checked_at` INTEGER NOT NULL, PRIMARY KEY(`video_id`))
             """.trimIndent(),
         )
     }

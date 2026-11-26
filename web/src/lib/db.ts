@@ -13,6 +13,8 @@ export interface Feed {
   fetchOgImages: boolean
   blockRules: string
   allowRules: string
+  /** Listed under Music subscriptions in the Android YouTube tab */
+  youtubeMusic?: boolean
   /** Epoch millis; the newer side wins when syncing. */
   whenModified: number
   // Local only

@@ -571,4 +571,67 @@
   <string name="search_zim_group">In your ZIM files</string>
   <string name="search_ebook">Ebook</string>
   <string name="search_zim_in">ZIM · %1$s</string>
+  <!-- YouTube tab (Flow-style subscriptions and video page) -->
+  <string name="youtube_subscriptions">Subscriptions</string>
+  <string name="youtube_view_grid">Show as cards</string>
+  <string name="youtube_view_list">Show as list</string>
+  <string name="youtube_search_subscriptions">Search subscriptions</string>
+  <string name="youtube_search_subscriptions_hint">Search subscriptions…</string>
+  <string name="youtube_group_all">All</string>
+  <string name="youtube_edit_groups">Edit groups</string>
+  <string name="youtube_edit_group">Edit %1$s</string>
+  <string name="youtube_delete_group">Delete %1$s?</string>
+  <string name="youtube_delete_group_text">Its channels stay subscribed and move out of the group (the folder in Feeds).</string>
+  <string name="youtube_new_group">New group</string>
+  <string name="youtube_no_group">No group</string>
+  <string name="youtube_group_name">Group name</string>
+  <string name="youtube_pick_channels">Channels in this group</string>
+  <string name="youtube_create_and_move">Create and move</string>
+  <string name="youtube_last_refreshed">Last refreshed %1$s</string>
+  <plurals name="youtube_videos_checked">
+    <item quantity="one">%d video checked</item>
+    <item quantity="other">%d videos checked</item>
+  </plurals>
+  <string name="youtube_shorts">Shorts</string>
+  <string name="youtube_live">LIVE</string>
+  <string name="youtube_empty_title">No YouTube subscriptions yet</string>
+  <string name="youtube_empty_text">Your YouTube channel feeds show up here. Add a channel or import your subscriptions.</string>
+  <string name="youtube_add_channels">Add channels</string>
+  <string name="youtube_sort">Sort</string>
+  <string name="youtube_sort_name">A–Z</string>
+  <string name="youtube_sort_recent">Recently added</string>
+  <string name="youtube_sort_active">Most active</string>
+  <string name="youtube_import">Import or add</string>
+  <string name="youtube_import_file">Import OPML or subscriptions.csv</string>
+  <string name="youtube_add_channel">Add a channel</string>
+  <string name="youtube_add_channel_hint">Channel link or @handle</string>
+  <string name="youtube_subscribe">Subscribe</string>
+  <string name="youtube_subscribed">Subscribed</string>
+  <string name="youtube_unsubscribe">Unsubscribe</string>
+  <string name="youtube_move_to_group">Move to group</string>
+  <string name="youtube_move_to_music">Move to music subscriptions</string>
+  <string name="youtube_move_to_videos">Move to video subscriptions</string>
+  <string name="youtube_video_subscriptions">Video subscriptions</string>
+  <string name="youtube_music_subscriptions">Music subscriptions</string>
+  <plurals name="youtube_channels">
+    <item quantity="one">%d channel</item>
+    <item quantity="other">%d channels</item>
+  </plurals>
+  <string name="youtube_channel_added">Subscribed: the channel\'s videos are on their way</string>
+  <string name="youtube_channel_already">You already follow this channel</string>
+  <string name="youtube_channel_not_found">Couldn\'t find a YouTube channel there</string>
+  <string name="youtube_import_failed">Couldn\'t read that file</string>
+  <string name="youtube_import_opml_done">Importing feeds…</string>
+  <plurals name="youtube_import_done">
+    <item quantity="one">Subscribed to %d channel</item>
+    <item quantity="other">Subscribed to %d channels</item>
+  </plurals>
+  <string name="youtube_clear">Clear</string>
+  <string name="youtube_done">Done</string>
+  <string name="youtube_comments">Comments</string>
+  <string name="youtube_replies">%1$s replies</string>
+  <string name="youtube_dislike">Dislike</string>
+  <string name="youtube_close_player">Close player</string>
+  <string name="player_previous">Previous video</string>
+  <string name="player_next">Next video</string>
 </resources>
