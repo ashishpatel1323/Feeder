@@ -43,6 +43,9 @@
   <string name="confirm_delete_extra_forget">The file itself stays where it is.</string>
   <string name="confirm_delete_extra_download">The article stays in Feeder.</string>
   <string name="confirm_delete_extra_group">Its channels stay subscribed.</string>
+  <string name="confirm_delete_title_history_entry">Remove from history?</string>
+  <string name="confirm_delete_extra_history_entry">The %1$s itself is not deleted.</string>
+  <string name="confirm_delete_extra_history_clear">No articles, videos, books, highlights or feeds are deleted.</string>
   <string name="confirm_delete_scope_dropbox_no_copy">Deletes the file from Dropbox, for all your devices.</string>
   <plurals name="confirm_delete_n_items">
     <item quantity="one">%d item</item>

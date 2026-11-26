@@ -21,6 +21,7 @@ import {
 import { syncNow } from '../lib/sync2'
 import type { Toast } from '../lib/toast'
 import { Modal } from './Dialogs'
+import { confirmDelete } from '../lib/confirmDelete'
 import { Icon, IconButton, type IconName } from './Icon'
 import { MoreMenu } from './MoreMenu'
 
@@ -73,7 +74,6 @@ export function HistoryPage(p: {
 }) {
   const [filter, setFilter] = useState<RecentFilter>('all')
   const [query, setQuery] = useState('')
-  const [removing, setRemoving] = useState<RecentEntry | 'all' | null>(null)
   const [deletedFeed, setDeletedFeed] = useState<RecentEntry | null>(null)
   const entries = useLiveQuery(recentEntries, [])
 
@@ -84,10 +84,14 @@ export function HistoryPage(p: {
   const shown = useMemo(() => (entries ?? []).filter((e) => matchesFilter(e, filter) && matchesQuery(e, query)), [entries, filter, query])
   const groups = useMemo(() => groupRecent(shown), [shown])
 
-  const confirmRemove = async () => {
-    const r = removing
-    setRemoving(null)
-    if (!r) return
+  /** Asks first (the shared delete confirmation), then removes one entry or all of them. */
+  const remove = async (r: RecentEntry | 'all') => {
+    const ok = await confirmDelete(
+      r === 'all'
+        ? { title: 'Clear all history?', scope: 'all-devices', confirmLabel: 'Clear', extra: 'Your articles, videos, books, highlights, notes and feeds stay as they are.' }
+        : { title: 'Remove from history?', itemName: titleText(r), scope: 'all-devices', confirmLabel: 'Remove', extra: `The ${thingText(r.t)} itself is not deleted.` },
+    )
+    if (!ok) return
     if (r === 'all') {
       await clearRecent()
       p.toast('History cleared')
@@ -118,7 +122,7 @@ export function HistoryPage(p: {
           <span className="mf-sp" />
           <MoreMenu
             label="History"
-            entries={[{ icon: 'delete', label: 'Clear history', danger: true, disabled: !entries?.length, onClick: () => setRemoving('all') }]}
+            entries={[{ icon: 'delete', label: 'Clear history', danger: true, disabled: !entries?.length, onClick: () => void remove('all') }]}
           />
         </div>
         <label className="hist-search">
@@ -170,7 +174,7 @@ export function HistoryPage(p: {
                         </span>
                       </span>
                     </button>
-                    <MoreMenu label={`More for ${titleText(e)}`} entries={[{ icon: 'delete', label: 'Remove from history', onClick: () => setRemoving(e) }]} />
+                    <MoreMenu label={`More for ${titleText(e)}`} entries={[{ icon: 'delete', label: 'Remove from history', onClick: () => void remove(e) }]} />
                   </div>
                 ))}
               </div>
@@ -178,27 +182,6 @@ export function HistoryPage(p: {
           ))
         )}
       </div>
-      {removing ? (
-        <Modal title={removing === 'all' ? 'Clear all history?' : `Remove “${titleText(removing)}” from history?`} onClose={() => setRemoving(null)}>
-          <div className="form">
-            <p>{removing === 'all' ? 'All history is removed on all your devices.' : 'It is removed from history on all your devices.'}</p>
-            <p className="muted small">
-              {removing === 'all'
-                ? 'Your articles, videos, books, highlights, notes and feeds stay as they are.'
-                : `The ${thingText(removing.t)} itself is not deleted.`}
-            </p>
-            <div className="form-actions">
-              <span className="spacer" />
-              <button type="button" onClick={() => setRemoving(null)} autoFocus>
-                Cancel
-              </button>
-              <button type="button" className="danger" onClick={() => void confirmRemove()}>
-                {removing === 'all' ? 'Clear history' : 'Remove'}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      ) : null}
       {deletedFeed ? (
         <Modal title={deletedFeed.n} onClose={() => setDeletedFeed(null)}>
           <div className="form">

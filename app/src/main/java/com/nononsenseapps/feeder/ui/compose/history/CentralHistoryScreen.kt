@@ -89,6 +89,9 @@ import com.nononsenseapps.feeder.model.history.CentralHistoryRecorder
 import com.nononsenseapps.feeder.model.history.RecentEntry
 import com.nononsenseapps.feeder.model.youtube.VideoPositions
 import com.nononsenseapps.feeder.model.zim.ZimLibrary
+import com.nononsenseapps.feeder.ui.compose.components.ConfirmDeleteDialog
+import com.nononsenseapps.feeder.ui.compose.components.DeleteScope
+import com.nononsenseapps.feeder.ui.compose.components.DeleteVerb
 import com.nononsenseapps.feeder.ui.compose.feed.dateHeaderText
 import com.nononsenseapps.feeder.ui.compose.feed.rememberGroupHeaderLabels
 import com.nononsenseapps.feeder.ui.compose.theme.FeederTokens
@@ -327,31 +330,31 @@ fun CentralHistoryScreen(
     }
 
     askRemove?.let { e ->
-        AlertDialog(
-            onDismissRequest = { askRemove = null },
-            title = { Text(stringResource(R.string.central_history_remove_title, rowTitle(e))) },
-            text = { Text(stringResource(R.string.central_history_remove_body, stringResource(thingOf(e.t)))) },
-            confirmButton = {
-                TextButton(onClick = {
-                    history.remove(e.key)
-                    askRemove = null
-                }) { Text(stringResource(R.string.central_history_remove_confirm)) }
+        ConfirmDeleteDialog(
+            title = stringResource(R.string.confirm_delete_title_history_entry),
+            itemName = rowTitle(e),
+            scope = DeleteScope.ALL_DEVICES,
+            verb = DeleteVerb.REMOVE,
+            extra = stringResource(R.string.confirm_delete_extra_history_entry, stringResource(thingOf(e.t))),
+            onConfirm = {
+                history.remove(e.key)
+                askRemove = null
             },
-            dismissButton = { TextButton(onClick = { askRemove = null }) { Text(stringResource(android.R.string.cancel)) } },
+            onDismiss = { askRemove = null },
         )
     }
     if (askClear) {
-        AlertDialog(
-            onDismissRequest = { askClear = false },
-            title = { Text(stringResource(R.string.central_history_clear_title)) },
-            text = { Text(stringResource(R.string.central_history_clear_body)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    history.clear()
-                    askClear = false
-                }) { Text(stringResource(R.string.central_history_clear_confirm)) }
+        ConfirmDeleteDialog(
+            title = stringResource(R.string.central_history_clear_title),
+            itemName = "",
+            scope = DeleteScope.ALL_DEVICES,
+            verb = DeleteVerb.CLEAR,
+            extra = stringResource(R.string.confirm_delete_extra_history_clear),
+            onConfirm = {
+                history.clear()
+                askClear = false
             },
-            dismissButton = { TextButton(onClick = { askClear = false }) { Text(stringResource(android.R.string.cancel)) } },
+            onDismiss = { askClear = false },
         )
     }
     askResubscribe?.let { e ->
