@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { db, type Highlight, type HighlightColor } from '../lib/db'
 import { deleteHighlight, quoteText, saveHighlight, updateHighlight } from '../lib/highlights'
 import { trackOpen } from '../lib/history'
+import { noteZimPage } from '../lib/recent'
 import { readAloud, type ReadAloudState } from '../lib/readaloud'
 import type { Settings } from '../lib/settings'
 import { firstVisibleText, highlightAt, injectMarkStyles, keepInView, paintHighlights, parseZimItemId, readableRoot, scrollToRange, selectionAnchor, zimItemId } from '../lib/zim/marks'
@@ -543,6 +544,8 @@ function ZimReader({ id, jump, settings, onBack, toast }: { id: string; jump: Zi
       if (at?.id === id) {
         here.current = { path: at.path, title: w.document.title }
         opened.current?.touch()
+        // History: every page read is an entry of its own
+        void noteZimPage(id, at.path, w.document.title).catch(() => undefined)
       }
       const d = w.document
       injectMarkStyles(d)

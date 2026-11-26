@@ -76,7 +76,8 @@ describe('history', () => {
     await joinSync(CODE, KEY)
     await recordHistory('audiobook', 'b1', 'play', { p: 'Ch. 1 · 00:00' }, 'app', 1000)
     await recordHistory('ebook', 'e1', 'close', { p: '37%', x: 'epubcfi(/6/4)' }, 'background', 2000)
-    expect((await syncNow())?.sent).toBe(2)
+    // The two events, and the audiobook's entry in History (recent.ts)
+    expect((await syncNow())?.sent).toBe(3)
     expect((await syncNow())?.sent).toBe(0)
     // Not kept in syncKnown
     expect(await db.syncKnown.where('k').startsWith('history\n').count()).toBe(0)

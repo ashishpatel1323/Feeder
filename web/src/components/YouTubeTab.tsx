@@ -8,6 +8,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db, newFeed, updateFeed, deleteFeeds, type Feed, type Item } from '../lib/db'
 import { addFeed, importOpml, refreshFeeds } from '../lib/refresh'
 import { syncNow } from '../lib/sync2'
+import { noteFeedsDeleted } from '../lib/recent'
 import {
   ageText,
   buildTab,
@@ -357,6 +358,7 @@ const SORTS: { sort: ChannelSort; label: string }[] = [
 export async function unsubscribe(feed: Pick<Feed, 'url'>, title: string): Promise<boolean> {
   const n = await db.items.where('feedUrl').equals(feed.url).count()
   if (!confirm(`Unsubscribe from ${title}? This deletes the feed and its ${n} video${n === 1 ? '' : 's'} here and on your other devices.`)) return false
+  await noteFeedsDeleted([feed.url])
   await deleteFeeds([feed.url])
   void sync()
   return true

@@ -253,6 +253,40 @@ export interface HistoryEvent {
   synced: number
 }
 
+/**
+ * One History entry (recent.ts; synced as "recent"): something opened, or a highlight, note or
+ * feed made or deleted. docs/central-history.md lists the fields.
+ */
+export interface RecentEntry {
+  /** "t:i" for opens, "t:i:a" for changes; "*" is the Clear history marker (at = cleared up to) */
+  key: string
+  t: 'article' | 'youtube' | 'podcast' | 'audiobook' | 'ebook' | 'zim' | 'highlight' | 'note' | 'feed'
+  a: 'open' | 'create' | 'delete'
+  i: string
+  n: string
+  s?: string
+  img?: string
+  at: number
+  f?: number
+  pos?: number
+  dur?: number
+  d?: number
+  pl?: string
+  pn?: string
+  x?: string
+  q?: string
+  c?: HighlightColor
+  u?: string
+  dv?: string
+  dn?: string
+  /** Last change (the sync record's time); the newest wins */
+  ts: number
+  /** 1 = removed from history (sent as { deleted: true }) */
+  del?: number
+  /** 1 once sent to the sync server (or when it came from there) */
+  synced: number
+}
+
 export interface KeyValue {
   key: string
   value: unknown
@@ -275,6 +309,7 @@ class FeederDb extends Dexie {
   audiobooks!: EntityTable<Audiobook, 'id'>
   audioPos!: EntityTable<AudioPos, 'id'>
   history!: EntityTable<HistoryEvent, 'id'>
+  recent!: EntityTable<RecentEntry, 'key'>
   ytMeta!: EntityTable<YouTubeMeta, 'id'>
 
   constructor() {
@@ -317,6 +352,8 @@ class FeederDb extends Dexie {
     this.version(8).stores({ history: '&id, [item+at], at, synced' })
     // The YouTube tab: lengths, views and Shorts flags looked up per video (youtubeTab.ts), local only
     this.version(9).stores({ ytMeta: '&id' })
+    // History: everything opened, and highlights, notes and feeds made or deleted (recent.ts)
+    this.version(10).stores({ recent: '&key, at, synced' })
   }
 }
 

@@ -27,6 +27,7 @@ import { computeFeedStats, formatRate, noStats, STATS_DAYS, timeAgo, type FeedSt
 import { loadClosedFolders, MANAGE_CLOSED_FOLDERS_KEY, saveClosedFolders, toggleFolder } from '../lib/folders'
 import { addFeed, exportOpml, importOpml, refreshFeeds } from '../lib/refresh'
 import { syncNow } from '../lib/sync2'
+import { noteFeedsDeleted } from '../lib/recent'
 import { FeedIcon } from './Sidebar'
 import { Icon, type IconName } from './Icon'
 
@@ -336,6 +337,7 @@ export function ManageFeeds(p: Props) {
 
     const removeTag = async (tag: string, mode: 'keep' | 'unsubscribe') => {
         setDeletingTag(null)
+        if (mode === 'unsubscribe') await noteFeedsDeleted(p.feeds.filter((f) => f.tag === tag).map((f) => f.url))
         const n = await deleteTag(tag, mode)
         if (n) sync()
         p.toast(
@@ -349,6 +351,7 @@ export function ManageFeeds(p: Props) {
         if (!urls.length) return
         const what = urls.length === 1 ? `"${feedDisplayTitle(p.feeds.find((f) => f.url === urls[0]))}"` : `${urls.length} feeds`
         if (!confirm(`Unsubscribe from ${what}? This also removes ${urls.length === 1 ? 'it' : 'them'} from your other devices.`)) return
+        await noteFeedsDeleted(urls)
         await deleteFeeds(urls)
         sync()
         setSelected((s) => new Set([...s].filter((u) => !urls.includes(u))))

@@ -3,12 +3,12 @@ import { Icon, IconButton, type IconName } from './Icon'
 
 /**
  * The places, as on Android: Feeds (Latest, By feed or Discover), YouTube, Playlists, Library,
- * Ebooks, Audiobooks and ZIM. Search is not a tab: ⌘K, /, and the "Search everything" bars open it.
+ * Ebooks, Audiobooks, ZIM and History. Search is not a tab: ⌘K, /, and the "Search everything" bars open it.
  * Discover lives inside Feeds; it is a Tab value only for its G then D shortcut.
  * Which tabs the bottom bar (and the sidebar) shows is picked in Settings > Bottom bar tabs;
  * the others open from rows on Library.
  */
-export type Tab = 'feeds' | 'discover' | 'youtube' | 'playlists' | 'library' | 'books' | 'audiobooks' | 'zim'
+export type Tab = 'feeds' | 'discover' | 'youtube' | 'playlists' | 'library' | 'books' | 'audiobooks' | 'zim' | 'history'
 export type BarTab = Exclude<Tab, 'discover'>
 
 export const TABS: { tab: BarTab; label: string; icon: IconName; key: string; hint: string }[] = [
@@ -19,6 +19,7 @@ export const TABS: { tab: BarTab; label: string; icon: IconName; key: string; hi
   { tab: 'books', label: 'Ebooks', icon: 'book', key: 'b', hint: 'Books from Dropbox and this device' },
   { tab: 'audiobooks', label: 'Audiobooks', icon: 'headphones', key: 'a', hint: 'Audiobooks from Dropbox' },
   { tab: 'zim', label: 'ZIM', icon: 'public', key: 'z', hint: 'Offline websites such as Wikipedia' },
+  { tab: 'history', label: 'History', icon: 'history', key: 'h', hint: 'Everything you opened, on all your devices' },
 ]
 
 /** Shortcuts to places that are not tabs of their own. */
@@ -161,7 +162,7 @@ export function SearchEverything({ onSearch }: { onSearch: () => void }) {
   )
 }
 
-/** G then F / Y / D / P / L / B / A / Z switches tabs, when not typing (as in Gmail). */
+/** G then F / Y / D / P / L / B / A / Z / H switches tabs, when not typing (as in Gmail). */
 export function useTabShortcuts(onTab: (t: Tab) => void, disabled: boolean) {
   useEffect(() => {
     if (disabled) return
@@ -209,7 +210,9 @@ export function LibraryPage(p: {
   onTab: (t: Tab) => void
 }) {
   const bar = useBarTabs()
-  const elsewhere = TABS.filter((t) => !bar.includes(t.tab))
+  // History always has its row; the other tabs only when they're not in the bottom bar
+  const history = TABS.find((t) => t.tab === 'history')!
+  const elsewhere = TABS.filter((t) => !bar.includes(t.tab) && t.tab !== 'history')
   const row = (icon: IconName, title: string, desc: string, count: number | null, onClick: () => void) => (
     <button type="button" className="lib-row" onClick={onClick}>
       <Icon name={icon} size={22} />
@@ -234,6 +237,7 @@ export function LibraryPage(p: {
           {row('bookmark', 'Saved', 'Read later and shared links', p.savedCount, p.onSaved)}
           {row('highlight', 'Highlights', 'Notes and quotes', p.highlightCount, p.onHighlights)}
           {p.showDownloads ? row('download', 'Downloads', 'Videos saved for offline', p.downloadCount, p.onDownloads) : null}
+          {row(history.icon, history.label, history.hint, null, () => p.onTab('history'))}
           {elsewhere.map((t) => (
             <Fragment key={t.tab}>{row(t.icon, t.label, t.hint, null, () => p.onTab(t.tab))}</Fragment>
           ))}
