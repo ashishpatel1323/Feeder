@@ -130,6 +130,7 @@ import com.nononsenseapps.feeder.ApplicationCoroutineScope
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.archmodel.FeedListGrouping
 import com.nononsenseapps.feeder.archmodel.FeedType
+import com.nononsenseapps.feeder.archmodel.Repository
 import com.nononsenseapps.feeder.archmodel.SortingOptions
 import com.nononsenseapps.feeder.db.room.FeedItemCursor
 import com.nononsenseapps.feeder.db.room.ID_SAVED_ARTICLES
@@ -143,7 +144,10 @@ import com.nononsenseapps.feeder.model.export.importSavedArticles
 import com.nononsenseapps.feeder.model.offline.OfflineVideos
 import com.nononsenseapps.feeder.model.opml.exportOpml
 import com.nononsenseapps.feeder.model.opml.importOpml
+import com.nononsenseapps.feeder.ui.compose.components.DeleteRequest
+import com.nononsenseapps.feeder.ui.compose.components.DeleteScope
 import com.nononsenseapps.feeder.ui.compose.components.TranslationProgressContent
+import com.nononsenseapps.feeder.ui.compose.components.rememberDeleteConfirmer
 import com.nononsenseapps.feeder.ui.compose.components.safeSemantics
 import com.nononsenseapps.feeder.ui.compose.deletefeed.DeletableFeed
 import com.nononsenseapps.feeder.ui.compose.deletefeed.DeleteFeedDialog
@@ -303,7 +307,10 @@ fun FeedScreen(
         selectedIds = emptySet()
     }
 
-    fun deleteWithUndo(itemIds: List<Long>) {
+    val deleteConfirmer = rememberDeleteConfirmer()
+    val repositoryForNames: Repository by LocalDI.current.instance()
+
+    fun deleteNowWithUndo(itemIds: List<Long>) {
         coroutineScope.launch {
             val deleted = viewModel.deleteForGood(itemIds)
             snackbarHostState.currentSnackbarData?.dismiss()
@@ -316,6 +323,28 @@ fun FeedScreen(
             if (result == SnackbarResult.ActionPerformed) {
                 viewModel.undoDelete(deleted)
             }
+        }
+    }
+
+    // Asks first (the shared delete confirmation), then deletes with Undo
+    fun deleteWithUndo(itemIds: List<Long>) {
+        if (itemIds.isEmpty()) return
+        coroutineScope.launch {
+            val single = itemIds.size == 1
+            val name =
+                if (single) {
+                    repositoryForNames.getArticle(itemIds.first())?.title.orEmpty()
+                } else {
+                    resources.getQuantityString(R.plurals.confirm_delete_n_articles, itemIds.size, itemIds.size)
+                }
+            deleteConfirmer.ask(
+                DeleteRequest(
+                    title = if (single) R.string.confirm_delete_title_article else R.string.confirm_delete_title_articles,
+                    itemName = name,
+                    scope = DeleteScope.ALL_DEVICES,
+                    onConfirm = { deleteNowWithUndo(itemIds) },
+                ),
+            )
         }
     }
 

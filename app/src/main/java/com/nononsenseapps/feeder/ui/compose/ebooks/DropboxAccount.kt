@@ -30,6 +30,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.dropbox.DropboxClient
+import com.nononsenseapps.feeder.ui.compose.components.ConfirmDeleteDialog
+import com.nononsenseapps.feeder.ui.compose.components.DeleteScope
 import com.nononsenseapps.feeder.ui.compose.feed.PlainTooltipBox
 
 /**
@@ -109,7 +111,7 @@ fun DropboxAccountButton(
     }
 }
 
-/** "Delete <title> from Dropbox? This removes it for all your devices." with Cancel / Delete. */
+/** The shared delete confirmation for a file in Dropbox. */
 @Composable
 fun DeleteFromDropboxDialog(
     title: String,
@@ -117,17 +119,16 @@ fun DeleteFromDropboxDialog(
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.delete_from_dropbox_title, title)) },
-        text = { Text(stringResource(if (keepsPhoneCopy) R.string.delete_from_dropbox_all_keep else R.string.delete_from_dropbox_all)) },
-        confirmButton = {
-            TextButton(onClick = {
-                onDelete()
-                onDismiss()
-            }) { Text(stringResource(R.string.zim_delete), color = MaterialTheme.colorScheme.error) }
+    ConfirmDeleteDialog(
+        title = stringResource(R.string.confirm_delete_title_dropbox),
+        itemName = title,
+        scope = DeleteScope.DROPBOX,
+        keepsLocalCopy = keepsPhoneCopy,
+        onConfirm = {
+            onDelete()
+            onDismiss()
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(android.R.string.cancel)) } },
+        onDismiss = onDismiss,
     )
 }
 

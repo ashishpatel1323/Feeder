@@ -1,23 +1,10 @@
 package com.nononsenseapps.feeder.ui.compose.audiobooks
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.outlined.AudioFile
-import androidx.compose.material.icons.outlined.Folder
-import com.nononsenseapps.feeder.ui.compose.shelf.CoverShape
-import com.nononsenseapps.feeder.ui.compose.shelf.GeneratedCover
-import com.nononsenseapps.feeder.ui.compose.shelf.ShelfAction
-import com.nononsenseapps.feeder.ui.compose.shelf.ShelfControls
-import com.nononsenseapps.feeder.ui.compose.shelf.ShelfItem
-import com.nononsenseapps.feeder.ui.compose.shelf.ShelfQuick
-import com.nononsenseapps.feeder.ui.compose.shelf.Where
-import com.nononsenseapps.feeder.ui.compose.shelf.rememberShelfPrefs
-import com.nononsenseapps.feeder.ui.compose.shelf.shelf
-
 import android.graphics.BitmapFactory
 import android.text.format.Formatter
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -53,6 +40,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -65,7 +53,9 @@ import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.outlined.AudioFile
 import androidx.compose.material.icons.outlined.DownloadDone
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -96,8 +86,8 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -125,12 +115,25 @@ import com.nononsenseapps.feeder.model.history.ItemHistory
 import com.nononsenseapps.feeder.sync2.SyncNudge
 import com.nononsenseapps.feeder.sync2.ThisDevice
 import com.nononsenseapps.feeder.sync2.otherDeviceText
+import com.nononsenseapps.feeder.ui.compose.components.DeleteRequest
+import com.nononsenseapps.feeder.ui.compose.components.DeleteScope
+import com.nononsenseapps.feeder.ui.compose.components.DeleteVerb
+import com.nononsenseapps.feeder.ui.compose.components.rememberDeleteConfirmer
 import com.nononsenseapps.feeder.ui.compose.ebooks.DeleteFromDropboxDialog
 import com.nononsenseapps.feeder.ui.compose.ebooks.DropboxAccountButton
 import com.nononsenseapps.feeder.ui.compose.ebooks.uploadOrExplain
 import com.nononsenseapps.feeder.ui.compose.feed.PlainTooltipBox
 import com.nononsenseapps.feeder.ui.compose.history.historyItems
 import com.nononsenseapps.feeder.ui.compose.history.rememberHistory
+import com.nononsenseapps.feeder.ui.compose.shelf.CoverShape
+import com.nononsenseapps.feeder.ui.compose.shelf.GeneratedCover
+import com.nononsenseapps.feeder.ui.compose.shelf.ShelfAction
+import com.nononsenseapps.feeder.ui.compose.shelf.ShelfControls
+import com.nononsenseapps.feeder.ui.compose.shelf.ShelfItem
+import com.nononsenseapps.feeder.ui.compose.shelf.ShelfQuick
+import com.nononsenseapps.feeder.ui.compose.shelf.Where
+import com.nononsenseapps.feeder.ui.compose.shelf.rememberShelfPrefs
+import com.nononsenseapps.feeder.ui.compose.shelf.shelf
 import com.nononsenseapps.feeder.ui.compose.theme.FeederTokens
 import com.nononsenseapps.feeder.ui.compose.theme.SensibleTopAppBar
 import kotlinx.coroutines.Dispatchers
@@ -212,6 +215,31 @@ fun AudiobooksScreen(
     val nudge: SyncNudge by di.instance()
     val player: AudiobookPlayer by di.instance()
     val library = remember { AudiobookLibrary.get(context) }
+    val deleteConfirmer = rememberDeleteConfirmer()
+
+    fun askRemoveDownload(b: Audiobook) =
+        deleteConfirmer.ask(
+            DeleteRequest(
+                title = R.string.confirm_delete_title_remove_from_device,
+                itemName = b.title,
+                scope = DeleteScope.THIS_DEVICE,
+                verb = DeleteVerb.REMOVE,
+                extra = R.string.confirm_delete_extra_stays_in_dropbox,
+                onConfirm = { library.removeDownload(b.id) },
+            ),
+        )
+
+    fun askForget(b: Audiobook) =
+        deleteConfirmer.ask(
+            DeleteRequest(
+                title = R.string.confirm_delete_title_forget,
+                itemName = b.title,
+                scope = DeleteScope.THIS_DEVICE,
+                verb = DeleteVerb.REMOVE,
+                extra = R.string.confirm_delete_extra_forget,
+                onConfirm = { library.forget(b.id) },
+            ),
+        )
     val positions = remember { AudioPositions.get(context) }
     val thisDeviceId = remember { ThisDevice.get(context).id }
     val dropbox = remember { DropboxClient.get(context) }
@@ -266,9 +294,9 @@ fun AudiobooksScreen(
             val started = p != null && p.f > 0 && p.f < 0.999
             val actions = mutableListOf<ShelfAction>()
             if (b.dropboxPath != null && !downloaded && !b.onPhone && job == null) actions += ShelfAction(downloadText) { library.download(b.id) }
-            if (downloaded && b.dropboxPath != null && !b.onPhone) actions += ShelfAction(removeDownloadText) { library.removeDownload(b.id) }
+            if (downloaded && b.dropboxPath != null && !b.onPhone) actions += ShelfAction(removeDownloadText) { askRemoveDownload(b) }
             if (b.dropboxPath == null && job == null) actions += ShelfAction(uploadText) { uploadOrExplain(context, link != null, audiobooksWhat) { library.uploadToDropbox(b.id) } }
-            if (b.tracks.any { it.uri != null }) actions += ShelfAction(forgetText) { library.forget(b.id) }
+            if (b.tracks.any { it.uri != null }) actions += ShelfAction(forgetText) { askForget(b) }
             if (b.dropboxPath != null && job == null) actions += ShelfAction(deleteDropboxText) { deleting = b }
             ShelfItem(
                 key = b.id,

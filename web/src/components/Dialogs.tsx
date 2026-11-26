@@ -11,6 +11,7 @@ import { OfflineSection } from './Offline'
 import { isKokoroVoice, kokoro, KOKORO_PREFIX, KOKORO_VOICES, webGpuAvailable, type KokoroStatus } from '../lib/kokoro'
 import { readAloud } from '../lib/readaloud'
 import { Icon, IconButton } from './Icon'
+import { confirmDelete } from '../lib/confirmDelete'
 import { ALWAYS_TABS, MAX_BAR_TABS, saveBarTabs, TABS, useBarTabs, type BarTab } from './Tabs'
 
 export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
@@ -99,8 +100,6 @@ export function EditFeedDialog({ url, onClose, toast }: { url: string; onClose: 
   )
 }
 
-const articlesText = (n: number) => (n === 1 ? 'its 1 article' : `all its ${n} articles`)
-
 /** Deletes a feed and its articles here, then syncs so every other device deletes it too. */
 export async function deleteFeedEverywhere(url: string) {
   await deleteFeed(url)
@@ -108,39 +107,10 @@ export async function deleteFeedEverywhere(url: string) {
   syncNow().catch(() => undefined)
 }
 
-/** Confirms deleting a feed from its page, saying how many articles go with it. */
-export function DeleteFeedDialog({
-  title,
-  articles,
-  saved,
-  onConfirm,
-  onClose,
-}: {
-  title: string
-  articles: number
-  saved: number
-  onConfirm: () => void
-  onClose: () => void
-}) {
-  return (
-    <Modal title={`Delete ${title}?`} onClose={onClose}>
-      <div className="form">
-        <p>
-          The feed and {articlesText(articles)} will be deleted{saved ? `, including ${saved} saved` : ''}.
-        </p>
-        <p className="muted small">It is also deleted on your other synced devices. This can't be undone.</p>
-        <div className="form-actions">
-          <span className="spacer" />
-          <button type="button" onClick={onClose} autoFocus>
-            Cancel
-          </button>
-          <button type="button" className="danger" onClick={onConfirm}>
-            Delete feed
-          </button>
-        </div>
-      </div>
-    </Modal>
-  )
+/** The shared delete confirmation for a feed, saying how many articles go with it. */
+export function confirmDeleteFeed(title: string, articles: number, saved = 0): Promise<boolean> {
+  const what = articles === 1 ? 'Its 1 article goes too' : `All its ${articles} articles go too`
+  return confirmDelete({ title: 'Delete feed?', itemName: title, scope: 'all-devices', extra: `${what}${saved ? `, including ${saved} saved` : ''}.` })
 }
 
 /**
@@ -197,7 +167,7 @@ export function EditFeedForm({
   }
   const remove = async () => {
     const count = await db.items.where('feedUrl').equals(url).count()
-    if (!confirm(`Delete "${draft.customTitle || draft.title || draft.url}" and ${articlesText(count)}? This also removes it from your other devices.`)) return
+    if (!(await confirmDeleteFeed(draft.customTitle || draft.title || draft.url, count))) return
     await deleteFeedEverywhere(url)
     toast('Feed deleted')
     onDeleted()

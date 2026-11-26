@@ -32,12 +32,13 @@ import {
   type CatalogEntry,
   type ZimBook,
 } from '../lib/zim/library'
-import { DeleteFromDropboxDialog, DropboxButton, needsDropbox, useDropbox } from './DropboxPanel'
+import { confirmDropboxDelete, DropboxButton, needsDropbox, useDropbox } from './DropboxPanel'
 import { Shelf, ShelfControls, useShelfPrefs, type ShelfItem } from './Shelf'
 import { HighlightBar } from './Highlights'
 import { HistoryList } from './History'
 import { Icon, IconButton } from './Icon'
 import { Player } from './Player'
+import { confirmDelete, confirmDeleteHighlight } from '../lib/confirmDelete'
 
 /**
  * The ZIM tab: offline websites (Wikipedia, Stack Exchange, docs made with zimit…) kept on this
@@ -189,9 +190,9 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
     }
   }, [missingIcons])
 
-  const [deleting, setDeleting] = useState<{ f: DropboxFile; onDevice: boolean } | null>(null)
-  const removeFromDropbox = async (f: DropboxFile) => {
+  const removeFromDropbox = async (f: DropboxFile, onDevice: boolean) => {
     const name = f.name.replace(/\.zim$/i, '').replace(/_/g, ' ')
+    if (!(await confirmDropboxDelete(name, onDevice))) return
     try {
       await deleteFromDropbox(f)
       toast(`Deleted ${name} from Dropbox`)
@@ -202,7 +203,12 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
   }
 
   const remove = async (b: ZimBook) => {
-    if (!confirm(`Delete ${b.title} (${formatBytes(b.size)}) from this device?${inDropbox(b) ? ' It stays in Dropbox.' : ''}`)) return
+    const ok = await confirmDelete(
+      inDropbox(b)
+        ? { title: 'Remove from this device?', itemName: `${b.title} (${formatBytes(b.size)})`, scope: 'this-device', confirmLabel: 'Remove', extra: 'It stays in Dropbox.' }
+        : { title: 'Delete offline site?', itemName: `${b.title} (${formatBytes(b.size)})`, scope: 'this-device', extra: "It isn't in Dropbox, so this is the only copy." },
+    )
+    if (!ok) return
     await deleteBook(b.file)
     toast(`Deleted ${b.title}`)
   }
@@ -215,7 +221,7 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
       const actions: ShelfItem['actions'] = []
       const uploadingNow = jobs.some((j) => j.label === `Uploading ${b.title} to Dropbox`)
       if ((!dbx.signedIn || remote) && !remoteCopy && !uploadingNow) actions.push({ label: 'Upload to Dropbox', run: () => needsDropbox(dbx.signedIn, toast, () => upload(b.file, b.title)) })
-      if (remoteCopy) actions.push({ label: 'Delete from Dropbox', run: () => setDeleting({ f: remoteCopy, onDevice: true }) })
+      if (remoteCopy) actions.push({ label: 'Delete from Dropbox', run: () => void removeFromDropbox(remoteCopy, true) })
       actions.push({ label: remoteCopy ? 'Remove from this device' : 'Delete', run: () => void remove(b) })
       return {
         key: `local:${b.file}`,
@@ -247,7 +253,7 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
         },
         actions: [
           ...(jobFor(f.name) ? [] : [{ label: 'Download to this device', run: () => fromDropbox(f) }]),
-          { label: 'Delete from Dropbox', run: () => setDeleting({ f, onDevice: false }) },
+          { label: 'Delete from Dropbox', run: () => void removeFromDropbox(f, false) },
         ],
       }),
     ),
@@ -294,14 +300,6 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
           />
         </div>
         <p className="zim-intro muted">Whole websites to read offline, such as Wikipedia, Wiktionary, Stack Exchange or your own sites made with zimit.</p>
-        {deleting ? (
-          <DeleteFromDropboxDialog
-            title={deleting.f.name.replace(/\.zim$/i, '').replace(/_/g, ' ')}
-            keepsCopy={deleting.onDevice}
-            onConfirm={() => void removeFromDropbox(deleting.f)}
-            onClose={() => setDeleting(null)}
-          />
-        ) : null}
 
         {catalog ? <Catalog onDownload={download} /> : null}
 
@@ -762,6 +760,7 @@ function ZimReader({ id, jump, settings, onBack, toast }: { id: string; jump: Zi
           }}
           onDelete={async () => {
             if (!editing) return
+            if (!(await confirmDeleteHighlight(editing.text))) return
             await deleteHighlight(editing.id)
             setEditing(null)
             toast('Highlight deleted')

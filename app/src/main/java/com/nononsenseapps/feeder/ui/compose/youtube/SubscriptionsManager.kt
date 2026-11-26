@@ -74,6 +74,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.db.room.YouTubeChannel
+import com.nononsenseapps.feeder.ui.compose.components.ConfirmDeleteDialog
+import com.nononsenseapps.feeder.ui.compose.components.DeleteScope
 import com.nononsenseapps.feeder.ui.compose.editfeed.DeleteFeedDialog
 import com.nononsenseapps.feeder.ui.compose.editfeed.FeedStats
 import com.nononsenseapps.feeder.ui.compose.theme.FeederTokens
@@ -443,17 +445,16 @@ fun GroupsDialog(
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.youtube_done)) } },
     )
     deleting?.let { g ->
-        AlertDialog(
-            onDismissRequest = { deleting = null },
-            title = { Text(stringResource(R.string.youtube_delete_group, g)) },
-            text = { Text(stringResource(R.string.youtube_delete_group_text)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    onDelete(g)
-                    deleting = null
-                }) { Text(stringResource(R.string.delete_button_text), color = MaterialTheme.colorScheme.error) }
+        ConfirmDeleteDialog(
+            title = stringResource(R.string.confirm_delete_title_group),
+            itemName = g,
+            scope = DeleteScope.ALL_DEVICES,
+            onConfirm = {
+                onDelete(g)
+                deleting = null
             },
-            dismissButton = { TextButton(onClick = { deleting = null }) { Text(stringResource(android.R.string.cancel)) } },
+            onDismiss = { deleting = null },
+            extra = stringResource(R.string.youtube_delete_group_text),
         )
     }
 }

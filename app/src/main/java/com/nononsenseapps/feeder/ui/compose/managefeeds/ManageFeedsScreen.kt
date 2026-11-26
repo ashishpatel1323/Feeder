@@ -128,6 +128,8 @@ import com.nononsenseapps.feeder.archmodel.PREF_VAL_OPEN_WITH_WEBVIEW
 import com.nononsenseapps.feeder.db.room.OPEN_ARTICLE_WITH_APPLICATION_DEFAULT
 import com.nononsenseapps.feeder.model.opml.exportOpml
 import com.nononsenseapps.feeder.model.opml.importOpml
+import com.nononsenseapps.feeder.ui.compose.components.ConfirmDeleteDialog
+import com.nononsenseapps.feeder.ui.compose.components.DeleteScope
 import com.nononsenseapps.feeder.ui.compose.editfeed.Bars
 import com.nononsenseapps.feeder.ui.compose.editfeed.DeleteFeedDialog
 import com.nononsenseapps.feeder.ui.compose.editfeed.FeedStatsPanel
@@ -1081,26 +1083,22 @@ private fun DeleteManyDialog(
 ) {
     val stored = feeds.sumOf { it.stats.stored }
     val saved = feeds.sumOf { it.stats.saved }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = { Icon(Icons.Default.Delete, contentDescription = null) },
-        title = { Text(stringResource(R.string.manage_feeds_delete_selected_title, feeds.size)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(FeederTokens.Space.sm)) {
-                Text(feeds.take(5).joinToString(", ") { it.title } + if (feeds.size > 5) ", …" else "")
-                Text(pluralStringResource(R.plurals.manage_feeds_delete_selected_articles, stored, stored))
-                if (saved > 0) Text(pluralStringResource(R.plurals.delete_feed_confirm_saved, saved, saved))
-                Text(stringResource(R.string.manage_feeds_delete_selected_sync))
+    val names = feeds.take(5).joinToString(", ") { it.title } + if (feeds.size > 5) ", …" else ""
+    val extra =
+        buildString {
+            append(pluralStringResource(R.plurals.manage_feeds_delete_selected_articles, stored, stored))
+            if (saved > 0) {
+                append(" ")
+                append(pluralStringResource(R.plurals.delete_feed_confirm_saved, saved, saved))
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onConfirm, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
-                Text(stringResource(R.string.delete_button_text))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(android.R.string.cancel)) }
-        },
+        }
+    ConfirmDeleteDialog(
+        title = stringResource(R.string.confirm_delete_title_feeds),
+        itemName = pluralStringResource(R.plurals.confirm_delete_n_feeds, feeds.size, feeds.size) + ": " + names,
+        scope = DeleteScope.ALL_DEVICES,
+        onConfirm = onConfirm,
+        onDismiss = onDismiss,
+        extra = extra,
     )
 }
 

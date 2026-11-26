@@ -23,9 +23,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -35,7 +32,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -78,6 +74,8 @@ import com.nononsenseapps.feeder.archmodel.PREF_VAL_OPEN_WITH_CUSTOM_TAB
 import com.nononsenseapps.feeder.archmodel.PREF_VAL_OPEN_WITH_READER
 import com.nononsenseapps.feeder.model.ArticleRuleError
 import com.nononsenseapps.feeder.ui.compose.components.AutoCompleteResults
+import com.nononsenseapps.feeder.ui.compose.components.ConfirmDeleteDialog
+import com.nononsenseapps.feeder.ui.compose.components.DeleteScope
 import com.nononsenseapps.feeder.ui.compose.components.OkCancelWithContent
 import com.nononsenseapps.feeder.ui.compose.feed.ExplainPermissionDialog
 import com.nononsenseapps.feeder.ui.compose.modifiers.interceptKey
@@ -842,34 +840,23 @@ fun DeleteFeedDialog(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
+    val stored = stats?.stored ?: 0
+    val saved = stats?.saved ?: 0
+    val extra =
+        buildString {
+            append(pluralStringResource(R.plurals.delete_feed_confirm_articles, stored, stored))
+            if (saved > 0) {
+                append(" ")
+                append(pluralStringResource(R.plurals.delete_feed_confirm_saved, saved, saved))
+            }
+        }
+    ConfirmDeleteDialog(
+        title = stringResource(R.string.confirm_delete_title_feed),
+        itemName = feedTitle,
+        scope = DeleteScope.ALL_DEVICES,
+        onConfirm = onConfirm,
+        onDismiss = onDismiss,
         modifier = modifier,
-        icon = { Icon(Icons.Default.Delete, contentDescription = null) },
-        title = { Text(stringResource(R.string.delete_feed_confirm_title, feedTitle)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                val stored = stats?.stored ?: 0
-                Text(pluralStringResource(R.plurals.delete_feed_confirm_articles, stored, stored))
-                val saved = stats?.saved ?: 0
-                if (saved > 0) {
-                    Text(pluralStringResource(R.plurals.delete_feed_confirm_saved, saved, saved))
-                }
-                Text(stringResource(R.string.delete_feed_confirm_sync))
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = onConfirm,
-                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-            ) {
-                Text(stringResource(R.string.delete_button_text))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(android.R.string.cancel))
-            }
-        },
+        extra = extra,
     )
 }

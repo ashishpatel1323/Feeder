@@ -27,6 +27,7 @@ import { syncNow } from '../lib/sync2'
 import { updateSettings, useSettings } from '../lib/settings'
 import { Icon } from './Icon'
 import { isMac } from '../lib/youtube'
+import { confirmDelete, itemCount } from '../lib/confirmDelete'
 
 const LIMITS = [
   { value: 100, label: 'Newest 100' },
@@ -98,6 +99,7 @@ export function OfflineSection({ toast }: { toast: (m: string) => void }) {
         )}
         <button
           onClick={async () => {
+            if (!(await confirmDelete({ title: 'Remove offline copies?', itemName: 'Saved article text and images', scope: 'this-device', confirmLabel: 'Remove' }))) return
             await removeOfflineCopies()
             toast('Removed offline images')
           }}
@@ -127,6 +129,7 @@ export function OfflineSection({ toast }: { toast: (m: string) => void }) {
         <div className="form-actions wrap">
           <button
             onClick={async () => {
+              if (!(await confirmDelete({ title: 'Remove offline videos?', itemName: itemCount(videos.length, 'video'), scope: 'this-device', confirmLabel: 'Remove' }))) return
               await removeAllVideos()
               toast('Removed offline videos')
             }}
@@ -272,7 +275,10 @@ export function VideoOfflineControls({
           </button>
         ) : null}
         {iina && iina !== 'busy' ? <span className="video-error">{iina}</span> : null}
-        <button className="open-youtube" onClick={() => void removeVideo(item.id, videoId)} title="Delete the saved copy from this browser">
+        <button className="open-youtube" onClick={async () => {
+            if (!(await confirmDelete({ title: 'Remove offline video?', itemName: item.title || 'Untitled', scope: 'this-device', confirmLabel: 'Remove' }))) return
+            void removeVideo(item.id, videoId)
+          }} title="Delete the saved copy from this browser">
           <Icon name="delete" size={18} /> Remove offline video ({formatBytes(item.offlineVideo)})
         </button>
         {subsBusy ? (

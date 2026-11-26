@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { dropboxAppKey, getDropbox, onDropboxChange, setDropboxAppKey, signOutDropbox, startDropboxSignIn } from '../lib/dropbox'
 import { Modal } from './Dialogs'
 import { Icon, IconButton } from './Icon'
+import { confirmDelete } from '../lib/confirmDelete'
 
 export function useDropbox(): { signedIn: boolean; name: string; email: string; ready: boolean } {
   const [s, setS] = useState({ signedIn: false, name: '', email: '', ready: false })
@@ -143,42 +144,9 @@ export function DropboxButton({ folder, toast }: { folder: string; toast: (m: st
   )
 }
 
-/** "Delete <title> from Dropbox? This removes it for all your devices." with Cancel / Delete. */
-export function DeleteFromDropboxDialog({
-  title,
-  keepsCopy,
-  onConfirm,
-  onClose,
-}: {
-  title: string
-  /** This device keeps its copy */
-  keepsCopy: boolean
-  onConfirm: () => void
-  onClose: () => void
-}) {
-  return (
-    <Modal title={`Delete ${title} from Dropbox?`} onClose={onClose}>
-      <div className="form">
-        <p>This removes it for all your devices.{keepsCopy ? ' The copy on this device stays.' : ''}</p>
-        <div className="form-actions">
-          <span className="spacer" />
-          <button type="button" onClick={onClose} autoFocus>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="danger"
-            onClick={() => {
-              onClose()
-              onConfirm()
-            }}
-          >
-            Delete
-          </button>
-        </div>
-      </div>
-    </Modal>
-  )
+/** The shared delete confirmation for a file in Dropbox. [keepsCopy]: this device keeps its copy. */
+export function confirmDropboxDelete(title: string, keepsCopy: boolean): Promise<boolean> {
+  return confirmDelete({ title: 'Delete from Dropbox?', itemName: title, scope: 'dropbox', keepsLocalCopy: keepsCopy })
 }
 
 /** Uploading needs Dropbox: signed out, say how to sign in instead. */

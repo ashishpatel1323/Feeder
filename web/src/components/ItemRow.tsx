@@ -19,6 +19,7 @@ import type { Toast } from '../lib/toast'
 import { openAddToPlaylist } from './AddToPlaylist'
 import { Icon, type IconName } from './Icon'
 import { MoreMenu } from './MoreMenu'
+import { confirmDelete } from '../lib/confirmDelete'
 
 /** Everything a row needs to know besides the item itself (feed kinds, play positions, lengths), kept live. */
 export function usePlaylistContext(feeds: Map<string, Feed>, rate: number): PlaylistContext {
@@ -89,9 +90,10 @@ export async function setItemRead(item: Item, read: boolean) {
 
 /** Deletes for good on every device, with Undo. */
 export async function deleteItemWithUndo(item: Item, toast: Toast) {
+  if (!(await confirmDelete({ title: 'Delete article?', itemName: item.title || 'Untitled', scope: 'all-devices' }))) return
   await hideItems([item.id])
   syncNow().catch(() => undefined)
-  toast('Deleted on all devices', { label: 'Undo', run: () => void unhideItems([item]).then(() => syncNow().catch(() => undefined)) })
+  toast('Article deleted', { label: 'Undo', run: () => void unhideItems([item]).then(() => syncNow().catch(() => undefined)) })
 }
 
 /** Plays an episode in the bottom player; a second press pauses or resumes it. */
@@ -213,7 +215,7 @@ export function ItemRow(p: RowProps) {
             { icon: 'playlistAdd', label: p.inPlaylist ? 'In playlist: add to another' : 'Add to playlist', onClick: () => trail.current && openAddToPlaylist([item.id], item.title, trail.current) },
             { icon: item.read ? 'unread' : 'read', label: facts.readLabel, onClick: () => setRead(!item.read) },
             'separator',
-            { icon: 'delete', label: 'Delete on all devices', onClick: p.onDelete, danger: true },
+            { icon: 'delete', label: 'Delete', onClick: p.onDelete, danger: true },
           ]}
         />
       </span>
