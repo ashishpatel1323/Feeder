@@ -140,7 +140,11 @@ export function YouTubeFrame({
     void startFor(itemId).then((start) => {
       if (!live) return
       const before = shown.current
-      if (before && before.videoId === videoId && before.itemId === itemId) return
+      if (before && before.videoId === videoId && before.itemId === itemId) {
+        // Back to the video already in the player: a switch queued meanwhile no longer applies
+        queued.current = null
+        return
+      }
       if (!before) {
         shown.current = { itemId, videoId }
         setInitial({ videoId, start })
