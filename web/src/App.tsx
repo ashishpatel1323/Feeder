@@ -918,12 +918,8 @@ export default function App() {
   /** Delete from the list (one article or all selected): deleted for good on every device, with Undo. */
   const deleteFromList = async (list: Item[]) => {
     if (!list.length) return
-    const ok = await confirmDelete({
-      title: list.length === 1 ? 'Delete article?' : 'Delete articles?',
-      itemName: list.length === 1 ? list[0].title || 'Untitled' : itemCount(list.length, 'article'),
-      scope: 'all-devices',
-    })
-    if (!ok) return
+    // One article has Undo, so it goes without asking; several ask first
+    if (list.length > 1 && !(await confirmDelete({ title: 'Delete articles?', itemName: itemCount(list.length, 'article'), scope: 'all-devices' }))) return
     const gone = new Set(list.map((i) => i.id))
     if (openId && gone.has(openId)) {
       const after = snapshot.slice(snapshot.indexOf(openId) + 1).find((id) => !gone.has(id))

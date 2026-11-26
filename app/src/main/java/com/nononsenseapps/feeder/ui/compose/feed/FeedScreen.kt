@@ -130,7 +130,6 @@ import com.nononsenseapps.feeder.ApplicationCoroutineScope
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.archmodel.FeedListGrouping
 import com.nononsenseapps.feeder.archmodel.FeedType
-import com.nononsenseapps.feeder.archmodel.Repository
 import com.nononsenseapps.feeder.archmodel.SortingOptions
 import com.nononsenseapps.feeder.db.room.FeedItemCursor
 import com.nononsenseapps.feeder.db.room.ID_SAVED_ARTICLES
@@ -308,7 +307,6 @@ fun FeedScreen(
     }
 
     val deleteConfirmer = rememberDeleteConfirmer()
-    val repositoryForNames: Repository by LocalDI.current.instance()
 
     fun deleteNowWithUndo(itemIds: List<Long>) {
         coroutineScope.launch {
@@ -326,26 +324,18 @@ fun FeedScreen(
         }
     }
 
-    // Asks first (the shared delete confirmation), then deletes with Undo
+    // One article has Undo, so it goes without asking; several ask first (the shared delete confirmation)
     fun deleteWithUndo(itemIds: List<Long>) {
         if (itemIds.isEmpty()) return
-        coroutineScope.launch {
-            val single = itemIds.size == 1
-            val name =
-                if (single) {
-                    repositoryForNames.getArticle(itemIds.first())?.title.orEmpty()
-                } else {
-                    resources.getQuantityString(R.plurals.confirm_delete_n_articles, itemIds.size, itemIds.size)
-                }
-            deleteConfirmer.ask(
-                DeleteRequest(
-                    title = if (single) R.string.confirm_delete_title_article else R.string.confirm_delete_title_articles,
-                    itemName = name,
-                    scope = DeleteScope.ALL_DEVICES,
-                    onConfirm = { deleteNowWithUndo(itemIds) },
-                ),
-            )
-        }
+        if (itemIds.size == 1) return deleteNowWithUndo(itemIds)
+        deleteConfirmer.ask(
+            DeleteRequest(
+                title = R.string.confirm_delete_title_articles,
+                itemName = resources.getQuantityString(R.plurals.confirm_delete_n_articles, itemIds.size, itemIds.size),
+                scope = DeleteScope.ALL_DEVICES,
+                onConfirm = { deleteNowWithUndo(itemIds) },
+            ),
+        )
     }
 
     val focusNavDrawer = remember { FocusRequester() }

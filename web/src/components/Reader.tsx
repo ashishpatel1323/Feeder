@@ -3,7 +3,7 @@ import { hasEpisode, PodcastEpisode } from './Podcast'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, feedDisplayTitle, hideItems, unhideItems, type Feed, type Highlight, type HighlightColor, type Item } from '../lib/db'
 import { anchorOf, articlePicture, applyHighlights, deleteHighlight, newHighlight, quoteText, saveHighlight, updateHighlight } from '../lib/highlights'
-import { confirmDelete, confirmDeleteHighlight } from '../lib/confirmDelete'
+import { confirmDeleteHighlight } from '../lib/confirmDelete'
 import { syncNow } from '../lib/sync2'
 import type { Toast } from '../lib/toast'
 import { copyText, HighlightBar, HighlightsRail } from './Highlights'
@@ -378,7 +378,6 @@ export function Reader(p: Props) {
   /** Deletes the article for good on every device, then moves on to the next one. */
   const remove = async () => {
     const copy = item
-    if (!(await confirmDelete({ title: 'Delete article?', itemName: copy.title || 'Untitled', scope: 'all-devices' }))) return
     if (p.hasNext) p.onNext()
     else p.onBack()
     await hideItems([copy.id])

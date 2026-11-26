@@ -45,11 +45,15 @@ class ItemCommands(
         scope.launch { if (read) repository.markAsReadAndNotified(itemId) else repository.markAsUnread(itemId) }
     }
 
-    /** Asks first (the shared delete confirmation), then deletes for good on every device; [snackbar] (when given) offers Undo. */
+    /**
+     * Deletes for good on every device. With a [snackbar] it goes at once and offers Undo; without
+     * one it asks first (the shared delete confirmation).
+     */
     fun delete(
         itemId: Long,
         snackbar: SnackbarHostState?,
     ) {
+        if (snackbar != null) return deleteNow(itemId, snackbar)
         scope.launch {
             val title = repository.getArticle(itemId)?.title.orEmpty()
             launch(Dispatchers.Main) {
