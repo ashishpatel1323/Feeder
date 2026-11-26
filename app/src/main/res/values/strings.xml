@@ -596,6 +596,8 @@
     <item quantity="other">%d videos checked</item>
   </plurals>
   <string name="youtube_shorts">Shorts</string>
+  <string name="youtube_shorts_play_all">Play all</string>
+  <string name="youtube_shorts_none_left">No Shorts left</string>
   <string name="youtube_live">LIVE</string>
   <string name="youtube_empty_title">No YouTube subscriptions yet</string>
   <string name="youtube_empty_text">Your YouTube channel feeds show up here. Add a channel or import your subscriptions.</string>
