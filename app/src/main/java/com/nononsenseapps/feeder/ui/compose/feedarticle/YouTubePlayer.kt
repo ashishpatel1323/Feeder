@@ -300,7 +300,7 @@ private fun VideoTranscript(
 
 /** Where the Flow-style player is in [key]'s video, checked a few times a second; 0 when it plays another. */
 @Composable
-private fun flowPositionMs(
+internal fun flowPositionMs(
     playback: YouTubePlayback,
     key: String,
 ): Long {

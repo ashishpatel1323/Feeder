@@ -9803,3 +9803,165 @@ mark.sr-mark {
   margin: 0 calc(-1 * var(--sp-2)) var(--sp-2);
   border-radius: var(--r-md);
 }
+
+/* ---------------------------------------------------------------- YouTube transcript panel + Feeder full screen (VideoTranscriptPanel.tsx) */
+.ytw.mini .ytw-stage {
+  display: contents;
+}
+.vtp {
+  position: relative;
+  margin-top: var(--sp-3);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.vtp-scroll {
+  max-height: 380px;
+  overflow-y: auto;
+  padding: var(--sp-1) 0 var(--sp-2);
+}
+.vtp-section {
+  position: relative;
+}
+/* The chapter heading sticks to the top while its lines scroll under it */
+.vtp-heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  align-items: center;
+  column-gap: 10px;
+  width: calc(100% - 12px);
+  margin: 2px 6px;
+  padding: 10px 6px 10px 10px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+  color: var(--text);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.vtp-heading.playing {
+  background: var(--accent-soft);
+  font-weight: 650;
+}
+.vtp-heading-time {
+  color: var(--accent);
+  padding-top: 0;
+}
+.vtp-heading-title {
+  min-width: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.vtp-lines.transcript-lines {
+  max-height: none;
+  overflow: visible;
+  padding: 0 6px;
+}
+.vtp-now {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.3);
+}
+.vtp .transcript-status {
+  padding: var(--sp-3) var(--sp-4);
+}
+.ytw-stage-bar {
+  display: none;
+}
+
+/* Full screen: black, the whole picture (never cropped), the panel beside it in a wide window and
+   under it in a tall one; the panel is dark like the Android full screen */
+.ytw-stage.is-fullscreen {
+  display: flex;
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  background: #000;
+  color-scheme: dark;
+  /* The app's dark colours, whatever the theme */
+  --surface-2: #222724;
+  --surface-3: #2c332e;
+  --text: #e1e3df;
+  --text-2: #b9c3bb;
+  --text-3: #8b958e;
+  --accent: #8cd5ac;
+  --accent-ink: #00391f;
+  --accent-soft: #1f4a33;
+}
+.ytw-stage.is-fullscreen .ytw-player {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ytw-stage.is-fullscreen .ytw-player .video-frame {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  border-radius: 0;
+}
+.ytw-stage.is-fullscreen .vtp {
+  flex: none;
+  width: clamp(300px, 32vw, 440px);
+  margin: 0;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  padding-top: 52px;
+}
+.ytw-stage.is-fullscreen .vtp-scroll {
+  max-height: none;
+  flex: 1;
+}
+.ytw-stage.is-fullscreen .ytw-stage-bar {
+  display: flex;
+  gap: var(--sp-1);
+  position: absolute;
+  top: var(--sp-2);
+  right: var(--sp-2);
+  z-index: 3;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.55);
+  color: #fff;
+}
+.ytw-stage.is-fullscreen .ytw-stage-bar .icon-btn {
+  color: #fff;
+}
+@media (orientation: portrait) {
+  .ytw-stage.is-fullscreen {
+    flex-direction: column;
+  }
+  .ytw-stage.is-fullscreen.with-panel .ytw-player {
+    flex: none;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    max-height: 55vh;
+  }
+  .ytw-stage.is-fullscreen .vtp {
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    padding-top: var(--sp-1);
+  }
+  /* The buttons sit at the top of the panel, off the picture */
+  .ytw-stage.is-fullscreen.with-panel .ytw-stage-bar {
+    top: calc(min(100vw * 9 / 16, 55vh) + var(--sp-2));
+  }
+  .ytw-stage.is-fullscreen.with-panel .vtp {
+    padding-top: 52px;
+  }
+}

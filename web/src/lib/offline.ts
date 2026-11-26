@@ -363,7 +363,7 @@ function setVideoJob(videoId: string, v: VideoJob | null) {
   }
 }
 
-const ytdlUrl = (action: string, videoId?: string) => {
+export const ytdlUrl = (action: string, videoId?: string) => {
   const q = new URLSearchParams()
   if (videoId) q.set('id', videoId)
   const t = getAccessToken()

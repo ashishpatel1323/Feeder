@@ -6,14 +6,15 @@
  * keeps playing. Channel, likes, comments and related come from /api/youtube/next (server/youtube.ts);
  * each part hides when that fails.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { db, type Feed, type Item } from '../lib/db'
 import { fetchComments, fetchNext, ageText, thumbUrl, channelFeedUrl, type Comment, type CommentPage, type RelatedVideo, type VideoRow, type WatchNext } from '../lib/youtubeTab'
 import { youtubeChannelId } from '../lib/refresh'
 import { compactNumber } from '../lib/discover'
 import { youtubeWatchUrl } from '../lib/youtube'
 import { saveVideo, useVideoJobs, useVideoSavingAvailable } from '../lib/offline'
-import { YouTubeFrame } from './YouTubeFrame'
+import { YouTubeFrame, type YTPlayer } from './YouTubeFrame'
+import { VideoTranscriptPanel } from './VideoTranscriptPanel'
 import { Icon, IconButton } from './Icon'
 import { MoreMenu } from './MoreMenu'
 import { ChannelAvatar, subscribe, unsubscribe } from './YouTubeTab'
@@ -46,6 +47,25 @@ export function YouTubeWatch(p: {
   const [sheet, setSheet] = useState(false)
   const [more, setMore] = useState(false)
   const [playing, setPlaying] = useState(true)
+  const [player, setPlayer] = useState<YTPlayer | null>(null)
+  // The transcript panel: under the video here, beside or under it in full screen
+  const [panel, setPanel] = useState(() => localStorage.getItem(PANEL_KEY) === '1')
+  const togglePanel = () => {
+    localStorage.setItem(PANEL_KEY, panel ? '0' : '1')
+    setPanel(!panel)
+  }
+  // Feeder's own full screen (YouTube's button can't show the panel): the video and the panel together
+  const stage = useRef<HTMLDivElement>(null)
+  const [fullscreen, setFullscreen] = useState(false)
+  useEffect(() => {
+    const onChange = () => setFullscreen(document.fullscreenElement === stage.current && !!stage.current)
+    document.addEventListener('fullscreenchange', onChange)
+    return () => document.removeEventListener('fullscreenchange', onChange)
+  }, [])
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) void document.exitFullscreen()
+    else void stage.current?.requestFullscreen().catch(() => undefined)
+  }
 
   // The embed reports its state to this page (enablejsapi): play/pause for the mini player's button
   useEffect(() => {
@@ -121,14 +141,25 @@ export function YouTubeWatch(p: {
         <div className="ytw-top">
           <IconButton icon="expand" label="Collapse to mini player" onClick={p.onCollapse} />
           <span className="ytw-top-gap" />
+          <IconButton icon="sidePanel" label={panel ? 'Hide transcript' : 'Show transcript'} active={panel} onClick={togglePanel} />
+          <IconButton icon="fullscreen" label="Full screen with transcript" onClick={toggleFullscreen} />
           <IconButton icon="skipPrev" label="Previous video" disabled={!prev} onClick={() => prev && p.onOpen({ videoId: prev.videoId, itemId: prev.item.id })} />
           <IconButton icon="skipNext" label="Next video" disabled={!after} onClick={() => after && p.onOpen({ videoId: after.videoId, itemId: after.item.id })} />
           <IconButton icon="close" label="Close player" onClick={p.onClose} />
         </div>
         <div className="ytw-grid">
           <div className="ytw-main">
-            <div className="ytw-player">
-              <YouTubeFrame itemId={itemId} videoId={videoId} title={title} autoplay />
+            <div ref={stage} className={`ytw-stage${panel ? ' with-panel' : ''}${fullscreen ? ' is-fullscreen' : ''}`}>
+              <div className="ytw-player">
+                <YouTubeFrame itemId={itemId} videoId={videoId} title={title} autoplay onPlayer={setPlayer} />
+              </div>
+              {fullscreen ? (
+                <div className="ytw-stage-bar">
+                  <IconButton icon="sidePanel" label={panel ? 'Hide transcript' : 'Show transcript'} active={panel} onClick={togglePanel} />
+                  <IconButton icon="fullscreenExit" label="Exit full screen" onClick={toggleFullscreen} />
+                </div>
+              ) : null}
+              {panel && !p.mini ? <VideoTranscriptPanel videoId={videoId} description={next?.description ?? null} player={player} /> : null}
             </div>
             <div className="ytw-mini-bar">
               <button type="button" className="ytw-mini-text" onClick={p.onExpand} aria-label={`Open ${title}`}>
@@ -198,6 +229,8 @@ export function YouTubeWatch(p: {
     </div>
   )
 }
+
+const PANEL_KEY = 'feeder.ytTranscriptPanel'
 
 /** "1,469,563 views" → "1.5M views", as Flow shows it; other wordings stay. */
 function shortViews(text: string | null | undefined): string {

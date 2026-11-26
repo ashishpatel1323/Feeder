@@ -76,7 +76,17 @@ import com.nononsenseapps.feeder.model.transcript.TranscriptSource
 import com.nononsenseapps.feeder.model.transcript.TranscriptState
 import com.nononsenseapps.feeder.model.transcript.TranscriptStatus
 import com.nononsenseapps.feeder.model.transcript.Transcripts
+import com.nononsenseapps.feeder.model.transcript.TranscriptChapter
+import com.nononsenseapps.feeder.model.transcript.TranscriptSection
 import com.nononsenseapps.feeder.model.transcript.indexAt
+import com.nononsenseapps.feeder.model.transcript.indexAtTime
+import com.nononsenseapps.feeder.model.transcript.transcriptSections
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.Surface
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalDensity
 import kotlinx.coroutines.launch
 import org.kodein.di.compose.LocalDI
 import org.kodein.di.instance
@@ -94,6 +104,11 @@ fun TranscriptPanel(
     modifier: Modifier = Modifier,
     /** A YouTube video's transcript (its captions), not a podcast episode's. */
     video: Boolean = false,
+    /**
+     * Non-null: the lines go under these chapter headings, only the current one open (no
+     * chapters = 5-minute blocks). Null: one plain list.
+     */
+    chapters: List<TranscriptChapter>? = null,
 ) {
     val di = LocalDI.current
     val transcripts: Transcripts by di.instance()
@@ -165,7 +180,16 @@ fun TranscriptPanel(
                 },
             )
         }
-        if (state.cues.isNotEmpty()) {
+        val sections = remember(state.cues, chapters) { chapters?.let { transcriptSections(state.cues, it) }.orEmpty() }
+        if (state.cues.isNotEmpty() && sections.isNotEmpty() && !(searchOpen && query.isNotBlank())) {
+            SectionedTranscriptLines(
+                cues = state.cues,
+                sections = sections,
+                positionMs = positionMs,
+                onSeek = onSeek,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+        } else if (state.cues.isNotEmpty()) {
             TranscriptLines(
                 cues = state.cues,
                 positionMs = positionMs,
@@ -443,6 +467,170 @@ private fun TranscriptLines(
     }
 }
 
+private sealed interface SectionRow {
+    data class Heading(val section: Int) : SectionRow
+
+    data class Line(val cue: Int) : SectionRow
+}
+
+/**
+ * The transcript under chapter headings. Other chapters stay folded to one line, so the list
+ * reads like a chapter list; the chapter playing opens on its own and follows playback.
+ */
+@Composable
+private fun SectionedTranscriptLines(
+    cues: List<TranscriptCue>,
+    sections: List<TranscriptSection>,
+    positionMs: Long,
+    onSeek: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    // The spoken line goes just under the sticky heading, with a line of the past above it
+    val belowHeading = with(LocalDensity.current) { -FOLLOW_OFFSET.roundToPx() }
+    val current = cues.indexAt(positionMs)
+    val currentSection = sections.indexAtTime(positionMs).coerceAtLeast(0)
+    var open by remember(sections) { mutableStateOf(setOf(currentSection)) }
+    LaunchedEffect(currentSection) { open = open + currentSection }
+    val rows =
+        remember(sections, open) {
+            buildList {
+                sections.forEachIndexed { i, section ->
+                    add(SectionRow.Heading(i))
+                    if (i in open) for (c in section.firstCue until section.endCue) add(SectionRow.Line(c))
+                }
+            }
+        }
+    fun scrollTarget(target: Int): Pair<Int, Int> =
+        if (rows.getOrNull(target) is SectionRow.Heading) target to 0 else target to belowHeading
+    // The line being said, or the chapter's heading while it is folded
+    val target =
+        rows.indexOf(SectionRow.Line(current)).takeIf { it >= 0 } ?: rows.indexOf(SectionRow.Heading(currentSection))
+
+    val dragged by listState.interactionSource.collectIsDraggedAsState()
+    var handScrolledAt by remember { mutableLongStateOf(0L) }
+    var following by remember { mutableStateOf(true) }
+    LaunchedEffect(dragged) {
+        if (dragged) {
+            following = false
+            handScrolledAt = System.currentTimeMillis()
+        }
+    }
+    LaunchedEffect(target, following, handScrolledAt) {
+        if (!following) {
+            kotlinx.coroutines.delay(FOLLOW_AGAIN_AFTER_MS)
+            following = true
+            return@LaunchedEffect
+        }
+        if (target >= 0) scrollTarget(target).let { (i, o) -> listState.animateScrollToItem(i, o) }
+    }
+
+    Box(modifier = modifier) {
+        LazyColumn(state = listState, modifier = Modifier.fillMaxWidth()) {
+            // Headings stick to the top, so the chapter being read stays named while its lines scroll
+            for (row in rows) {
+                when (row) {
+                    is SectionRow.Heading -> {
+                        val section = sections[row.section]
+                        stickyHeader(key = "h${row.section}") {
+                            SectionHeading(
+                                section = section,
+                                playing = row.section == currentSection,
+                                open = row.section in open,
+                                onClick = {
+                                    if (section.isEmpty) {
+                                        onSeek(section.startMs)
+                                    } else {
+                                        open = if (row.section in open) open - row.section else open + row.section
+                                    }
+                                },
+                            )
+                        }
+                    }
+
+                    is SectionRow.Line -> {
+                        val index = row.cue
+                        item(key = "c$index") {
+                            val cue = cues[index]
+                            CueLine(
+                                cue = cue,
+                                matches = emptyList(),
+                                selected = null,
+                                speaker = cue.speaker?.takeIf { it != cues.getOrNull(index - 1)?.speaker },
+                                state =
+                                    when {
+                                        index == current && positionMs <= cue.endMs + PAUSE_GRACE_MS -> CueState.NOW
+                                        index <= current -> CueState.PAST
+                                        else -> CueState.LATER
+                                    },
+                                onClick = { onSeek(cue.startMs) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        if (!following && target >= 0) {
+            ExtendedFloatingActionButton(
+                onClick = {
+                    following = true
+                    scope.launch { scrollTarget(target).let { (i, o) -> listState.animateScrollToItem(i, o) } }
+                },
+                icon = { Icon(Icons.Default.MyLocation, contentDescription = null) },
+                text = { Text(stringResource(R.string.transcript_now_playing)) },
+                modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SectionHeading(
+    section: TranscriptSection,
+    playing: Boolean,
+    open: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        // Opaque: it sticks over the lines scrolling under it
+        color = if (playing) colors.secondaryContainer else colors.surfaceContainerHigh,
+        contentColor = if (playing) colors.onSecondaryContainer else colors.onSurface,
+        shape = RoundedCornerShape(12.dp),
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(start = 8.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
+        ) {
+            Text(
+                formatCueTime(section.startMs),
+                style = MaterialTheme.typography.labelMedium,
+                color = colors.primary,
+                modifier = Modifier.width(44.dp),
+            )
+            Text(
+                section.title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = if (open || playing) FontWeight.SemiBold else FontWeight.Normal,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (!section.isEmpty) {
+                Icon(
+                    if (open) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = stringResource(if (open) R.string.transcript_fold_chapter else R.string.transcript_unfold_chapter),
+                    tint = colors.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
 private enum class CueState { PAST, NOW, LATER }
 
 @Composable
@@ -514,6 +702,7 @@ private fun markedText(
     }
 
 private const val FOLLOW_AGAIN_AFTER_MS = 5000L
+private val FOLLOW_OFFSET = 140.dp
 private const val PAUSE_GRACE_MS = 2000L
 
 internal fun formatCueTime(ms: Long): String {

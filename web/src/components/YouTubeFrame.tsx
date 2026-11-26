@@ -5,8 +5,10 @@ import { resumeAt, saveVideoPos } from '../lib/videopos'
 import { youtubeEmbedUrl } from '../lib/youtube'
 
 /** The bits of YouTube's IFrame Player API used here. */
-interface YTPlayer {
+export interface YTPlayer {
   getCurrentTime(): number
+  seekTo(seconds: number, allowSeekAhead: boolean): void
+  playVideo(): void
   getDuration(): number
   getPlayerState(): number
   loadVideoById(opts: { videoId: string; startSeconds?: number }): void
@@ -82,6 +84,7 @@ export function YouTubeFrame({
   title,
   onEnded,
   autoplay,
+  onPlayer,
 }: {
   /** The article the video belongs to; null (a related video) keeps no position */
   itemId: string | null
@@ -89,7 +92,11 @@ export function YouTubeFrame({
   title: string
   onEnded?: () => void
   autoplay?: boolean
+  /** The ready player (null when it goes), for a transcript to follow and move it */
+  onPlayer?: (player: YTPlayer | null) => void
 }) {
+  const onPlayerRef = useRef(onPlayer)
+  onPlayerRef.current = onPlayer
   const endedRef = useRef(onEnded)
   endedRef.current = onEnded
   // The first video's start goes in the embed URL, so wait for it before showing the player
@@ -196,6 +203,7 @@ export function YouTubeFrame({
             onReady: (e) => {
               if (stopped) return
               playerRef.current = e.target
+              onPlayerRef.current?.(e.target)
               const next = queued.current
               queued.current = null
               if (next) switchTo(e.target, next)
@@ -221,6 +229,7 @@ export function YouTubeFrame({
     return () => {
       stopped = true
       playerRef.current = null
+      onPlayerRef.current?.(null)
       clearInterval(tick)
       document.removeEventListener('visibilitychange', onHide)
       window.removeEventListener('pagehide', stop)

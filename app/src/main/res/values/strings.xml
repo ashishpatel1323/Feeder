@@ -518,6 +518,9 @@
   <string name="player_play">Play</string>
   <string name="player_pause">Pause</string>
   <string name="player_fullscreen">Fullscreen</string>
+  <string name="player_show_transcript_panel">Show transcript</string>
+  <string name="player_hide_transcript_panel">Hide transcript</string>
+  <string name="player_turn_for_bigger">Turn the phone for a bigger picture</string>
   <string name="player_exit_fullscreen">Exit fullscreen</string>
   <string name="video_views">%1$s views</string>
   <string name="video_subscribers">%1$s subscribers</string>
