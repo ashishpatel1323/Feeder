@@ -558,6 +558,7 @@ class AudiobookPlayer(
         const val REASON_FOCUS = "focus"
         const val REASON_CLOSED = "closed"
         const val REASON_SYSTEM = "system"
+        const val REASON_WIDGET = "widget"
     }
 }
 

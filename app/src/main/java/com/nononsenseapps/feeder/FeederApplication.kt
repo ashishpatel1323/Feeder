@@ -244,6 +244,9 @@ class FeederApplication :
             di.direct.instance<com.nononsenseapps.feeder.model.history.CentralHistoryRecorder>().itemOpened(itemId)
         }
         di.direct.instance<com.nononsenseapps.feeder.model.history.CentralHistoryRecorder>().backfillOnce()
+        // The Continue widget follows what plays and what was opened
+        com.nononsenseapps.feeder.widget.ContinueWidgetUpdater
+            .startIfPlaced(this)
     }
 
     override fun onTerminate() {

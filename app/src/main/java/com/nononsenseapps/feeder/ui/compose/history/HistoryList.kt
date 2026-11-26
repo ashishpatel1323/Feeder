@@ -132,6 +132,7 @@ private fun reasonText(r: String): String? =
         "closed" -> stringResource(R.string.history_reason_closed)
         "background" -> stringResource(R.string.history_reason_background)
         "system" -> stringResource(R.string.history_reason_system)
+        "widget" -> stringResource(R.string.history_reason_widget)
         else -> null
     }
 
