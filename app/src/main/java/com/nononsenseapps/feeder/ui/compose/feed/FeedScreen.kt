@@ -44,6 +44,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.CloudQueue
@@ -62,6 +63,7 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VerticalAlignBottom
 import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.MarkEmailUnread
 import androidx.compose.material.icons.outlined.TaskAlt
@@ -703,6 +705,10 @@ class FeedSelection(
     val onMarkBelowAsRead: (Long) -> Unit = {},
     val onShare: (Long) -> Unit = {},
     val onOpenInBrowser: (Long) -> Unit = {},
+    /** Save / Unsave for everything selected; null = not offered (Feeds saves by swiping). */
+    val onSave: ((Boolean) -> Unit)? = null,
+    /** Every selected one is saved already: the button unsaves. */
+    val allSaved: Boolean = false,
 ) {
     val active: Boolean get() = ids.isNotEmpty()
 }
@@ -738,6 +744,13 @@ fun FeedSelectionBar(
             ) {
                 ItemActionButton(Icons.Outlined.TaskAlt, stringResource(R.string.item_action_mark_read), { selection.onMarkRead(true) })
                 ItemActionButton(Icons.Outlined.MarkEmailUnread, stringResource(R.string.item_action_mark_unread), { selection.onMarkRead(false) })
+                selection.onSave?.let { save ->
+                    if (selection.allSaved) {
+                        ItemActionButton(Icons.Filled.Bookmark, stringResource(R.string.item_action_unsave), { save(false) })
+                    } else {
+                        ItemActionButton(Icons.Outlined.BookmarkBorder, stringResource(R.string.action_save), { save(true) })
+                    }
+                }
                 ItemActionButton(Icons.Outlined.Delete, stringResource(R.string.action_delete_article), selection.onDelete, danger = true)
                 val single = selection.ids.singleOrNull()
                 if (single != null) {

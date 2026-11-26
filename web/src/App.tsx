@@ -1432,6 +1432,8 @@ export default function App() {
           }}
           onMenu={() => setDrawer(true)}
           toast={toast}
+          onSetRead={setReadFromList}
+          onDelete={deleteFromList}
         />
       ) : onPlaylists ? (
         <PlaylistsPage

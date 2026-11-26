@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Selection bar / video menu: takes a video (or several) out of Saved -->
+    <string name="item_action_unsave">Unsave</string>
+</resources>

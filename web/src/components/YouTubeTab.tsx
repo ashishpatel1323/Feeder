@@ -29,8 +29,10 @@ import {
   type VideoRow,
 } from '../lib/youtubeTab'
 import { timeAgo } from '../lib/feedstats'
+import { youtubeWatchUrl } from '../lib/youtube'
 import { Icon, IconButton } from './Icon'
-import { MoreMenu } from './MoreMenu'
+import { MoreMenu, type MoreMenuEntry } from './MoreMenu'
+import { toggleSaved } from './ItemRow'
 import { Modal } from './Dialogs'
 import { preloadYouTubePlayer } from './YouTubeFrame'
 import { confirmDelete, itemCount } from '../lib/confirmDelete'
@@ -70,6 +72,9 @@ export function YouTubeTab(p: {
   onOpenVideo: (row: VideoRow, order: VideoRow[]) => void
   onMenu: () => void
   toast: (m: string) => void
+  /** Feeds' own handlers (the videos are articles): synced, with the same delete confirmation and Undo */
+  onSetRead: (items: Item[], read: boolean) => void
+  onDelete: (items: Item[]) => void
 }) {
   const [prefs, setPrefs] = useTabPrefs()
   const state = useYouTubeData(p.feeds, p.items, prefs.group)
@@ -87,6 +92,8 @@ function Subscriptions(p: {
   onOpenVideo: (row: VideoRow, order: VideoRow[]) => void
   onMenu: () => void
   toast: (m: string) => void
+  onSetRead: (items: Item[], read: boolean) => void
+  onDelete: (items: Item[]) => void
 }) {
   const { state, prefs } = p
   const [query, setQuery] = useState('')
@@ -121,6 +128,105 @@ function Subscriptions(p: {
 
   // YouTube's player script loads while the list shows, so the first video starts sooner
   useEffect(() => preloadYouTubePlayer(), [])
+
+  // Multi-select, as in Feeds: Ctrl/Cmd-click adds or removes one video, Shift-click a range,
+  // long press (touch) starts it; then a tap picks more
+  const [picked, setPicked] = useState<Set<string>>(() => new Set())
+  const anchor = useRef<string | null>(null)
+  const all = useMemo(() => [...shorts, ...videos], [shorts, videos])
+  const selected = all.filter((r) => picked.has(r.item.id))
+  const clearSelection = () => {
+    setPicked(new Set())
+    anchor.current = null
+  }
+  useEffect(() => clearSelection(), [prefs.group, query])
+  const toggle = (id: string) =>
+    setPicked((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  const clickTile = (e: React.MouseEvent, r: VideoRow, order: VideoRow[]) => {
+    if (e.shiftKey && anchor.current) {
+      const a = all.findIndex((x) => x.item.id === anchor.current)
+      const b = all.findIndex((x) => x.item.id === r.item.id)
+      if (a >= 0 && b >= 0) {
+        const [from, to] = a < b ? [a, b] : [b, a]
+        setPicked(new Set([...picked, ...all.slice(from, to + 1).map((x) => x.item.id)]))
+        return
+      }
+    }
+    if (e.metaKey || e.ctrlKey || e.shiftKey || picked.size) {
+      anchor.current = r.item.id
+      toggle(r.item.id)
+      return
+    }
+    p.onOpenVideo(r, order)
+  }
+  const pressStart = (r: VideoRow) => {
+    anchor.current = r.item.id
+    toggle(r.item.id)
+  }
+  const setRead = (rows: VideoRow[], read: boolean) => {
+    p.onSetRead(rows.map((r) => r.item), read)
+    clearSelection()
+  }
+  const setSaved = async (rows: VideoRow[], saved: boolean) => {
+    const ids = rows.filter((r) => !!r.item.saved !== saved).map((r) => r.item.id)
+    clearSelection()
+    if (!ids.length) return
+    await db.items.bulkUpdate(ids.map((key) => ({ key, changes: { saved: saved ? 1 : 0, readSynced: 0 } })))
+    syncNow().catch(() => undefined)
+    if (ids.length > 1) p.toast(`${saved ? 'Saved' : 'Unsaved'} ${ids.length}`)
+  }
+  const remove = (rows: VideoRow[]) => {
+    clearSelection()
+    p.onDelete(rows.map((r) => r.item))
+  }
+  const share = async (r: VideoRow) => {
+    const url = youtubeWatchUrl(r.videoId)
+    try {
+      if (navigator.share) return await navigator.share({ title: r.item.title, url })
+    } catch {
+      return
+    }
+    await navigator.clipboard?.writeText(url).catch(() => undefined)
+    p.toast('Link copied')
+  }
+  const openInYouTube = (r: VideoRow) => window.open(youtubeWatchUrl(r.videoId), '_blank', 'noopener')
+  const allSaved = selected.length > 0 && selected.every((r) => r.item.saved)
+  // While videos are selected: Esc clears, S saves, M marks watched, as Feeds' keys do for an article
+  useEffect(() => {
+    if (!picked.size) return
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      if (t?.closest('input, textarea, select, [contenteditable="true"]') || e.metaKey || e.ctrlKey || e.altKey) return
+      const rows = all.filter((r) => picked.has(r.item.id))
+      if (e.key === 'Escape') clearSelection()
+      else if (e.key === 's') void setSaved(rows, !rows.every((r) => r.item.saved))
+      else if (e.key === 'm') setRead(rows, rows.some((r) => !r.item.read))
+      else return
+      e.preventDefault()
+      e.stopPropagation()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }) // eslint-disable-line react-hooks/exhaustive-deps
+  const tileActions: TileActions = {
+    picking: picked.size > 0,
+    onClick: clickTile,
+    onLongPress: pressStart,
+    menu: (r) => [
+      { icon: r.item.saved ? 'bookmarkFilled' : 'bookmark', label: r.item.saved ? 'Saved' : 'Save', checked: !!r.item.saved, kbd: 'S', onClick: () => void toggleSaved(r.item).then(() => syncNow().catch(() => undefined)) },
+      { icon: r.item.read ? 'unread' : 'read', label: r.item.read ? 'Mark unread' : 'Mark watched', kbd: 'M', onClick: () => p.onSetRead([r.item], !r.item.read) },
+      { icon: 'share', label: 'Share', onClick: () => void share(r) },
+      { icon: 'open', label: 'Open in YouTube', onClick: () => openInYouTube(r) },
+      { icon: 'check', label: 'Select', onClick: () => pressStart(r) },
+      'separator',
+      { icon: 'delete', label: 'Delete', danger: true, onClick: () => p.onDelete([r.item]) },
+    ],
+  }
 
   const refresh = async () => {
     if (refreshing) return
@@ -176,19 +282,41 @@ function Subscriptions(p: {
               </h2>
               <div className="yt-shorts-row">
                 {shorts.map((r) => (
-                  <button key={r.item.id} type="button" className="yt-short" onClick={() => p.onOpenVideo(r, shorts)} title={r.item.title}>
-                    <img src={thumbUrl(r.videoId, true)} alt="" loading="lazy" referrerPolicy="no-referrer" />
-                    <span className="yt-short-title">{r.item.title}</span>
-                    {r.views != null ? <span className="yt-short-views">{viewsText(r.views)}</span> : null}
-                  </button>
+                  <Tile key={r.item.id} row={r} order={shorts} actions={tileActions} picked={picked.has(r.item.id)} className="yt-short-tile">
+                    {(press) => (
+                      <button type="button" className="yt-short" title={r.item.title} {...press}>
+                        <img src={thumbUrl(r.videoId, true)} alt="" loading="lazy" referrerPolicy="no-referrer" />
+                        <span className="yt-short-title">{r.item.title}</span>
+                        {r.views != null ? <span className="yt-short-views">{viewsText(r.views)}</span> : null}
+                      </button>
+                    )}
+                  </Tile>
                 ))}
               </div>
+            </div>
+          ) : null}
+          {selected.length ? (
+            <div className="select-bar yt-select-bar" role="toolbar" aria-label="Selected videos">
+              <IconButton icon="close" label="Clear selection (Esc)" onClick={clearSelection} />
+              <span className="select-count">{selected.length} selected</span>
+              {selected.length < all.length ? (
+                <button className="select-all" onClick={() => setPicked(new Set(all.map((r) => r.item.id)))}>
+                  Select all
+                </button>
+              ) : null}
+              <span className="select-spacer" />
+              {selected.some((r) => !r.item.read) ? <IconButton icon="read" label="Mark watched (M)" onClick={() => setRead(selected, true)} /> : null}
+              {selected.some((r) => r.item.read) ? <IconButton icon="unread" label="Mark unread (M)" onClick={() => setRead(selected, false)} /> : null}
+              <IconButton icon={allSaved ? 'bookmarkFilled' : 'bookmark'} label={allSaved ? 'Unsave (S)' : 'Save (S)'} onClick={() => void setSaved(selected, !allSaved)} />
+              {selected.length === 1 ? <IconButton icon="share" label="Share" onClick={() => void share(selected[0])} /> : null}
+              {selected.length === 1 ? <IconButton icon="open" label="Open in YouTube" onClick={() => openInYouTube(selected[0])} /> : null}
+              <IconButton icon="delete" label="Delete" onClick={() => remove(selected)} />
             </div>
           ) : null}
           {videos.length ? (
             <div className={prefs.grid ? 'yt-grid' : 'yt-list'}>
               {page.map((r) => (
-                <VideoTile key={r.item.id} row={r} grid={prefs.grid} onOpen={() => p.onOpenVideo(r, videos)} />
+                <VideoTile key={r.item.id} row={r} grid={prefs.grid} order={videos} actions={tileActions} picked={picked.has(r.item.id)} />
               ))}
             </div>
           ) : (
@@ -211,28 +339,92 @@ function Subscriptions(p: {
   )
 }
 
-export function VideoTile({ row: r, grid, onOpen }: { row: VideoRow; grid: boolean; onOpen: () => void }) {
+/** What a video tile can do: open (or pick, while picking), long press to pick, and its ⋮ menu. */
+interface TileActions {
+  picking: boolean
+  onClick: (e: React.MouseEvent, r: VideoRow, order: VideoRow[]) => void
+  onLongPress: (r: VideoRow) => void
+  menu: (r: VideoRow) => MoreMenuEntry[]
+}
+
+/**
+ * One video with Feeds' actions: tap opens it, Ctrl/Cmd/Shift-click or a long press picks it, and
+ * the ⋮ menu has Save, Mark watched, Share, Open in YouTube, Select and Delete. [children] gets the
+ * press handlers for its main button.
+ */
+function Tile(p: {
+  row: VideoRow
+  order: VideoRow[]
+  actions: TileActions
+  picked: boolean
+  className: string
+  children: (press: React.ButtonHTMLAttributes<HTMLButtonElement>) => React.ReactNode
+}) {
+  const r = p.row
+  const timer = useRef<number | null>(null)
+  const longPressed = useRef(false)
+  const cancel = () => {
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = null
+  }
+  const press: React.ButtonHTMLAttributes<HTMLButtonElement> = {
+    'aria-pressed': p.actions.picking ? p.picked : undefined,
+    onPointerDown: (e) => {
+      if (e.pointerType === 'mouse') return
+      longPressed.current = false
+      timer.current = window.setTimeout(() => {
+        longPressed.current = true
+        p.actions.onLongPress(r)
+      }, 500)
+    },
+    onPointerUp: cancel,
+    onPointerLeave: cancel,
+    onPointerCancel: cancel,
+    onContextMenu: (e) => longPressed.current && e.preventDefault(),
+    onClick: (e) => {
+      if (longPressed.current) {
+        longPressed.current = false
+        return
+      }
+      p.actions.onClick(e, r, p.order)
+    },
+  }
+  return (
+    <div className={`yt-tile ${p.className}${r.item.read ? ' read' : ''}${p.picked ? ' picked' : ''}`}>
+      {p.children(press)}
+      <span className="yt-tile-more">
+        <MoreMenu label={r.item.title ? `More for ${r.item.title}` : 'More'} entries={p.actions.menu(r)} />
+      </span>
+    </div>
+  )
+}
+
+export function VideoTile({ row: r, grid, order, actions, picked }: { row: VideoRow; grid: boolean; order: VideoRow[]; actions: TileActions; picked: boolean }) {
   const meta = [viewsText(r.views), ageText(r.item.sortTime)].filter(Boolean).join(' · ')
   return (
-    <button type="button" className={grid ? 'yt-card' : 'yt-row'} onClick={onOpen}>
-      <span className="yt-thumb">
-        <img src={thumbUrl(r.videoId, grid)} alt="" loading="lazy" referrerPolicy="no-referrer" />
-        {r.isLive ? <span className="yt-badge live">LIVE</span> : r.duration ? <span className="yt-badge">{durationText(r.duration)}</span> : null}
-        {r.progress > 0 ? (
-          <span className="yt-watched" aria-label={r.progress >= 1 ? 'Watched' : `${Math.round(r.progress * 100)}% watched`}>
-            <span style={{ width: `${Math.max(4, r.progress * 100)}%` }} />
+    <Tile row={r} order={order} actions={actions} picked={picked} className={grid ? 'yt-card-tile' : 'yt-row-tile'}>
+      {(press) => (
+        <button type="button" className={grid ? 'yt-card' : 'yt-row'} {...press}>
+          <span className="yt-thumb">
+            <img src={thumbUrl(r.videoId, grid)} alt="" loading="lazy" referrerPolicy="no-referrer" />
+            {r.isLive ? <span className="yt-badge live">LIVE</span> : r.duration ? <span className="yt-badge">{durationText(r.duration)}</span> : null}
+            {r.progress > 0 ? (
+              <span className="yt-watched" aria-label={r.progress >= 1 ? 'Watched' : `${Math.round(r.progress * 100)}% watched`}>
+                <span style={{ width: `${Math.max(4, r.progress * 100)}%` }} />
+              </span>
+            ) : null}
           </span>
-        ) : null}
-      </span>
-      <span className="yt-text">
-        {grid ? <ChannelAvatar src={r.avatar} name={r.channel} /> : null}
-        <span className="yt-text-col">
-          <span className="yt-title">{r.item.title}</span>
-          <span className="yt-meta">{grid ? [r.channel, meta].filter(Boolean).join(' · ') : r.channel}</span>
-          {grid ? null : <span className="yt-meta">{meta}</span>}
-        </span>
-      </span>
-    </button>
+          <span className="yt-text">
+            {grid ? <ChannelAvatar src={r.avatar} name={r.channel} /> : null}
+            <span className="yt-text-col">
+              <span className="yt-title">{r.item.title}</span>
+              <span className="yt-meta">{grid ? [r.channel, meta].filter(Boolean).join(' · ') : r.channel}</span>
+              {grid ? null : <span className="yt-meta">{meta}</span>}
+            </span>
+          </span>
+        </button>
+      )}
+    </Tile>
   )
 }
 
