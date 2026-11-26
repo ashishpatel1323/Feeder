@@ -101,6 +101,7 @@ fun ShortsPlayerScreen(
     onClose: () -> Unit,
 ) {
     HideMainBar()
+    DarkSystemBars()
     val state by viewModel.viewState.collectAsState()
     val shorts = remember { mutableStateListOf<VideoRow>() }
     var startPage by remember { mutableStateOf<Int?>(null) }
@@ -378,7 +379,7 @@ private fun ShortVideo(
     val key = row.articleKey
 
     DisposableEffect(key) {
-        playback.open(key, row.videoId, key, row.item.id, row.item.title, details, 0)
+        playback.open(key, row.videoId, key, row.item.id, row.item.title, details, 0, subtitles = false)
         playback.setBackground(false)
         playback.player.value?.let {
             it.repeatMode = Player.REPEAT_MODE_ONE
@@ -431,6 +432,8 @@ private fun ShortVideo(
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     useController = false
+                    // No captions over Shorts, even when the regular player has subtitles on
+                    subtitleView?.visibility = android.view.View.GONE
                     setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
                     setKeepContentOnPlayerReset(true)
                 }
@@ -475,3 +478,27 @@ private const val PROGRESS_TICK_MS = 200L
 
 /** Narrower than this (width / height) counts as upright: 9:16 is 0.56, 3:4 is 0.75. */
 private const val UPRIGHT_RATIO = 0.8f
+
+/**
+ * Light icons on the status and navigation bars while the Shorts show, and no light scrim behind
+ * three-button navigation (it was drawn over the bottom of the video).
+ */
+@Composable
+private fun DarkSystemBars() {
+    val view = androidx.compose.ui.platform.LocalView.current
+    DisposableEffect(view) {
+        val window = (view.context as? android.app.Activity)?.window ?: return@DisposableEffect onDispose {}
+        val controller = androidx.core.view.WindowCompat.getInsetsController(window, view)
+        val lightStatus = controller.isAppearanceLightStatusBars
+        val lightNav = controller.isAppearanceLightNavigationBars
+        val contrast = if (android.os.Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced else false
+        controller.isAppearanceLightStatusBars = false
+        controller.isAppearanceLightNavigationBars = false
+        if (android.os.Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = false
+        onDispose {
+            controller.isAppearanceLightStatusBars = lightStatus
+            controller.isAppearanceLightNavigationBars = lightNav
+            if (android.os.Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = contrast
+        }
+    }
+}

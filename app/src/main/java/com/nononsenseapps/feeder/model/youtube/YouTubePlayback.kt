@@ -156,6 +156,8 @@ class YouTubePlayback(
         title: String,
         details: VideoDetails,
         start: Int,
+        // False for Shorts: no captions, whatever the subtitle setting
+        subtitles: Boolean = true,
     ) {
         attached = key
         if (_state.value?.key == key && _player.value != null) return
@@ -163,7 +165,7 @@ class YouTubePlayback(
         loadPrefs()
         val p = _prefs.value
         val video = details.videoFor(p.quality)
-        val subtitle = if (p.subtitlesOn) pickSubtitle(details, p.subtitleLanguage) else null
+        val subtitle = if (subtitles && p.subtitlesOn) pickSubtitle(details, p.subtitleLanguage) else null
         val initial =
             PlaybackState(
                 key = key,
