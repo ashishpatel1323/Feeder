@@ -23,13 +23,13 @@ import { formatBytes } from '../lib/offline'
 import { readAloud, type ReadAloudState } from '../lib/readaloud'
 import type { Settings } from '../lib/settings'
 import type { FoliateView, Location, TocItem } from '../vendor/foliate-js/view.js'
-import { confirmDropboxDelete, DropboxButton, needsDropbox, useDropbox } from './DropboxPanel'
+import { confirmDropboxDelete, needsDropbox, useDropbox } from './DropboxPanel'
 import { HighlightBar } from './Highlights'
 import { HistoryList } from './History'
 import { Icon, IconButton } from './Icon'
 import { Player } from './Player'
 import { otherDeviceText } from '../lib/device'
-import { Shelf, ShelfControls, useShelfPrefs, type ShelfItem } from './Shelf'
+import { LibraryListing, ListingUnavailable, useShelfPrefs, type ShelfItem } from './Shelf'
 import { confirmDelete, confirmDeleteHighlight } from '../lib/confirmDelete'
 
 /**
@@ -44,17 +44,7 @@ export function EbooksPage(p: {
   onMenu: () => void
   toast: (m: string) => void
 }) {
-  if (!ebooksSupported())
-    return (
-      <section className="manage-pane books-page" aria-label="Ebooks">
-        <div className="mf-page">
-          <div className="mf-head">
-            <h1>Ebooks</h1>
-          </div>
-          <p className="muted">This browser cannot keep files on the device. Use a current Chrome, Edge, Safari or Firefox.</p>
-        </div>
-      </section>
-    )
+  if (!ebooksSupported()) return <ListingUnavailable title="Ebooks" />
   return p.book ? (
     <BookReader key={p.book} id={p.book} at={p.at} settings={p.settings} onBack={() => p.onOpen(null)} toast={p.toast} />
   ) : (
@@ -97,8 +87,8 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
     [books],
   )
 
-  const onFiles = (files: FileList | null) => {
-    for (const f of files ?? []) {
+  const onFiles = (files: File[]) => {
+    for (const f of files) {
       const key = `${f.name}:${Date.now()}`
       setJobs((j) => [...j, { key, label: f.name, done: 0, total: f.size }])
       let last = 0
@@ -181,8 +171,11 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
       subtitle: b.author,
       detail: [f ? `${pos?.n ? `${pos.p} of ${pos.n} pages` : `${Math.round(f * 100)}%`} read${where ? ` ${where}` : ''}` : 'Not started', b.ext.toUpperCase(), formatBytes(b.size)].join(' · '),
       cover: b.cover,
+      coverFit: 'fit',
       coverIcon: 'book',
       where: b.local ? (b.dropboxPath ? 'both' : 'device') : 'cloud',
+      progress: f,
+      quick: b.local ? { icon: 'book', label: `Open ${b.title}`, run: () => onOpen(b.id) } : { icon: 'download', label: `Download and open ${b.title}`, run: () => onOpen(b.id) },
       size: b.size,
       busy: downloading.has(b.id) ? 'Downloading…' : uploading[b.id] !== undefined ? `Uploading ${Math.floor(uploading[b.id] * 100)}%` : undefined,
       onOpen: () => onOpen(b.id),
@@ -191,75 +184,38 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
   })
 
   return (
-    <section
-      className="manage-pane books-page"
-      aria-label="Ebooks"
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={(e) => {
-        e.preventDefault()
-        onFiles(e.dataTransfer.files)
-      }}
+    <LibraryListing
+      title="Ebooks"
+      prefs={prefs}
+      items={items}
+      emptyIcon="book"
+      emptyText={`No books yet. Add an EPUB, MOBI, AZW3, FB2, CBZ or PDF file (you can also drop it here)${dbx.signedIn ? ', or put books in Dropbox › Apps › Feeder › Ebooks' : ''}.`}
+      emptyDevice="No books on this device yet. Books in Dropbox download when you open them."
+      addLabel="Add book"
+      addActions={[{ icon: 'book', label: 'Files…', run: () => fileInput.current?.click() }]}
+      dropboxFolder="Ebooks"
+      signedIn={dbx.signedIn}
+      toast={toast}
+      onMenu={onMenu}
+      onRefresh={refresh}
+      refreshLabel="Check Dropbox for new books"
+      refreshing={busy}
+      loading={books === undefined}
+      jobs={jobs.map((j) => ({ key: j.key, label: j.label, detail: `Adding${j.done ? `: ${formatBytes(j.done)} of ${formatBytes(j.total)}` : '…'}`, done: j.done, total: j.total }))}
+      onDropFiles={onFiles}
     >
-      <div className="mf-page">
-        <div className="mf-head">
-          <span className="only-narrow">
-            <IconButton icon="menu" label="Feeds" onClick={onMenu} />
-          </span>
-          <h1>Ebooks</h1>
-          <span className="zim-actions">
-            {dbx.signedIn ? <IconButton icon="refresh" label="Check Dropbox for new books" onClick={refresh} disabled={busy} /> : null}
-            <DropboxButton folder="Ebooks" toast={toast} />
-            <button type="button" className="mf-btn primary" onClick={() => fileInput.current?.click()}>
-              <Icon name="upload" size={18} />
-              Add book
-            </button>
-          </span>
-          <input
-            ref={fileInput}
-            type="file"
-            accept={ACCEPT}
-            multiple
-            hidden
-            onChange={(e) => {
-              onFiles(e.target.files)
-              e.target.value = ''
-            }}
-          />
-        </div>
-
-        {jobs.length ? (
-          <div className="lib-list zim-jobs">
-            {jobs.map((j) => (
-              <div key={j.key} className="lib-row">
-                <Icon name="upload" size={22} />
-                <span className="lib-text">
-                  <span className="lib-title">{j.label}</span>
-                  <span className="lib-desc">Adding{j.done ? `: ${formatBytes(j.done)} of ${formatBytes(j.total)} uploaded` : '…'}</span>
-                  <progress max={j.total || 1} value={j.done || undefined} />
-                </span>
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        {books === undefined ? (
-          <p className="muted">Loading…</p>
-        ) : sorted.length === 0 && !jobs.length ? (
-          <div className="zim-empty">
-            <Icon name="book" size={40} />
-            <p>
-              No books yet. Add an EPUB, MOBI, AZW3, FB2, CBZ or PDF file (you can also drop it here)
-              {dbx.signedIn ? ', or put books in Dropbox › Apps › Feeder › Ebooks' : ''}.
-            </p>
-          </div>
-        ) : (
-          <>
-            <ShelfControls {...prefs} counts={{ all: sorted.length, device: sorted.filter((b) => b.local).length, cloud: sorted.filter((b) => !b.local).length }} />
-            <Shelf items={items} show={prefs.show} view={prefs.view} shape="book" emptyDevice="No books on this device yet. Books in Dropbox download when you open them." />
-          </>
-        )}
-      </div>
-    </section>
+      <input
+        ref={fileInput}
+        type="file"
+        accept={ACCEPT}
+        multiple
+        hidden
+        onChange={(e) => {
+          onFiles([...(e.target.files ?? [])])
+          e.target.value = ''
+        }}
+      />
+    </LibraryListing>
   )
 }
 

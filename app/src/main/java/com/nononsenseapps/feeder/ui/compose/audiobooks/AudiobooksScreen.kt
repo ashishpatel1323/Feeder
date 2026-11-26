@@ -15,24 +15,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -40,13 +32,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Forward30
 import androidx.compose.material.icons.filled.Headphones
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
@@ -54,9 +44,7 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.outlined.AudioFile
-import androidx.compose.material.icons.outlined.DownloadDone
 import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -125,17 +113,16 @@ import com.nononsenseapps.feeder.ui.compose.ebooks.uploadOrExplain
 import com.nononsenseapps.feeder.ui.compose.feed.PlainTooltipBox
 import com.nononsenseapps.feeder.ui.compose.history.historyItems
 import com.nononsenseapps.feeder.ui.compose.history.rememberHistory
-import com.nononsenseapps.feeder.ui.compose.shelf.CoverShape
 import com.nononsenseapps.feeder.ui.compose.shelf.GeneratedCover
+import com.nononsenseapps.feeder.ui.compose.shelf.LibraryListingScreen
 import com.nononsenseapps.feeder.ui.compose.shelf.ShelfAction
-import com.nononsenseapps.feeder.ui.compose.shelf.ShelfControls
+import com.nononsenseapps.feeder.ui.compose.shelf.ShelfAdd
 import com.nononsenseapps.feeder.ui.compose.shelf.ShelfItem
+import com.nononsenseapps.feeder.ui.compose.shelf.ShelfJob
 import com.nononsenseapps.feeder.ui.compose.shelf.ShelfQuick
 import com.nononsenseapps.feeder.ui.compose.shelf.Where
 import com.nononsenseapps.feeder.ui.compose.shelf.rememberShelfPrefs
-import com.nononsenseapps.feeder.ui.compose.shelf.shelf
 import com.nononsenseapps.feeder.ui.compose.theme.FeederTokens
-import com.nononsenseapps.feeder.ui.compose.theme.SensibleTopAppBar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -253,7 +240,6 @@ fun AudiobooksScreen(
     val version by library.version.collectAsState()
     val playing by player.state.collectAsState()
     val prefs = rememberShelfPrefs("audiobooks", defaultCards = true)
-    var addMenu by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<Audiobook?>(null) }
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris -> library.addFiles(uris) }
     val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> uri?.let(library::addFolder) }
@@ -305,7 +291,13 @@ fun AudiobooksScreen(
                 detail =
                     listOf(
                         progressText(b, p, thisDeviceId),
-                        if (len > 0) AudiobookRules.lengthText(len) else if (b.tracks.size > 1) filesText.format(b.tracks.size) else Formatter.formatShortFileSize(context, b.size),
+                        if (len > 0) {
+                            AudiobookRules.lengthText(len)
+                        } else if (b.tracks.size > 1) {
+                            filesText.format(b.tracks.size)
+                        } else {
+                            Formatter.formatShortFileSize(context, b.size)
+                        },
                     ).joinToString(" · "),
                 cover = covers[b.id],
                 fallback = Icons.Default.Headphones,
@@ -321,90 +313,41 @@ fun AudiobooksScreen(
                 quick =
                     ShelfQuick(
                         if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        "${if (isPlaying) pauseText else if (started) resumeText else playText} ${b.title}",
+                        "${if (isPlaying) {
+                            pauseText
+                        } else if (started) {
+                            resumeText
+                        } else {
+                            playText
+                        }} ${b.title}",
                     ) { if (isPlaying) player.pause() else player.open(b.id) },
                 onOpen = { onOpenBook(b.id) },
                 actions = actions,
             )
         }
 
-    Scaffold(
-        modifier = modifier.windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal)),
-        contentWindowInsets = WindowInsets(0),
-        topBar = {
-            SensibleTopAppBar(
-                title = stringResource(R.string.tab_audiobooks),
-                actions = {
-                    if (link != null) {
-                        IconButton(onClick = { library.refresh() }, enabled = !refreshing) {
-                            Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.audiobooks_refresh))
-                        }
-                    }
-                    DropboxAccountButton(what = audiobooksWhat, folder = DropboxClient.AUDIOBOOKS_FOLDER.removePrefix("/"), onSignedOut = { nudge.changed(false) })
-                    Box {
-                        IconButton(onClick = { addMenu = true }) {
-                            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.audiobooks_add))
-                        }
-                        DropdownMenu(expanded = addMenu, onDismissRequest = { addMenu = false }) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.add_from_phone_files)) },
-                                leadingIcon = { Icon(Icons.Outlined.AudioFile, null) },
-                                onClick = {
-                                    addMenu = false
-                                    pickFiles.launch(arrayOf("audio/*", "video/mp4", "application/octet-stream"))
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.add_from_phone_folder)) },
-                                leadingIcon = { Icon(Icons.Outlined.Folder, null) },
-                                onClick = {
-                                    addMenu = false
-                                    pickFolder.launch(null)
-                                },
-                            )
-                        }
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        LazyVerticalGrid(
-            columns = if (prefs.cards) GridCells.Adaptive(150.dp) else GridCells.Fixed(1),
-            modifier = Modifier.padding(padding).fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalArrangement = Arrangement.spacedBy(if (prefs.cards) 18.dp else 0.dp),
-        ) {
-            adding?.let { title ->
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    Column {
-                        Text(stringResource(R.string.audiobooks_adding, title), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                        LinearProgressIndicator(Modifier.fillMaxWidth())
-                    }
-                }
-            }
-            if (refreshing && sorted.isEmpty() && adding == null) {
-                item(span = { GridItemSpan(maxLineSpan) }) { LinearProgressIndicator(Modifier.fillMaxWidth()) }
-            }
-            if (sorted.isEmpty() && !refreshing) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    Text(
-                        stringResource(R.string.audiobooks_empty),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth().padding(32.dp),
-                    )
-                }
-            }
-            if (sorted.isNotEmpty()) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    ShelfControls(prefs, all = items.size, device = items.count { it.where != Where.CLOUD }, cloud = items.count { it.where == Where.CLOUD })
-                }
-                shelf(items, prefs, CoverShape.SQUARE, emptyPhoneText, streams = true)
-            }
-        }
-    }
+    LibraryListingScreen(
+        title = stringResource(R.string.tab_audiobooks),
+        prefs = prefs,
+        items = items,
+        emptyIcon = Icons.Default.Headphones,
+        emptyText = stringResource(R.string.audiobooks_empty),
+        emptyDevice = emptyPhoneText,
+        addLabel = stringResource(R.string.audiobooks_add),
+        addActions =
+            listOf(
+                ShelfAdd(Icons.Outlined.AudioFile, stringResource(R.string.add_from_phone_files)) { pickFiles.launch(arrayOf("audio/*", "video/mp4", "application/octet-stream")) },
+                ShelfAdd(Icons.Outlined.Folder, stringResource(R.string.add_from_phone_folder)) { pickFolder.launch(null) },
+            ),
+        dropbox = { DropboxAccountButton(what = audiobooksWhat, folder = DropboxClient.AUDIOBOOKS_FOLDER.removePrefix("/"), onSignedOut = { nudge.changed(false) }) },
+        modifier = modifier,
+        onRefresh = if (link != null) ({ library.refresh() }) else null,
+        refreshLabel = stringResource(R.string.audiobooks_refresh),
+        refreshing = refreshing,
+        loading = refreshing && adding == null,
+        jobs = listOfNotNull(adding?.let { ShelfJob("adding", stringResource(R.string.audiobooks_adding, it)) }),
+        streams = true,
+    )
 
     deleting?.let { b ->
         DeleteFromDropboxDialog(
@@ -501,29 +444,31 @@ fun AudiobookPlayerScreen(
                     val ms = parts.getOrNull(1)?.toLongOrNull()
                     if (i != null && ms != null) player.open(bookId, play = mine && (s.isPlaying || s.loading), at = i to ms)
                 }
-            } else itemsIndexed(chapters, key = { _, c -> "${c.i}:${c.startMs}" }) { k, c ->
-                val current = mine && k == s.chapter
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 52.dp)
-                            .clip(RoundedCornerShape(FeederTokens.Radius.sm))
-                            .background(if (current) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface)
-                            .clickable { if (mine) player.jumpToChapter(k) else player.open(bookId, at = c.i to c.startMs) }
-                            .padding(horizontal = FeederTokens.Space.md, vertical = FeederTokens.Space.sm),
-                ) {
-                    Text("${k + 1}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(36.dp))
-                    Text(
-                        c.title,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = if (current) FontWeight.SemiBold else null,
-                        modifier = Modifier.weight(1f),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (c.lengthMs > 0) Text(AudiobookRules.clock(c.lengthMs), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                itemsIndexed(chapters, key = { _, c -> "${c.i}:${c.startMs}" }) { k, c ->
+                    val current = mine && k == s.chapter
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 52.dp)
+                                .clip(RoundedCornerShape(FeederTokens.Radius.sm))
+                                .background(if (current) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface)
+                                .clickable { if (mine) player.jumpToChapter(k) else player.open(bookId, at = c.i to c.startMs) }
+                                .padding(horizontal = FeederTokens.Space.md, vertical = FeederTokens.Space.sm),
+                    ) {
+                        Text("${k + 1}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(36.dp))
+                        Text(
+                            c.title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (current) FontWeight.SemiBold else null,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (c.lengthMs > 0) Text(AudiobookRules.clock(c.lengthMs), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
         }

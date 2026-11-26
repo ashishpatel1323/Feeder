@@ -32,8 +32,8 @@ import {
   type CatalogEntry,
   type ZimBook,
 } from '../lib/zim/library'
-import { confirmDropboxDelete, DropboxButton, needsDropbox, useDropbox } from './DropboxPanel'
-import { Shelf, ShelfControls, useShelfPrefs, type ShelfItem } from './Shelf'
+import { confirmDropboxDelete, needsDropbox, useDropbox } from './DropboxPanel'
+import { LibraryListing, ListingUnavailable, useShelfPrefs, type ShelfItem } from './Shelf'
 import { HighlightBar } from './Highlights'
 import { HistoryList } from './History'
 import { Icon, IconButton } from './Icon'
@@ -53,17 +53,7 @@ export interface ZimJump {
 }
 
 export function ZimPage(p: { book: string | null; jump?: ZimJump | null; settings: Settings; onOpen: (id: string | null) => void; onMenu: () => void; toast: (m: string) => void }) {
-  if (!zimSupported())
-    return (
-      <section className="manage-pane zim-page" aria-label="ZIM library">
-        <div className="mf-page">
-          <div className="mf-head">
-            <h1>ZIM library</h1>
-          </div>
-          <p className="muted">This browser cannot keep files on the device. Use a current Chrome, Edge, Safari or Firefox.</p>
-        </div>
-      </section>
-    )
+  if (!zimSupported()) return <ListingUnavailable title="ZIM library" />
   return p.book ? <ZimReader key={p.book} id={p.book} jump={p.jump ?? null} settings={p.settings} onBack={() => p.onOpen(null)} toast={p.toast} /> : <ZimLibrary onOpen={p.onOpen} onMenu={p.onMenu} toast={p.toast} />
 }
 
@@ -84,7 +74,7 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
   const [remote, setRemote] = useState<DropboxFile[] | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   const dbx = useDropbox()
-  const prefs = useShelfPrefs('zim', 'list')
+  const prefs = useShelfPrefs('zim', 'cards')
   const [icons, setIcons] = useState<Record<string, string>>({})
   // Landing-page covers come from the service worker, like the reader's pages
   const [swReady, setSwReady] = useState(false)
@@ -156,8 +146,8 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
   )
   const added = (label: string) => () => toast(`${label} is ready to read on this device`)
 
-  const onFiles = (files: FileList | null) => {
-    for (const f of files ?? []) run(f.name, (prog, signal) => importFile(f, prog, signal), added(f.name))
+  const onFiles = (files: File[]) => {
+    for (const f of files) run(f.name, (prog, signal) => importFile(f, prog, signal), added(f.name))
   }
 
   const download = (e: CatalogEntry) => {
@@ -229,11 +219,13 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
         subtitle: b.description,
         detail: [formatBytes(b.size), b.flavour, b.articleCount ? `${b.articleCount.toLocaleString()} pages` : '', b.date].filter(Boolean).join(' · '),
         cover: b.icon,
+        coverFit: 'icon',
         coverIcon: 'public',
         preview: !b.icon && swReady ? zimUrl(b.id, '') : undefined,
         where: remoteCopy ? 'both' : 'device',
         size: b.size,
         busy: percent(jobs.find((j) => j.label === `Uploading ${b.title} to Dropbox`), 'Uploading'),
+        quick: { icon: 'book', label: `Open ${b.title}`, run: () => onOpen(b.id) },
         onOpen: () => onOpen(b.id),
         actions,
       }
@@ -243,11 +235,13 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
         key: `dbx:${f.id}`,
         title: f.name.replace(/\.zim$/i, '').replace(/_/g, ' '),
         detail: formatBytes(f.size),
-        cover: icons[f.name] ?? null,
+        cover: icons[f.name] || null,
+        coverFit: 'icon',
         coverIcon: 'public',
         where: 'cloud',
         size: f.size,
         busy: percent(jobFor(f.name), 'Downloading'),
+        quick: jobFor(f.name) ? undefined : { icon: 'download', label: `Download and open ${f.name.replace(/\.zim$/i, '').replace(/_/g, ' ')}`, run: () => fromDropbox(f) },
         onOpen: () => {
           if (!jobFor(f.name)) fromDropbox(f)
         },
@@ -260,89 +254,53 @@ function ZimLibrary({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; o
   ]
 
   return (
-    <section
-      className="manage-pane zim-page"
-      aria-label="ZIM library"
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={(e) => {
-        e.preventDefault()
-        onFiles(e.dataTransfer.files)
-      }}
+    <LibraryListing
+      title="ZIM library"
+      prefs={prefs}
+      items={items}
+      emptyIcon="public"
+      emptyText="Whole websites to read offline, such as Wikipedia, Wiktionary, Stack Exchange or your own sites made with zimit. No books yet: get one from the Kiwix library, or add a .zim file you already have (you can also drop it here)."
+      emptyDevice="No ZIM books on this device yet. Download one from the In Dropbox list."
+      addLabel="Add ZIM files"
+      addActions={[
+        { icon: 'explore', label: 'Get ZIM files…', run: () => setCatalog((c) => !c) },
+        { icon: 'upload', label: 'Add .zim file…', run: () => fileInput.current?.click() },
+      ]}
+      dropboxFolder="ZIM"
+      signedIn={dbx.signedIn}
+      toast={toast}
+      onMenu={onMenu}
+      onRefresh={refreshRemote}
+      refreshLabel="Check Dropbox for ZIM files"
+      loading={books === null}
+      jobs={jobs
+        .filter((j) => !onlyInDropbox.some((f) => f.name === j.label) && !j.label.startsWith('Uploading '))
+        .map((j) => ({ key: j.key, label: j.label, done: j.done, total: j.total, onCancel: () => j.abort.abort() }))}
+      extra={catalog ? <Catalog onDownload={download} /> : null}
+      footer={
+        <>
+          {broken.length ? <p className="muted">Could not open: {broken.join(', ')}</p> : null}
+          {usage ? (
+            <p className="shelf-usage muted">
+              Feeder uses {formatBytes(usage.used)} on this device{usage.quota ? `, ${formatBytes(usage.quota)} available to it` : ''}.
+            </p>
+          ) : null}
+        </>
+      }
+      onDropFiles={onFiles}
     >
-      <div className="mf-page">
-        <div className="mf-head">
-          <span className="only-narrow">
-            <IconButton icon="menu" label="Feeds" onClick={onMenu} />
-          </span>
-          <h1>ZIM library</h1>
-          <span className="zim-actions">
-            {dbx.signedIn ? <IconButton icon="refresh" label="Check Dropbox for ZIM files" onClick={refreshRemote} /> : null}
-            <DropboxButton folder="ZIM" toast={toast} />
-            <button type="button" className={`mf-btn${catalog ? '' : ' primary'}`} onClick={() => setCatalog((c) => !c)} aria-expanded={catalog}>
-              <Icon name="explore" size={18} />
-              Get ZIM files
-            </button>
-            <button type="button" className="mf-btn" onClick={() => fileInput.current?.click()}>
-              <Icon name="upload" size={18} />
-              Add .zim file
-            </button>
-          </span>
-          <input
-            ref={fileInput}
-            type="file"
-            accept=".zim,application/x-zim"
-            multiple
-            hidden
-            onChange={(e) => {
-              onFiles(e.target.files)
-              e.target.value = ''
-            }}
-          />
-        </div>
-        <p className="zim-intro muted">Whole websites to read offline, such as Wikipedia, Wiktionary, Stack Exchange or your own sites made with zimit.</p>
-
-        {catalog ? <Catalog onDownload={download} /> : null}
-
-        {jobs.length ? (
-          <div className="lib-list zim-jobs">
-            {jobs.map((j) => (
-              <div key={j.key} className="lib-row">
-                <Icon name="download" size={22} />
-                <span className="lib-text">
-                  <span className="lib-title">{j.label}</span>
-                  <span className="lib-desc">
-                    {formatBytes(j.done)}
-                    {j.total ? ` of ${formatBytes(j.total)}` : ''}
-                  </span>
-                  <progress max={j.total || 1} value={j.total ? j.done : undefined} />
-                </span>
-                <IconButton icon="close" label="Stop" onClick={() => j.abort.abort()} />
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        {books === null ? (
-          <p className="muted">Loading…</p>
-        ) : books.length === 0 && !jobs.length && !onlyInDropbox.length ? (
-          <div className="zim-empty">
-            <Icon name="public" size={40} />
-            <p>No books yet. Get one from the Kiwix library, or add a .zim file you already have (you can also drop it here).</p>
-          </div>
-        ) : (
-          <>
-            <ShelfControls {...prefs} counts={{ all: items.length, device: items.filter((i) => i.where !== 'cloud').length, cloud: items.filter((i) => i.where === 'cloud').length }} />
-            <Shelf items={items} show={prefs.show} view={prefs.view} shape="tile" emptyDevice="No ZIM books on this device yet. Download one from the In Dropbox list." />
-          </>
-        )}
-        {broken.length ? <p className="muted">Could not open: {broken.join(', ')}</p> : null}
-        {usage ? (
-          <p className="zim-usage muted">
-            Feeder uses {formatBytes(usage.used)} on this device{usage.quota ? `, ${formatBytes(usage.quota)} available to it` : ''}.
-          </p>
-        ) : null}
-      </div>
-    </section>
+      <input
+        ref={fileInput}
+        type="file"
+        accept=".zim,application/x-zim"
+        multiple
+        hidden
+        onChange={(e) => {
+          onFiles([...(e.target.files ?? [])])
+          e.target.value = ''
+        }}
+      />
+    </LibraryListing>
   )
 }
 
