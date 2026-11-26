@@ -19,6 +19,10 @@ class UserHighlights(
     val list: List<Highlight>,
     val onTap: (Highlight) -> Unit,
 ) {
+    /** Margin sketches (shown as strips after their paragraph); the rest are marked in the text. */
+    val sketches: List<Highlight> = list.filter { !it.sketch.isNullOrBlank() }
+    val marked: List<Highlight> = list.filter { it.sketch.isNullOrBlank() }
+
     @Volatile
     var locator: HighlightLocator? = null
 }
@@ -57,6 +61,41 @@ internal fun highlightMarks(
         }
     }
     return out
+}
+
+@Suppress("ktlint:compose:compositionlocal-allowlist")
+internal val LocalSketchStrips = compositionLocalOf<Map<Int, List<Highlight>>> { emptyMap() }
+
+/**
+ * Which top-level element each margin sketch goes after: the one holding the last paragraph of
+ * its text. Sketches whose text isn't in the article go after the last element, so they're never lost.
+ */
+internal fun sketchStrips(
+    article: LinearArticle,
+    locator: HighlightLocator,
+    sketches: List<Highlight>,
+): Map<Int, List<Highlight>> {
+    if (sketches.isEmpty() || article.elements.isEmpty()) return emptyMap()
+    val texts = article.highlightTexts()
+    // Each paragraph's top-level element
+    val topOf = IdentityHashMap<LinearText, Int>()
+    article.elements.forEachIndexed { index, element -> element.visitTexts { topOf[it] = index } }
+    val out = sortedMapOf<Int, MutableList<Highlight>>()
+    for (h in sketches) {
+        val last = locator.ranges(h.text, h.prefix, h.start).keys.maxOrNull()
+        val top = last?.let { texts.getOrNull(it) }?.let { topOf[it] } ?: article.elements.lastIndex
+        out.getOrPut(top) { mutableListOf() } += h
+    }
+    return out
+}
+
+private fun com.nononsenseapps.feeder.model.html.LinearElement.visitTexts(f: (LinearText) -> Unit) {
+    when (this) {
+        is LinearText -> f(this)
+        is com.nononsenseapps.feeder.model.html.LinearBlockQuote -> content.forEach { it.visitTexts(f) }
+        is com.nononsenseapps.feeder.model.html.LinearListItem -> content.forEach { it.visitTexts(f) }
+        else -> Unit
+    }
 }
 
 /** Behind highlighted text. The text on it is always dark, so it reads in both themes. */

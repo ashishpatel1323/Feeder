@@ -905,7 +905,10 @@ class Sync2Client(
                 "color" to h.color,
                 "note" to h.note,
                 "createdAt" to h.createdAt,
-            ).apply { h.cfi?.takeIf { it.isNotBlank() }?.let { put("cfi", it) } }
+            ).apply {
+                h.cfi?.takeIf { it.isNotBlank() }?.let { put("cfi", it) }
+                h.sketch?.takeIf { it.isNotBlank() }?.let { put("sketch", it) }
+            }
 
         const val DROPBOX_KEY = "main"
         const val HISTORY = "history"
@@ -942,6 +945,7 @@ class Sync2Client(
                 createdAt = (v["createdAt"] as? Number)?.toLong() ?: ts,
                 modifiedAt = ts,
                 cfi = (v["cfi"] as? String)?.takeIf { it.isNotBlank() },
+                sketch = (v["sketch"] as? String)?.takeIf { it.isNotBlank() },
             )
         }
 

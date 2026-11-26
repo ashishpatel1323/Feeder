@@ -41,6 +41,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Draw
 import androidx.compose.material.icons.outlined.FormatSize
 import androidx.compose.material.icons.outlined.Headphones
 import androidx.compose.material.icons.outlined.Highlight
@@ -99,6 +100,7 @@ import com.nononsenseapps.feeder.model.history.HistoryWhere
 import com.nononsenseapps.feeder.model.history.ItemHistory
 import com.nononsenseapps.feeder.ui.compose.components.askHighlight
 import com.nononsenseapps.feeder.ui.compose.components.rememberDeleteConfirmer
+import com.nononsenseapps.feeder.ui.compose.highlights.SketchEditorDialog
 import com.nononsenseapps.feeder.ui.compose.history.historyItems
 import com.nononsenseapps.feeder.ui.compose.history.rememberHistory
 import com.nononsenseapps.feeder.ui.compose.history.rememberOpenTracker
@@ -119,8 +121,8 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.kodein.di.compose.LocalDI
-import org.kodein.di.instance
 import java.io.File
+import org.kodein.di.instance
 import java.util.UUID
 
 /** Reader settings, the same fields as the web app's ReaderPrefs (web/src/lib/ebooks/reader.ts). */
@@ -209,6 +211,9 @@ fun EbookReaderScreen(
     var toc by remember { mutableStateOf<List<TocEntry>>(emptyList()) }
     var selection by remember { mutableStateOf<Selection?>(null) }
     var editing by remember { mutableStateOf<Highlight?>(null) }
+    // A margin sketch being drawn: for a selection, or an existing sketch (by id)
+    var sketchingNew by remember { mutableStateOf<Selection?>(null) }
+    var sketchingId by remember { mutableStateOf<String?>(null) }
     var sheet by remember { mutableStateOf<String?>(null) }
     var prefs by remember { mutableStateOf(loadPrefs(context)) }
     var webView by remember { mutableStateOf<WebView?>(null) }
@@ -228,7 +233,14 @@ fun EbookReaderScreen(
     fun q(s: String?) = if (s == null) "null" else JsonPrimitive(s).toString()
 
     fun highlightsJson() =
-        JsonArray(highlights.map { JsonObject(mapOf("cfi" to JsonPrimitive(it.cfi), "color" to JsonPrimitive(it.color))) }).toString()
+        JsonArray(
+            highlights.map {
+                JsonObject(
+                    mapOf("id" to JsonPrimitive(it.id), "cfi" to JsonPrimitive(it.cfi), "color" to JsonPrimitive(it.color)) +
+                        (it.sketch?.let { sk -> mapOf("sketch" to JsonPrimitive(sk)) } ?: emptyMap()),
+                )
+            },
+        ).toString()
 
     LaunchedEffect(bookId) {
         try {
@@ -307,7 +319,7 @@ fun EbookReaderScreen(
                     main.post {
                         currentHighlights.firstOrNull { it.cfi == cfi }?.let {
                             selection = null
-                            editing = it
+                            if (it.sketch.isNullOrBlank()) editing = it else sketchingId = it.id
                         }
                     }
 
@@ -489,6 +501,14 @@ fun EbookReaderScreen(
                                 selection = null
                                 editing = null
                             },
+                            onSketch =
+                                selection?.let { sel ->
+                                    {
+                                        sketchingNew = sel
+                                        js("feeder.clearSelection()")
+                                        selection = null
+                                    }
+                                },
                         )
 
                     else ->
@@ -636,6 +656,58 @@ fun EbookReaderScreen(
         }
     }
 
+    sketchingNew?.let { sel ->
+        SketchEditorDialog(
+            quote = sel.text,
+            initial = null,
+            initialColor = HighlightColor.PINK,
+            onSave = { sketch, color ->
+                highlightStore.add(
+                    Highlight(
+                        id = UUID.randomUUID().toString(),
+                        itemKey = itemKey,
+                        itemTitle = book?.title ?: "",
+                        itemLink = null,
+                        feedTitle = book?.author ?: "",
+                        imageUrl = null,
+                        text = sel.text,
+                        color = color.id,
+                        createdAt = System.currentTimeMillis(),
+                        cfi = sel.cfi,
+                        sketch = sketch,
+                    ),
+                )
+                Toast.makeText(context, R.string.sketch_added, Toast.LENGTH_SHORT).show()
+                sketchingNew = null
+            },
+            onDelete = null,
+            onDismiss = { sketchingNew = null },
+        )
+    }
+    sketchingId?.let { id ->
+        val h = highlights.firstOrNull { it.id == id }
+        if (h == null) {
+            sketchingId = null
+        } else {
+            SketchEditorDialog(
+                quote = h.text,
+                initial = h.sketch,
+                initialColor = h.highlightColor,
+                onSave = { sketch, color ->
+                    highlightStore.updateSketch(h.id, sketch, color)
+                    sketchingId = null
+                },
+                onDelete = {
+                    deleteConfirmer.askHighlight(h.text) {
+                        highlightStore.delete(h.id)
+                        sketchingId = null
+                    }
+                },
+                onDismiss = { sketchingId = null },
+            )
+        }
+    }
+
     if (sheet != null) {
         ModalBottomSheet(onDismissRequest = { sheet = null }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = sheet != "look")) {
             when (sheet) {
@@ -715,6 +787,8 @@ internal fun HighlightBar(
     onShare: () -> Unit,
     onDelete: () -> Unit,
     onClose: () -> Unit,
+    /** Draw a margin sketch for the selected text instead (new selections only). */
+    onSketch: (() -> Unit)? = null,
 ) {
     var color by remember(existing?.id, text) { mutableStateOf(existing?.highlightColor ?: HighlightColor.YELLOW) }
     var note by remember(existing?.id, text) { mutableStateOf(existing?.note ?: "") }
@@ -743,6 +817,13 @@ internal fun HighlightBar(
                         Icon(Icons.Outlined.Highlight, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
                         Text(stringResource(R.string.ebook_highlight))
+                    }
+                    if (onSketch != null) {
+                        OutlinedButton(onClick = onSketch) {
+                            Icon(Icons.Outlined.Draw, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(stringResource(R.string.sketch_action))
+                        }
                     }
                 } else if (note.trim() != existing.note) {
                     androidx.compose.material3.Button(onClick = { onSave(color, note) }) { Text(stringResource(R.string.ebook_save_note)) }

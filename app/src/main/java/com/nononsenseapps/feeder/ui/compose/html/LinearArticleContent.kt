@@ -134,9 +134,11 @@ import com.nononsenseapps.feeder.ui.compose.feedarticle.YouTubeVideoBlock
 import com.nononsenseapps.feeder.ui.compose.highlights.HighlightTextColor
 import com.nononsenseapps.feeder.ui.compose.highlights.LocalHighlightMarks
 import com.nononsenseapps.feeder.ui.compose.highlights.LocalUserHighlights
+import com.nononsenseapps.feeder.ui.compose.highlights.SketchStrip
 import com.nononsenseapps.feeder.ui.compose.highlights.background
 import com.nononsenseapps.feeder.ui.compose.highlights.highlightLocator
 import com.nononsenseapps.feeder.ui.compose.highlights.highlightMarks
+import com.nononsenseapps.feeder.ui.compose.highlights.sketchStrips
 import com.nononsenseapps.feeder.ui.compose.images.rememberImageViewer
 import com.nononsenseapps.feeder.ui.compose.layouts.Table
 import com.nononsenseapps.feeder.ui.compose.layouts.TableCell
@@ -234,7 +236,11 @@ fun ColumnArticleContent(
     SideEffect { userHighlights?.locator = locator }
     val marks =
         remember(articleContent, locator, userHighlights?.list) {
-            userHighlights?.let { highlightMarks(articleContent, locator, it.list) } ?: emptyMap()
+            userHighlights?.let { highlightMarks(articleContent, locator, it.marked) } ?: emptyMap()
+        }
+    val strips =
+        remember(articleContent, locator, userHighlights?.list) {
+            userHighlights?.let { sketchStrips(articleContent, locator, it.sketches) } ?: emptyMap()
         }
     val currentOnReadAloudFrom by rememberUpdatedState(onReadAloudFrom)
     val tapHandler =
@@ -270,16 +276,37 @@ fun ColumnArticleContent(
                             },
                     contentAlignment = Alignment.Center,
                 ) {
-                    LinearElementContent(
-                        linearElement = element,
-                        idToIndex = articleContent.idToIndex,
-                        allowHorizontalScroll = true,
-                        onLinkClick = onLinkClick,
-                        modifier =
+                    val elementSketches = strips[index]
+                    if (elementSketches.isNullOrEmpty()) {
+                        LinearElementContent(
+                            linearElement = element,
+                            idToIndex = articleContent.idToIndex,
+                            allowHorizontalScroll = true,
+                            onLinkClick = onLinkClick,
+                            modifier =
+                                Modifier
+                                    .widthIn(max = minOf(maxWidth, LocalDimens.current.maxReaderWidth))
+                                    .fillMaxWidth(),
+                        )
+                    } else {
+                        // Margin sketches show as strips right after their paragraph
+                        Column(
                             Modifier
                                 .widthIn(max = minOf(maxWidth, LocalDimens.current.maxReaderWidth))
                                 .fillMaxWidth(),
-                    )
+                        ) {
+                            LinearElementContent(
+                                linearElement = element,
+                                idToIndex = articleContent.idToIndex,
+                                allowHorizontalScroll = true,
+                                onLinkClick = onLinkClick,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            for (h in elementSketches) {
+                                SketchStrip(highlight = h, onClick = { userHighlights?.onTap?.invoke(h) })
+                            }
+                        }
+                    }
                 }
             }
         }
