@@ -10,7 +10,8 @@ import { updateSettings, type Settings } from '../lib/settings'
 import { OfflineSection } from './Offline'
 import { isKokoroVoice, kokoro, KOKORO_PREFIX, KOKORO_VOICES, webGpuAvailable, type KokoroStatus } from '../lib/kokoro'
 import { readAloud } from '../lib/readaloud'
-import { IconButton } from './Icon'
+import { Icon, IconButton } from './Icon'
+import { ALWAYS_TABS, MAX_BAR_TABS, saveBarTabs, TABS, useBarTabs, type BarTab } from './Tabs'
 
 export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   useEffect(() => {
@@ -583,6 +584,8 @@ export function SettingsDialog({
         ) : null}
       </section>
 
+      <BottomBarTabsSection />
+
       <section className="settings-section">
         <h3>Feeds</h3>
         <div className="form-actions wrap">
@@ -612,5 +615,55 @@ export function SettingsDialog({
         </label>
       </section>
     </Modal>
+  )
+}
+
+/**
+ * Settings > Bottom bar tabs: pick and order up to five tabs for the bottom bar (and the sidebar),
+ * kept per browser. Feeds and Library are always there; the others open from rows on Library.
+ */
+export function BottomBarTabsSection() {
+  const bar = useBarTabs()
+  // Tabs in the bar first, in their order, then the rest
+  const order: BarTab[] = [...bar, ...TABS.map((t) => t.tab).filter((t) => !bar.includes(t))]
+  const full = bar.length >= MAX_BAR_TABS
+  const toggle = (t: BarTab) => saveBarTabs(bar.includes(t) ? bar.filter((x) => x !== t) : [...bar, t])
+  const move = (t: BarTab, by: -1 | 1) => {
+    const i = bar.indexOf(t)
+    const j = i + by
+    if (i < 0 || j < 0 || j >= bar.length) return
+    const next = [...bar]
+    ;[next[i], next[j]] = [next[j], next[i]]
+    saveBarTabs(next)
+  }
+  return (
+    <section className="settings-section bar-tabs" aria-labelledby="bar-tabs-h">
+      <h3 id="bar-tabs-h">Bottom bar tabs</h3>
+      <p className="muted small">Up to {MAX_BAR_TABS} tabs, in this order, in the bottom bar and the sidebar. The others open from Library.</p>
+      <ul className="bar-tabs-list">
+        {order.map((tab) => {
+          const t = TABS.find((x) => x.tab === tab)!
+          const on = bar.includes(tab)
+          const always = ALWAYS_TABS.includes(tab)
+          const i = bar.indexOf(tab)
+          return (
+            <li key={tab} className={on ? 'on' : ''}>
+              <label className="check">
+                <input type="checkbox" checked={on} disabled={always || (!on && full)} onChange={() => toggle(tab)} />
+                <Icon name={t.icon} size={20} />
+                <span className="bar-tab-name">{t.label}</span>
+                {always ? <span className="muted small">Always shown</span> : null}
+              </label>
+              {on ? (
+                <span className="bar-tab-move">
+                  <IconButton icon="arrowUp" label={`Move ${t.label} up`} disabled={i === 0} onClick={() => move(tab, -1)} />
+                  <IconButton icon="arrowDown" label={`Move ${t.label} down`} disabled={i === bar.length - 1} onClick={() => move(tab, 1)} />
+                </span>
+              ) : null}
+            </li>
+          )
+        })}
+      </ul>
+    </section>
   )
 }

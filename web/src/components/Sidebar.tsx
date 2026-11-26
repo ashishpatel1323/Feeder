@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { FEED_ORDER_KEY, feedDisplayTitle, FOLDER_ORDER_KEY, getKv, sortFolder, sortFolders, type Feed, type Item } from '../lib/db'
 import type { Selection } from '../lib/listquery'
-import { TABS, tabKeys, type Tab } from './Tabs'
+import { shownTab, TABS, tabKeys, useBarTabs, type Tab } from './Tabs'
 import { Icon, IconButton } from './Icon'
 import { proxiedUrl } from '../lib/api'
 import { usePlaylists } from './Playlists'
@@ -182,6 +182,11 @@ export function Sidebar(p: Props) {
             </ul>
           ) : null
 
+  // The sidebar shows the same tabs as the bottom bar; the rest open from Library
+  const bar = useBarTabs()
+  const barTabs = bar.map((b) => TABS.find((t) => t.tab === b)!)
+  const current = shownTab(p.currentTab, bar)
+
   return (
     <nav className="sidebar">
       <div className="sidebar-rail" aria-label="Feeds (collapsed)">
@@ -189,10 +194,10 @@ export function Sidebar(p: Props) {
         <button className="rail-btn" title={`Search everything (${searchKeys()})`} aria-label="Search" onClick={p.onSearch}>
           <Icon name="search" size={20} />
         </button>
-        {TABS.map((t) => (
+        {barTabs.map((t) => (
           <button
             key={t.tab}
-            className={`rail-btn${p.currentTab === t.tab ? ' selected' : ''}`}
+            className={`rail-btn${current === t.tab ? ' selected' : ''}`}
             title={`${t.label}: ${t.hint} (${tabKeys(t.tab)})`}
             aria-label={t.label}
             onClick={() => p.onTab(t.tab)}
@@ -223,10 +228,10 @@ export function Sidebar(p: Props) {
       </button>
       {p.refreshing ? <div className="sidebar-status">Refreshing {p.refreshing}</div> : null}
       <ul className="nav-list">
-        {TABS.map((t) => (
+        {barTabs.map((t) => (
           <li key={t.tab}>
             <button
-              className={`nav-row tab-row${p.currentTab === t.tab && (t.tab !== 'playlists' || !p.showingPlaylist) ? ' selected' : ''}`}
+              className={`nav-row tab-row${current === t.tab && (t.tab !== 'playlists' || !p.showingPlaylist) ? ' selected' : ''}`}
               title={`${t.hint} (${tabKeys(t.tab)})`}
               onClick={() => p.onTab(t.tab)}
             >

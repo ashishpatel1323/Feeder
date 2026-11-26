@@ -66,6 +66,7 @@ function siteOf(url: string): string | undefined {
 
 /** 9483 → "9.5K", 21500000 → "21.5M". */
 export function compactNumber(n: number): string {
+  if (n >= 1e9) return `${(n / 1e9).toFixed(n >= 1e10 ? 0 : 1).replace(/\.0$/, '')}B`
   if (n >= 1e6) return `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace(/\.0$/, '')}M`
   if (n >= 1e3) return `${(n / 1e3).toFixed(n >= 1e4 ? 0 : 1).replace(/\.0$/, '')}K`
   return String(n)

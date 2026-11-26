@@ -10,6 +10,7 @@
  */
 
 import { handleSync2, syncStoreKind, type Sync2Env } from './sync2'
+import { handleYouTube } from './youtube'
 
 export interface Env extends Sync2Env {
   /** When set, every request must carry it in the X-Access-Token header. */
@@ -264,6 +265,7 @@ export async function handle(request: Request, env: Env): Promise<Response> {
   try {
     if (path === 'fetch' && request.method === 'GET') return await proxyFetch(request)
     if (path === 'audio' && request.method === 'GET') return await proxyAudio(request)
+    if (path.startsWith('youtube/')) return await handleYouTube(request, path.slice('youtube/'.length))
     if (path.startsWith('sync/')) return await proxySync(request, env, path.slice('sync/'.length))
   } catch (e) {
     return json(502, { error: e instanceof Error ? e.message : String(e) })

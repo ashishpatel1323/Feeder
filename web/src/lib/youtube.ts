@@ -43,8 +43,9 @@ export function articleVideoId(item: { link: string | null; contentHtml?: string
   return m ? youtubeVideoId(m[1].startsWith('//') ? `https:${m[1]}` : m[1].replace(/&amp;/g, '&')) : null
 }
 
-export function youtubeEmbedUrl(id: string, opts: { start?: number; origin?: string } = {}): string {
+export function youtubeEmbedUrl(id: string, opts: { start?: number; origin?: string; autoplay?: boolean } = {}): string {
   const q = new URLSearchParams({ rel: '0', playsinline: '1', enablejsapi: '1' })
+  if (opts.autoplay) q.set('autoplay', '1')
   if (opts.origin) q.set('origin', opts.origin)
   if (opts.start && opts.start > 0) q.set('start', String(Math.floor(opts.start)))
   return `https://www.youtube.com/embed/${id}?${q}`
