@@ -9709,6 +9709,7 @@ mark.sr-mark {
   .hist-entry {
     padding-right: 0;
   }
+}
 
 /* ------------------------------------------------ delete confirmation (lib/confirmDelete.ts) */
 /* M3 basic dialog: title, item in bold, where it is deleted, then Cancel + red text button. */
@@ -9754,4 +9755,72 @@ mark.sr-mark {
 .confirm-delete-actions .mf-btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* YouTube tab: Feeds' actions on each video (⋮ menu, multi-select, watched = read) */
+.yt-tile {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  border-radius: var(--r-md);
+}
+.yt-tile > .yt-row,
+.yt-tile > .yt-card {
+  flex: 1;
+  min-width: 0;
+}
+.yt-row-tile > .yt-row {
+  padding-right: calc(var(--sp-2) + 40px);
+}
+.yt-card-tile > .yt-card .yt-text {
+  padding-right: 40px;
+}
+.yt-tile-more {
+  position: absolute;
+  top: var(--sp-1);
+  right: 0;
+}
+.yt-card-tile .yt-tile-more {
+  top: auto;
+  bottom: auto;
+  right: 0;
+  /* Beside the title, under the thumbnail */
+  margin-top: calc(100% * 9 / 16);
+}
+.yt-short-tile {
+  flex: none;
+}
+.yt-short-tile .yt-tile-more {
+  top: var(--sp-1);
+  right: var(--sp-1);
+  z-index: 2;
+  border-radius: var(--r-pill);
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+}
+.yt-short-tile .yt-tile-more .icon-btn {
+  color: #fff;
+}
+.yt-tile.read .yt-title {
+  font-weight: 500;
+  color: var(--text-2);
+}
+.yt-tile.read .yt-thumb img,
+.yt-tile.read.yt-short-tile img {
+  opacity: 0.6;
+}
+.yt-tile.picked {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.yt-tile.picked .yt-short {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+.yt-select-bar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin: 0 calc(-1 * var(--sp-2)) var(--sp-2);
+  border-radius: var(--r-md);
 }

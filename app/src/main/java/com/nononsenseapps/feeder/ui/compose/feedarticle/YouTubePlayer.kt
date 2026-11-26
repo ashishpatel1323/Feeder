@@ -419,7 +419,7 @@ fun VideoPositionText(
     )
 }
 
-private fun openInYouTubeApp(
+internal fun openInYouTubeApp(
     context: Context,
     url: String,
 ) {

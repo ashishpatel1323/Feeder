@@ -1,7 +1,9 @@
 package com.nononsenseapps.feeder.ui.compose.youtube
 
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -30,8 +32,15 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.OpenInBrowser
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Subscriptions
 import androidx.compose.material3.Button
@@ -43,37 +52,53 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.model.youtube.VideoDetails
 import com.nononsenseapps.feeder.model.youtube.YouTubeStreams
 import com.nononsenseapps.feeder.model.youtube.youtubeWatchUrl
+import com.nononsenseapps.feeder.ui.compose.components.DeleteRequest
+import com.nononsenseapps.feeder.ui.compose.components.DeleteScope
+import com.nononsenseapps.feeder.ui.compose.components.rememberDeleteConfirmer
+import com.nononsenseapps.feeder.ui.compose.feed.FeedSelection
+import com.nononsenseapps.feeder.ui.compose.feed.FeedSelectionBar
+import com.nononsenseapps.feeder.ui.compose.feedarticle.openInYouTubeApp
+import com.nononsenseapps.feeder.ui.compose.item.markReadIcon
 import com.nononsenseapps.feeder.ui.compose.theme.FeederTokens
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 import org.kodein.di.compose.LocalDI
 import org.kodein.di.instance
 
@@ -99,6 +124,7 @@ fun SubscriptionsScreen(
     }
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(viewModel) { viewModel.messages.collect { snackbar.showSnackbar(it) } }
+    val actions = rememberVideoActions(viewModel, state, snackbar)
     var editGroups by rememberSaveable { mutableStateOf(false) }
     val gridState = rememberLazyGridState()
 
@@ -149,7 +175,8 @@ fun SubscriptionsScreen(
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(if (state.grid) 320.dp else 480.dp),
                         state = gridState,
-                        contentPadding = PaddingValues(bottom = FeederTokens.Space.lg),
+                        // Room for the selection bar, so the last rows can still be picked
+                        contentPadding = PaddingValues(bottom = if (actions.selection.active) 200.dp else FeederTokens.Space.lg),
                         modifier = Modifier.fillMaxSize(),
                     ) {
                         item(key = "header", span = { GridItemSpan(maxLineSpan) }) {
@@ -165,21 +192,25 @@ fun SubscriptionsScreen(
                         }
                         if (state.shorts.isNotEmpty()) {
                             item(key = "shorts", span = { GridItemSpan(maxLineSpan) }) {
-                                ShortsShelf(state.shorts, open)
+                                ShortsShelf(state.shorts, open, actions)
                             }
                         }
                         items(state.videos, key = { it.item.id }) { row ->
                             if (state.grid) {
-                                VideoCard(row, onClick = { open(row) })
+                                VideoCard(row, onClick = { open(row) }, actions = actions)
                             } else {
-                                VideoListRow(row, onClick = { open(row) })
+                                VideoListRow(row, onClick = { open(row) }, actions = actions)
                             }
                         }
                     }
                 }
             }
         }
-        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
+        Column(Modifier.align(Alignment.BottomCenter)) {
+            SnackbarHost(snackbar)
+            // Long press picks videos; the same bar as in Feeds, plus Save
+            if (actions.selection.active) FeedSelectionBar(actions.selection)
+        }
     }
 
     if (editGroups) {
@@ -277,6 +308,7 @@ private fun RefreshStatus(state: YouTubeViewState) {
 private fun ShortsShelf(
     shorts: List<VideoRow>,
     onOpen: (VideoRow) -> Unit,
+    actions: VideoActions,
 ) {
     Column(Modifier.padding(top = FeederTokens.Space.sm)) {
         Text(
@@ -289,7 +321,7 @@ private fun ShortsShelf(
             contentPadding = PaddingValues(horizontal = FeederTokens.Space.lg),
         ) {
             items(shorts, key = { it.item.id }) { row ->
-                VideoPressable(row, onClick = { onOpen(row) }, modifier = Modifier.width(132.dp)) { press ->
+                VideoPressable(row, onClick = { onOpen(row) }, actions = actions, modifier = Modifier.width(132.dp)) { press, more ->
                     Column(press) {
                         VideoThumbnail(
                             url = youtubeThumbnail(row.videoId, large = true),
@@ -297,19 +329,24 @@ private fun ShortsShelf(
                             progress = row.progress,
                             modifier = Modifier.fillMaxWidth().aspectRatio(9f / 16f),
                         )
-                        Text(
-                            row.item.title,
-                            style = MaterialTheme.typography.bodyMedium,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(top = FeederTokens.Space.xs),
-                        )
-                        row.views?.let {
-                            Text(
-                                stringResource(R.string.video_views, VideoDetails.compactCount(it)),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                        Row {
+                            Column(Modifier.weight(1f).padding(top = FeederTokens.Space.xs)) {
+                                Text(
+                                    row.item.title,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = titleColor(row),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                row.views?.let {
+                                    Text(
+                                        stringResource(R.string.video_views, VideoDetails.compactCount(it)),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                            more()
                         }
                     }
                 }
@@ -325,15 +362,16 @@ private fun ShortsShelf(
 fun VideoListRow(
     row: VideoRow,
     onClick: () -> Unit,
+    actions: VideoActions,
     modifier: Modifier = Modifier,
 ) {
-    VideoPressable(row, onClick, modifier.fillMaxWidth()) { press ->
+    VideoPressable(row, onClick, actions, modifier.fillMaxWidth()) { press, more ->
         Row(
             horizontalArrangement = Arrangement.spacedBy(FeederTokens.Space.md),
             modifier =
                 press
                     .fillMaxWidth()
-                    .padding(horizontal = FeederTokens.Space.lg, vertical = FeederTokens.Space.sm),
+                    .padding(start = FeederTokens.Space.lg, end = FeederTokens.Space.xs, top = FeederTokens.Space.sm, bottom = FeederTokens.Space.sm),
         ) {
             VideoThumbnail(
                 url = youtubeThumbnail(row.videoId),
@@ -346,6 +384,8 @@ fun VideoListRow(
                 Text(
                     row.item.title,
                     style = MaterialTheme.typography.titleSmall,
+                    color = titleColor(row),
+                    fontWeight = titleWeight(row),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -364,6 +404,7 @@ fun VideoListRow(
                     maxLines = 1,
                 )
             }
+            more()
         }
     }
 }
@@ -373,9 +414,10 @@ fun VideoListRow(
 fun VideoCard(
     row: VideoRow,
     onClick: () -> Unit,
+    actions: VideoActions,
     modifier: Modifier = Modifier,
 ) {
-    VideoPressable(row, onClick, modifier.fillMaxWidth()) { press ->
+    VideoPressable(row, onClick, actions, modifier.fillMaxWidth()) { press, more ->
         Column(
             modifier =
                 press
@@ -391,11 +433,18 @@ fun VideoCard(
             )
             Row(
                 horizontalArrangement = Arrangement.spacedBy(FeederTokens.Space.md),
-                modifier = Modifier.padding(start = FeederTokens.Space.md, end = FeederTokens.Space.lg, top = FeederTokens.Space.md),
+                modifier = Modifier.padding(start = FeederTokens.Space.md, end = FeederTokens.Space.xs, top = FeederTokens.Space.md),
             ) {
                 ChannelAvatar(row.channel, row.channelAvatar, 36.dp)
                 Column(Modifier.weight(1f)) {
-                    Text(row.item.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        row.item.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = titleColor(row),
+                        fontWeight = titleWeight(row),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                     Text(
                         listOf(row.channel, viewsAndAge(row)).filter { it.isNotBlank() }.joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
@@ -405,27 +454,76 @@ fun VideoCard(
                         modifier = Modifier.padding(top = 2.dp),
                     )
                 }
+                more()
             }
         }
     }
 }
 
 /**
- * Tap opens the video; long press offers Share (also a TalkBack action). [content] gets the
- * modifier that handles the presses.
+ * What can be done to the videos, which are Feeder articles: the same as in Feeds (Save, Mark
+ * watched, Delete, Share, Read above/below), from a row's ⋮ menu or by long-pressing into
+ * multi-select ([selection], shown in Feeds' selection bar).
  */
-@OptIn(ExperimentalFoundationApi::class)
+@Immutable
+class VideoActions(
+    val selection: FeedSelection,
+    val onToggleSave: (VideoRow) -> Unit,
+    val onToggleRead: (VideoRow) -> Unit,
+    val onShare: (VideoRow) -> Unit,
+    val onOpenInYouTube: (VideoRow) -> Unit,
+    val onDelete: (VideoRow) -> Unit,
+)
+
+/** The YouTube tab's [VideoActions], through the same repository calls (and delete confirmation) as Feeds. */
 @Composable
-private fun VideoPressable(
-    row: VideoRow,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    content: @Composable (Modifier) -> Unit,
-) {
+private fun rememberVideoActions(
+    viewModel: YouTubeViewModel,
+    state: YouTubeViewState,
+    snackbar: SnackbarHostState,
+): VideoActions {
     val context = LocalContext.current
-    var menu by remember { mutableStateOf(false) }
-    val shareLabel = stringResource(R.string.share)
-    val share = {
+    val resources = context.resources
+    val scope = rememberCoroutineScope()
+    val undoText = stringResource(R.string.undo_delete_article)
+    val deleteConfirmer = rememberDeleteConfirmer()
+    var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
+    LaunchedEffect(state.group) { selectedIds = emptySet() }
+    BackHandler(enabled = selectedIds.isNotEmpty()) { selectedIds = emptySet() }
+
+    val rows = state.videos + state.shorts
+
+    fun rowOf(id: Long) = rows.firstOrNull { it.item.id == id }
+
+    fun deleteNow(ids: List<Long>) {
+        scope.launch {
+            val deleted = viewModel.deleteForGood(ids)
+            snackbar.currentSnackbarData?.dismiss()
+            val result =
+                snackbar.showSnackbar(
+                    message = resources.getQuantityString(R.plurals.n_articles_deleted_everywhere, ids.size, ids.size),
+                    actionLabel = undoText,
+                    duration = SnackbarDuration.Short,
+                )
+            if (result == SnackbarResult.ActionPerformed) viewModel.undoDelete(deleted)
+        }
+    }
+
+    // As in Feeds: one video has Undo, so it goes without asking; several ask first
+    fun delete(ids: List<Long>) {
+        if (ids.isEmpty()) return
+        if (ids.size == 1) return deleteNow(ids)
+        deleteConfirmer.ask(
+            DeleteRequest(
+                title = R.string.confirm_delete_title_articles,
+                itemName = resources.getQuantityString(R.plurals.confirm_delete_n_articles, ids.size, ids.size),
+                scope = DeleteScope.ALL_DEVICES,
+                onConfirm = { deleteNow(ids) },
+            ),
+        )
+    }
+
+    fun share(row: VideoRow) {
         val intent =
             Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
@@ -434,26 +532,149 @@ private fun VideoPressable(
             }
         context.startActivity(Intent.createChooser(intent, null))
     }
+
+    val selection =
+        FeedSelection(
+            ids = selectedIds,
+            onToggle = { id -> selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id },
+            onClear = { selectedIds = emptySet() },
+            onMarkRead = { read ->
+                viewModel.setRead(selectedIds, read)
+                selectedIds = emptySet()
+            },
+            onDelete = {
+                delete(selectedIds.toList())
+                selectedIds = emptySet()
+            },
+            onMarkAboveAsRead = { id ->
+                viewModel.markAboveAsRead(id)
+                selectedIds = emptySet()
+            },
+            onMarkBelowAsRead = { id ->
+                viewModel.markBelowAsRead(id)
+                selectedIds = emptySet()
+            },
+            onShare = { id -> rowOf(id)?.let(::share) },
+            onOpenInBrowser = { id -> rowOf(id)?.let { openInYouTubeApp(context, youtubeWatchUrl(it.videoId)) } },
+            onSave = { save ->
+                viewModel.setSaved(selectedIds, save)
+                selectedIds = emptySet()
+            },
+            allSaved = selectedIds.isNotEmpty() && selectedIds.all { id -> rowOf(id)?.item?.bookmarked == true },
+        )
+    return VideoActions(
+        selection = selection,
+        onToggleSave = { row -> viewModel.setSaved(listOf(row.item.id), !row.item.bookmarked) },
+        onToggleRead = { row -> viewModel.setRead(listOf(row.item.id), row.item.readTime == null) },
+        onShare = ::share,
+        onOpenInYouTube = { row -> openInYouTubeApp(context, youtubeWatchUrl(row.videoId)) },
+        onDelete = { row -> delete(listOf(row.item.id)) },
+    )
+}
+
+/** Watched videos look like read articles in Feeds: the title goes grey. */
+@Composable
+private fun titleColor(row: VideoRow) = if (row.item.readTime != null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
+
+private fun titleWeight(row: VideoRow) = if (row.item.readTime != null) FontWeight.Normal else FontWeight.Medium
+
+/**
+ * Tap opens the video; long press starts multi-select (then taps pick more). [content] gets the
+ * modifier that handles the presses and the ⋮ button (Save, Mark watched, Share, Open in YouTube,
+ * Delete) to place; every action is a TalkBack action too.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun VideoPressable(
+    row: VideoRow,
+    onClick: () -> Unit,
+    actions: VideoActions,
+    modifier: Modifier = Modifier,
+    content: @Composable (press: Modifier, more: @Composable () -> Unit) -> Unit,
+) {
+    val selection = actions.selection
+    val selected = row.item.id in selection.ids
+    val saved = row.item.bookmarked
+    val read = row.item.readTime != null
+    var menu by remember { mutableStateOf(false) }
+    val saveLabel = stringResource(if (saved) R.string.item_action_unsave else R.string.action_save)
+    val readLabel = stringResource(if (read) R.string.item_action_mark_unread else R.string.item_action_mark_watched)
+    val shareLabel = stringResource(R.string.share)
+    val openLabel = stringResource(R.string.open_in_youtube_app)
+    val deleteLabel = stringResource(R.string.action_delete_article)
+    val selectLabel = stringResource(R.string.select_article)
+    val more: @Composable () -> Unit = {
+        Box {
+            IconButton(onClick = { menu = true }) {
+                Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.more_options))
+            }
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                val close = { menu = false }
+                MenuEntry(saveLabel, if (saved) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder, close) { actions.onToggleSave(row) }
+                MenuEntry(readLabel, markReadIcon(read), close) { actions.onToggleRead(row) }
+                MenuEntry(shareLabel, Icons.Default.Share, close) { actions.onShare(row) }
+                MenuEntry(openLabel, Icons.Default.OpenInBrowser, close) { actions.onOpenInYouTube(row) }
+                MenuEntry(selectLabel, Icons.Outlined.CheckCircle, close) { selection.onToggle(row.item.id) }
+                HorizontalDivider()
+                MenuEntry(deleteLabel, Icons.Outlined.Delete, close, danger = true) { actions.onDelete(row) }
+            }
+        }
+    }
     Box(modifier) {
         content(
             Modifier
+                .then(if (selected) Modifier.background(MaterialTheme.colorScheme.secondaryContainer) else Modifier)
                 .semantics {
+                    this.selected = selected
                     customActions =
                         listOf(
+                            CustomAccessibilityAction(saveLabel) {
+                                actions.onToggleSave(row)
+                                true
+                            },
+                            CustomAccessibilityAction(readLabel) {
+                                actions.onToggleRead(row)
+                                true
+                            },
                             CustomAccessibilityAction(shareLabel) {
-                                share()
+                                actions.onShare(row)
+                                true
+                            },
+                            CustomAccessibilityAction(selectLabel) {
+                                selection.onToggle(row.item.id)
+                                true
+                            },
+                            CustomAccessibilityAction(deleteLabel) {
+                                actions.onDelete(row)
                                 true
                             },
                         )
-                }.combinedClickable(onClick = onClick, onLongClick = { menu = true }),
+                }.combinedClickable(
+                    onClick = { if (selection.active) selection.onToggle(row.item.id) else onClick() },
+                    onLongClick = { selection.onToggle(row.item.id) },
+                ),
+            more,
         )
-        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-            DropdownMenuItem(text = { Text(shareLabel) }, onClick = {
-                menu = false
-                share()
-            })
-        }
     }
+}
+
+@Composable
+private fun MenuEntry(
+    label: String,
+    icon: ImageVector,
+    onClose: () -> Unit,
+    danger: Boolean = false,
+    action: () -> Unit,
+) {
+    val color = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+    DropdownMenuItem(
+        text = { Text(label, color = if (danger) MaterialTheme.colorScheme.error else Color.Unspecified) },
+        leadingIcon = { Icon(icon, contentDescription = null, tint = color) },
+        onClick = {
+            onClose()
+            action()
+        },
+    )
 }
 
 @Composable

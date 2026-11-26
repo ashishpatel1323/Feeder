@@ -6,6 +6,7 @@ import android.net.Uri
 import androidx.compose.runtime.Immutable
 import androidx.core.content.edit
 import androidx.lifecycle.viewModelScope
+import com.nononsenseapps.feeder.ApplicationCoroutineScope
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.archmodel.Repository
 import com.nononsenseapps.feeder.background.runOnceRssSync
@@ -24,9 +25,11 @@ import com.nononsenseapps.feeder.model.youtube.VideoPos
 import com.nononsenseapps.feeder.model.youtube.VideoPositions
 import com.nononsenseapps.feeder.model.youtube.YouTubeMetaStore
 import com.nononsenseapps.feeder.model.youtube.youtubeVideoId
+import com.nononsenseapps.feeder.sync2.DeletedArticles
 import com.nononsenseapps.feeder.ui.compose.editfeed.FeedStats
 import com.nononsenseapps.feeder.ui.compose.editfeed.computeFeedStats
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -115,6 +118,7 @@ class YouTubeViewModel(
     private val rssLocalSync: RssLocalSync by instance()
     private val feedParser: FeedParser by instance()
     private val feedItemDao: FeedItemDao by instance()
+    private val applicationCoroutineScope: ApplicationCoroutineScope by instance()
 
     private val prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     private val saving = Mutex()
@@ -287,6 +291,36 @@ class YouTubeViewModel(
     /** How many articles go with a feed when it is deleted, for the confirmation. */
     suspend fun statsFor(feedId: Long): FeedStats = withContext(Dispatchers.IO) { computeFeedStats(feedItemDao.loadItemsForStats(feedId)) }
 
+    // The videos are Feeder articles: the same actions as in Feeds, through the same repository calls
+
+    /** Save (Read later) or unsave; synced like a save in Feeds. */
+    fun setSaved(
+        itemIds: Collection<Long>,
+        saved: Boolean,
+    ) = applicationCoroutineScope.launch {
+        for (id in itemIds) repository.setBookmarked(id, saved)
+    }
+
+    /** Marks videos watched (read) or not, synced like in Feeds. */
+    fun setRead(
+        itemIds: Collection<Long>,
+        read: Boolean,
+    ) = applicationCoroutineScope.launch {
+        for (id in itemIds) {
+            if (read) repository.markAsReadAndNotified(id) else repository.markAsUnread(id)
+        }
+    }
+
+    /** Read above / below: every video listed before (or after) [itemId] in the current list. */
+    fun markAboveAsRead(itemId: Long) = setRead(videosAbove(viewState.value.videos, itemId), true)
+
+    fun markBelowAsRead(itemId: Long) = setRead(videosBelow(viewState.value.videos, itemId), true)
+
+    /** Deleted for good on every device, as in Feeds. Returns what Undo needs. */
+    suspend fun deleteForGood(itemIds: List<Long>): DeletedArticles = applicationCoroutineScope.async { repository.deleteArticlesForGood(itemIds) }.await()
+
+    fun undoDelete(deleted: DeletedArticles) = applicationCoroutineScope.launch { repository.undoDeleteArticles(deleted) }
+
     /** Unsubscribe: deletes the feed, as everywhere else in Feeder. */
     fun unsubscribe(feedId: Long) =
         viewModelScope.launch {
@@ -403,6 +437,24 @@ class YouTubeViewModel(
         }
 
     companion object {
+        /** The ids of the videos listed before [itemId] (none when it isn't listed). */
+        fun videosAbove(
+            videos: List<VideoRow>,
+            itemId: Long,
+        ): List<Long> {
+            val i = videos.indexOfFirst { it.item.id == itemId }
+            return if (i < 0) emptyList() else videos.take(i).map { it.item.id }
+        }
+
+        /** The ids of the videos listed after [itemId]. */
+        fun videosBelow(
+            videos: List<VideoRow>,
+            itemId: Long,
+        ): List<Long> {
+            val i = videos.indexOfFirst { it.item.id == itemId }
+            return if (i < 0) emptyList() else videos.drop(i + 1).map { it.item.id }
+        }
+
         private const val PREFS = "youtube_tab"
         private const val KEY_GROUP = "group"
         private const val KEY_GRID = "grid"
