@@ -52,6 +52,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.nononsenseapps.feeder.R
+import com.nononsenseapps.feeder.model.history.CentralHistory
+import com.nononsenseapps.feeder.model.shelf.BookStatus
+import com.nononsenseapps.feeder.model.shelf.ShelfMarks
+import com.nononsenseapps.feeder.model.shelf.ShelfStatusRules
 import com.nononsenseapps.feeder.dropbox.DropboxClient
 import com.nononsenseapps.feeder.dropbox.DropboxFile
 import com.nononsenseapps.feeder.model.zim.ZimBook
@@ -106,6 +110,18 @@ fun ZimLibraryScreen(
             uris.forEach { library.import(it) }
         }
     val shelfPrefs = rememberShelfPrefs("zim", defaultCards = true)
+    val marks: ShelfMarks by di.instance()
+    val picked by marks.statuses.collectAsState()
+    val centralHistory: CentralHistory by di.instance()
+    val recent by centralHistory.entries.collectAsState()
+    // When each site was last opened, on any device (History syncs)
+    val lastOpened =
+        remember(recent) {
+            recent
+                .filter { it.t == CentralHistory.ZIM }
+                .groupBy { it.i.substringBefore('\n') }
+                .mapValues { (_, es) -> es.maxOf { it.at } }
+        }
     val uploadLabel = stringResource(R.string.upload_to_dropbox)
     val resumeUploadLabel = stringResource(R.string.resume_upload_to_dropbox)
     val deleteDropboxLabel = stringResource(R.string.delete_from_dropbox)
@@ -164,7 +180,15 @@ fun ZimLibraryScreen(
         list.orEmpty().map { book ->
             val copy = remote?.firstOrNull { library.sameZim(book, it) }
             val up = jobs.firstOrNull { it.key == "up:${book.file.name}" }
+            val markKey = ShelfStatusRules.key(ShelfStatusRules.ZIM, book.id)
+            val opened = lastOpened[book.id] ?: 0
+            // A site has no end, so it never becomes Completed by itself
+            val auto = ShelfStatusRules.auto(null, opened = opened > 0 || library.lastPath(book.id) != null, canFinish = false)
+            val status = ShelfStatusRules.effective(auto, picked[markKey], opened)
             ShelfItem(
+                status = status,
+                sortAt = maxOf(opened, picked[markKey]?.ts ?: 0),
+                onStatus = { marks.setStatus(markKey, it) },
                 key = "local:${book.id}",
                 title = book.title,
                 subtitle = book.description,
@@ -204,6 +228,7 @@ fun ZimLibraryScreen(
             onlyInDropbox.map { f ->
                 val down = jobs.firstOrNull { it.label == f.name }
                 ShelfItem(
+                    status = BookStatus.NEW,
                     key = "dbx:${f.id}",
                     title = f.name.removeSuffix(".zim").replace('_', ' '),
                     detail = Formatter.formatShortFileSize(context, f.size),

@@ -30,6 +30,8 @@ import { Icon, IconButton } from './Icon'
 import { Player } from './Player'
 import { otherDeviceText } from '../lib/device'
 import { LibraryListing, ListingUnavailable, useShelfPrefs, type ShelfItem } from './Shelf'
+import { CoverPicker } from './CoverPicker'
+import { autoStatus, effectiveStatus, markKey, setStatus } from '../lib/shelfMarks'
 import { confirmDelete, confirmDeleteHighlight } from '../lib/confirmDelete'
 
 /**
@@ -62,6 +64,9 @@ interface Job {
 function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMenu: () => void; toast: (m: string) => void }) {
   const books = useLiveQuery(() => db.books.toArray(), [])
   const positions = useLiveQuery(() => db.bookPos.toArray(), []) ?? []
+  const picked = useLiveQuery(() => db.shelfStatus.where('key').startsWith('ebook:').toArray(), []) ?? []
+  const pickedCovers = useLiveQuery(() => db.bookCovers.where('key').startsWith('ebook:').toArray(), []) ?? []
+  const [coverFor, setCoverFor] = useState<Book | null>(null)
   const [jobs, setJobs] = useState<Job[]>([])
   const [busy, setBusy] = useState(false)
   const [downloading, setDownloading] = useState<Set<string>>(new Set())
@@ -82,6 +87,8 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
   }, [refresh])
 
   const progressOf = useMemo(() => new Map(positions.map((x) => [x.id, x])), [positions])
+  const statusOf = useMemo(() => new Map(picked.map((x) => [x.key, x])), [picked])
+  const coverOf = useMemo(() => new Map(pickedCovers.flatMap((x) => (x.data ? [[x.key, x.data] as const] : []))), [pickedCovers])
   const sorted = useMemo(
     () => [...(books ?? [])].sort((a, b) => (b.lastOpenedAt || 0) - (a.lastOpenedAt || 0) || b.addedAt - a.addedAt || a.title.localeCompare(b.title)),
     [books],
@@ -164,13 +171,21 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
     if (!b.local) actions.push({ label: 'Download to this device', run: () => void download(b) })
     if (b.local && !b.dropboxPath && uploading[b.id] === undefined) actions.push({ label: 'Upload to Dropbox', run: () => needsDropbox(dbx.signedIn, toast, () => void upload(b)) })
     if (b.local) actions.push({ label: b.dropboxPath ? 'Remove from this device' : 'Delete', run: () => void act(b, 'device') })
+    actions.push({ label: 'Cover from the Internet', run: () => setCoverFor(b) })
     if (b.dropboxPath) actions.push({ label: 'Delete from Dropbox', run: () => void act(b, 'dropbox') })
+    const mk = markKey('ebook', b.id)
+    const mine = statusOf.get(mk)
+    const activity = Math.max(b.lastOpenedAt || 0, pos?.ts ?? 0)
+    const status = effectiveStatus(autoStatus(f, (b.lastOpenedAt || 0) > 0), mine, activity)
     return {
+      status,
+      sortAt: status === 'new' ? b.addedAt : Math.max(activity, mine?.ts ?? 0),
+      onStatus: (st) => void setStatus(mk, st),
       key: b.id,
       title: b.title,
       subtitle: b.author,
       detail: [f ? `${pos?.n ? `${pos.p} of ${pos.n} pages` : `${Math.round(f * 100)}%`} read${where ? ` ${where}` : ''}` : 'Not started', b.ext.toUpperCase(), formatBytes(b.size)].join(' · '),
-      cover: b.cover,
+      cover: coverOf.get(mk) ?? b.cover,
       coverFit: 'fit',
       coverIcon: 'book',
       where: b.local ? (b.dropboxPath ? 'both' : 'device') : 'cloud',
@@ -216,6 +231,7 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
           e.target.value = ''
         }}
       />
+      {coverFor ? <CoverPicker markKey={markKey('ebook', coverFor.id)} query={[coverFor.title, coverFor.author].filter(Boolean).join(' ')} audiobook={false} onClose={() => setCoverFor(null)} toast={toast} /> : null}
     </LibraryListing>
   )
 }

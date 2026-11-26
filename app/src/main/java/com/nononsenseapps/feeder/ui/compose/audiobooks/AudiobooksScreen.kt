@@ -91,6 +91,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.nononsenseapps.feeder.R
+import com.nononsenseapps.feeder.model.shelf.BookStatus
+import com.nononsenseapps.feeder.model.shelf.ShelfMarks
+import com.nononsenseapps.feeder.model.shelf.ShelfStatusRules
+import com.nononsenseapps.feeder.ui.compose.shelf.CoverPickerDialog
 import com.nononsenseapps.feeder.dropbox.DropboxClient
 import com.nononsenseapps.feeder.model.audiobooks.AudioPos
 import com.nononsenseapps.feeder.model.audiobooks.AudioPositions
@@ -241,6 +245,10 @@ fun AudiobooksScreen(
     val playing by player.state.collectAsState()
     val prefs = rememberShelfPrefs("audiobooks", defaultCards = true)
     var deleting by remember { mutableStateOf<Audiobook?>(null) }
+    val marks: ShelfMarks by di.instance()
+    val picked by marks.statuses.collectAsState()
+    var coverFor by remember { mutableStateOf<Audiobook?>(null) }
+    val coverText = stringResource(R.string.cover_from_internet)
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris -> library.addFiles(uris) }
     val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> uri?.let(library::addFolder) }
 
@@ -284,8 +292,15 @@ fun AudiobooksScreen(
             if (downloaded && b.dropboxPath != null && !b.onPhone) actions += ShelfAction(removeDownloadText) { askRemoveDownload(b) }
             if (b.dropboxPath == null && job == null) actions += ShelfAction(if (library.hasPendingUpload(b.id)) resumeUploadText else uploadText) { uploadOrExplain(context, link != null, audiobooksWhat) { library.uploadToDropbox(b.id) } }
             if (b.tracks.any { it.uri != null }) actions += ShelfAction(forgetText) { askForget(b) }
+            actions += ShelfAction(coverText) { coverFor = b }
             if (b.dropboxPath != null && job == null) actions += ShelfAction(deleteDropboxText) { deleting = b }
+            val markKey = ShelfStatusRules.key(ShelfStatusRules.AUDIOBOOK, b.id)
+            val activity = maxOf(b.lastOpenedAt, p?.ts ?: 0)
+            val status = ShelfStatusRules.effective(ShelfStatusRules.auto(p?.f, opened = b.lastOpenedAt > 0), picked[markKey], activity)
             ShelfItem(
+                status = status,
+                sortAt = if (status == BookStatus.NEW) b.addedAt else maxOf(activity, picked[markKey]?.ts ?: 0),
+                onStatus = { marks.setStatus(markKey, it) },
                 key = b.id,
                 title = b.title,
                 subtitle = b.author,
@@ -349,6 +364,16 @@ fun AudiobooksScreen(
         jobs = listOfNotNull(adding?.let { ShelfJob("adding", stringResource(R.string.audiobooks_adding, it)) }),
         streams = true,
     )
+
+    coverFor?.let { b ->
+        CoverPickerDialog(
+            key = ShelfStatusRules.key(ShelfStatusRules.AUDIOBOOK, b.id),
+            query = listOf(b.title, b.author).filter { it.isNotBlank() }.joinToString(" "),
+            audiobook = true,
+            marks = marks,
+            onDismiss = { coverFor = null },
+        )
+    }
 
     deleting?.let { b ->
         DeleteFromDropboxDialog(

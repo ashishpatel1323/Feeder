@@ -21,6 +21,15 @@
   <string name="books_search_inside">Search inside books and everything else</string>
   <string name="books_more">More</string>
   <string name="books_view">View</string>
+  <string name="shelf_status_current">Current</string>
+  <string name="shelf_status_new">Not started yet</string>
+  <string name="shelf_status_done">Completed</string>
+  <string name="cover_from_internet">Cover from the Internet</string>
+  <string name="cover_search_hint">Title and author</string>
+  <string name="cover_searching">Looking for covers…</string>
+  <string name="cover_none">No covers found. Try other words.</string>
+  <string name="cover_failed">Couldn’t get that picture. Try another one.</string>
+  <string name="cover_cancel">Cancel</string>
   <string name="bottom_bar_tabs">Bottom bar tabs</string>
   <string name="bottom_bar_tabs_summary">Pick and order the tabs</string>
   <string name="bottom_bar_tabs_help">Pick up to %1$d tabs and drag to reorder. Tabs left out open from Library.</string>

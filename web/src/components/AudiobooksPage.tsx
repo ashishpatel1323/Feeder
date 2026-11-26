@@ -13,6 +13,8 @@ import { HistoryList } from './History'
 import { Icon, IconButton } from './Icon'
 import { formatSpeed } from './Player'
 import { GeneratedCover, LibraryListing, useShelfPrefs, type ShelfItem } from './Shelf'
+import { CoverPicker } from './CoverPicker'
+import { autoStatus, effectiveStatus, markKey, setStatus } from '../lib/shelfMarks'
 
 const RATES = [0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.5, 1.75, 2, 2.5, 3]
 const SLEEP_MINUTES = [5, 10, 15, 30, 45, 60, 90]
@@ -58,6 +60,11 @@ interface Job {
 function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMenu: () => void; toast: (m: string) => void }) {
   const books = useLiveQuery(() => db.audiobooks.toArray(), [])
   const positions = useLiveQuery(() => db.audioPos.toArray(), []) ?? []
+  const picked = useLiveQuery(() => db.shelfStatus.where('key').startsWith('audiobook:').toArray(), []) ?? []
+  const pickedCovers = useLiveQuery(() => db.bookCovers.where('key').startsWith('audiobook:').toArray(), []) ?? []
+  const statusOf = useMemo(() => new Map(picked.map((x) => [x.key, x])), [picked])
+  const coverOf = useMemo(() => new Map(pickedCovers.flatMap((x) => (x.data ? [[x.key, x.data] as const] : []))), [pickedCovers])
+  const [coverFor, setCoverFor] = useState<Audiobook | null>(null)
   const [busy, setBusy] = useState(false)
   const [adding, setAdding] = useState<Job | null>(null)
   const [jobs, setJobs] = useState<Record<string, Job>>({})
@@ -165,18 +172,26 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
           void removeFromDevice(b.id).then(() => toast(b.dropboxPath ? `Removed ${b.title} from this device; it stays in Dropbox` : `Deleted ${b.title}`))
         },
       })
+    actions.push({ label: 'Cover from the Internet', run: () => setCoverFor(b) })
     if (b.dropboxPath && !j) actions.push({ label: 'Delete from Dropbox', run: async () => {
       if (!(await confirmDropboxDelete(b.title, here))) return
       void deleteAudiobookFromDropbox(b.id)
         .then(() => toast(`Deleted ${b.title} from Dropbox`))
         .catch((e) => toast(e instanceof Error ? e.message : String(e)))
     } })
+    const mk = markKey('audiobook', b.id)
+    const mine = statusOf.get(mk)
+    const activity = Math.max(b.lastOpenedAt || 0, pos?.ts ?? 0)
+    const status = effectiveStatus(autoStatus(pos?.f, (b.lastOpenedAt || 0) > 0), mine, activity)
     return {
+      status,
+      sortAt: status === 'new' ? b.addedAt : Math.max(activity, mine?.ts ?? 0),
+      onStatus: (st) => void setStatus(mk, st),
       key: b.id,
       title: b.title,
       subtitle: b.author,
       detail: [progressText(b, pos), len ? lengthText(len) : b.tracks.length > 1 ? `${b.tracks.length} files` : formatBytes(b.size)].join(' · '),
-      cover: b.cover,
+      cover: coverOf.get(mk) ?? b.cover,
       coverIcon: 'headphones',
       where: here ? (b.dropboxPath ? 'both' : 'device') : 'cloud',
       size: b.size,
@@ -242,6 +257,7 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
           e.target.value = ''
         }}
       />
+      {coverFor ? <CoverPicker markKey={markKey('audiobook', coverFor.id)} query={[coverFor.title, coverFor.author].filter(Boolean).join(' ')} audiobook onClose={() => setCoverFor(null)} toast={toast} /> : null}
     </LibraryListing>
   )
 }

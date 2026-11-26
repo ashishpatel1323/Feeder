@@ -16,6 +16,8 @@
  *   bookpos  ebook id             { cfi, f }: where an ebook was left (f = 0–1 through the book)
  *   audiopos audiobook id         { i, h, ms, f }: where an audiobook was left (file index and
  *                                 content hash, ms into that file, f = 0–1 through the book)
+ *   shelfstatus "kind:id"         { s }: a Books status picked by hand, "new" / "current" / "done"
+ *   bookcover "kind:id"           { url }: a cover picked from the Internet for an ebook or audiobook
  *   dropbox  "main"               DropboxLink (the Dropbox sign-in), or { deleted: true } after signing out
  *   history  event id             HistoryValue (history.ts): one play, pause, open or close of an
  *                                 audiobook, ebook or ZIM site. Never changes, so events from every
@@ -38,6 +40,7 @@ import { b64encode, decodeKey, decryptString, encryptString, type SecretKeys } f
 import { applyDropboxLink, dropboxLink, DROPBOX_TS_KEY, type DropboxLink } from './dropbox'
 import { eventFromValue, historyValue } from './history'
 import { applyRecent, recentValue } from './recent'
+import { fillCoverData, isStatus } from './shelfMarks'
 import { DELETED_PLAYLISTS_KEY, PLAYLISTS_KEY, STARTER_IDS, loadPlaylists, type Playlist } from './playlists'
 import {
   db,
@@ -67,7 +70,7 @@ export interface SyncState {
   lastError?: string | null
 }
 
-export type Kind = 'feed' | 'read' | 'saved' | 'hidden' | 'layout' | 'video' | 'playlist' | 'highlight' | 'bookpos' | 'audiopos' | 'dropbox' | 'history' | 'recent'
+export type Kind = 'feed' | 'read' | 'saved' | 'hidden' | 'layout' | 'video' | 'playlist' | 'highlight' | 'bookpos' | 'audiopos' | 'shelfstatus' | 'bookcover' | 'dropbox' | 'history' | 'recent'
 
 /** The plaintext inside a record. */
 export interface Payload {
@@ -573,6 +576,22 @@ export async function collectChanges(now = Date.now()): Promise<Pending[]> {
     if (!kn || (p.ts > kn.ts && !same(kn.v, value))) out.push({ k: 'audiopos', key: p.id, v: value, ts: Math.max(p.ts, (kn?.ts ?? 0) + 1) })
   })
 
+  // Books statuses and covers picked here since they were last exchanged
+  const statuses = await db.shelfStatus.toArray()
+  const knownStatus = await db.syncKnown.bulkGet(statuses.map((m) => knownKey('shelfstatus', m.key)))
+  statuses.forEach((m, n) => {
+    const kn = knownStatus[n]
+    const value = { s: m.s }
+    if (!kn || (m.ts > kn.ts && !same(kn.v, value))) out.push({ k: 'shelfstatus', key: m.key, v: value, ts: Math.max(m.ts, (kn?.ts ?? 0) + 1) })
+  })
+  const covers = await db.bookCovers.toArray()
+  const knownCovers = await db.syncKnown.bulkGet(covers.map((m) => knownKey('bookcover', m.key)))
+  covers.forEach((m, n) => {
+    const kn = knownCovers[n]
+    const value = { url: m.url }
+    if (!kn || (m.ts > kn.ts && !same(kn.v, value))) out.push({ k: 'bookcover', key: m.key, v: value, ts: Math.max(m.ts, (kn?.ts ?? 0) + 1) })
+  })
+
   // The Dropbox sign-in, so other devices use the same Dropbox without signing in
   const link = await dropboxLink()
   const kd = await db.syncKnown.get(knownKey('dropbox', DROPBOX_RECORD_KEY))
@@ -622,7 +641,8 @@ export async function applyRemote(p: Payload, ts: number, result: ApplyResult): 
   }
   const k = knownKey(p.k, p.key)
   let dropbox: { link: DropboxLink | null } | null = null
-  await db.transaction('rw', [db.feeds, db.items, db.syncKnown, db.hidden, db.kv, db.videoPos, db.highlights, db.bookPos, db.audioPos], async () => {
+  let coverToFetch: { key: string; url: string } | null = null
+  await db.transaction('rw', [db.feeds, db.items, db.syncKnown, db.hidden, db.kv, db.videoPos, db.highlights, db.bookPos, db.audioPos, db.shelfStatus, db.bookCovers], async () => {
     const kn = await db.syncKnown.get(k)
     if (kn && kn.ts > ts) return
     if (kn && kn.ts === ts && same(kn.v, p.v)) return
@@ -721,6 +741,22 @@ export async function applyRemote(p: Payload, ts: number, result: ApplyResult): 
         }
         break
       }
+      case 'shelfstatus': {
+        const s = (p.v as { s?: unknown } | null)?.s
+        const old = await db.shelfStatus.get(p.key)
+        if (isStatus(s) && (!old || old.ts < ts)) await db.shelfStatus.put({ key: p.key, s, ts })
+        break
+      }
+      case 'bookcover': {
+        const url = (p.v as { url?: unknown } | null)?.url
+        const old = await db.bookCovers.get(p.key)
+        if (typeof url === 'string' && /^https?:/.test(url) && (!old || old.ts < ts)) {
+          const keep = old?.url === url ? old.data : null
+          await db.bookCovers.put({ key: p.key, url, ts, data: keep })
+          if (!keep) coverToFetch = { key: p.key, url }
+        }
+        break
+      }
       case 'audiopos': {
         const v = p.v as Partial<AudioPosValue> | null
         if (v && typeof v.ms === 'number' && Number.isFinite(v.ms)) {
@@ -755,6 +791,9 @@ export async function applyRemote(p: Payload, ts: number, result: ApplyResult): 
   // Outside the transaction: it writes the kv table and tells the Ebooks and ZIM tabs
   const d = dropbox as { link: DropboxLink | null } | null
   if (d) await applyDropboxLink(d.link)
+  // A cover picked on another device: fetched in the background, so sync doesn't wait for it
+  const c = coverToFetch as { key: string; url: string } | null
+  if (c) void fillCoverData(c.key, c.url).catch(() => undefined)
 }
 
 /** A saved article another device has but this one never fetched. */

@@ -10279,3 +10279,96 @@ mark.sr-mark {
   color: var(--accent);
   font-weight: 600;
 }
+
+/* Books groups (as in the Voice app): Current, Not started yet, Completed */
+.status-group + .status-group {
+  margin-top: var(--sp-2);
+}
+.status-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: var(--sp-4) 0 var(--sp-3);
+  font-size: var(--fs-xl);
+  font-weight: 500;
+}
+.status-head button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.status-count {
+  padding: 2px var(--sp-3);
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: var(--fs-md);
+  font-weight: 500;
+}
+.status-picker {
+  display: flex;
+  flex-direction: column;
+  padding: var(--sp-1) 0;
+  border-bottom: 1px solid var(--border);
+}
+.book-menu .status-picker button {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.book-menu .status-picker button.on {
+  background: var(--accent-soft);
+  font-weight: 500;
+}
+.cover-search {
+  display: flex;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+.cover-search input {
+  flex: 1;
+  min-width: 0;
+  height: var(--control-h);
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+.cover-progress {
+  width: 100%;
+  margin-bottom: var(--sp-2);
+}
+.cover-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: var(--sp-3);
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.cover-choice {
+  aspect-ratio: 1;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  overflow: hidden;
+  cursor: pointer;
+}
+.cover-choice:hover,
+.cover-choice:focus-visible {
+  border-color: var(--accent);
+}
+.cover-choice img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
