@@ -7,6 +7,7 @@
 import { apiHeaders } from './api'
 import { db, feedDisplayTitle, type Feed, type Item, type VideoPos, type YouTubeMeta } from './db'
 import { compactNumber } from './discover'
+import { pickedFolders, readPicked } from './folderFilter'
 import { isWatched } from './videopos'
 import { youtubeVideoId } from './youtube'
 import type { CommentPage, VideoMeta, WatchNext } from '../../server/youtube'
@@ -57,8 +58,8 @@ export interface TabState {
   channels: Channel[]
   /** Folders that hold YouTube feeds, A to Z. */
   groups: string[]
-  /** null = All. */
-  group: string | null
+  /** The groups picked in the filter that still exist; empty = All. */
+  picked: string[]
   videos: VideoRow[]
   shorts: VideoRow[]
   lastRefreshed: number | null
@@ -110,15 +111,16 @@ export function channelsShown(channels: Channel[], query: string, music: boolean
   )
 }
 
-export function buildTab(feeds: Feed[], items: Item[], meta: Map<string, YouTubeMeta>, positions: Map<string, VideoPos>, wantGroup: string | null): TabState {
+export function buildTab(feeds: Feed[], items: Item[], meta: Map<string, YouTubeMeta>, positions: Map<string, VideoPos>, want: readonly string[]): TabState {
   const channels = channelsOf(feeds, items)
   const groups = [...new Set(channels.map((c) => c.tag).filter(Boolean))].sort(byName)
-  const group = wantGroup && groups.includes(wantGroup) ? wantGroup : null
+  const picked = pickedFolders(want, groups)
+  const inPicked = picked.length ? new Set(picked) : null
   const byUrl = new Map(channels.map((c) => [c.url, c]))
   const rows: VideoRow[] = []
   for (const item of items) {
     const ch = byUrl.get(item.feedUrl)
-    if (!ch || (group && ch.tag !== group)) continue
+    if (!ch || (inPicked && !inPicked.has(ch.tag))) continue
     const videoId = youtubeVideoId(item.link)
     if (!videoId) continue
     const m = meta.get(videoId)
@@ -142,7 +144,7 @@ export function buildTab(feeds: Feed[], items: Item[], meta: Map<string, YouTube
   return {
     channels,
     groups,
-    group,
+    picked,
     videos: rows.filter((r) => !r.isShort),
     shorts: rows.filter((r) => r.isShort).slice(0, MAX_SHORTS),
     lastRefreshed: last || null,
@@ -189,21 +191,23 @@ export const thumbUrl = (id: string, big = false) => `https://i.ytimg.com/vi/${i
 const PREF_KEY = 'feeder.youtubeTab'
 
 export interface TabPrefs {
-  group: string | null
+  /** Groups (folders) picked in the filter; empty = All. */
+  groups: string[]
   grid: boolean
   sort: ChannelSort
 }
 
 export function loadPrefs(storage: Pick<Storage, 'getItem'> | undefined = globalThis.localStorage): TabPrefs {
   try {
-    const v = JSON.parse(storage?.getItem(PREF_KEY) ?? '{}') as Partial<TabPrefs>
+    const v = JSON.parse(storage?.getItem(PREF_KEY) ?? '{}') as Partial<TabPrefs> & { group?: unknown }
     return {
-      group: typeof v.group === 'string' ? v.group : null,
+      // Older versions kept one group as `group`
+      groups: readPicked(v.groups ?? v.group),
       grid: v.grid === true,
       sort: v.sort === 'recent' || v.sort === 'active' ? v.sort : 'name',
     }
   } catch {
-    return { group: null, grid: false, sort: 'name' }
+    return { groups: [], grid: false, sort: 'name' }
   }
 }
 
