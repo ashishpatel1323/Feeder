@@ -74,4 +74,9 @@
   <string name="shelf_no_books_here">No books on this phone yet. Books in Dropbox download when you open them.</string>
   <string name="shelf_no_zims_here">No ZIM books on this phone yet. Download one from the In Dropbox list.</string>
   <string name="ebook_downloaded_toast">%1$s is on this phone</string>
+  <string name="shelf_on_phone_hint_play">Plays offline too</string>
+  <string name="shelf_open">Open %1$s</string>
+  <string name="shelf_download_open">Download and open %1$s</string>
+  <string name="shelf_check_dropbox">Check Dropbox for new files</string>
+  <string name="zim_add">Add ZIM files</string>
 </resources>

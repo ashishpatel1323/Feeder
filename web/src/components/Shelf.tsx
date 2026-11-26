@@ -1,16 +1,24 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { formatBytes } from '../lib/offline'
+import { DropboxButton } from './DropboxPanel'
 import { Icon, IconButton, type IconName } from './Icon'
 
 /**
- * The shared shelf of the Ebooks, ZIM and Audiobooks tabs: what is on this device (ready, also
- * offline) and what is only in Dropbox, as cards or a list. The tabs look and behave the same.
+ * The shared listing of the Audiobooks, Ebooks and ZIM tabs: what is on this device (ready, also
+ * offline) and what is only in Dropbox, as cards or a list. [LibraryListing] is the whole page
+ * (header, jobs, empty state, controls, shelf), so the three tabs look and behave the same. The
+ * Android app's shelf/LibraryListing.kt + Shelf.kt draw the same thing.
  */
 
 /** both = on this device and in Dropbox; device = only here; cloud = only in Dropbox */
 export type Where = 'both' | 'device' | 'cloud'
 export type Show = 'all' | 'device' | 'cloud'
 export type ShelfView = 'cards' | 'list'
+/**
+ * How a picture sits in the square cover every tab uses: fill crops it to the square (audiobook
+ * art), fit shows all of it (a book cover), icon shows it small in the middle (a ZIM's site icon).
+ */
+export type CoverFit = 'fill' | 'fit' | 'icon'
 
 export interface ShelfAction {
   label: string
@@ -25,12 +33,14 @@ export interface ShelfItem {
   /** A short line such as "42% read" or "6.5 M pages · 2025-01" */
   detail?: string
   cover: string | null
+  /** How [cover] sits in the square; fill when left out */
+  coverFit?: CoverFit
   coverIcon: IconName
   /** A page to show shrunk as the cover when there is no [cover] (a ZIM's landing page) */
   preview?: string
   /** 0–1 through it (listened), drawn as a bar along the cover */
   progress?: number
-  /** One action right on the cover (an audiobook's Play) */
+  /** The main action right on the cover: an audiobook's Play, a book's Open */
   quick?: { icon: IconName; label: string; run: () => void }
   where: Where
   size: number
@@ -100,16 +110,18 @@ export function Availability({ where, size, busy }: { where: Where; size: number
   )
 }
 
-export function ShelfControls(p: { show: Show; setShow: (s: Show) => void; view: ShelfView; setView: (v: ShelfView) => void; counts: { all: number; device: number; cloud: number } }) {
+export function ShelfControls(p: { show: Show; setShow: (s: Show) => void; view: ShelfView; setView: (v: ShelfView) => void; items: ShelfItem[] }) {
+  const cloud = p.items.filter((i) => i.where === 'cloud').length
+  const counts = { all: p.items.length, device: p.items.length - cloud, cloud }
   return (
     <div className="shelf-controls">
-      {p.counts.cloud ? (
+      {counts.cloud ? (
         <span className="feeds-switch" role="radiogroup" aria-label="Show">
           {(
             [
-              ['all', `All ${p.counts.all}`],
-              ['device', `On this device ${p.counts.device}`],
-              ['cloud', `In Dropbox ${p.counts.cloud}`],
+              ['all', `All ${counts.all}`],
+              ['device', `On this device ${counts.device}`],
+              ['cloud', `In Dropbox ${counts.cloud}`],
             ] as const
           ).map(([k, label]) => (
             <button key={k} type="button" role="radio" aria-checked={p.show === k} className={p.show === k ? 'on' : ''} onClick={() => p.setShow(k)}>
@@ -150,7 +162,7 @@ export function GeneratedCover({ title, icon, small }: { title: string; icon: Ic
  * "On this device" and "In Dropbox" sections, filtered by [show], as cards or rows. [streams]:
  * what is in Dropbox plays from there right away (audiobooks), so it isn't dimmed.
  */
-export function Shelf(p: { items: ShelfItem[]; show: Show; view: ShelfView; shape: 'book' | 'tile' | 'square'; emptyDevice: string; streams?: boolean }) {
+export function Shelf(p: { items: ShelfItem[]; show: Show; view: ShelfView; emptyDevice: string; streams?: boolean }) {
   const [menu, setMenu] = useState<string | null>(null)
   const onDevice = p.items.filter((i) => i.where !== 'cloud')
   const cloud = p.items.filter((i) => i.where === 'cloud')
@@ -193,30 +205,27 @@ export function Shelf(p: { items: ShelfItem[]; show: Show; view: ShelfView; shap
       </span>
     ) : null
 
-  const cover = (i: ShelfItem, small: boolean) =>
-    p.shape === 'square' ? (
-      i.cover ? (
-        <img className={small ? 'shelf-thumb shelf-square' : 'shelf-square-cover'} src={i.cover} alt="" />
-      ) : small ? (
-        <span className="shelf-thumb shelf-square">
-          <GeneratedCover title={i.title} icon={i.coverIcon} small />
-        </span>
-      ) : (
-        <span className="shelf-square-cover">
-          <GeneratedCover title={i.title} icon={i.coverIcon} />
+  /** The same square cover on every tab */
+  const cover = (i: ShelfItem, small: boolean) => {
+    const cls = small ? 'shelf-thumb' : 'shelf-cover'
+    if (!i.cover && i.preview)
+      return (
+        <span className={`${cls} shelf-preview`}>
+          <PagePreview src={i.preview} />
         </span>
       )
-    ) : p.shape === 'book' ? (
-      i.cover ? (
-        <img className={small ? 'shelf-thumb' : 'book-cover'} src={i.cover} alt="" />
-      ) : (
-        <span className={`${small ? 'shelf-thumb' : 'book-cover'} book-cover-blank`}>{small ? <Icon name={i.coverIcon} size={18} /> : <span>{i.title}</span>}</span>
+    if (!i.cover)
+      return (
+        <span className={cls}>
+          <GeneratedCover title={i.title} icon={i.coverIcon} small={small} />
+        </span>
       )
-    ) : (
-      <span className={`${small ? 'shelf-thumb shelf-tile' : 'shelf-tile-cover'}${!i.cover && i.preview ? ' shelf-preview' : ''}`}>
-        {i.cover ? <img src={i.cover} alt="" /> : i.preview ? <PagePreview src={i.preview} /> : <Icon name={i.coverIcon} size={small ? 22 : 44} />}
+    return (
+      <span className={`${cls} cover-${i.coverFit ?? 'fill'}`}>
+        <img src={i.cover} alt="" loading="lazy" />
       </span>
     )
+  }
 
   const dim = (i: ShelfItem) => (i.where === 'cloud' && !p.streams ? ' in-cloud' : '')
 
@@ -271,7 +280,7 @@ export function Shelf(p: { items: ShelfItem[]; show: Show; view: ShelfView; shap
           {group(onDevice)}
         </>
       ) : null}
-      {p.show === 'device' && !onDevice.length ? <p className="muted">{p.emptyDevice}</p> : null}
+      {p.show === 'device' && !onDevice.length ? <p className="muted shelf-none">{p.emptyDevice}</p> : null}
       {p.show !== 'device' && cloud.length ? (
         <>
           <h2 className="lib-section shelf-section">
@@ -311,9 +320,180 @@ function PagePreview({ src }: { src: string }) {
           tabIndex={-1}
           loading="lazy"
           sandbox="allow-same-origin"
-          style={{ width: PREVIEW_WIDTH, height: PREVIEW_WIDTH * 0.75, transform: `scale(${scale})` }}
+          style={{ width: PREVIEW_WIDTH, height: PREVIEW_WIDTH, transform: `scale(${scale})` }}
         />
       ) : null}
     </span>
+  )
+}
+
+/** One way to add to a library: in the header's Add menu and as a button in the empty state. */
+export interface ShelfAdd {
+  icon: IconName
+  label: string
+  run: () => void
+}
+
+/** Something being added or fetched that isn't a shelf item yet (an import, a catalog download). */
+export interface ShelfJob {
+  key: string
+  label: string
+  /** What is happening; bytes so far (of total) when left out */
+  detail?: string
+  done: number
+  /** 0 = unknown: the bar just moves */
+  total: number
+  /** Stop it, where it can be stopped */
+  onCancel?: () => void
+}
+
+/**
+ * The one listing page of the Audiobooks, Ebooks and ZIM tabs: header (title, refresh, Dropbox
+ * account, Add menu), jobs, then the filter chips, the Cards | List switch and the shelf, or the
+ * empty state. [children] go in the header (hidden file inputs); [extra] goes under it (the ZIM
+ * catalog).
+ */
+export function LibraryListing(p: {
+  title: string
+  prefs: ReturnType<typeof useShelfPrefs>
+  items: ShelfItem[]
+  emptyIcon: IconName
+  emptyText: ReactNode
+  emptyDevice: string
+  addLabel: string
+  addActions: ShelfAdd[]
+  addDisabled?: boolean
+  addTitle?: string
+  dropboxFolder: string
+  signedIn: boolean
+  toast: (m: string) => void
+  onMenu: () => void
+  onRefresh?: () => void
+  refreshLabel?: string
+  refreshing?: boolean
+  /** The library is still being read */
+  loading?: boolean
+  jobs?: ShelfJob[]
+  /** What is in Dropbox plays from there right away (audiobooks), so it isn't dimmed */
+  streams?: boolean
+  extra?: ReactNode
+  footer?: ReactNode
+  onDropFiles?: (files: File[]) => void
+  children?: ReactNode
+}) {
+  const [addMenu, setAddMenu] = useState(false)
+  const jobs = p.jobs ?? []
+  return (
+    <section
+      className="manage-pane shelf-page"
+      aria-label={p.title}
+      onDragOver={p.onDropFiles ? (e) => e.preventDefault() : undefined}
+      onDrop={
+        p.onDropFiles
+          ? (e) => {
+              e.preventDefault()
+              p.onDropFiles?.([...e.dataTransfer.files])
+            }
+          : undefined
+      }
+    >
+      <div className="mf-page">
+        <div className="mf-head">
+          <span className="only-narrow">
+            <IconButton icon="menu" label="Feeds" onClick={p.onMenu} />
+          </span>
+          <h1>{p.title}</h1>
+          <span className="shelf-actions">
+            {p.signedIn && p.onRefresh ? <IconButton icon="refresh" label={p.refreshLabel ?? 'Check Dropbox for new files'} onClick={p.onRefresh} disabled={p.refreshing} /> : null}
+            <DropboxButton folder={p.dropboxFolder} toast={p.toast} />
+            {p.addActions.length ? (
+              <span className="shelf-add-wrap">
+                <button
+                  type="button"
+                  className="mf-btn primary"
+                  aria-haspopup={p.addActions.length > 1 ? 'menu' : undefined}
+                  aria-expanded={p.addActions.length > 1 ? addMenu : undefined}
+                  onClick={() => (p.addActions.length > 1 ? setAddMenu((o) => !o) : p.addActions[0].run())}
+                  disabled={p.addDisabled}
+                  title={p.addTitle}
+                >
+                  <Icon name="add" size={18} />
+                  {p.addLabel}
+                </button>
+                {addMenu ? (
+                  <span className="book-menu shelf-add-menu" role="menu" onMouseLeave={() => setAddMenu(false)}>
+                    {p.addActions.map((a) => (
+                      <button key={a.label} type="button" role="menuitem" onClick={() => (setAddMenu(false), a.run())}>
+                        <Icon name={a.icon} size={18} />
+                        {a.label}
+                      </button>
+                    ))}
+                  </span>
+                ) : null}
+              </span>
+            ) : null}
+          </span>
+          {p.children}
+        </div>
+        {p.extra}
+
+        {jobs.length ? (
+          <div className="lib-list shelf-jobs">
+            {jobs.map((j) => (
+              <div key={j.key} className="lib-row">
+                <Icon name="download" size={22} />
+                <span className="lib-text">
+                  <span className="lib-title">{j.label}</span>
+                  <span className="lib-desc">{j.detail ?? (j.done ? `${formatBytes(j.done)}${j.total ? ` of ${formatBytes(j.total)}` : ''}` : 'Starting…')}</span>
+                  <progress max={j.total || 1} value={j.total ? j.done : undefined} />
+                </span>
+                {j.onCancel ? <IconButton icon="close" label="Stop" onClick={j.onCancel} /> : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {p.loading && !p.items.length ? (
+          <p className="muted">Loading…</p>
+        ) : !p.items.length ? (
+          jobs.length ? null : (
+            <div className="shelf-empty">
+              <Icon name={p.emptyIcon} size={40} />
+              <p>{p.emptyText}</p>
+              {p.addActions.length ? (
+                <span className="shelf-empty-actions">
+                  {p.addActions.map((a) => (
+                    <button key={a.label} type="button" className="mf-btn" onClick={a.run} disabled={p.addDisabled}>
+                      <Icon name={a.icon} size={18} />
+                      {a.label}
+                    </button>
+                  ))}
+                </span>
+              ) : null}
+            </div>
+          )
+        ) : (
+          <>
+            <ShelfControls {...p.prefs} items={p.items} />
+            <Shelf items={p.items} show={p.prefs.show} view={p.prefs.view} streams={p.streams} emptyDevice={p.emptyDevice} />
+          </>
+        )}
+        {p.footer}
+      </div>
+    </section>
+  )
+}
+
+/** The page shown instead of a listing when this browser can't keep files at all. */
+export function ListingUnavailable({ title }: { title: string }) {
+  return (
+    <section className="manage-pane shelf-page" aria-label={title}>
+      <div className="mf-page">
+        <div className="mf-head">
+          <h1>{title}</h1>
+        </div>
+        <p className="muted">This browser cannot keep files on the device. Use a current Chrome, Edge, Safari or Firefox.</p>
+      </div>
+    </section>
   )
 }

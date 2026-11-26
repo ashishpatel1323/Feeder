@@ -7,12 +7,12 @@ import { formatBytes } from '../lib/offline'
 import { ACCEPT_AUDIO, addLocal, deleteAudiobookFromDropbox, downloadAudiobook, isAudioName, localSupported, onDevice, pickedFromFolder, refreshAudiobooks, removeFromDevice, uploadAudiobook, type Picked } from '../lib/audiobooks/library'
 import { audiobookPlayer, useAudiobookPlayer, type BookPlayerState } from '../lib/audiobooks/player'
 import { bookLengthMs, chaptersOf, clock, lengthText } from '../lib/audiobooks/timeline'
-import { confirmDropboxDelete, DropboxButton, needsDropbox, useDropbox } from './DropboxPanel'
+import { confirmDropboxDelete, needsDropbox, useDropbox } from './DropboxPanel'
 import { confirmDelete } from '../lib/confirmDelete'
 import { HistoryList } from './History'
 import { Icon, IconButton } from './Icon'
 import { formatSpeed } from './Player'
-import { GeneratedCover, Shelf, ShelfControls, useShelfPrefs, type ShelfItem } from './Shelf'
+import { GeneratedCover, LibraryListing, useShelfPrefs, type ShelfItem } from './Shelf'
 
 const RATES = [0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.5, 1.75, 2, 2.5, 3]
 const SLEEP_MINUTES = [5, 10, 15, 30, 45, 60, 90]
@@ -61,7 +61,6 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
   const [busy, setBusy] = useState(false)
   const [adding, setAdding] = useState<Job | null>(null)
   const [jobs, setJobs] = useState<Record<string, Job>>({})
-  const [addMenu, setAddMenu] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
   const folderInput = useRef<HTMLInputElement>(null)
   const prefs = useShelfPrefs('audiobooks', 'cards')
@@ -193,109 +192,55 @@ function Library({ onOpen, onMenu, toast }: { onOpen: (id: string) => void; onMe
   })
 
   return (
-    <section
-      className="manage-pane books-page ab-page"
-      aria-label="Audiobooks"
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={(e) => {
-        e.preventDefault()
-        void add([...e.dataTransfer.files].map((file) => ({ file, rel: file.name })), '')
-      }}
+    <LibraryListing
+      title="Audiobooks"
+      prefs={prefs}
+      items={items}
+      emptyIcon="headphones"
+      emptyText="No audiobooks yet. Add files or a folder from this device (they stay here), or put them in Dropbox › Apps › Feeder › Audiobooks: a file there is one book (M4B, M4A, MP3…), and a folder there is one book whose files play in name order."
+      emptyDevice="No audiobooks on this device yet. Add some, or download one from the In Dropbox list."
+      addLabel="Add audiobook"
+      addTitle="Add audiobooks from this device. They stay here, nothing is uploaded."
+      addDisabled={!!adding || !localSupported()}
+      addActions={[
+        { icon: 'headphones', label: 'Files…', run: () => fileInput.current?.click() },
+        { icon: 'folder', label: 'A folder…', run: () => folderInput.current?.click() },
+      ]}
+      dropboxFolder="Audiobooks"
+      signedIn={dbx.signedIn}
+      toast={toast}
+      onMenu={onMenu}
+      onRefresh={refresh}
+      refreshLabel="Check Dropbox for new audiobooks"
+      refreshing={busy}
+      loading={books === undefined}
+      jobs={adding ? [{ key: 'adding', label: adding.label, detail: `${adding.verb}${adding.total ? `: ${Math.floor((adding.done / adding.total) * 100)}%` : '…'}`, done: adding.done, total: adding.total }] : []}
+      streams
+      onDropFiles={(files) => void add(files.map((file) => ({ file, rel: file.name })), '')}
     >
-      <div className="mf-page">
-        <div className="mf-head">
-          <span className="only-narrow">
-            <IconButton icon="menu" label="Feeds" onClick={onMenu} />
-          </span>
-          <h1>Audiobooks</h1>
-          <span className="zim-actions">
-            {dbx.signedIn ? <IconButton icon="refresh" label="Check Dropbox for new audiobooks" onClick={refresh} disabled={busy} /> : null}
-            <DropboxButton folder="Audiobooks" toast={toast} />
-            <span className="ab-menu-wrap">
-              <button
-                type="button"
-                className="mf-btn primary"
-                aria-haspopup="menu"
-                aria-expanded={addMenu}
-                onClick={() => setAddMenu((o) => !o)}
-                disabled={!!adding || !localSupported()}
-                title="Add audiobooks from this device. They stay here, nothing is uploaded."
-              >
-                <Icon name="add" size={18} />
-                Add audiobook
-              </button>
-              {addMenu ? (
-                <span className="book-menu ab-menu" role="menu" onMouseLeave={() => setAddMenu(false)}>
-                  <button type="button" role="menuitem" onClick={() => (setAddMenu(false), fileInput.current?.click())}>
-                    <Icon name="headphones" size={18} />
-                    Files…
-                  </button>
-                  <button type="button" role="menuitem" onClick={() => (setAddMenu(false), folderInput.current?.click())}>
-                    <Icon name="folder" size={18} />
-                    A folder…
-                  </button>
-                </span>
-              ) : null}
-            </span>
-          </span>
-          <input
-            ref={fileInput}
-            type="file"
-            accept={ACCEPT_AUDIO}
-            multiple
-            hidden
-            onChange={(e) => {
-              void add([...(e.target.files ?? [])].map((file) => ({ file, rel: file.name })), '')
-              e.target.value = ''
-            }}
-          />
-          <input
-            ref={folderInput}
-            type="file"
-            hidden
-            {...({ webkitdirectory: '' } as Record<string, string>)}
-            onChange={(e) => {
-              const { name, files } = pickedFromFolder([...(e.target.files ?? [])])
-              void add(files, name)
-              e.target.value = ''
-            }}
-          />
-        </div>
-
-        {adding ? (
-          <div className="lib-list zim-jobs">
-            <div className="lib-row">
-              <Icon name="download" size={22} />
-              <span className="lib-text">
-                <span className="lib-title">{adding.label}</span>
-                <span className="lib-desc">
-                  {adding.verb}
-                  {adding.total ? `: ${Math.floor((adding.done / adding.total) * 100)}%` : '…'}
-                </span>
-                <progress max={adding.total || 1} value={adding.done || undefined} />
-              </span>
-            </div>
-          </div>
-        ) : null}
-
-        {books === undefined ? (
-          <p className="muted">Loading…</p>
-        ) : !sorted.length ? (
-          <div className="zim-empty">
-            <Icon name="headphones" size={40} />
-            <p>
-              No audiobooks yet. Add files or a folder from this device (they stay here), or put them in Dropbox › Apps › Feeder › Audiobooks: a file there is one book (M4B, M4A, MP3…),
-              and a folder there is one book whose files play in name order.
-            </p>
-          </div>
-        ) : (
-          <>
-            <ShelfControls {...prefs} counts={{ all: items.length, device: items.filter((i) => i.where !== 'cloud').length, cloud: items.filter((i) => i.where === 'cloud').length }} />
-            <Shelf items={items} show={prefs.show} view={prefs.view} shape="square" streams emptyDevice="No audiobooks on this device yet. Add some, or download one from the In Dropbox list." />
-          </>
-        )}
-      </div>
-    </section>
+      <input
+        ref={fileInput}
+        type="file"
+        accept={ACCEPT_AUDIO}
+        multiple
+        hidden
+        onChange={(e) => {
+          void add([...(e.target.files ?? [])].map((file) => ({ file, rel: file.name })), '')
+          e.target.value = ''
+        }}
+      />
+      <input
+        ref={folderInput}
+        type="file"
+        hidden
+        {...({ webkitdirectory: '' } as Record<string, string>)}
+        onChange={(e) => {
+          const { name, files } = pickedFromFolder([...(e.target.files ?? [])])
+          void add(files, name)
+          e.target.value = ''
+        }}
+      />
+    </LibraryListing>
   )
 }
 
