@@ -436,6 +436,7 @@ data object LibraryDestination : NavigationDestination(
             onEbooks = { navController.navigate(EbooksDestination.route) { launchSingleTop = true } },
             onAudiobooks = { navController.navigate(AudiobooksDestination.route) { launchSingleTop = true } },
             onZim = { navController.navigate(ZimDestination.route) { launchSingleTop = true } },
+            onHistory = { HistoryDestination.navigate(navController) },
             barTabs = BottomBarTabs.tabs(LocalContext.current).collectAsState().value ?: BottomBarTabs.DEFAULT,
             onYouTube = { navController.navigate(YouTubeDestination.route) { launchSingleTop = true } },
             onPlaylists = { navController.navigate("playlists") { launchSingleTop = true } },
@@ -574,6 +575,41 @@ data object ZimDestination : NavigationDestination(
     ) {
         com.nononsenseapps.feeder.ui.compose.zim.ZimLibraryScreen(
             onOpenBook = { ZimReaderDestination.navigate(navController, it) },
+        )
+    }
+}
+
+/** History: everything opened, and highlights, notes and feeds made or deleted, on every device. */
+data object HistoryDestination : NavigationDestination(
+    path = "history",
+    navArguments = emptyList(),
+    deepLinks = emptyList(),
+) {
+    fun navigate(navController: NavController) {
+        navController.navigate(path) { launchSingleTop = true }
+    }
+
+    @Composable
+    override fun RegisterScreen(
+        navController: NavController,
+        backStackEntry: NavBackStackEntry,
+        navDrawerListState: LazyListState,
+        mainActivityViewModel: MainActivityViewModel,
+    ) {
+        val context = LocalContext.current
+        val bar = BottomBarTabs.tabs(context).collectAsState().value ?: BottomBarTabs.DEFAULT
+        com.nononsenseapps.feeder.ui.compose.history.CentralHistoryScreen(
+            // As a tab it has no Back
+            onNavigateUp = if (MainTab.HISTORY in bar) null else ({ navController.popBackStack() }),
+            nav =
+                com.nononsenseapps.feeder.ui.compose.history.CentralHistoryNav(
+                    openArticle = { id -> ArticleDestination.navigate(navController, itemId = id) },
+                    openVideo = { id, video -> YouTubeVideoDestination.navigate(navController, id, video) },
+                    openBook = { book, cfi -> EbookReaderDestination.navigate(navController, book, cfi) },
+                    openAudiobook = { book -> AudiobookPlayerDestination.navigate(navController, book) },
+                    openZim = { book -> ZimReaderDestination.navigate(navController, book) },
+                    openFeed = { id -> FeedDestination.navigate(navController, feedId = id, keepBackStack = true) },
+                ),
         )
     }
 }

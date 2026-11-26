@@ -17,6 +17,7 @@ export const HIGHLIGHT_INK: Record<HighlightColor, string> = {
 
 export { anchorOf, locate, locateRange, textOf } from './textanchor'
 import { locateRange, textOf } from './textanchor'
+import { noteHighlightChange } from './recent'
 
 /**
  * Wraps each highlight's text in <mark class="hl hl-color" data-hl="id"> elements. Only adds
@@ -108,9 +109,25 @@ export function newHighlight(item: Item, feed: Feed | undefined, anchor: { start
   }
 }
 
-export const saveHighlight = (h: Highlight) => db.highlights.put(h)
-export const updateHighlight = (id: string, patch: Partial<Pick<Highlight, 'color' | 'note'>>) => db.highlights.update(id, { ...patch, modifiedAt: Date.now() })
-export const deleteHighlight = (id: string) => db.highlights.delete(id)
+/** Saves a highlight made here (History notes it, and its note if it has one). */
+export async function saveHighlight(h: Highlight) {
+  const before = await db.highlights.get(h.id)
+  await db.highlights.put(h)
+  await noteHighlightChange(before, h)
+}
+
+export async function updateHighlight(id: string, patch: Partial<Pick<Highlight, 'color' | 'note'>>) {
+  const before = await db.highlights.get(id)
+  const n = await db.highlights.update(id, { ...patch, modifiedAt: Date.now() })
+  if (before) await noteHighlightChange(before, { ...before, ...patch })
+  return n
+}
+
+export async function deleteHighlight(id: string) {
+  const before = await db.highlights.get(id)
+  await db.highlights.delete(id)
+  if (before) await noteHighlightChange(before, null)
+}
 
 /** What goes on the clipboard (and in a share's text): the quote, where it's from, and the link. */
 export function quoteText(h: Pick<Highlight, 'text' | 'itemTitle' | 'feedTitle' | 'itemLink'>, note?: string): string {

@@ -239,6 +239,11 @@ class FeederApplication :
         podcastPlayerStateHolder.otherDevicePosition = { itemId ->
             di.direct.instance<com.nononsenseapps.feeder.model.playlists.PlaylistStore>().takeOtherDevicePosition(itemId)
         }
+        // History: episodes played outside playlists, and what was there before it existed
+        podcastPlayerStateHolder.onPlay = { itemId ->
+            di.direct.instance<com.nononsenseapps.feeder.model.history.CentralHistoryRecorder>().itemOpened(itemId)
+        }
+        di.direct.instance<com.nononsenseapps.feeder.model.history.CentralHistoryRecorder>().backfillOnce()
     }
 
     override fun onTerminate() {

@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.DynamicFeed
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Headphones
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Subscriptions
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.outlined.DynamicFeed
 import androidx.compose.material.icons.outlined.Headphones
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Subscriptions
 import androidx.compose.material.icons.outlined.VideoLibrary
@@ -80,6 +82,7 @@ enum class MainTab {
     EBOOKS,
     AUDIOBOOKS,
     ZIM,
+    HISTORY,
 }
 
 /**
@@ -137,7 +140,7 @@ enum class FeedsView { LATEST, BY_FEED, DISCOVER }
 
 /**
  * Which tab a screen belongs to, or null for screens that show no bottom bar (reader, settings,
- * search...). Ebooks, Audiobooks and ZIM are their own tab when in [bar], else part of Library.
+ * search...). Ebooks, Audiobooks, ZIM and History are their own tab when in [bar], else part of Library.
  */
 fun NavBackStackEntry.mainTab(bar: List<MainTab> = BottomBarTabs.DEFAULT): MainTab? = mainTabOf(destination.route, arguments?.getLong("id"), bar)
 
@@ -159,6 +162,7 @@ fun mainTabOf(
         ZimDestination.route -> own(MainTab.ZIM)
         EbooksDestination.route -> own(MainTab.EBOOKS)
         AudiobooksDestination.route -> own(MainTab.AUDIOBOOKS)
+        HistoryDestination.route -> own(MainTab.HISTORY)
         else -> null
     }
 }
@@ -175,6 +179,7 @@ fun NavBackStackEntry.wantsSharedMiniPlayer(): Boolean =
         ZimDestination.route,
         EbooksDestination.route,
         AudiobooksDestination.route,
+        HistoryDestination.route,
         -> true
         else -> false
     }
@@ -242,6 +247,7 @@ fun NavController.openTab(
             MainTab.ZIM -> ZimDestination.route
             MainTab.EBOOKS -> EbooksDestination.route
             MainTab.AUDIOBOOKS -> AudiobooksDestination.route
+            MainTab.HISTORY -> HistoryDestination.route
             MainTab.FEEDS -> HomeDestination.route
         }
     if (tab == current) {
@@ -294,6 +300,7 @@ internal fun MainTab.look(): Triple<ImageVector, ImageVector, Int> =
         MainTab.ZIM -> Triple(Icons.Filled.Public, Icons.Outlined.Public, R.string.tab_zim)
         MainTab.EBOOKS -> Triple(Icons.AutoMirrored.Filled.MenuBook, Icons.AutoMirrored.Outlined.MenuBook, R.string.tab_ebooks)
         MainTab.AUDIOBOOKS -> Triple(Icons.Filled.Headphones, Icons.Outlined.Headphones, R.string.tab_audiobooks)
+        MainTab.HISTORY -> Triple(Icons.Filled.History, Icons.Outlined.History, R.string.tab_history)
     }
 
 /** What the tab screens need from the app shell, so they don't each take these as parameters. */

@@ -4,6 +4,7 @@
  */
 import { db, type VideoPos } from './db'
 import { thisDevice } from './device'
+import { noteItemProgress } from './recent'
 
 /** Resume this many seconds before where the video was left. */
 export const RESUME_BACK = 3
@@ -28,12 +29,17 @@ export async function saveVideoPos(id: string, t: number, d: number, now = Date.
   if (!Number.isFinite(t) || t < 0) return
   const dur = Number.isFinite(d) && d > 0 ? Math.round(d) : 0
   const time = Math.round(t)
+  let saved: { t: number; d: number } | null = null
   await db.transaction('rw', db.videoPos, async () => {
     const old = await db.videoPos.get(id)
     if (!old && time < MIN_SAVE) return
     if (old && old.t === time && (old.d === dur || !dur)) return
-    await db.videoPos.put({ id, t: time, d: dur || old?.d || 0, ts: Math.max(now, (old?.ts ?? 0) + 1), ...thisDevice() })
+    saved = { t: time, d: dur || old?.d || 0 }
+    await db.videoPos.put({ id, ...saved, ts: Math.max(now, (old?.ts ?? 0) + 1), ...thisDevice() })
   })
+  // History shows how far it got
+  const s = saved as { t: number; d: number } | null
+  if (s) await noteItemProgress(id, s.t, s.d).catch(() => undefined)
 }
 
 /** "4:12" or "1:02:05". */

@@ -19,6 +19,7 @@ import com.squareup.moshi.JsonAdapter
 import okhttp3.OkHttpClient
 import org.kodein.di.DI
 import org.kodein.di.bind
+import org.kodein.di.direct
 import org.kodein.di.instance
 import org.kodein.di.provider
 import org.kodein.di.singleton
@@ -43,16 +44,29 @@ val networkModule =
         bind<com.nononsenseapps.feeder.model.playlists.PlaylistStore>() with
             singleton {
                 val nudge = instance<SyncNudge>()
+                val d = di
                 com.nononsenseapps.feeder.model.playlists
                     .PlaylistStore(instance())
-                    .also { store -> store.onChanged = { positionOnly -> nudge.changed(positionOnly) } }
+                    .also { store ->
+                        store.onChanged = { positionOnly -> nudge.changed(positionOnly) }
+                        // History follows where episodes were left
+                        store.onPositionSaved = { id, seconds, length ->
+                            d.direct.instance<com.nononsenseapps.feeder.model.history.CentralHistoryRecorder>().itemProgress(id, seconds, length)
+                        }
+                    }
             }
         bind<com.nononsenseapps.feeder.model.highlights.HighlightStore>() with
             singleton {
                 val nudge = instance<SyncNudge>()
+                val d = di
                 com.nononsenseapps.feeder.model.highlights
                     .HighlightStore(instance())
-                    .also { store -> store.onChanged = { nudge.changed(false) } }
+                    .also { store ->
+                        store.onChanged = { nudge.changed(false) }
+                        store.onEdit = { before, after ->
+                            d.direct.instance<com.nononsenseapps.feeder.model.history.CentralHistoryRecorder>().highlightChanged(before, after)
+                        }
+                    }
             }
         bind<com.nononsenseapps.feeder.model.ebooks.BookPositions>() with
             singleton {
@@ -71,9 +85,28 @@ val networkModule =
         bind<com.nononsenseapps.feeder.model.history.ItemHistory>() with
             singleton {
                 val nudge = instance<SyncNudge>()
+                val d = di
                 com.nononsenseapps.feeder.model.history.ItemHistory
                     .get(instance<android.app.Application>())
-                    .also { store -> store.onChanged = { nudge.changed(true) } }
+                    .also { store ->
+                        store.onChanged = { nudge.changed(true) }
+                        // Audiobook plays and ebook opens also land in History
+                        store.onRecorded = { ev ->
+                            d.direct.instance<com.nononsenseapps.feeder.model.history.CentralHistoryRecorder>().fromEvent(ev)
+                        }
+                    }
+            }
+        bind<com.nononsenseapps.feeder.model.history.CentralHistory>() with
+            singleton {
+                val nudge = instance<SyncNudge>()
+                com.nononsenseapps.feeder.model.history.CentralHistory
+                    .get(instance<android.app.Application>())
+                    .also { store -> store.onChanged = { positionOnly -> nudge.changed(positionOnly) } }
+            }
+        bind<com.nononsenseapps.feeder.model.history.CentralHistoryRecorder>() with
+            singleton {
+                com.nononsenseapps.feeder.model.history
+                    .CentralHistoryRecorder(di)
             }
         bind<com.nononsenseapps.feeder.model.audiobooks.AudiobookPlayer>() with
             singleton {

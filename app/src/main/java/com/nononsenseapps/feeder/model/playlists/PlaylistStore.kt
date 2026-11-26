@@ -39,6 +39,10 @@ class PlaylistStore(
     @Volatile
     var onChanged: ((positionOnly: Boolean) -> Unit)? = null
 
+    /** Told (item id, seconds, length) after a position is saved here, for History. */
+    @Volatile
+    var onPositionSaved: ((Long, Long, Long) -> Unit)? = null
+
     // Items whose position came from another device after this device last saved one
     private val fromOtherDevice = mutableSetOf<Long>()
 
@@ -205,6 +209,7 @@ class PlaylistStore(
         putPosition(itemId, Triple(seconds, len, maxOf(System.currentTimeMillis(), (old?.third ?: 0L) + 1)))
         putDevice(itemId, null)
         onChanged?.invoke(true)
+        onPositionSaved?.invoke(itemId, seconds, len)
     }
 
     /** Where another device left [itemId], saved at [ts]: kept unless this device's is newer. */

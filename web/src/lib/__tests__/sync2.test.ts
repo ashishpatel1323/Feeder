@@ -358,7 +358,8 @@ describe('sync client', () => {
       createdAt: 1000,
     }
     await saveHighlight(h)
-    expect((await syncNow())?.sent).toBe(1)
+    // The highlight, and "Highlighted in An article" in History (recent.ts)
+    expect((await syncNow())?.sent).toBe(2)
     const other = await otherDevice()
     const sent = (await other.all()).find((p) => p.k === 'highlight')
     expect(sent).toMatchObject({ key: 'hl-1', ts: 1000, v: { item: article, title: 'An article', text: 'a quote', start: 10, prefix: 'before ', color: 'yellow', note: '' } })
@@ -382,10 +383,12 @@ describe('sync client', () => {
 
     // Editing and deleting here go out
     await updateHighlight('hl-1', { note: 'nicer' })
+    // Only the highlight: changing a note that came from the phone adds nothing to History here
     expect((await syncNow())?.sent).toBe(1)
     expect((await other.all()).find((p) => p.key === 'hl-1')?.v).toMatchObject({ note: 'nicer', color: 'pink' })
     await deleteHighlight('hl-2')
-    expect((await syncNow())?.sent).toBe(1)
+    // The deletion, and "Deleted highlight" in History
+    expect((await syncNow())?.sent).toBe(2)
     expect((await other.all()).find((p) => p.key === 'hl-2')?.v).toEqual({ deleted: true })
 
     // Deleted elsewhere

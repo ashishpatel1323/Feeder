@@ -157,6 +157,7 @@ fun ZimReaderScreen(
     val highlightStore: HighlightStore by di.instance()
     val ttsStateHolder: TTSStateHolder by di.instance()
     val repository: Repository by di.instance()
+    val recentHistory: com.nononsenseapps.feeder.model.history.CentralHistoryRecorder by di.instance()
     /** The page shown, as its path in the book; null until a page of the book has loaded. */
     var pagePath by remember { mutableStateOf<String?>(null) }
     /** Bumped each time a page finishes loading and has the script. */
@@ -545,6 +546,8 @@ fun ZimReaderScreen(
                                             at?.let { (_, path) -> if (path.isNotEmpty()) library.rememberPath(bookId, path) }
                                             pagePath = at?.second
                                             if (at != null) opening.touch()
+                                            // History: every page shown is its own entry
+                                            at?.let { (_, path) -> recentHistory.zimPage(bookId, path, pageTitle, currentBookTitle) }
                                             if (at != null && script != null) {
                                                 view.evaluateJavascript(script, null)
                                                 library.pendingHighlight?.let {

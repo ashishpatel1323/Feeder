@@ -20,6 +20,10 @@
  *   history  event id             HistoryValue (history.ts): one play, pause, open or close of an
  *                                 audiobook, ebook or ZIM site. Never changes, so events from every
  *                                 device add up; not remembered in syncKnown (db.history.synced)
+ *   recent   "t:i" or "t:i:a"      RecentValue (recent.ts): one History entry, newest wins, or
+ *                                 { deleted: true } once removed from history. Key "*" =
+ *                                 { before }: Clear history up to then. Not remembered in
+ *                                 syncKnown (db.recent.synced)
  *
  * New kinds (Read later links, …) can be added later: devices keep records of kinds they
  * don't know and the server never looks inside.
@@ -33,6 +37,7 @@ import { apiHeaders, HttpError } from './api'
 import { b64encode, decodeKey, decryptString, encryptString, type SecretKeys } from './crypto'
 import { applyDropboxLink, dropboxLink, DROPBOX_TS_KEY, type DropboxLink } from './dropbox'
 import { eventFromValue, historyValue } from './history'
+import { applyRecent, recentValue } from './recent'
 import { DELETED_PLAYLISTS_KEY, PLAYLISTS_KEY, STARTER_IDS, loadPlaylists, type Playlist } from './playlists'
 import {
   db,
@@ -62,7 +67,7 @@ export interface SyncState {
   lastError?: string | null
 }
 
-export type Kind = 'feed' | 'read' | 'saved' | 'hidden' | 'layout' | 'video' | 'playlist' | 'highlight' | 'bookpos' | 'audiopos' | 'dropbox' | 'history'
+export type Kind = 'feed' | 'read' | 'saved' | 'hidden' | 'layout' | 'video' | 'playlist' | 'highlight' | 'bookpos' | 'audiopos' | 'dropbox' | 'history' | 'recent'
 
 /** The plaintext inside a record. */
 export interface Payload {
@@ -426,6 +431,8 @@ interface Pending extends Payload {
 
 /** History events are only sent once, and never remembered in syncKnown. */
 const isHistory = (p: { k: string }) => p.k === 'history'
+/** History entries keep their own synced flag too (db.recent.synced). */
+const isRecent = (p: { k: string }) => p.k === 'recent'
 
 /** Everything that differs from what was last exchanged. */
 export async function collectChanges(now = Date.now()): Promise<Pending[]> {
@@ -579,6 +586,11 @@ export async function collectChanges(now = Date.now()): Promise<Pending[]> {
   for (const e of await db.history.where('synced').equals(0).toArray()) {
     out.push({ k: 'history', key: e.id, v: historyValue(e), ts: Math.max(1, e.at) })
   }
+
+  // History entries changed here and not sent yet
+  for (const e of await db.recent.where('synced').equals(0).toArray()) {
+    out.push({ k: 'recent', key: e.key, v: recentValue(e), ts: Math.max(1, e.ts) })
+  }
   return out
 }
 
@@ -602,6 +614,10 @@ export async function applyRemote(p: Payload, ts: number, result: ApplyResult): 
       await db.history.put(e)
       result.applied++
     }
+    return
+  }
+  if (isRecent(p)) {
+    if (await applyRecent(p.key, p.v, ts)) result.applied++
     return
   }
   const k = knownKey(p.k, p.key)
@@ -839,10 +855,11 @@ async function runSync(state: SyncState): Promise<SyncResult> {
     // What was sent is now the known value; the server's answer below may still override it
     const sent = toSend.slice(i, i + BATCH)
     await db.syncKnown.bulkPut(
-      sent.filter((p) => !isHistory(p)).map((p) => ({ k: knownKey(p.k, p.key), v: p.v, ts: p.ts, ...(p.a ? { a: p.a } : {}) })),
+      sent.filter((p) => !isHistory(p) && !isRecent(p)).map((p) => ({ k: knownKey(p.k, p.key), v: p.v, ts: p.ts, ...(p.a ? { a: p.a } : {}) })),
     )
     const sentHistory = sent.filter(isHistory).map((p) => p.key)
     if (sentHistory.length) await db.history.bulkUpdate(sentHistory.map((key) => ({ key, changes: { synced: 1 } })))
+    await markRecentSent(sent.filter(isRecent))
     for (;;) {
       for (const c of res.changes) {
         let payload: Payload
@@ -910,9 +927,21 @@ export async function forceSync(): Promise<SyncResult | null> {
   return syncNow()
 }
 
+/** Marks sent History entries as sent, unless they changed again meanwhile. */
+async function markRecentSent(sent: Pending[]) {
+  if (!sent.length) return
+  await db.transaction('rw', db.recent, async () => {
+    for (const p of sent) {
+      const e = await db.recent.get(p.key)
+      if (e && !e.synced && Math.max(1, e.ts) === p.ts) await db.recent.update(p.key, { synced: 1 })
+    }
+  })
+}
+
 async function resetExchange(state: SyncState) {
-  await db.transaction('rw', [db.items, db.syncKnown, db.kv, db.history], async () => {
+  await db.transaction('rw', [db.items, db.syncKnown, db.kv, db.history, db.recent], async () => {
     await db.history.toCollection().modify({ synced: 0 })
+    await db.recent.toCollection().modify({ synced: 0 })
     // Keep remembered unsubscribes and deletions, so they are sent again rather than undone.
     // Unsubscribes keep the time they happened, so a feed subscribed to again elsewhere since stays.
     const keep = await db.syncKnown.filter((r) => (r.k.startsWith('feed\n') && isDeleted(r.v)) || r.k.startsWith('hidden\n')).toArray()
@@ -939,10 +968,11 @@ export function randomSecretKey(): string {
 async function start(syncCode: string, secretKey: string, extra: Partial<SyncState> = {}): Promise<SyncState> {
   const keys = await decodeKey(secretKey) // validates
   const state: SyncState = { syncCode: syncCode.toLowerCase(), secretKey: keys.encoded, cursor: 0, ...extra }
-  await db.transaction('rw', [db.items, db.syncKnown, db.kv, db.history], async () => {
+  await db.transaction('rw', [db.items, db.syncKnown, db.kv, db.history, db.recent], async () => {
     await db.syncKnown.clear()
     await db.items.toCollection().modify({ readSynced: 0 })
     await db.history.toCollection().modify({ synced: 0 })
+    await db.recent.toCollection().modify({ synced: 0 })
     await setKv(STATE_KEY, state)
   })
   return state
@@ -963,11 +993,12 @@ export async function createSync(): Promise<SyncState> {
 /** Stops syncing in this browser. Feeds and articles stay; other devices are not touched. */
 export async function leaveSync(): Promise<void> {
   if (running) await running.catch(() => undefined)
-  await db.transaction('rw', [db.items, db.syncKnown, db.kv, db.history], async () => {
+  await db.transaction('rw', [db.items, db.syncKnown, db.kv, db.history, db.recent], async () => {
     await setKv(STATE_KEY, null)
     await db.syncKnown.clear()
     await db.items.toCollection().modify({ readSynced: 0 })
     await db.history.toCollection().modify({ synced: 0 })
+    await db.recent.toCollection().modify({ synced: 0 })
   })
 }
 

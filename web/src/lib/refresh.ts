@@ -4,6 +4,7 @@ import { db, getKv, itemId, newFeed, setKv, type Feed, type Item } from './db'
 import { countWords, findFeedLinks, htmlToText, parseFeed, type ParsedArticle, type ParsedFeed } from './feedparse'
 import { makeFilter } from './filterrules'
 import { getSyncState, knownStateFor } from './sync2'
+import { noteFeedChange, noteFeedsDeleted } from './recent'
 
 export const MAX_ITEMS_PER_FEED_KEY = 'maxItemsPerFeed'
 
@@ -176,6 +177,7 @@ export async function addFeed(input: string, tag = ''): Promise<string> {
   } else {
     const feed = newFeed(feedUrl, { title: parsed.title, tag })
     await db.feeds.put(feed)
+    void noteFeedChange('create', feed)
     // Store what was just downloaded and parsed instead of fetching a big feed a second time
     try {
       await fetchOne(feed, parsed)
@@ -187,6 +189,7 @@ export async function addFeed(input: string, tag = ''): Promise<string> {
 }
 
 export async function deleteFeed(url: string) {
+  await noteFeedsDeleted([url])
   await db.transaction('rw', db.feeds, db.items, async () => {
     await db.feeds.delete(url)
     await db.items.where('feedUrl').equals(url).delete()

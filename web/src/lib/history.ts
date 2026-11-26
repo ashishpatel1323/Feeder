@@ -21,6 +21,7 @@
  */
 import { db, type HistoryEvent } from './db'
 import { thisDevice } from './device'
+import { noteFromEvent } from './recent'
 
 export type HistoryKind = 'audiobook' | 'ebook' | 'zim'
 export type HistoryAction = 'play' | 'pause' | 'open' | 'close'
@@ -73,6 +74,8 @@ export async function recordHistory(c: HistoryKind, i: string, a: HistoryAction,
   }
   await db.history.put(ev)
   void trim()
+  // The central History log follows (recent.ts)
+  await noteFromEvent(c, i, a, where).catch(() => undefined)
   return ev
 }
 

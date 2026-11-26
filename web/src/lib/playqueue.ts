@@ -13,6 +13,7 @@ import { savedVideoUrl } from './offline'
 import { articleVideoId } from './youtube'
 import { resumeAt, saveVideoPos } from './videopos'
 import { rememberDuration } from './downloads'
+import { noteItemOpened } from './recent'
 
 export type QueueStatus = 'idle' | 'loading' | 'playing' | 'paused'
 
@@ -161,6 +162,8 @@ class PlayQueue {
     this.current = item
     this.feedTitle = feedDisplayTitle(feed) || ''
     this.set({ kind, status: 'loading', position: 0, duration: item.duration ?? 0 })
+    // History: played (from a playlist when the queue is one)
+    void noteItemOpened(id, this.state.playlistId ? { playlistId: this.state.playlistId, playlistName: this.state.name } : null).catch(() => undefined)
     if (kind === 'article') {
       // QueuePlayer sees the new article, attaches its text and starts reading it aloud
       if (readAloud.state.status !== 'idle') readAloud.stop()
