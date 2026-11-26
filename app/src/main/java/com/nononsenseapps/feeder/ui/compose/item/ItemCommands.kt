@@ -10,6 +10,10 @@ import androidx.compose.ui.platform.LocalContext
 import com.nononsenseapps.feeder.ApplicationCoroutineScope
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.archmodel.Repository
+import com.nononsenseapps.feeder.ui.compose.components.DeleteConfirmer
+import com.nononsenseapps.feeder.ui.compose.components.DeleteRequest
+import com.nononsenseapps.feeder.ui.compose.components.DeleteScope
+import com.nononsenseapps.feeder.ui.compose.components.rememberDeleteConfirmer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.kodein.di.compose.LocalDI
@@ -25,6 +29,7 @@ class ItemCommands(
     private val scope: ApplicationCoroutineScope,
     private val deletedText: (Int) -> String,
     private val undoText: String,
+    private val confirmer: DeleteConfirmer,
 ) {
     fun setSaved(
         itemId: Long,
@@ -40,8 +45,31 @@ class ItemCommands(
         scope.launch { if (read) repository.markAsReadAndNotified(itemId) else repository.markAsUnread(itemId) }
     }
 
-    /** Deletes for good on every device; [snackbar] (when given) offers Undo. */
+    /**
+     * Deletes for good on every device. With a [snackbar] it goes at once and offers Undo; without
+     * one it asks first (the shared delete confirmation).
+     */
     fun delete(
+        itemId: Long,
+        snackbar: SnackbarHostState?,
+    ) {
+        if (snackbar != null) return deleteNow(itemId, snackbar)
+        scope.launch {
+            val title = repository.getArticle(itemId)?.title.orEmpty()
+            launch(Dispatchers.Main) {
+                confirmer.ask(
+                    DeleteRequest(
+                        title = R.string.confirm_delete_title_article,
+                        itemName = title,
+                        scope = DeleteScope.ALL_DEVICES,
+                        onConfirm = { deleteNow(itemId, snackbar) },
+                    ),
+                )
+            }
+        }
+    }
+
+    private fun deleteNow(
         itemId: Long,
         snackbar: SnackbarHostState?,
     ) {
@@ -65,12 +93,14 @@ fun rememberItemCommands(): ItemCommands {
     val scope: ApplicationCoroutineScope by di.instance()
     val resources = LocalContext.current.resources
     val undo = resources.getString(R.string.undo_delete_article)
-    return remember(repository, scope) {
+    val confirmer = rememberDeleteConfirmer()
+    return remember(repository, scope, confirmer) {
         ItemCommands(
             repository = repository,
             scope = scope,
             deletedText = { n -> resources.getQuantityString(R.plurals.n_articles_deleted_everywhere, n, n) },
             undoText = undo,
+            confirmer = confirmer,
         )
     }
 }

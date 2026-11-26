@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Shared delete confirmation (ConfirmDeleteDialog) -->
+  <string name="confirm_delete_scope_all_devices">This deletes it on all your synced devices.</string>
+  <string name="confirm_delete_scope_all_devices_no_sync">This deletes it.</string>
+  <string name="confirm_delete_scope_this_device">Only removes it from this device. Other devices keep it.</string>
+  <string name="confirm_delete_scope_dropbox">Deletes the file from Dropbox. The copy on this device stays.</string>
+  <string name="confirm_delete_action_delete">Delete</string>
+  <string name="confirm_delete_action_remove">Remove</string>
+  <string name="confirm_delete_action_unsubscribe">Unsubscribe</string>
+  <string name="confirm_delete_action_clear">Clear</string>
+  <string name="confirm_delete_cancel">Cancel</string>
+  <string name="confirm_delete_title_feed">Delete feed?</string>
+  <string name="confirm_delete_title_feeds">Delete feeds?</string>
+  <string name="confirm_delete_title_unsubscribe">Unsubscribe from channel?</string>
+  <string name="confirm_delete_title_folder">Delete folder?</string>
+  <string name="confirm_delete_title_folder_feeds">Delete folder and its feeds?</string>
+  <string name="confirm_delete_title_article">Delete article?</string>
+  <string name="confirm_delete_title_articles">Delete articles?</string>
+  <string name="confirm_delete_title_playlist">Delete playlist?</string>
+  <string name="confirm_delete_title_remove_from_playlist">Remove from playlist?</string>
+  <string name="confirm_delete_title_highlight">Delete highlight?</string>
+  <string name="confirm_delete_title_book">Delete book?</string>
+  <string name="confirm_delete_title_audiobook">Delete audiobook?</string>
+  <string name="confirm_delete_title_offline_site">Delete offline site?</string>
+  <string name="confirm_delete_title_remove_from_device">Remove from this device?</string>
+  <string name="confirm_delete_title_forget">Forget this book?</string>
+  <string name="confirm_delete_title_download">Delete download?</string>
+  <string name="confirm_delete_title_downloads">Delete all downloads?</string>
+  <string name="confirm_delete_title_offline_copy">Remove offline copy?</string>
+  <string name="confirm_delete_title_offline_articles">Remove offline articles?</string>
+  <string name="confirm_delete_title_group">Delete group?</string>
+  <string name="confirm_delete_title_dropbox">Delete from Dropbox?</string>
+  <string name="confirm_delete_extra_feed_saved">Saved ones go too.</string>
+  <string name="confirm_delete_extra_feed_articles">Its articles go too.</string>
+  <string name="confirm_delete_extra_folder_feeds_move">Its feeds move to No folder.</string>
+  <string name="confirm_delete_extra_folder_feeds_go">The feeds and their articles go too.</string>
+  <string name="confirm_delete_extra_playlist">The articles and episodes in it stay in Feeder.</string>
+  <string name="confirm_delete_extra_playlist_entry">It stays in Feeder.</string>
+  <string name="confirm_delete_extra_highlight">Its note goes too.</string>
+  <string name="confirm_delete_extra_stays_in_dropbox">It stays in Dropbox.</string>
+  <string name="confirm_delete_extra_only_copy">It isn\'t in Dropbox, so this is the only copy.</string>
+  <string name="confirm_delete_extra_forget">The file itself stays where it is.</string>
+  <string name="confirm_delete_extra_download">The article stays in Feeder.</string>
+  <string name="confirm_delete_extra_group">Its channels stay subscribed.</string>
+  <string name="confirm_delete_title_history_entry">Remove from history?</string>
+  <string name="confirm_delete_extra_history_entry">The %1$s itself is not deleted.</string>
+  <string name="confirm_delete_extra_history_clear">No articles, videos, books, highlights or feeds are deleted.</string>
+  <string name="confirm_delete_scope_dropbox_no_copy">Deletes the file from Dropbox, for all your devices.</string>
+  <plurals name="confirm_delete_n_items">
+    <item quantity="one">%d item</item>
+    <item quantity="other">%d items</item>
+  </plurals>
+  <plurals name="confirm_delete_n_feeds">
+    <item quantity="one">%d feed</item>
+    <item quantity="other">%d feeds</item>
+  </plurals>
+  <plurals name="confirm_delete_n_articles">
+    <item quantity="one">%d article</item>
+    <item quantity="other">%d articles</item>
+  </plurals>
+</resources>

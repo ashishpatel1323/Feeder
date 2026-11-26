@@ -11,7 +11,6 @@ import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -23,7 +22,6 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -39,6 +37,9 @@ import androidx.compose.ui.unit.dp
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.archmodel.Repository
 import com.nononsenseapps.feeder.model.offline.OfflineDownloader
+import com.nononsenseapps.feeder.ui.compose.components.ConfirmDeleteDialog
+import com.nononsenseapps.feeder.ui.compose.components.DeleteScope
+import com.nononsenseapps.feeder.ui.compose.components.DeleteVerb
 import com.nononsenseapps.feeder.ui.compose.theme.LocalDimens
 import kotlinx.coroutines.launch
 import org.kodein.di.compose.LocalDI
@@ -184,28 +185,20 @@ fun OfflineReadingSection(modifier: Modifier = Modifier) {
     }
 
     if (confirmRemove) {
-        AlertDialog(
-            onDismissRequest = { confirmRemove = false },
-            title = { Text(stringResource(R.string.offline_remove_confirm_title)) },
-            text = { Text(stringResource(R.string.offline_remove_confirm_text)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        confirmRemove = false
-                        coroutineScope.launch {
-                            downloader.removeAll()
-                            storageBytes = downloader.storageBytes()
-                        }
-                    },
-                ) {
-                    Text(stringResource(R.string.offline_remove))
+        ConfirmDeleteDialog(
+            title = stringResource(R.string.offline_remove_confirm_title),
+            itemName = "",
+            scope = DeleteScope.THIS_DEVICE,
+            verb = DeleteVerb.REMOVE,
+            onConfirm = {
+                confirmRemove = false
+                coroutineScope.launch {
+                    downloader.removeAll()
+                    storageBytes = downloader.storageBytes()
                 }
             },
-            dismissButton = {
-                TextButton(onClick = { confirmRemove = false }) {
-                    Text(stringResource(android.R.string.cancel))
-                }
-            },
+            onDismiss = { confirmRemove = false },
+            extra = stringResource(R.string.offline_remove_confirm_text),
         )
     }
 }

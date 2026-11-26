@@ -27,6 +27,7 @@ import { articleVideoId } from '../lib/youtube'
 import { Icon, IconButton } from './Icon'
 import { deleteItemWithUndo, ItemRow, usePlaylistContext } from './ItemRow'
 import type { Toast } from '../lib/toast'
+import { confirmDelete, itemCount } from '../lib/confirmDelete'
 
 interface Download {
   item: Item
@@ -137,7 +138,8 @@ export function DownloadsPage(p: {
   }
 
   const deleteAll = async () => {
-    if (!window.confirm('Delete every saved video and every unfinished download from this browser? This can’t be undone.')) return
+    const n = completed.length + incomplete.length
+    if (!(await confirmDelete({ title: 'Delete all downloads?', itemName: itemCount(n, 'video'), scope: 'this-device', extra: 'Unfinished downloads stop too.' }))) return
     setPlayingId(null)
     for (const d of incomplete) cancelVideo(d.videoId)
     await removeAllVideos()
@@ -304,7 +306,8 @@ export function DownloadsPage(p: {
                             <button
                               type="button"
                               className="mf-btn ir-btn"
-                              onClick={() => {
+                              onClick={async () => {
+                                if (!(await confirmDelete({ title: 'Delete download?', itemName: d.item.title || 'Untitled', scope: 'this-device', extra: 'The article stays in Feeder.' }))) return
                                 if (d.item.id === playingId) playNext(1)
                                 void removeVideo(d.item.id, d.videoId)
                               }}

@@ -83,7 +83,10 @@ import com.nononsenseapps.feeder.model.playlists.itemKind
 import com.nononsenseapps.feeder.model.playlists.itemSeconds
 import com.nononsenseapps.feeder.ui.MainActivityViewModel
 import com.nononsenseapps.feeder.ui.ScrollDirection
+import com.nononsenseapps.feeder.ui.compose.components.DeleteRequest
+import com.nononsenseapps.feeder.ui.compose.components.DeleteScope
 import com.nononsenseapps.feeder.ui.compose.components.TranslationProgressContent
+import com.nononsenseapps.feeder.ui.compose.components.rememberDeleteConfirmer
 import com.nononsenseapps.feeder.ui.compose.highlights.ArticleHighlightsHost
 import com.nononsenseapps.feeder.ui.compose.highlights.ArticleHighlightsState
 import com.nononsenseapps.feeder.ui.compose.html.ColumnArticleContent
@@ -191,6 +194,7 @@ fun ArticleScreen(
 
     val toolbarColor = MaterialTheme.colorScheme.surface.toArgb()
     val context = LocalContext.current
+    val deleteConfirmer = rememberDeleteConfirmer()
 
     ArticleHighlightsHost(
         articleId = viewState.articleId,
@@ -264,9 +268,18 @@ fun ArticleScreen(
                 viewModel.setBookmarked(!viewState.isBookmarked)
             },
             onDelete = {
-                viewModel.deleteForGood()
-                Toast.makeText(context, R.string.article_deleted_everywhere, Toast.LENGTH_SHORT).show()
-                onNavigateUp()
+                deleteConfirmer.ask(
+                    DeleteRequest(
+                        title = R.string.confirm_delete_title_article,
+                        itemName = viewState.articleTitle,
+                        scope = DeleteScope.ALL_DEVICES,
+                        onConfirm = {
+                            viewModel.deleteForGood()
+                            Toast.makeText(context, R.string.article_deleted_everywhere, Toast.LENGTH_SHORT).show()
+                            onNavigateUp()
+                        },
+                    ),
+                )
             },
             articleScrollState = articleScrollState,
             onNavigateUp = onNavigateUp,

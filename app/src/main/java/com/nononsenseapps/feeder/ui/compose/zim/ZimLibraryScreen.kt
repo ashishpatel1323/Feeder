@@ -24,6 +24,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -36,7 +39,6 @@ import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -56,6 +58,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -79,6 +82,12 @@ import com.nononsenseapps.feeder.model.zim.ZimLibrary
 import com.nononsenseapps.feeder.model.zim.ZimNative
 import com.nononsenseapps.feeder.model.zim.ZimSnapshots
 import com.nononsenseapps.feeder.sync2.SyncNudge
+import com.nononsenseapps.feeder.ui.compose.components.ConfirmDeleteDialog
+import com.nononsenseapps.feeder.ui.compose.components.DeleteScope
+import com.nononsenseapps.feeder.ui.compose.components.DeleteVerb
+import com.nononsenseapps.feeder.ui.compose.ebooks.DeleteFromDropboxDialog
+import com.nononsenseapps.feeder.ui.compose.ebooks.DropboxAccountButton
+import com.nononsenseapps.feeder.ui.compose.ebooks.uploadOrExplain
 import com.nononsenseapps.feeder.ui.compose.shelf.CoverShape
 import com.nononsenseapps.feeder.ui.compose.shelf.ShelfAction
 import com.nononsenseapps.feeder.ui.compose.shelf.ShelfControls
@@ -86,17 +95,10 @@ import com.nononsenseapps.feeder.ui.compose.shelf.ShelfItem
 import com.nononsenseapps.feeder.ui.compose.shelf.Where
 import com.nononsenseapps.feeder.ui.compose.shelf.rememberShelfPrefs
 import com.nononsenseapps.feeder.ui.compose.shelf.shelf
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.runtime.produceState
-import com.nononsenseapps.feeder.ui.compose.ebooks.DeleteFromDropboxDialog
-import com.nononsenseapps.feeder.ui.compose.ebooks.DropboxAccountButton
-import com.nononsenseapps.feeder.ui.compose.ebooks.uploadOrExplain
 import com.nononsenseapps.feeder.ui.compose.theme.SensibleTopAppBar
+import kotlinx.coroutines.delay
 import org.kodein.di.compose.LocalDI
 import org.kodein.di.instance
-import kotlinx.coroutines.delay
 
 /** The ZIM tab: offline websites (Wikipedia, Stack Exchange, zimit copies…) kept on this phone. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -117,6 +119,7 @@ fun ZimLibraryScreen(
     val nudge: SyncNudge by di.instance()
     var catalogOpen by rememberSaveable { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<ZimBook?>(null) }
+    var deletingInDropbox by remember { mutableStateOf(false) }
     var deletingRemote by remember { mutableStateOf<Pair<DropboxFile, Boolean>?>(null) }
     val pick =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
@@ -231,7 +234,12 @@ fun ZimLibraryScreen(
                         buildList {
                             if ((link == null || remote != null) && copy == null && up == null) add(ShelfAction(uploadLabel) { uploadOrExplain(context, link != null, zimWhat) { library.uploadToDropbox(book) } })
                             if (copy != null) add(ShelfAction(deleteDropboxLabel) { deletingRemote = copy to true })
-                            add(ShelfAction(if (copy != null) removeLabel else deleteLabel) { deleting = book })
+                            add(
+                                ShelfAction(if (copy != null) removeLabel else deleteLabel) {
+                                    deletingInDropbox = copy != null
+                                    deleting = book
+                                },
+                            )
                         },
                 )
             } +
@@ -323,17 +331,17 @@ fun ZimLibraryScreen(
     }
 
     deleting?.let { book ->
-        AlertDialog(
-            onDismissRequest = { deleting = null },
-            title = { Text(stringResource(R.string.zim_delete_title, book.title)) },
-            text = { Text(stringResource(R.string.zim_delete_text, Formatter.formatShortFileSize(context, book.size))) },
-            confirmButton = {
-                TextButton(onClick = {
-                    library.delete(book)
-                    deleting = null
-                }) { Text(stringResource(R.string.zim_delete)) }
+        ConfirmDeleteDialog(
+            title = stringResource(if (deletingInDropbox) R.string.confirm_delete_title_remove_from_device else R.string.confirm_delete_title_offline_site),
+            itemName = "${book.title} (${Formatter.formatShortFileSize(context, book.size)})",
+            scope = DeleteScope.THIS_DEVICE,
+            verb = if (deletingInDropbox) DeleteVerb.REMOVE else DeleteVerb.DELETE,
+            onConfirm = {
+                library.delete(book)
+                deleting = null
             },
-            dismissButton = { TextButton(onClick = { deleting = null }) { Text(stringResource(android.R.string.cancel)) } },
+            onDismiss = { deleting = null },
+            extra = stringResource(if (deletingInDropbox) R.string.confirm_delete_extra_stays_in_dropbox else R.string.confirm_delete_extra_only_copy),
         )
     }
 }

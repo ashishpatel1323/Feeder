@@ -261,7 +261,7 @@ export function FlipMode(p: Props) {
     setCurId(after)
     await hideItems([copy.id])
     syncNow().catch(() => undefined)
-    p.toast('Article deleted on all devices', {
+    p.toast('Article deleted', {
       label: 'Undo',
       run: () => {
         setGone((g) => {
@@ -480,7 +480,7 @@ export function FlipMode(p: Props) {
                   <Icon name="article" size={18} /> {kind === 'article' ? 'Read full article' : 'Open in reader'}
                 </button>
                 <span className="flip-spacer" />
-                <button className="flip-btn del" onClick={remove} title="Delete on all devices (Delete)">
+                <button className="flip-btn del" onClick={remove} title="Delete (Delete)">
                   <Icon name="delete" size={18} /> Delete
                 </button>
               </div>

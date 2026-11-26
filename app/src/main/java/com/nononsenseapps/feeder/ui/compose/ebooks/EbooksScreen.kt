@@ -1,7 +1,5 @@
 package com.nononsenseapps.feeder.ui.compose.ebooks
 
-import androidx.compose.material.icons.outlined.Folder
-
 import android.graphics.BitmapFactory
 import android.text.format.Formatter
 import android.widget.Toast
@@ -32,7 +30,9 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.DropdownMenu
@@ -74,6 +74,10 @@ import com.nononsenseapps.feeder.model.ebooks.EbookLibrary
 import com.nononsenseapps.feeder.sync2.SyncNudge
 import com.nononsenseapps.feeder.sync2.ThisDevice
 import com.nononsenseapps.feeder.sync2.otherDeviceText
+import com.nononsenseapps.feeder.ui.compose.components.DeleteRequest
+import com.nononsenseapps.feeder.ui.compose.components.DeleteScope
+import com.nononsenseapps.feeder.ui.compose.components.DeleteVerb
+import com.nononsenseapps.feeder.ui.compose.components.rememberDeleteConfirmer
 import com.nononsenseapps.feeder.ui.compose.shelf.CoverShape
 import com.nononsenseapps.feeder.ui.compose.shelf.ShelfAction
 import com.nononsenseapps.feeder.ui.compose.shelf.ShelfControls
@@ -81,7 +85,6 @@ import com.nononsenseapps.feeder.ui.compose.shelf.ShelfItem
 import com.nononsenseapps.feeder.ui.compose.shelf.Where
 import com.nononsenseapps.feeder.ui.compose.shelf.rememberShelfPrefs
 import com.nononsenseapps.feeder.ui.compose.shelf.shelf
-import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import com.nononsenseapps.feeder.ui.compose.theme.SensibleTopAppBar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -100,6 +103,29 @@ fun EbooksScreen(
     val di = LocalDI.current
     val nudge: SyncNudge by di.instance()
     val library = remember { EbookLibrary.get(context) }
+    val deleteConfirmer = rememberDeleteConfirmer()
+
+    fun askRemove(b: Book) =
+        deleteConfirmer.ask(
+            DeleteRequest(
+                title =
+                    when {
+                        b.uri != null -> R.string.confirm_delete_title_forget
+                        b.dropboxPath != null -> R.string.confirm_delete_title_remove_from_device
+                        else -> R.string.confirm_delete_title_book
+                    },
+                itemName = b.title,
+                scope = DeleteScope.THIS_DEVICE,
+                verb = if (b.dropboxPath != null || b.uri != null) DeleteVerb.REMOVE else DeleteVerb.DELETE,
+                extra =
+                    when {
+                        b.uri != null -> R.string.confirm_delete_extra_forget
+                        b.dropboxPath != null -> R.string.confirm_delete_extra_stays_in_dropbox
+                        else -> R.string.confirm_delete_extra_only_copy
+                    },
+                onConfirm = { library.removeFromDevice(b.id) },
+            ),
+        )
     val positions = remember { BookPositions.get(context) }
     val thisDeviceId = remember { ThisDevice.get(context).id }
     val dropbox = remember { DropboxClient.get(context) }
@@ -168,7 +194,7 @@ fun EbooksScreen(
                     buildList {
                         if (!b.local) add(ShelfAction(downloadLabel) { library.download(b.id) })
                         if (b.local && b.dropboxPath == null && jobs.none { it.key == "up:${b.id}" }) add(ShelfAction(uploadLabel) { uploadOrExplain(context, link != null, booksWhat) { library.uploadToDropbox(b.id) } })
-                        if (b.local) add(ShelfAction(if (b.uri != null) forgetLabel else if (b.dropboxPath != null) removeLabel else deleteLabel) { library.removeFromDevice(b.id) })
+                        if (b.local) add(ShelfAction(if (b.uri != null) forgetLabel else if (b.dropboxPath != null) removeLabel else deleteLabel) { askRemove(b) })
                         if (b.dropboxPath != null) add(ShelfAction(deleteDropboxLabel) { deleting = b })
                     },
             )

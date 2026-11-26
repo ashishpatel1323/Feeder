@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { confirmDelete, confirmDeleteHighlight, itemCount } from './lib/confirmDelete'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, FEED_ORDER_KEY, feedDisplayTitle, getKv, hideItems, moveFeedToTag, opensInBrowser, placeInOrder, setKv, unhideItems, type Feed, type Item } from './lib/db'
 import type { ToastAction } from './lib/toast'
@@ -941,7 +942,7 @@ export default function App() {
   const deleteRead = async () => {
     const gone = groups.flatMap((g) => g.items).filter((i) => i.read && !i.saved)
     if (!gone.length) return toast('No read articles to delete (saved ones are kept)')
-    if (!confirm(`Delete ${gone.length} read article${gone.length === 1 ? '' : 's'} on all your devices? Saved articles are kept.`)) return
+    if (!(await confirmDelete({ title: 'Delete read articles?', itemName: itemCount(gone.length, 'read article'), scope: 'all-devices', extra: 'Saved articles are kept.' }))) return
     await hideItems(gone.map((i) => i.id))
     syncNow().catch(() => undefined)
     toast(`Deleted ${gone.length}`, { label: 'Undo', run: () => void unhideItems(gone).then(() => syncNow().catch(() => undefined)) })
@@ -960,6 +961,8 @@ export default function App() {
   /** Delete from the list (one article or all selected): deleted for good on every device, with Undo. */
   const deleteFromList = async (list: Item[]) => {
     if (!list.length) return
+    // One article has Undo, so it goes without asking; several ask first
+    if (list.length > 1 && !(await confirmDelete({ title: 'Delete articles?', itemName: itemCount(list.length, 'article'), scope: 'all-devices' }))) return
     const gone = new Set(list.map((i) => i.id))
     if (openId && gone.has(openId)) {
       const after = snapshot.slice(snapshot.indexOf(openId) + 1).find((id) => !gone.has(id))
@@ -968,7 +971,7 @@ export default function App() {
     }
     await hideItems([...gone])
     syncNow().catch(() => undefined)
-    const msg = list.length === 1 ? 'Article deleted on all devices' : `${list.length} articles deleted on all devices`
+    const msg = list.length === 1 ? 'Article deleted' : `${list.length} articles deleted`
     toast(msg, { label: 'Undo', run: () => void unhideItems(list).then(() => syncNow().catch(() => undefined)) })
   }
 
@@ -1471,6 +1474,7 @@ export default function App() {
           onShare={async (h) => setPageShare({ text: h.text, note: h.note, color: h.color, itemTitle: h.itemTitle, feedTitle: h.feedTitle, itemLink: h.itemLink, imageUrl: await pictureFor(h) })}
           onShareMany={async (hs) => setPageShare(combinedSubject(hs, { itemTitle: hs[0].itemTitle, feedTitle: hs[0].feedTitle, itemLink: hs[0].itemLink, imageUrl: await pictureFor(hs[0]) }))}
           onDelete={async (h) => {
+            if (!(await confirmDeleteHighlight(h.text))) return
             await deleteHighlight(h.id)
             toast('Highlight deleted')
           }}

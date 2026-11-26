@@ -30,6 +30,7 @@ import { syncNow } from '../lib/sync2'
 import { noteFeedsDeleted } from '../lib/recent'
 import { FeedIcon } from './Sidebar'
 import { Icon, type IconName } from './Icon'
+import { confirmDelete, itemCount } from '../lib/confirmDelete'
 
 const PICK = '\u0000pick'
 const NEW_FOLDER = '\u0000new'
@@ -336,6 +337,13 @@ export function ManageFeeds(p: Props) {
     }
 
     const removeTag = async (tag: string, mode: 'keep' | 'unsubscribe') => {
+        const count = p.feeds.filter((f) => f.tag === tag).length
+        const ok = await confirmDelete(
+            mode === 'keep'
+                ? { title: 'Delete folder?', itemName: tag, scope: 'all-devices', extra: count ? `Its ${itemCount(count, 'feed')} move to No folder.` : undefined }
+                : { title: 'Delete folder and its feeds?', itemName: `${tag} (${itemCount(count, 'feed')})`, scope: 'all-devices', confirmLabel: 'Unsubscribe', extra: 'The feeds and their articles go too.' },
+        )
+        if (!ok) return
         setDeletingTag(null)
         if (mode === 'unsubscribe') await noteFeedsDeleted(p.feeds.filter((f) => f.tag === tag).map((f) => f.url))
         const n = await deleteTag(tag, mode)
@@ -349,8 +357,8 @@ export function ManageFeeds(p: Props) {
 
     const unsubscribe = async (urls: string[]) => {
         if (!urls.length) return
-        const what = urls.length === 1 ? `"${feedDisplayTitle(p.feeds.find((f) => f.url === urls[0]))}"` : `${urls.length} feeds`
-        if (!confirm(`Unsubscribe from ${what}? This also removes ${urls.length === 1 ? 'it' : 'them'} from your other devices.`)) return
+        const what = urls.length === 1 ? feedDisplayTitle(p.feeds.find((f) => f.url === urls[0])) : itemCount(urls.length, 'feed')
+        if (!(await confirmDelete({ title: urls.length === 1 ? 'Unsubscribe from feed?' : 'Unsubscribe from feeds?', itemName: what, scope: 'all-devices', confirmLabel: 'Unsubscribe', extra: 'Its articles are deleted too.' }))) return
         await noteFeedsDeleted(urls)
         await deleteFeeds(urls)
         sync()

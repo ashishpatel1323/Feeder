@@ -33,6 +33,8 @@ import com.nononsenseapps.feeder.model.highlights.HighlightArticle
 import com.nononsenseapps.feeder.model.highlights.HighlightStore
 import com.nononsenseapps.feeder.model.highlights.newHighlight
 import com.nononsenseapps.feeder.model.highlights.quoteText
+import com.nononsenseapps.feeder.ui.compose.components.askHighlight
+import com.nononsenseapps.feeder.ui.compose.components.rememberDeleteConfirmer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -63,6 +65,7 @@ fun ArticleHighlightsHost(
     val store: HighlightStore by di.instance()
     val dao: Sync2Dao by di.instance()
     val context = LocalContext.current
+    val deleteConfirmer = rememberDeleteConfirmer()
     val itemKey by produceState<String?>(null, articleId) {
         value = if (articleId > 0) dao.getItemKeys(listOf(articleId)).firstOrNull()?.let { "${it.feedUrl}\n${it.guid}" } else null
     }
@@ -178,9 +181,11 @@ fun ArticleHighlightsHost(
                     copyText(context, quoteText(h.text, h.itemTitle, h.feedTitle, h.itemLink, note), context.getString(R.string.highlight_copied))
                 },
                 onDelete = {
-                    store.delete(h.id)
-                    toast(context, R.string.highlight_deleted)
-                    editing = null
+                    deleteConfirmer.askHighlight(h.text) {
+                        store.delete(h.id)
+                        toast(context, R.string.highlight_deleted)
+                        editing = null
+                    }
                 },
                 onDismiss = { editing = null },
             )
@@ -199,9 +204,11 @@ fun ArticleHighlightsHost(
             },
             onShare = { share = it.shareSubject() },
             onShareMany = { hs -> share = combinedSubject(hs) },
-            onDelete = {
-                store.delete(it.id)
-                toast(context, R.string.highlight_deleted)
+            onDelete = { h ->
+                deleteConfirmer.askHighlight(h.text) {
+                    store.delete(h.id)
+                    toast(context, R.string.highlight_deleted)
+                }
             },
             onDismiss = { showList = false },
         )

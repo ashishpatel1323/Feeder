@@ -37,6 +37,7 @@ import { articleVideoId } from '../lib/youtube'
 import { Icon, IconButton } from './Icon'
 import { deleteItemWithUndo, ItemRow, usePlaylistContext } from './ItemRow'
 import { MoreMenu } from './MoreMenu'
+import { confirmDelete } from '../lib/confirmDelete'
 
 export { usePlaylistContext }
 
@@ -91,7 +92,7 @@ export function PlaylistsPage(p: Props) {
   }
 
   const remove = async (pl: Playlist) => {
-    if (!confirm(`Delete the playlist “${pl.name}”? The articles and episodes in it stay in Feeder.`)) return
+    if (!(await confirmDelete({ title: 'Delete playlist?', itemName: pl.name, scope: 'all-devices', extra: 'The articles and episodes in it stay in Feeder.' }))) return
     const before = lists
     await deletePlaylist(pl.id)
     p.onRoute(null)
@@ -387,7 +388,8 @@ function PlaylistDetail(p: {
                         <button
                           type="button"
                           className="mf-btn ir-btn"
-                          onClick={() => {
+                          onClick={async () => {
+                            if (!(await confirmDelete({ title: 'Remove from playlist?', itemName: it.title || 'Untitled', scope: 'all-devices', confirmLabel: 'Remove', extra: `Only leaves ${pl.name}; it stays in Feeder.` }))) return
                             void removeFromPlaylist(pl.id, [it.id])
                             p.toast('Taken out of the playlist', { label: 'Undo', run: () => void savePlaylist(pl) })
                           }}

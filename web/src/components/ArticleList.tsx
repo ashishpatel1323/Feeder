@@ -373,7 +373,7 @@ export function ArticleList(p: Props) {
             { icon: 'doneAll', label: 'Mark all as read', onClick: p.onMarkAllRead },
             { icon: 'download', label: s.offlineMode ? 'Go online' : 'Go offline', checked: s.offlineMode, onClick: () => updateSettings({ offlineMode: !s.offlineMode }), hidden: !network },
             'separator',
-            { icon: 'delete', label: 'Delete read articles on all devices', onClick: p.onDeleteRead, danger: true },
+            { icon: 'delete', label: 'Delete read articles', onClick: p.onDeleteRead, danger: true },
           ]}
         />
       </header>
@@ -389,7 +389,7 @@ export function ArticleList(p: Props) {
           <span className="select-spacer" />
           {selected.some((i) => !i.read) ? <IconButton icon="read" label="Mark as read" onClick={() => setRead(selected, true)} /> : null}
           {selected.some((i) => i.read) ? <IconButton icon="unread" label="Mark unread" onClick={() => setRead(selected, false)} /> : null}
-          <IconButton icon="delete" label="Delete on all devices" onClick={() => remove(selected)} />
+          <IconButton icon="delete" label="Delete" onClick={() => remove(selected)} />
         </div>
       ) : null}
       {p.onAddLink ? <AddLinkBar onAdd={p.onAddLink} kind={savedKind} onKind={setSavedKind} /> : null}

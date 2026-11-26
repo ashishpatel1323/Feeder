@@ -49,7 +49,6 @@ import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -71,7 +70,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -115,6 +113,11 @@ import com.nononsenseapps.feeder.model.playlists.matches
 import com.nononsenseapps.feeder.model.playlists.totalSeconds
 import com.nononsenseapps.feeder.model.playlists.withinLabel
 import com.nononsenseapps.feeder.model.youtube.VideoPositions
+import com.nononsenseapps.feeder.ui.compose.components.ConfirmDeleteDialog
+import com.nononsenseapps.feeder.ui.compose.components.DeleteRequest
+import com.nononsenseapps.feeder.ui.compose.components.DeleteScope
+import com.nononsenseapps.feeder.ui.compose.components.DeleteVerb
+import com.nononsenseapps.feeder.ui.compose.components.rememberDeleteConfirmer
 import com.nononsenseapps.feeder.ui.compose.feed.PlainTooltipBox
 import com.nononsenseapps.feeder.ui.compose.item.ItemActionButton
 import com.nononsenseapps.feeder.ui.compose.item.ItemRow
@@ -249,20 +252,20 @@ fun PlaylistsScreen(
         )
     }
     confirmDelete?.let { pl ->
-        AlertDialog(
-            onDismissRequest = { confirmDelete = null },
-            text = { Text(stringResource(R.string.playlist_delete_confirm, pl.name)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    val before = state.playlists
-                    viewModel.delete(pl.id)
-                    confirmDelete = null
-                    scope.launch {
-                        if (snackbar.showSnackbar("Deleted ${pl.name}", actionLabel = "Undo") == SnackbarResult.ActionPerformed) viewModel.restore(before)
-                    }
-                }) { Text(stringResource(R.string.playlist_delete)) }
+        ConfirmDeleteDialog(
+            title = stringResource(R.string.confirm_delete_title_playlist),
+            itemName = pl.name,
+            scope = DeleteScope.ALL_DEVICES,
+            onConfirm = {
+                val before = state.playlists
+                viewModel.delete(pl.id)
+                confirmDelete = null
+                scope.launch {
+                    if (snackbar.showSnackbar("Deleted ${pl.name}", actionLabel = "Undo") == SnackbarResult.ActionPerformed) viewModel.restore(before)
+                }
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text(stringResource(R.string.playlist_cancel)) } },
+            onDismiss = { confirmDelete = null },
+            extra = stringResource(R.string.confirm_delete_extra_playlist),
         )
     }
     if (carMode && queue.active) {
@@ -368,6 +371,7 @@ private fun PlaylistDetail(
 ) {
     val items = remember(pl, state) { pl.items(state.candidates, state.ctx, state.byId) }
     val commands = rememberItemCommands()
+    val deleteConfirmer = rememberDeleteConfirmer()
     val (total, unknown) = remember(items, state.ctx) { items.totalSeconds(state.ctx) }
     val feedTitles = remember(state.feeds) { state.feeds.toMap() }
     val playingId = if (queue.playlistId == pl.id) queue.currentId else null
@@ -512,7 +516,18 @@ private fun PlaylistDetail(
                         ItemActionButton(
                             icon = Icons.Default.Close,
                             label = stringResource(R.string.item_action_remove),
-                            onClick = { viewModel.remove(pl.id, it.id) },
+                            onClick = {
+                                deleteConfirmer.ask(
+                                    DeleteRequest(
+                                        title = R.string.confirm_delete_title_remove_from_playlist,
+                                        itemName = it.title,
+                                        scope = DeleteScope.ALL_DEVICES,
+                                        verb = DeleteVerb.REMOVE,
+                                        extra = R.string.confirm_delete_extra_playlist_entry,
+                                        onConfirm = { viewModel.remove(pl.id, it.id) },
+                                    ),
+                                )
+                            },
                         )
                     }
                 },

@@ -143,7 +143,10 @@ import com.nononsenseapps.feeder.model.export.importSavedArticles
 import com.nononsenseapps.feeder.model.offline.OfflineVideos
 import com.nononsenseapps.feeder.model.opml.exportOpml
 import com.nononsenseapps.feeder.model.opml.importOpml
+import com.nononsenseapps.feeder.ui.compose.components.DeleteRequest
+import com.nononsenseapps.feeder.ui.compose.components.DeleteScope
 import com.nononsenseapps.feeder.ui.compose.components.TranslationProgressContent
+import com.nononsenseapps.feeder.ui.compose.components.rememberDeleteConfirmer
 import com.nononsenseapps.feeder.ui.compose.components.safeSemantics
 import com.nononsenseapps.feeder.ui.compose.deletefeed.DeletableFeed
 import com.nononsenseapps.feeder.ui.compose.deletefeed.DeleteFeedDialog
@@ -303,7 +306,9 @@ fun FeedScreen(
         selectedIds = emptySet()
     }
 
-    fun deleteWithUndo(itemIds: List<Long>) {
+    val deleteConfirmer = rememberDeleteConfirmer()
+
+    fun deleteNowWithUndo(itemIds: List<Long>) {
         coroutineScope.launch {
             val deleted = viewModel.deleteForGood(itemIds)
             snackbarHostState.currentSnackbarData?.dismiss()
@@ -317,6 +322,20 @@ fun FeedScreen(
                 viewModel.undoDelete(deleted)
             }
         }
+    }
+
+    // One article has Undo, so it goes without asking; several ask first (the shared delete confirmation)
+    fun deleteWithUndo(itemIds: List<Long>) {
+        if (itemIds.isEmpty()) return
+        if (itemIds.size == 1) return deleteNowWithUndo(itemIds)
+        deleteConfirmer.ask(
+            DeleteRequest(
+                title = R.string.confirm_delete_title_articles,
+                itemName = resources.getQuantityString(R.plurals.confirm_delete_n_articles, itemIds.size, itemIds.size),
+                scope = DeleteScope.ALL_DEVICES,
+                onConfirm = { deleteNowWithUndo(itemIds) },
+            ),
+        )
     }
 
     val focusNavDrawer = remember { FocusRequester() }
