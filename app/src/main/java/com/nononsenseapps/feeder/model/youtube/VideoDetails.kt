@@ -86,7 +86,12 @@ data class VideoDetails(
     val userAgent: String?,
     /** Qualities to save it in, best first. */
     val downloadOptions: List<DownloadOption> = emptyList(),
+    /** Where the streams came from: [YT_DLP], or the InnerTube client that gave them ("VISIONOS"). */
+    val source: String = YT_DLP,
 ) {
+    /** Streams from YouTube's player endpoint: yt-dlp is the fallback when they stop playing. */
+    val fromInnerTube: Boolean get() = source != YT_DLP
+
     val hasStreams: Boolean get() = (videos.isNotEmpty() && audios.isNotEmpty()) || muxedUrl != null
 
     /** The stream of [height], or the closest lower one (the lowest when none is lower). */
@@ -96,6 +101,8 @@ data class VideoDetails(
 
     companion object {
         private val json = Json { ignoreUnknownKeys = true }
+
+        const val YT_DLP = "yt-dlp"
 
         /** Heights offered, highest first. Phones don't need more than 1080p. */
         const val MAX_HEIGHT = 1080

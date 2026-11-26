@@ -32,6 +32,7 @@ import { timeAgo } from '../lib/feedstats'
 import { Icon, IconButton } from './Icon'
 import { MoreMenu } from './MoreMenu'
 import { Modal } from './Dialogs'
+import { preloadYouTubePlayer } from './YouTubeFrame'
 
 const sync = () => syncNow().catch(() => undefined)
 /** Rows drawn at first; more as the list is scrolled. */
@@ -116,6 +117,9 @@ function Subscriptions(p: {
   }, [shown, videos.length])
 
   useEffect(() => setShown(PAGE), [prefs.group, query])
+
+  // YouTube's player script loads while the list shows, so the first video starts sooner
+  useEffect(() => preloadYouTubePlayer(), [])
 
   const refresh = async () => {
     if (refreshing) return

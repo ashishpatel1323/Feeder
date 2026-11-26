@@ -243,7 +243,14 @@ class Transcripts(
             ?.sortedByDescending { it.name.contains(".en") }
             ?.firstNotNullOfOrNull { file -> parseYouTube(file.readText()).takeIf { it.isNotEmpty() } }
             ?.let { return it }
-        val details = offlineVideos.videoDetails(youtubeWatchUrl(videoId))
+        // The player's streams list the captions too (no yt-dlp run); yt-dlp when they don't
+        val fast = offlineVideos.playbackDetails(videoId)
+        val details =
+            if (fast.fromInnerTube && bestCaptions(fast.subtitles) == null) {
+                offlineVideos.videoDetails(youtubeWatchUrl(videoId))
+            } else {
+                fast
+            }
         val track = bestCaptions(details.subtitles) ?: return emptyList()
         val content = fetchText(track.url, details.userAgent) ?: return emptyList()
         return parseYouTube(content)
@@ -360,7 +367,7 @@ class Transcripts(
         val url =
             if (videoId != null) {
                 // A YouTube video: its sound stream in the video's own language
-                val details = offlineVideos.videoDetails(youtubeWatchUrl(videoId))
+                val details = offlineVideos.playbackDetails(videoId)
                 userAgent = details.userAgent
                 details.audios.firstOrNull()?.url ?: error("This video has no sound stream")
             } else {

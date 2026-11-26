@@ -7,11 +7,13 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavController
 import androidx.navigation.NavType
+import androidx.navigation.navDeepLink
 import com.nononsenseapps.feeder.base.diAwareViewModel
 import com.nononsenseapps.feeder.ui.MainActivityViewModel
 import com.nononsenseapps.feeder.ui.compose.youtube.SubscriptionsManagerScreen
 import com.nononsenseapps.feeder.ui.compose.youtube.SubscriptionsScreen
 import com.nononsenseapps.feeder.ui.compose.youtube.YouTubeVideoPage
+import com.nononsenseapps.feeder.util.DEEP_LINK_BASE_URI
 
 /** The YouTube tab: Feeder's YouTube feeds shown like Flow's Subscriptions. */
 data object YouTubeDestination : NavigationDestination(
@@ -72,7 +74,12 @@ data object YouTubeVideoDestination : NavigationDestination(
                 defaultValue = ""
             },
         ),
-    deepLinks = emptyList(),
+    deepLinks =
+        listOf(
+            navDeepLink {
+                uriPattern = "$DEEP_LINK_BASE_URI/youtube/watch?item={item}&video={video}"
+            },
+        ),
     enterTransition = { slideInVertically { it } },
     popExitTransition = { slideOutVertically { it } },
 ) {

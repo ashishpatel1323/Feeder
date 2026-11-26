@@ -6,14 +6,18 @@ import android.util.Log
 import com.nononsenseapps.feeder.ApplicationCoroutineScope
 import com.nononsenseapps.feeder.db.room.FeedItemDao
 import com.nononsenseapps.feeder.model.youtube.VideoDetails
+import com.nononsenseapps.feeder.model.youtube.YouTubeStreams
+import com.nononsenseapps.feeder.model.youtube.YouTubeTiming
+import com.nononsenseapps.feeder.model.youtube.youtubeVideoId
+import com.nononsenseapps.feeder.model.youtube.youtubeWatchUrl
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -95,6 +99,7 @@ class OfflineVideos(
     private val applicationCoroutineScope: ApplicationCoroutineScope by instance()
     private val prefs: SharedPreferences by instance()
     private val okHttpClient: OkHttpClient by instance()
+    private val youTubeStreams: YouTubeStreams by instance()
 
     /** Episodes are big: kept out of the app's HTTP cache. */
     private val audioClient: OkHttpClient by lazy { okHttpClient.newBuilder().cache(null).build() }
@@ -440,13 +445,18 @@ class OfflineVideos(
             detailsInFlight.computeIfAbsent(link) {
                 applicationCoroutineScope.async(Dispatchers.IO, start = CoroutineStart.LAZY) {
                     try {
+                        val videoId = youtubeVideoId(link) ?: link
+                        YouTubeTiming.log(videoId, "yt-dlp start")
                         ensureReady()
+                        YouTubeTiming.log(videoId, "yt-dlp ready (init + update check)")
                         val response =
                             YoutubeDL.getInstance().execute(
                                 YoutubeDLRequest(link)
                                     .addOption("--no-playlist")
                                     .addOption("-J"),
+                                detailsProcessId(link),
                             )
+                        YouTubeTiming.log(videoId, "yt-dlp -J done")
                         val details = VideoDetails.parse(response.out)
                         check(details.hasStreams) { "yt-dlp found no stream" }
                         details.also { detailsCache[link] = System.currentTimeMillis() to it }
@@ -457,6 +467,30 @@ class OfflineVideos(
             }
         return running.await()
     }
+
+    /**
+     * What the player needs to start [videoId]: the streams from YouTube's player endpoint (under
+     * a second, kept from a prefetch), else yt-dlp's details.
+     */
+    suspend fun playbackDetails(videoId: String): VideoDetails {
+        if (!YouTubeStreams.slowMode()) youTubeStreams.details(videoId)?.let { return it }
+        return videoDetails(youtubeWatchUrl(videoId))
+    }
+
+    /**
+     * Stops a yt-dlp details run for [link] that nobody needs any more (the player's standby when
+     * another video opens): Python on a phone slows the next video's start.
+     */
+    fun stopDetails(link: String) {
+        if (detailsInFlight[link]?.isActive != true) return
+        try {
+            YoutubeDL.getInstance().destroyProcessById(detailsProcessId(link))
+        } catch (e: Exception) {
+            Log.w(LOG_TAG, "Could not stop yt-dlp: ${e.message}")
+        }
+    }
+
+    private fun detailsProcessId(link: String) = "feeder-details-${link.hashCode()}"
 
     /** Drops cached details whose streams stopped working. */
     fun forgetDetails(link: String) {

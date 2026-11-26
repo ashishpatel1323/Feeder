@@ -128,7 +128,7 @@ export function YouTubeWatch(p: {
         <div className="ytw-grid">
           <div className="ytw-main">
             <div className="ytw-player">
-              <YouTubeFrame key={`${videoId}:${itemId ?? ''}`} itemId={itemId} videoId={videoId} title={title} autoplay />
+              <YouTubeFrame itemId={itemId} videoId={videoId} title={title} autoplay />
             </div>
             <div className="ytw-mini-bar">
               <button type="button" className="ytw-mini-text" onClick={p.onExpand} aria-label={`Open ${title}`}>

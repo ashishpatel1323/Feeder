@@ -98,6 +98,8 @@ import com.nononsenseapps.feeder.model.youtube.VideoDetails
 import com.nononsenseapps.feeder.model.youtube.VideoPositions
 import com.nononsenseapps.feeder.model.youtube.WatchNext
 import com.nononsenseapps.feeder.model.youtube.YouTubePlayback
+import com.nononsenseapps.feeder.model.youtube.YouTubeStreams
+import com.nononsenseapps.feeder.model.youtube.YouTubeTiming
 import com.nononsenseapps.feeder.model.youtube.youtubeWatchUrl
 import com.nononsenseapps.feeder.ui.compose.editfeed.DeleteFeedDialog
 import com.nononsenseapps.feeder.ui.compose.editfeed.FeedStats
@@ -181,9 +183,10 @@ fun YouTubeVideoPage(
         videoId,
     ) {
         if (value is Loaded.Ready) return@produceState
+        YouTubeTiming.start(videoId)
         value =
             try {
-                Loaded.Ready(offlineVideos.videoDetails(youtubeWatchUrl(videoId)))
+                Loaded.Ready(offlineVideos.playbackDetails(videoId).also { YouTubeTiming.log(videoId, "details ready (${it.source})") })
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -192,6 +195,11 @@ fun YouTubeVideoPage(
             }
     }
     val next by produceState<WatchNext?>(null, videoId) { value = innerTube.next(videoId) }
+    // The next videos start at once too
+    val streams: YouTubeStreams by di.instance()
+    LaunchedEffect(next) {
+        next?.related?.take(PREFETCH_RELATED)?.let { list -> streams.prefetch(list.map { it.videoId }) }
+    }
     val firstComments by produceState<CommentPage?>(null, next?.commentsToken) {
         value = next?.commentsToken?.let { innerTube.comments(it) }
     }
@@ -723,3 +731,6 @@ private fun RelatedCard(
         }
     }
 }
+
+/** Related videos whose streams are fetched while this one plays. */
+private const val PREFETCH_RELATED = 2
