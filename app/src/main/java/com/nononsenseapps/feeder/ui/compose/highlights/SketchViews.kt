@@ -200,7 +200,7 @@ fun SketchEditorDialog(
                         TextButton(onClick = onDelete, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
                             Icon(Icons.Outlined.Delete, contentDescription = null)
                             Spacer(Modifier.width(FeederTokens.Space.xs))
-                            Text(stringResource(R.string.highlight_delete))
+                            Text(stringResource(R.string.sketch_delete))
                         }
                     }
                     Button(

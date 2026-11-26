@@ -91,7 +91,7 @@ export function strokePath(p: number[]): string {
 /** The sketch as SVG markup; strokes take their color from the --ink-* variables (see SKETCH_CSS). */
 export function sketchSvg(sk: Sketch): string {
   const paths = sk.s.map((st) => `<path d="${strokePath(st.p)}" stroke="var(--feeder-ink-${st.c})" stroke-width="${st.w}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`).join('')
-  return `<svg viewBox="0 0 ${SKETCH_W} ${sk.h}" width="100%" preserveAspectRatio="xMinYMin meet" aria-hidden="true">${paths}</svg>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SKETCH_W} ${sk.h}" width="100%" preserveAspectRatio="xMinYMin meet" aria-hidden="true">${paths}</svg>`
 }
 
 /** Look of the strips; for pages that don't load the app's styles (ZIM pages, ebook sections). */
@@ -111,7 +111,8 @@ const BLOCK = /^(P|LI|BLOCKQUOTE|H[1-6]|PRE|DD|DT|TD|TH|FIGCAPTION|CAPTION|SECTI
 
 /** The strip element for a sketch highlight: a span shown as a block (a div can't go inside a <p>). */
 export function sketchStrip(doc: Document, id: string, color: SketchColor, sk: Sketch): HTMLElement {
-  const el = doc.createElement('span')
+  // XHTML pages (EPUB chapters) need the namespace, or the strip isn't an HTML element
+  const el = doc.createElementNS('http://www.w3.org/1999/xhtml', 'span') as HTMLElement
   el.className = 'feeder-sketch'
   el.dataset.sketch = id
   el.setAttribute('role', 'button')
@@ -125,7 +126,7 @@ export function sketchStrip(doc: Document, id: string, color: SketchColor, sk: S
 /** Adds the strip at the end of the block that holds `node`, below `root`. */
 export function placeStrip(root: Node, node: Node, strip: HTMLElement) {
   let el: Element | null = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement
-  while (el && el !== root && !BLOCK.test(el.tagName)) el = el.parentElement
+  while (el && el !== root && !BLOCK.test(el.tagName.toUpperCase())) el = el.parentElement
   // Inline-only content straight in the root: add it after the node's top-level ancestor
   if (!el || el === root) {
     let top: Node = node
@@ -162,7 +163,7 @@ export function isDarkPage(doc: Document): boolean {
 export function injectSketchStyles(doc: Document, dark = isDarkPage(doc)) {
   let style = doc.getElementById('feeder-sketch-style')
   if (!style) {
-    style = doc.createElement('style')
+    style = doc.createElementNS('http://www.w3.org/1999/xhtml', 'style')
     style.id = 'feeder-sketch-style'
     ;(doc.head ?? doc.documentElement).append(style)
   }

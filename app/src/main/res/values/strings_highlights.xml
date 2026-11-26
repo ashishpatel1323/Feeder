@@ -80,6 +80,7 @@
   <string name="sketch_pen">Pen</string>
   <string name="sketch_eraser">Eraser</string>
   <string name="sketch_undo">Undo</string>
+  <string name="sketch_delete">Delete</string>
   <string name="sketch_added">Sketch saved</string>
   <string name="sketch_deleted">Sketch deleted</string>
 </resources>
