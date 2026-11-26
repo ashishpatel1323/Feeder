@@ -288,14 +288,20 @@ private fun ShortPage(
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
                 .height(120.dp)
-                .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.5f), Color.Transparent))),
+                .background(
+                    androidx.compose.ui.graphics.Brush
+                        .verticalGradient(listOf(Color.Black.copy(alpha = 0.5f), Color.Transparent)),
+                ),
         )
         Box(
             Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .height(200.dp)
-                .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)))),
+                .background(
+                    androidx.compose.ui.graphics.Brush
+                        .verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))),
+                ),
         )
 
         Row(
