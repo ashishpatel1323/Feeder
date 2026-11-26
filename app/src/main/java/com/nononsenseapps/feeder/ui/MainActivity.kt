@@ -234,6 +234,8 @@ class MainActivity : DIAwareComponentActivity() {
                     .register(this, navController, navDrawerListState, mainActivityViewModel)
                 com.nononsenseapps.feeder.ui.compose.navigation.YouTubeVideoDestination
                     .register(this, navController, navDrawerListState, mainActivityViewModel)
+                com.nononsenseapps.feeder.ui.compose.navigation.BottomBarTabsDestination
+                    .register(this, navController, navDrawerListState, mainActivityViewModel)
                 com.nononsenseapps.feeder.ui.compose.navigation.EbooksDestination
                     .register(this, navController, navDrawerListState, mainActivityViewModel)
                 com.nononsenseapps.feeder.ui.compose.navigation.EbookReaderDestination

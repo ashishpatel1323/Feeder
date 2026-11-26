@@ -11,12 +11,14 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.BorderColor
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Headphones
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Subscriptions
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
@@ -29,7 +31,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.nononsenseapps.feeder.R
+import com.nononsenseapps.feeder.ui.compose.navigation.BottomBarTabs
 import com.nononsenseapps.feeder.ui.compose.navigation.GlobalSearchTopBar
+import com.nononsenseapps.feeder.ui.compose.navigation.MainTab
 
 /** The Library tab: what you kept (Saved, Highlights, Downloads), books and offline sites, then Settings and Sync. */
 @Composable
@@ -41,6 +45,10 @@ fun LibraryScreen(
     onAudiobooks: () -> Unit,
     onZim: () -> Unit,
     onSettings: () -> Unit,
+    // Tabs in the bottom bar get no row here; the others do, so every screen stays reachable
+    barTabs: List<MainTab> = BottomBarTabs.DEFAULT,
+    onYouTube: () -> Unit = {},
+    onPlaylists: () -> Unit = {},
     onSync: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -53,9 +61,21 @@ fun LibraryScreen(
             item { Row(Icons.Outlined.BookmarkBorder, stringResource(R.string.saved_articles), stringResource(R.string.library_saved_desc), onOpenSaved) }
             item { Row(Icons.Outlined.BorderColor, stringResource(R.string.highlights), stringResource(R.string.library_highlights_desc), onHighlights) }
             item { Row(Icons.Outlined.Download, stringResource(R.string.downloads), stringResource(R.string.library_downloads_desc), onDownloads) }
-            item { Row(Icons.AutoMirrored.Outlined.MenuBook, stringResource(R.string.tab_ebooks), stringResource(R.string.library_ebooks_desc), onEbooks) }
-            item { Row(Icons.Outlined.Headphones, stringResource(R.string.tab_audiobooks), stringResource(R.string.library_audiobooks_desc), onAudiobooks) }
-            item { Row(Icons.Outlined.Public, stringResource(R.string.tab_zim), stringResource(R.string.library_zim_desc), onZim) }
+            if (MainTab.YOUTUBE !in barTabs) {
+                item { Row(Icons.Outlined.Subscriptions, stringResource(R.string.tab_youtube), null, onYouTube) }
+            }
+            if (MainTab.PLAYLISTS !in barTabs) {
+                item { Row(Icons.AutoMirrored.Outlined.QueueMusic, stringResource(R.string.playlists), null, onPlaylists) }
+            }
+            if (MainTab.EBOOKS !in barTabs) {
+                item { Row(Icons.AutoMirrored.Outlined.MenuBook, stringResource(R.string.tab_ebooks), stringResource(R.string.library_ebooks_desc), onEbooks) }
+            }
+            if (MainTab.AUDIOBOOKS !in barTabs) {
+                item { Row(Icons.Outlined.Headphones, stringResource(R.string.tab_audiobooks), stringResource(R.string.library_audiobooks_desc), onAudiobooks) }
+            }
+            if (MainTab.ZIM !in barTabs) {
+                item { Row(Icons.Outlined.Public, stringResource(R.string.tab_zim), stringResource(R.string.library_zim_desc), onZim) }
+            }
             item {
                 Text(
                     stringResource(R.string.library_app),

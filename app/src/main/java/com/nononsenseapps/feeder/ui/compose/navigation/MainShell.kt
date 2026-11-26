@@ -36,7 +36,9 @@ fun MainShell(
 ) {
     val context = LocalContext.current
     val entry by navController.currentBackStackEntryAsState()
-    val tab = entry?.mainTab()
+    val barTabs by BottomBarTabs.tabs(context).collectAsState()
+    val bar = barTabs ?: BottomBarTabs.DEFAULT
+    val tab = entry?.mainTab(bar)
     val nav =
         remember(navController) {
             MainNav(
@@ -106,7 +108,7 @@ fun MainShell(
                                 onOpen = { AudiobookPlayerDestination.navigate(navController, it) },
                             )
                         }
-                        MainBottomBar(current = tab, onSelect = { navController.openTab(context, it, tab) })
+                        MainBottomBar(current = tab, tabs = bar, onSelect = { navController.openTab(context, it, tab) })
                     }
                 }
             },

@@ -15,21 +15,27 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.filled.DynamicFeed
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Headphones
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Subscriptions
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.outlined.DynamicFeed
+import androidx.compose.material.icons.outlined.Headphones
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Subscriptions
 import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.Icon
-import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -58,6 +64,9 @@ import androidx.navigation.NavController
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.db.room.ID_ALL_FEEDS
 import com.nononsenseapps.feeder.db.room.ID_SAVED_ARTICLES
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * The bottom bar's tabs. Search is not a tab: every tab's top bar is a "Search everything" bar
@@ -68,25 +77,91 @@ enum class MainTab {
     YOUTUBE,
     PLAYLISTS,
     LIBRARY,
+    EBOOKS,
+    AUDIOBOOKS,
+    ZIM,
+}
+
+/**
+ * Which tabs the bottom bar shows, in order (Settings > Bottom bar tabs). Feeds and Library are
+ * always there, so every screen stays reachable: tabs left out open from rows on Library.
+ */
+object BottomBarTabs {
+    private const val PREFS = "main_tabs"
+    private const val KEY = "bar_tabs"
+    const val MAX = 5
+    val DEFAULT = listOf(MainTab.FEEDS, MainTab.YOUTUBE, MainTab.PLAYLISTS, MainTab.LIBRARY)
+    val ALWAYS = setOf(MainTab.FEEDS, MainTab.LIBRARY)
+
+    private val _tabs = MutableStateFlow<List<MainTab>?>(null)
+
+    fun tabs(context: Context): StateFlow<List<MainTab>?> {
+        if (_tabs.value == null) {
+            val saved = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, null)
+            _tabs.value = parse(saved)
+        }
+        return _tabs.asStateFlow()
+    }
+
+    fun set(
+        context: Context,
+        tabs: List<MainTab>,
+    ) {
+        val clean = normalize(tabs)
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putString(KEY, clean.joinToString(",") { it.name }) }
+        _tabs.value = clean
+    }
+
+    /** Saved order, without unknown names, with Feeds and Library added back, at most [MAX]. */
+    fun parse(saved: String?): List<MainTab> =
+        if (saved.isNullOrBlank()) {
+            DEFAULT
+        } else {
+            normalize(saved.split(',').mapNotNull { name -> MainTab.entries.firstOrNull { it.name == name.trim() } })
+        }
+
+    fun normalize(tabs: List<MainTab>): List<MainTab> {
+        val distinct = tabs.distinct().toMutableList()
+        ALWAYS.filter { it !in distinct }.forEach { distinct += it }
+        // Too many: drop the last optional ones
+        while (distinct.size > MAX) {
+            val drop = distinct.last { it !in ALWAYS }
+            distinct.remove(drop)
+        }
+        return distinct
+    }
 }
 
 /** The Feeds tab's views: Latest, By feed (the tiles) and Discover. */
 enum class FeedsView { LATEST, BY_FEED, DISCOVER }
 
-/** Which tab a screen belongs to, or null for screens that show no bottom bar (reader, settings, search...). */
-fun NavBackStackEntry.mainTab(): MainTab? =
-    when (destination.route) {
+/**
+ * Which tab a screen belongs to, or null for screens that show no bottom bar (reader, settings,
+ * search...). Ebooks, Audiobooks and ZIM are their own tab when in [bar], else part of Library.
+ */
+fun NavBackStackEntry.mainTab(bar: List<MainTab> = BottomBarTabs.DEFAULT): MainTab? = mainTabOf(destination.route, arguments?.getLong("id"), bar)
+
+/** [mainTab] for a route ([feedId] is the feed page's id argument). */
+fun mainTabOf(
+    route: String?,
+    feedId: Long?,
+    bar: List<MainTab>,
+): MainTab? {
+    fun own(tab: MainTab) = if (tab in bar) tab else MainTab.LIBRARY
+    return when (route) {
         HomeDestination.route -> MainTab.FEEDS
         FeedDestination.route ->
-            if (arguments?.getLong("id") == ID_SAVED_ARTICLES) MainTab.LIBRARY else MainTab.FEEDS
+            if (feedId == ID_SAVED_ARTICLES) MainTab.LIBRARY else MainTab.FEEDS
         DiscoverDestination.route -> MainTab.FEEDS
-        PlaylistsDestination.route -> MainTab.PLAYLISTS
+        PlaylistsDestination.route -> own(MainTab.PLAYLISTS)
         LibraryDestination.route, DownloadsDestination.route, HighlightsDestination.route -> MainTab.LIBRARY
-        YouTubeDestination.route -> MainTab.YOUTUBE
-        // Ebooks, Audiobooks and ZIM open from rows on the Library screen
-        ZimDestination.route, EbooksDestination.route, AudiobooksDestination.route -> MainTab.LIBRARY
+        YouTubeDestination.route -> own(MainTab.YOUTUBE)
+        ZimDestination.route -> own(MainTab.ZIM)
+        EbooksDestination.route -> own(MainTab.EBOOKS)
+        AudiobooksDestination.route -> own(MainTab.AUDIOBOOKS)
         else -> null
     }
+}
 
 /** Screens that show no mini player of their own, so the bottom bar shows it above the tabs. */
 fun NavBackStackEntry.wantsSharedMiniPlayer(): Boolean =
@@ -164,6 +239,9 @@ fun NavController.openTab(
             MainTab.YOUTUBE -> YouTubeDestination.route
             MainTab.PLAYLISTS -> "playlists"
             MainTab.LIBRARY -> LibraryDestination.route
+            MainTab.ZIM -> ZimDestination.route
+            MainTab.EBOOKS -> EbooksDestination.route
+            MainTab.AUDIOBOOKS -> AudiobooksDestination.route
             MainTab.FEEDS -> HomeDestination.route
         }
     if (tab == current) {
@@ -183,9 +261,10 @@ fun MainBottomBar(
     current: MainTab?,
     onSelect: (MainTab) -> Unit,
     modifier: Modifier = Modifier,
+    tabs: List<MainTab> = BottomBarTabs.DEFAULT,
 ) {
     NavigationBar(modifier) {
-        MainTab.entries.forEach { tab ->
+        tabs.forEach { tab ->
             val selected = tab == current
             val (filled, outlined, label) = tab.look()
             NavigationBarItem(
@@ -206,12 +285,15 @@ fun MainBottomBar(
     }
 }
 
-private fun MainTab.look(): Triple<ImageVector, ImageVector, Int> =
+internal fun MainTab.look(): Triple<ImageVector, ImageVector, Int> =
     when (this) {
         MainTab.FEEDS -> Triple(Icons.Filled.DynamicFeed, Icons.Outlined.DynamicFeed, R.string.tab_feeds)
         MainTab.PLAYLISTS -> Triple(Icons.AutoMirrored.Filled.QueueMusic, Icons.AutoMirrored.Outlined.QueueMusic, R.string.playlists)
         MainTab.YOUTUBE -> Triple(Icons.Filled.Subscriptions, Icons.Outlined.Subscriptions, R.string.tab_youtube)
         MainTab.LIBRARY -> Triple(Icons.Filled.VideoLibrary, Icons.Outlined.VideoLibrary, R.string.tab_library)
+        MainTab.ZIM -> Triple(Icons.Filled.Public, Icons.Outlined.Public, R.string.tab_zim)
+        MainTab.EBOOKS -> Triple(Icons.AutoMirrored.Filled.MenuBook, Icons.AutoMirrored.Outlined.MenuBook, R.string.tab_ebooks)
+        MainTab.AUDIOBOOKS -> Triple(Icons.Filled.Headphones, Icons.Outlined.Headphones, R.string.tab_audiobooks)
     }
 
 /** What the tab screens need from the app shell, so they don't each take these as parameters. */
@@ -301,14 +383,14 @@ fun FeedsViewSwitch(
                     shape = SegmentedButtonDefaults.itemShape(k, options.size),
                     icon = { SegmentedButtonDefaults.Icon(view == v) { Icon(icon, null, Modifier.size(18.dp)) } },
                     // Six tabs share the width: a long label (Audiobooks) shrinks a little instead of wrapping
-                label = {
-                    Text(
-                        stringResource(label),
-                        maxLines = 1,
-                        softWrap = false,
-                        autoSize = TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = MaterialTheme.typography.labelMedium.fontSize),
-                    )
-                },
+                    label = {
+                        Text(
+                            stringResource(label),
+                            maxLines = 1,
+                            softWrap = false,
+                            autoSize = TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = MaterialTheme.typography.labelMedium.fontSize),
+                        )
+                    },
                 )
             }
         }
