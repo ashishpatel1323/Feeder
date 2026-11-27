@@ -21,13 +21,14 @@ import {
   uploadMedia,
 } from '../lib/media/library'
 import { playMedia } from '../lib/media/play'
+import { useMediaThumbs } from '../lib/media/thumbs'
 import { audiobookPlayer, useAudiobookPlayer } from '../lib/audiobooks/player'
 import { clock, lengthText } from '../lib/audiobooks/timeline'
 import { confirmDelete } from '../lib/confirmDelete'
 import { confirmDropboxDelete, DropboxButton, needsDropbox, useDropbox } from './DropboxPanel'
 import { Icon, IconButton } from './Icon'
 import { MoreMenu } from './MoreMenu'
-import { BooksTabs, GeneratedCover, Shelf, ShelfControls, useShelfPrefs, type ShelfAction, type ShelfItem, type Where } from './Shelf'
+import { BooksTabs, GeneratedCover, PictureOr, Shelf, ShelfControls, useShelfPrefs, type ShelfAction, type ShelfItem, type Where } from './Shelf'
 import { SleepMenu, SpeedMenu } from './AudiobooksPage'
 import { rememberBookCount, rememberBookTab } from './Tabs'
 
@@ -196,6 +197,7 @@ function MediaListing({ folder, onPage, onMenu, toast }: { folder: string; onPag
   const files = q ? items.filter((m) => m.name.toLowerCase().includes(q) || m.folder.toLowerCase().includes(q)).sort((a, b) => a.name.localeCompare(b.name)) : view.files
   const folders = q ? view.folders.filter((f) => f.name.toLowerCase().includes(q)) : view.folders
   const playable = (list: MediaFile[]) => list.filter((m) => playsHere(m.name))
+  const thumbs = useMediaThumbs(files)
 
   const play = (m: MediaFile, list: MediaFile[]) => {
     const order = playable(list)
@@ -230,6 +232,7 @@ function MediaListing({ folder, onPage, onMenu, toast }: { folder: string; onPag
   }
 
   const shelfItems: ShelfItem[] = files.map((m) => {
+    const pic = thumbs[m.id] ?? null
     const pos = posOf.get(m.id)
     const playing = s.bookId === m.id && (s.status === 'playing' || s.status === 'loading')
     const j = jobs[m.id]
@@ -240,7 +243,7 @@ function MediaListing({ folder, onPage, onMenu, toast }: { folder: string; onPag
       title: titleOf(m.name),
       subtitle: q && m.folder ? m.folder.replace(/\//g, ' › ') : undefined,
       detail: [can ? progressText(m, pos) : 'Plays on Android only', len, m.local ? formatBytes(m.size) : ''].filter(Boolean).join(' · '),
-      cover: null,
+      cover: pic,
       coverIcon: m.kind === 'video' ? 'movie' : 'musicNote',
       where: where(m),
       size: m.size,
@@ -435,6 +438,8 @@ function MediaWatch({ id, onPage, onBack, toast }: { id: string; onPage: (page: 
     const k = siblings.findIndex((x) => x.id === id)
     return k >= 0 ? siblings.slice(k + 1) : []
   }, [siblings, id])
+  const pictured = useMemo(() => [...(m ? [m] : []), ...next.slice(0, 50)], [m, next])
+  const thumbs = useMediaThumbs(pictured)
 
   // Opening the page loads the file where it was left, without playing it yet (unless nothing else plays)
   const opened = useRef(false)
@@ -514,9 +519,21 @@ function MediaWatch({ id, onPage, onBack, toast }: { id: string; onPage: (page: 
               ) : null}
             </div>
           ) : (
-            <span className="ab-art mp-art">
-              <GeneratedCover title={title} icon="musicNote" />
-            </span>
+            thumbs[m.id] ? (
+              <PictureOr
+                className="ab-art mp-art"
+                src={thumbs[m.id]}
+                fallback={
+                  <span className="ab-art mp-art">
+                    <GeneratedCover title={title} icon="musicNote" />
+                  </span>
+                }
+              />
+            ) : (
+              <span className="ab-art mp-art">
+                <GeneratedCover title={title} icon="musicNote" />
+              </span>
+            )
           )}
           <h1 className="mp-title">{title}</h1>
           <p className="mp-meta muted">{meta}</p>
@@ -579,7 +596,9 @@ function MediaWatch({ id, onPage, onBack, toast }: { id: string; onPage: (page: 
                   }}
                 >
                   <span className="shelf-thumb">
-                    <GeneratedCover title={titleOf(x.name)} icon={x.kind === 'video' ? 'movie' : 'musicNote'} small />
+                    {thumbs[x.id] ? (
+                      <PictureOr src={thumbs[x.id]} lazy fallback={<GeneratedCover title={titleOf(x.name)} icon={x.kind === 'video' ? 'movie' : 'musicNote'} small />} />
+                    ) : <GeneratedCover title={titleOf(x.name)} icon={x.kind === 'video' ? 'movie' : 'musicNote'} small />}
                   </span>
                   <span className="lib-text">
                     <span className="lib-title">{titleOf(x.name)}</span>

@@ -10,8 +10,11 @@ import com.nononsenseapps.feeder.model.audiobooks.AudioPositions
 import com.nononsenseapps.feeder.model.offline.OfflineFiles
 import com.nononsenseapps.feeder.model.offline.OfflineVideos
 import com.nononsenseapps.feeder.model.youtube.VideoPositions
+import com.nononsenseapps.feeder.model.youtube.youtubeVideoId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.kodein.di.DI
 import org.kodein.di.DIAware
 import org.kodein.di.instance
@@ -36,6 +39,7 @@ class DownloadsToPlayer(
     private val offlineFiles: OfflineFiles by instance()
     private val offlineVideos: OfflineVideos by instance()
     private val videoPositions: VideoPositions by instance()
+    private val okHttp: OkHttpClient by instance()
     private val library by lazy { MediaLibrary.get(app) }
     private val positions by lazy { AudioPositions.get(app) }
 
@@ -69,7 +73,8 @@ class DownloadsToPlayer(
                     }
                     val path = MoveRules.playerPath(title, channel, if (video != null) MoveRules.YOUTUBE else MoveRules.PODCASTS, ext)
                     val subs = video?.subtitles?.let { MoveRules.pickSubtitle(it.map { f -> f.name }) }?.let { n -> video.subtitles.first { it.name == n } }
-                    library.addFile(tmp, path.second, path.first, if (video != null) MediaRules.VIDEO else MediaRules.AUDIO, subs)
+                    val picture = MoveRules.pictureUrl(item.link, item.thumbnailImage?.url)?.let { fetchPicture(it) }
+                    library.addFile(tmp, path.second, path.first, if (video != null) MediaRules.VIDEO else MediaRules.AUDIO, subs, picture)
                 } finally {
                     tmp.delete()
                 }
@@ -83,6 +88,22 @@ class DownloadsToPlayer(
         offlineVideos.remove(itemId)
         if (upload) library.uploadToDropbox(id)
         return id
+    }
+
+    /** The video's (or episode's) own picture, for its row in the Player; null when it can't be had. */
+    private fun fetchPicture(url: String): ByteArray? =
+        runCatching {
+            okHttp.newCall(Request.Builder().url(url).build()).execute().use { res ->
+                if (!res.isSuccessful) return@use null
+                // Never more than the limit in memory, even without a Content-Length
+                val source = res.body.source()
+                if (source.request(MAX_PICTURE_BYTES + 1L)) return@use null
+                source.readByteArray().takeIf { it.isNotEmpty() }
+            }
+        }.getOrNull()
+
+    private companion object {
+        const val MAX_PICTURE_BYTES = 5 * 1024 * 1024
     }
 }
 
@@ -111,6 +132,15 @@ object MoveRules {
         top: String = YOUTUBE,
         ext: String = "mp4",
     ): Pair<String, String> = "$top/${safeName(channel, if (top == YOUTUBE) "Unknown channel" else "Unknown podcast")}" to "${safeName(title, if (top == YOUTUBE) "Video" else "Episode")}.$ext"
+
+    /**
+     * The picture to keep with a moved download: a YouTube video's own thumbnail (the 16:9 one,
+     * without the black bars of the bigger sizes), else the article's picture (a podcast episode's).
+     */
+    fun pictureUrl(
+        link: String?,
+        image: String?,
+    ): String? = youtubeVideoId(link)?.let { "https://i.ytimg.com/vi/$it/mqdefault.jpg" } ?: image?.takeIf { it.startsWith("http") }
 
     /** The subtitle file to keep, from names like "12.subs.en.vtt": English first, else the first. */
     fun pickSubtitle(names: List<String>): String? {
