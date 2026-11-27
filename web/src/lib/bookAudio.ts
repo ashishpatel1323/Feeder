@@ -5,6 +5,11 @@
  * voice + text, so playback finds it without knowing about books). Played chapters are deleted as
  * reading moves on; a book's audio goes when it is finished or not opened for STALE_DAYS days.
  *
+ * The chapter being read is kept too, from where reading is: pieces read aloud makes are kept as
+ * they come (spoken()), and the rest of the chapter is made first, before the chapters ahead,
+ * starting LIVE_AHEAD pieces past the one being read (read aloud makes those itself). Everything is
+ * kept piece by piece, so a reload or stop carries on where it was instead of starting over.
+ *
  * Browsers only run this while Feeder is open. The Android app does the same in a background job
  * (model/ebooks/BookAudio.kt).
  */
@@ -15,6 +20,8 @@ import { indexSpeechText, kokoroPieces } from './readaloud'
 import { decodeSpeech, encodeSpeech, type StoredSpeech } from './speechCodec'
 
 const STALE_DAYS = 7
+/** Pieces after the one being read that read aloud makes itself (about its own read-ahead) */
+export const LIVE_AHEAD = 8
 export const AHEAD_CHOICES = [1, 2, 3, 5]
 
 interface Piece {
@@ -57,6 +64,30 @@ export interface BookAudioState {
   bytes: number
   readyAhead: number
   preparing: boolean
+  /** The chapter being read is kept from where reading is to its end */
+  currentReady: boolean
+  /** How much of the chapter being read, from where reading is, is kept (0–1) */
+  currentProgress: number
+}
+
+/**
+ * Pieces of the chapter being read still to make, in order: those from [reading] + [liveAhead] on
+ * that aren't kept ([has]). The pieces just after [reading] are left to read aloud.
+ */
+export function currentChapterTodo(keys: string[], has: (k: string) => boolean, reading: number, liveAhead = LIVE_AHEAD): number[] {
+  const out: number[] = []
+  for (let i = Math.max(0, reading) + liveAhead; i < keys.length; i++) if (!has(keys[i])) out.push(i)
+  return out
+}
+
+/** How much of the chapter being read is kept from piece [reading] on (0–1). */
+export function keptFrom(keys: string[], has: (k: string) => boolean, reading: number): number {
+  const from = Math.max(0, Math.min(reading, keys.length))
+  const rest = keys.length - from
+  if (rest <= 0) return keys.length ? 1 : 0
+  let kept = 0
+  for (let i = from; i < keys.length; i++) if (has(keys[i])) kept++
+  return kept / rest
 }
 
 interface Plan {
@@ -88,7 +119,9 @@ class BookAudioManager {
   private making: { section: number; done: number; total: number } | null = null
   private running = false
   private generation = 0
-  state: BookAudioState = { bookId: null, supported: false, current: -1, sections: [], bytes: 0, readyAhead: 0, preparing: false }
+  /** Piece of the chapter being read that read aloud is on (-1 when not known yet) */
+  private readingPiece = -1
+  state: BookAudioState = { bookId: null, supported: false, current: -1, sections: [], bytes: 0, readyAhead: 0, preparing: false, currentReady: false, currentProgress: 0 }
 
   subscribe(l: Listener): () => void {
     this.listeners.add(l)
@@ -120,6 +153,33 @@ class BookAudioManager {
     const p = await this.db?.pieces.get(keyOf(voice, text))
     if (!p) throw new Error('Prepared audio is gone')
     return decodeSpeech(p.speech)
+  }
+
+  /** Read aloud is now speaking [text] (a piece of the chapter being read, when it is one). */
+  reading(voice: string, text: string) {
+    if (voice !== this.voice || !this.bookId || this.current < 0) return
+    const plan = this.plans.get(this.current)
+    const i = plan ? plan.keys.indexOf(keyOf(voice, text)) : -1
+    if (i < 0 || i === this.readingPiece) return
+    this.readingPiece = i
+    this.emit()
+    void this.run()
+  }
+
+  /** Read aloud made [text] itself: kept when it belongs to the chapter being read. */
+  spoken(voice: string, text: string, audio: Promise<KokoroAudio>) {
+    const bookId = this.bookId
+    const section = this.current
+    if (voice !== this.voice || !bookId || section < 0) return
+    const key = keyOf(voice, text)
+    if (!this.plans.get(section)?.keys.includes(key)) return
+    void audio
+      .then(async (a) => {
+        if (bookId !== this.bookId || section !== this.current || this.index.has(key)) return
+        await this.keep(bookId, section, voice, text, a)
+        this.emit()
+      })
+      .catch(() => undefined)
   }
 
   /** Keeps audio for [text] (made with [voice]) for [owner]: a book's chapter, or "item:<id>". */
@@ -167,6 +227,7 @@ class BookAudioManager {
       this.voice = voice
       this.plans.clear()
       this.current = -1
+      this.readingPiece = -1
       this.lastDeleted = null
       this.making = null
     } else this.view = view
@@ -198,7 +259,9 @@ class BookAudioManager {
   setPosition(section: number) {
     if (section < 0 || section === this.current) return
     this.current = section
+    this.readingPiece = -1
     void this.open().then(async () => {
+      await this.plan(section)
       await this.trim()
       if (this.db && this.bookId) await this.db.pieces.where('bookId').equals(this.bookId).modify({ at: Date.now() })
       this.emit()
@@ -281,17 +344,20 @@ class BookAudioManager {
     const gen = this.generation
     try {
       while (gen === this.generation && this.bookId && this.voice) {
+        // The rest of the chapter being read first, then the chapters ahead
+        const now = this.current >= 0 ? await this.plan(this.current) : null
+        const todo = now && this.readingPiece >= 0 ? currentChapterTodo(now.keys, (k) => this.index.has(k), this.readingPiece) : []
         const plans = await this.window()
-        const next = plans.find((p) => p.keys.some((k) => !this.index.has(k)))
+        const next = todo.length ? now : plans.find((p) => p.keys.some((k) => !this.index.has(k)))
         if (!next || gen !== this.generation) break
         await kokoro.load(this.gpu)
-        const i = next.keys.findIndex((k) => !this.index.has(k))
+        const i = todo.length ? todo[0] : next.keys.findIndex((k) => !this.index.has(k))
         this.making = { section: next.index, done: next.keys.filter((k) => this.index.has(k)).length, total: next.keys.length }
         this.emit()
         const audio = await kokoro.generate(next.texts[i], this.voice, false, true).audio
         if (gen !== this.generation || !this.db || !this.bookId) break
         // Reading may have moved past this chapter meanwhile
-        if (next.index <= this.current) continue
+        if (next.index < this.current) continue
         await this.keep(this.bookId, next.index, this.voice, next.texts[i], audio)
       }
     } catch (e) {
@@ -307,7 +373,7 @@ class BookAudioManager {
     const bookId = this.bookId
     const supported = this.state.supported
     if (!bookId || !supported) {
-      this.state = { bookId, supported, current: -1, sections: [], bytes: 0, readyAhead: 0, preparing: false }
+      this.state = { bookId, supported, current: -1, sections: [], bytes: 0, readyAhead: 0, preparing: false, currentReady: false, currentProgress: 0 }
       this.listeners.forEach((l) => l(this.state))
       return
     }
@@ -333,7 +399,9 @@ class BookAudioManager {
         rows.push({ index: p.index, label: p.label, state: 'preparing', progress: done / p.keys.length, seconds: 0 })
       } else rows.push({ index: p.index, label: p.label, state: 'waiting', progress: done / p.keys.length, seconds: 0 })
     }
-    this.state = { bookId, supported, current: this.current, sections: rows, bytes, readyAhead: ready, preparing: !!this.making }
+    const now = this.current >= 0 ? this.plans.get(this.current) : undefined
+    const currentProgress = now?.keys.length && this.readingPiece >= 0 ? keptFrom(now.keys, (k) => this.index.has(k), this.readingPiece) : 0
+    this.state = { bookId, supported, current: this.current, sections: rows, bytes, readyAhead: ready, preparing: !!this.making, currentReady: currentProgress >= 1, currentProgress }
     this.listeners.forEach((l) => l(this.state))
   }
 }

@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import type { HistoryEvent } from '../lib/db'
 import { actionText, byDay, historyOf, reasonText, timeText, type HistoryKind } from '../lib/history'
 import { Icon } from './Icon'
+import { HistoryGraphCard, type GraphChapter } from './HistoryGraph'
 
 const ICONS = { play: 'play', pause: 'pause', open: 'book', close: 'close' } as const
 
@@ -10,12 +11,26 @@ const ICONS = { play: 'play', pause: 'pause', open: 'book', close: 'close' } as 
  * played or paused (and why), opened or closed, where it was then and on which device. Tapping an
  * event with a place goes back there.
  */
-export function HistoryList({ c, i, onJump }: { c: HistoryKind; i: string; onJump?: (e: HistoryEvent) => void }) {
+export function HistoryList({
+  c,
+  i,
+  onJump,
+  chapters,
+  bookLengthMs,
+}: {
+  c: HistoryKind
+  i: string
+  onJump?: (e: HistoryEvent) => void
+  /** An audiobook's chapters and length, for the chapter bar under the progress line */
+  chapters?: GraphChapter[]
+  bookLengthMs?: number
+}) {
   const events = useLiveQuery(() => historyOf(c, i), [c, i])
   if (!events) return null
   if (!events.length) return <p className="muted hist-empty">{c === 'audiobook' ? 'Plays and pauses show up here.' : 'Each time it is opened and closed shows up here.'}</p>
   return (
     <div className="hist">
+      <HistoryGraphCard c={c} i={i} events={events} chapters={chapters} bookLengthMs={bookLengthMs} />
       {byDay(events).map((g) => (
         <section key={g.day} aria-label={g.day}>
           <h3 className="hist-day">{g.day}</h3>

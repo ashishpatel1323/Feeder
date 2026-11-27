@@ -195,7 +195,7 @@ internal suspend fun synthesizeSpeech(
                 try {
                     check(engine.synthesizeToFile(text.substring(part.start, part.end), Bundle(), temporary, id) == TextToSpeech.SUCCESS)
                     withTimeout(120_000) { done.await() }
-                    if (!receivedAudio) appendWrittenFile(wave, temporary)
+                    if (!receivedAudio) appendWaveFile(wave, temporary)
                 } finally {
                     done.cancel()
                     temporary.delete()
@@ -214,7 +214,8 @@ internal suspend fun synthesizeSpeech(
         }
     }
 
-private fun appendWrittenFile(
+/** Appends the samples of the WAV [file] to [wave]. */
+internal fun appendWaveFile(
     wave: SpeechWaveFile,
     file: File,
 ) {
