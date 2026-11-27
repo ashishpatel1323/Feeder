@@ -352,6 +352,11 @@ export function pickedMediaFolder(files: File[]): Picked[] {
  * syncs. [onProgress] gets bytes done of all the bytes. Returns how many files were added.
  */
 export async function addLocalMedia(picked: Picked[], onProgress?: Progress, signal?: AbortSignal): Promise<number> {
+  return (await addLocalMediaIds(picked, onProgress, signal)).length
+}
+
+/** [addLocalMedia], returning the ids of the files added (in the order picked). */
+export async function addLocalMediaIds(picked: Picked[], onProgress?: Progress, signal?: AbortSignal): Promise<string[]> {
   const media = picked.filter((p) => kindOf(p.file.name))
   const subs = picked.filter((p) => isSubtitleName(p.file.name))
   if (!media.length) throw new Error('Pick audio or video files: MP3, M4A, Opus, FLAC, MP4, WebM, MOV…')
@@ -359,8 +364,10 @@ export async function addLocalMedia(picked: Picked[], onProgress?: Progress, sig
   let done = 0
   const bytes = (n: number) => onProgress?.((done += n), total)
   const d = await mediaDir()
+  const ids: string[] = []
   for (const p of media) {
     const id = await contentHash(p.file)
+    ids.push(id)
     bytes(p.file.size)
     const folder = dirOf(p.rel)
     const name = baseOf(p.rel) || p.file.name
@@ -385,7 +392,7 @@ export async function addLocalMedia(picked: Picked[], onProgress?: Progress, sig
     if (old) await db.media.update(id, { local: true, subs: old.subs ?? subsKey })
     else await db.media.put({ id, name, folder, dropboxPath: null, size: p.file.size, kind, duration: null, subs: subsKey, local: true, addedAt: Date.now(), lastOpenedAt: 0 })
   }
-  return media.length
+  return ids
 }
 
 /** Downloads a Dropbox file to this device, to play offline. */

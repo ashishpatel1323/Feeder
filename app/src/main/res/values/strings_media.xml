@@ -30,4 +30,13 @@
   <string name="media_remove_from_feeder">Remove from Feeder</string>
   <string name="media_search">Search files</string>
   <string name="media_confirm_forget_title">Remove from Feeder?</string>
+  <string name="media_delete">Delete</string>
+  <string name="media_confirm_delete_title">Delete file?</string>
+  <string name="media_confirm_delete_only_copy">It isn\'t in Dropbox, so this is the only copy.</string>
+  <string name="media_move_to_player">Move to Player</string>
+  <string name="media_move_to_player_dropbox">Move to Player and Dropbox</string>
+  <string name="media_moving_short">Moving to Player…</string>
+  <string name="media_moved">%1$s is in Player on this phone</string>
+  <string name="media_moved_dropbox">%1$s is in Player; uploading to Dropbox</string>
+  <string name="media_move_failed">Could not move %1$s: %2$s</string>
 </resources>

@@ -1536,6 +1536,7 @@ export default function App() {
         />
       ) : downloadsPage ? (
         <DownloadsPage
+          onOpenPlayer={(id) => showPlayer(`p:${id}`)}
           items={items}
           feeds={feeds}
           onBack={() => showDownloads(false)}

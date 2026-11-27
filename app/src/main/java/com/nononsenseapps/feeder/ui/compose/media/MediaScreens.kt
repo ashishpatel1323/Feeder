@@ -202,6 +202,7 @@ private fun rememberFileActions(
     val forgetText = stringResource(R.string.media_remove_from_feeder)
     val uploadText = stringResource(R.string.upload_to_dropbox)
     val deleteDropboxText = stringResource(R.string.delete_from_dropbox)
+    val deleteText = stringResource(R.string.media_delete)
     val what = stringResource(R.string.media_what)
     return { m ->
         val busy = jobs.containsKey(m.id)
@@ -225,6 +226,21 @@ private fun rememberFileActions(
                 )
             }
             if (m.dropboxPath == null && !busy) add(ShelfAction(uploadText) { uploadOrExplain(context, signedIn, what) { library.uploadToDropbox(m.id) } })
+            if (m.uri == null && m.dropboxPath == null && downloaded) {
+                add(
+                    ShelfAction(deleteText) {
+                        deleteConfirmer.ask(
+                            DeleteRequest(
+                                title = R.string.media_confirm_delete_title,
+                                itemName = m.title,
+                                scope = DeleteScope.THIS_DEVICE,
+                                extra = R.string.media_confirm_delete_only_copy,
+                                onConfirm = { library.deleteFromPhone(m.id) },
+                            ),
+                        )
+                    },
+                )
+            }
             if (m.uri != null) {
                 add(
                     ShelfAction(forgetText) {

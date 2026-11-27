@@ -100,6 +100,39 @@ class DownloadsViewModel(
     private val playlist: DownloadsPlaylist by instance()
     private val playback: DownloadsPlayback by instance()
     private val dao: FeedItemDao by instance()
+    private val toPlayer: com.nononsenseapps.feeder.model.media.DownloadsToPlayer by instance()
+
+    /** Downloads being moved into Books > Player right now */
+    private val _moving = MutableStateFlow<Set<Long>>(emptySet())
+    val moving: StateFlow<Set<Long>> = _moving.asStateFlow()
+    private val _messages = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 4)
+    val messages: kotlinx.coroutines.flow.SharedFlow<String> = _messages
+
+    /** Moves a download into Books > Player on this phone, and with [upload] on to Dropbox. */
+    fun moveToPlayer(
+        id: Long,
+        upload: Boolean,
+        moved: (String) -> String,
+        failed: (String) -> String,
+    ) {
+        if (id in _moving.value) return
+        _moving.update { it + id }
+        if (_state.value.playingId == id) playback.stop()
+        viewModelScope.launch {
+            val title = info(id).title
+            try {
+                toPlayer.move(id, upload)
+                _messages.tryEmit(moved(title))
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.w("FEEDER_DOWNLOADS", "Move to Player failed", e)
+                _messages.tryEmit(failed(e.message ?: e.javaClass.simpleName))
+            } finally {
+                _moving.update { it - id }
+            }
+        }
+    }
 
     private val _state =
         MutableStateFlow(

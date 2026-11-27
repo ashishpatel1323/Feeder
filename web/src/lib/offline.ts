@@ -477,6 +477,25 @@ export function clearVideoError(videoId: string) {
   if (videoJobs.get()[videoId]?.phase === 'error') setVideoJob(videoId, null)
 }
 
+/** The saved video itself, or null. */
+export async function savedVideoBlob(videoId: string): Promise<Blob | null> {
+  if (!hasCaches()) return null
+  const res = await (await caches.open(VIDEO_CACHE)).match(videoKey(videoId))
+  return res ? res.blob() : null
+}
+
+/** The saved subtitle tracks themselves. */
+export async function savedSubtitleBlobs(videoId: string, langs: string[]): Promise<{ lang: string; blob: Blob }[]> {
+  if (!hasCaches() || !langs.length) return []
+  const videos = await caches.open(VIDEO_CACHE)
+  const out: { lang: string; blob: Blob }[] = []
+  for (const lang of langs) {
+    const res = await videos.match(subsKey(videoId, lang))
+    if (res) out.push({ lang, blob: await res.blob() })
+  }
+  return out
+}
+
 /** A blob: URL for the saved video, or null. The caller revokes it. */
 export async function savedVideoUrl(videoId: string): Promise<string | null> {
   if (!hasCaches()) return null

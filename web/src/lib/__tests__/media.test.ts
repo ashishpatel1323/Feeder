@@ -114,3 +114,18 @@ describe('srtToVtt', () => {
     expect(vtt).toBe('WEBVTT\n\n00:00:01.500 --> 00:00:04.000\nHello\n\n00:00:05.000 --> 00:00:06.250\nWorld 2\n')
   })
 })
+
+describe('Downloads to Player', async () => {
+  const { playerPathFor, pickSubtitle, safeName } = await import('../media/fromDownloads')
+  it('puts a video in YouTube/<channel> with a safe name', () => {
+    expect(playerPathFor('How to: fix a/b?', 'Tech  Channel')).toEqual({ folder: 'YouTube/Tech Channel', name: 'How to fix a b.mp4' })
+    expect(playerPathFor('', '')).toEqual({ folder: 'YouTube/Unknown channel', name: 'Video.mp4' })
+    expect(safeName('Ends with dots...', 'x')).toBe('Ends with dots')
+  })
+  it('keeps English subtitles first', () => {
+    expect(pickSubtitle(['de', 'en-US', 'en'])).toBe('en')
+    expect(pickSubtitle(['de', 'en-GB'])).toBe('en-GB')
+    expect(pickSubtitle(['fr'])).toBe('fr')
+    expect(pickSubtitle([])).toBeNull()
+  })
+})

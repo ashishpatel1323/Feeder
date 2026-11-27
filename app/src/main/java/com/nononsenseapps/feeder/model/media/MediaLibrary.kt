@@ -59,6 +59,9 @@ data class MediaFile(
     val title: String get() = AudiobookRules.nameWithoutExt(name)
 }
 
+/** A subtitle file on the phone (a picked document, or a file the app keeps), not a Dropbox path. */
+fun String.isPhonePath() = startsWith("content:") || startsWith("file:")
+
 /** A folder in the Player list: its name and path, and how much is in it (subfolders included). */
 data class MediaFolder(
     val name: String,
@@ -156,7 +159,7 @@ object MediaRules {
                     dropboxPath = d.dropboxPath,
                     folder = if (old.uri != null && old.dropboxPath == null) old.folder else d.folder,
                     name = d.name,
-                    subs = d.subs ?: old.subs?.takeIf { it.startsWith("content:") },
+                    subs = d.subs ?: old.subs?.takeIf { it.isPhonePath() },
                 ) ?: d
         }
         for (m in have) {
@@ -164,7 +167,7 @@ object MediaRules {
             if (m.dropboxPath == null) {
                 out += m
             } else if (onPhone(m)) {
-                out += m.copy(dropboxPath = null, subs = m.subs?.takeIf { it.startsWith("content:") })
+                out += m.copy(dropboxPath = null, subs = m.subs?.takeIf { it.isPhonePath() })
             }
         }
         return out
@@ -351,6 +354,60 @@ class MediaLibrary private constructor(
     fun onPhone(m: MediaFile) = m.uri != null || localFile(m) != null
 
     fun markOpened(id: String) = patch(id) { it.copy(lastOpenedAt = System.currentTimeMillis()) }
+
+    /**
+     * Keeps [file] (moved here, e.g. from Downloads) as a Player file on this phone in [folder],
+     * with [subtitles] next to it. A file already in the list (same content) gets this copy.
+     * Returns its id.
+     */
+    fun addFile(
+        file: File,
+        name: String,
+        folder: String,
+        kind: String,
+        subtitles: File?,
+    ): String {
+        val id = DropboxClient.contentHash(file)
+        val dest = File(dir, "$id.${AudiobookRules.extOf(name).ifBlank { "media" }}")
+        if (!file.renameTo(dest)) {
+            file.copyTo(dest, overwrite = true)
+            file.delete()
+        }
+        val subs =
+            subtitles?.let { s ->
+                val keep = File(dir, "$id.${s.extension.ifBlank { "vtt" }}")
+                s.copyTo(keep, overwrite = true)
+                android.net.Uri
+                    .fromFile(keep)
+                    .toString()
+            }
+        change { list ->
+            val old = list.firstOrNull { it.id == id }
+            if (old != null) {
+                list.map { if (it.id == id) it.copy(subs = it.subs ?: subs) else it }
+            } else {
+                list + MediaFile(id = id, name = name, folder = folder, size = dest.length(), kind = kind, subs = subs, addedAt = System.currentTimeMillis())
+            }
+        }
+        _version.update { it + 1 }
+        return id
+    }
+
+    /** Deletes a file that is only on this phone (kept by the app, not picked): it is gone everywhere. */
+    fun deleteFromPhone(id: String) {
+        val m = get(id) ?: return
+        localFile(m)?.delete()
+        m.subs?.takeIf { it.startsWith("file:") }?.let {
+            File(
+                android.net.Uri
+                    .parse(it)
+                    .path ?: "",
+            ).delete()
+        }
+        change { list -> list.filterNot { it.id == id } }
+        _version.update { it + 1 }
+        _messages.value = "Deleted ${m.title}"
+    }
 
     /** The real length, once the player knows it. */
     fun setDuration(
@@ -575,7 +632,7 @@ class MediaLibrary private constructor(
                             dropbox.upload(dest, size, { from -> openAt(uri, from, m.name) }, progress, id = m.id)
                         }
                     }
-                m.subs?.takeIf { it.startsWith("content:") }?.let { s ->
+                m.subs?.takeIf { it.isPhonePath() }?.let { s ->
                     runCatching {
                         val bytes = context.contentResolver.openInputStream(Uri.parse(s))?.use { it.readBytes() } ?: return@runCatching
                         val ext = if (s.lowercase(Locale.ROOT).endsWith(".srt") || LocalFiles.describe(context, Uri.parse(s))?.name?.endsWith(".srt", true) == true) "srt" else "vtt"
@@ -627,7 +684,7 @@ class MediaLibrary private constructor(
                 dropbox.delete(path)
                 m.subs?.takeIf { it.startsWith("/") }?.let { runCatching { dropbox.delete(it) } }
                 if (onPhone(m)) {
-                    patch(id) { it.copy(dropboxPath = null, subs = it.subs?.takeIf { s -> s.startsWith("content:") }) }
+                    patch(id) { it.copy(dropboxPath = null, subs = it.subs?.takeIf { s -> s.isPhonePath() }) }
                 } else {
                     change { list -> list.filterNot { it.id == id } }
                 }
@@ -645,7 +702,7 @@ class MediaLibrary private constructor(
     /** Where the player reads the subtitles from: a document URI, or a Dropbox link (fetched now). */
     suspend fun subtitlesUri(m: MediaFile): Uri? {
         val s = m.subs ?: return null
-        return runCatching { if (s.startsWith("content:")) Uri.parse(s) else Uri.parse(dropbox.temporaryLink(s)) }.getOrNull()
+        return runCatching { if (s.isPhonePath()) Uri.parse(s) else Uri.parse(dropbox.temporaryLink(s)) }.getOrNull()
     }
 
     companion object {

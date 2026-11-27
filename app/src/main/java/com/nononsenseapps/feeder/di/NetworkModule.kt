@@ -38,6 +38,11 @@ val networkModule =
         bind<OfflineFiles>() with singleton { OfflineFiles(instance()) }
         bind<OfflineDownloader>() with singleton { OfflineDownloader(di) }
         bind<OfflineVideos>() with singleton { OfflineVideos(di) }
+        bind<com.nononsenseapps.feeder.model.media.DownloadsToPlayer>() with
+            singleton {
+                com.nononsenseapps.feeder.model.media
+                    .DownloadsToPlayer(di)
+            }
         bind<DownloadsPlaylist>() with singleton { DownloadsPlaylist(instance()) }
         bind<DownloadsPlayback>() with singleton { DownloadsPlayback(di) }
         bind<SyncNudge>() with singleton { SyncNudge(di) }
@@ -84,7 +89,10 @@ val networkModule =
                     .also { store ->
                         store.onChanged = { nudge.changed(false) }
                         // A cover picked on another device is fetched here too
-                        store.onRemoteCover = { key, url -> com.nononsenseapps.feeder.model.shelf.BookCovers.fetchInBackground(app, key, url) }
+                        store.onRemoteCover = { key, url ->
+                            com.nononsenseapps.feeder.model.shelf.BookCovers
+                                .fetchInBackground(app, key, url)
+                        }
                     }
             }
         bind<com.nononsenseapps.feeder.model.audiobooks.AudioPositions>() with

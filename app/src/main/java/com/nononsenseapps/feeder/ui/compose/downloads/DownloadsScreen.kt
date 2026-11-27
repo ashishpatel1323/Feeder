@@ -44,7 +44,9 @@ import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.outlined.ClosedCaption
+import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.DownloadForOffline
+import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -141,6 +143,14 @@ fun DownloadsScreen(
     var fullscreen by rememberSaveable { mutableStateOf(false) }
     var showTranscript by rememberSaveable { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
+    val moveContext = LocalContext.current
+    LaunchedEffect(Unit) {
+        viewModel.messages.collect {
+            android.widget.Toast
+                .makeText(moveContext, it, android.widget.Toast.LENGTH_LONG)
+                .show()
+        }
+    }
 
     // Without Background play, leaving the app pauses (the player keeps its place)
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.onAppHidden() }
@@ -233,6 +243,8 @@ private fun DownloadsList(
     val status by viewModel.status.collectAsStateWithLifecycle()
     val commands = rememberItemCommands()
     val deleteConfirmer = rememberDeleteConfirmer()
+    val moving by viewModel.moving.collectAsStateWithLifecycle()
+    val moveContext = LocalContext.current
     // The list being dragged; the view model's order otherwise
     val order = remember { mutableStateListOf<DownloadedVideo>() }
     var draggingId by remember { mutableStateOf<Long?>(null) }
@@ -287,6 +299,28 @@ private fun DownloadsList(
                             onConfirm = { viewModel.delete(video.id) },
                         ),
                     )
+                },
+                moving = video.id in moving,
+                onMoveToPlayer = { upload ->
+                    val go = {
+                        viewModel.moveToPlayer(
+                            video.id,
+                            upload,
+                            moved = { t -> moveContext.getString(if (upload) R.string.media_moved_dropbox else R.string.media_moved, t) },
+                            failed = { m -> moveContext.getString(R.string.media_move_failed, video.info.title, m) },
+                        )
+                    }
+                    if (upload) {
+                        com.nononsenseapps.feeder.ui.compose.ebooks.uploadOrExplain(
+                            moveContext,
+                            com.nononsenseapps.feeder.dropbox.DropboxClient
+                                .get(moveContext)
+                                .link.value != null,
+                            moveContext.getString(R.string.media_what),
+                        ) { go() }
+                    } else {
+                        go()
+                    }
                 },
                 onMoveUp = { viewModel.move(video.id, -1) },
                 onMoveDown = { viewModel.move(video.id, 1) },
@@ -522,6 +556,8 @@ private fun CompletedRow(
     onPlay: () -> Unit,
     onDelete: () -> Unit,
     onMoveUp: () -> Unit,
+    moving: Boolean = false,
+    onMoveToPlayer: (upload: Boolean) -> Unit = {},
     onMoveDown: () -> Unit,
     modifier: Modifier = Modifier,
     dragHandleModifier: Modifier = Modifier,
@@ -567,6 +603,33 @@ private fun CompletedRow(
             }
         },
         extras = {
+            var moveMenu by remember { mutableStateOf(false) }
+            Box {
+                ItemActionButton(
+                    icon = Icons.Outlined.Movie,
+                    label = if (moving) stringResource(R.string.media_moving_short) else stringResource(R.string.media_move_to_player),
+                    onClick = { moveMenu = true },
+                    enabled = !moving,
+                )
+                androidx.compose.material3.DropdownMenu(expanded = moveMenu, onDismissRequest = { moveMenu = false }) {
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text(stringResource(R.string.media_move_to_player)) },
+                        leadingIcon = { Icon(Icons.Outlined.Movie, null) },
+                        onClick = {
+                            moveMenu = false
+                            onMoveToPlayer(false)
+                        },
+                    )
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text(stringResource(R.string.media_move_to_player_dropbox)) },
+                        leadingIcon = { Icon(Icons.Outlined.CloudUpload, null) },
+                        onClick = {
+                            moveMenu = false
+                            onMoveToPlayer(true)
+                        },
+                    )
+                }
+            }
             ItemActionButton(
                 icon = Icons.Default.DeleteOutline,
                 label = stringResource(R.string.item_action_delete_download),

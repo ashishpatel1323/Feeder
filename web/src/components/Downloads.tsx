@@ -28,6 +28,8 @@ import { Icon, IconButton } from './Icon'
 import { deleteItemWithUndo, ItemRow, usePlaylistContext } from './ItemRow'
 import type { Toast } from '../lib/toast'
 import { confirmDelete, itemCount } from '../lib/confirmDelete'
+import { moveDownloadToPlayer } from '../lib/media/fromDownloads'
+import { needsDropbox, useDropbox } from './DropboxPanel'
 
 interface Download {
   item: Item
@@ -47,8 +49,42 @@ export function DownloadsPage(p: {
   onBack: () => void
   onMenu: () => void
   onOpenArticle: (id: string) => void
+  /** Opens a file's page in Books > Player */
+  onOpenPlayer?: (id: string) => void
   toast: Toast
 }) {
+  const dbx = useDropbox()
+  const [moving, setMoving] = useState<Record<string, string>>({})
+  /** Moves a download into Books > Player (and with [upload], on to Dropbox for every device). */
+  const moveToPlayer = (d: Download, upload: boolean) => {
+    if (moving[d.item.id]) return
+    const go = () => {
+      const title = d.item.title || 'Video'
+      const set = (text: string | null) =>
+        setMoving((m) => {
+          const next = { ...m }
+          if (text) next[d.item.id] = text
+          else delete next[d.item.id]
+          return next
+        })
+      set('Moving to Player…')
+      if (d.item.id === playingId) setPlayingId(null)
+      let last = 0
+      void moveDownloadToPlayer(d.item, d.videoId, {
+        upload,
+        onProgress: (done, total) => {
+          if (Date.now() - last < 250 && done < total) return
+          last = Date.now()
+          set(`Uploading to Dropbox ${total ? Math.floor((done / total) * 100) : 0}%`)
+        },
+      })
+        .then((id) => p.toast(upload ? `${title} is in Player and Dropbox` : `${title} is in Player on this device`, p.onOpenPlayer ? { label: 'Open', run: () => p.onOpenPlayer?.(id) } : undefined))
+        .catch((e) => p.toast(`Could not move ${title}: ${e instanceof Error ? e.message : String(e)}`))
+        .finally(() => set(null))
+    }
+    if (upload) needsDropbox(dbx.signedIn, p.toast, go)
+    else go()
+  }
   const ctx = usePlaylistContext(p.feeds, 1)
   const jobs = useVideoJobs()
   const available = useVideoSavingAvailable()
@@ -297,7 +333,12 @@ export function DownloadsPage(p: {
                           onPrimary={() => setPlayingId(d.item.id)}
                           primaryLabel={d.item.id === playingId ? 'Playing' : 'Play'}
                           primaryIcon="play"
-                          metaExtra={d.item.offlineVideo ? <span>{formatBytes(d.item.offlineVideo)}</span> : null}
+                          metaExtra={moving[d.item.id] ? <span>{moving[d.item.id]}</span> : d.item.offlineVideo ? <span>{formatBytes(d.item.offlineVideo)}</span> : null}
+                          moreEntries={[
+                            'separator',
+                            { icon: 'movie', label: 'Move to Player', disabled: !!moving[d.item.id], onClick: () => moveToPlayer(d, false) },
+                            { icon: 'upload', label: 'Move to Player and Dropbox', disabled: !!moving[d.item.id], onClick: () => moveToPlayer(d, true) },
+                          ]}
                           onDelete={() => {
                             if (d.item.id === playingId) playNext(1)
                             void deleteItemWithUndo(d.item, p.toast)
