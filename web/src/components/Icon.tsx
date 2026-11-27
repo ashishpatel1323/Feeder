@@ -46,6 +46,10 @@ const PATHS = {
   prev: 'M15.41 16.58 10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.42Z',
   next: 'M8.59 16.58 13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.42Z',
   play: 'M8 5.14v14l11-7-11-7Z',
+  // Material "movie" (Library > Player)
+  movie: 'M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4Zm2 14H4V10h16v8Z',
+  // Material "play_circle"
+  playCircle: 'M10 16.5l6-4.5-6-4.5v9ZM12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2Zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8Z',
   pause: 'M14 19h4V5h-4M6 19h4V5H6v14Z',
   skipPrev: 'M6 6h2v12H6m3.5-6 8.5 6V6',
   skipNext: 'M16 18h2V6h-2M6 18l8.5-6L6 6v12Z',

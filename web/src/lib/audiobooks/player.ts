@@ -4,6 +4,11 @@
  * position (saved every 15 s, on pause and on every jump, and synced as "audiopos"), a speed per
  * book, a sleep timer (minutes, or to the end of the chapter, fading out at the end) and the
  * media session (lock screen, headphone buttons: back 10 s, ahead 30 s, chapter back/next).
+ *
+ * It also plays Library > Player's files (media/library.ts), audio or video, as one-file books:
+ * the same mini player, speed, sleep timer and synced place. Its element is a <video>, kept out of
+ * the page until the Player's watch page shows it ([attachVideo]); moving it doesn't stop it, so a
+ * video carries on as sound when its page is left. Files in a folder play one after another.
  */
 import { useEffect, useState } from 'react'
 import { db, getKv, setKv, type Audiobook } from '../db'
@@ -11,6 +16,9 @@ import { audioFocus, playQueue } from '../playqueue'
 import { readAloud } from '../readaloud'
 import { clockText, recordHistory } from '../history'
 import { saveAudioPos, scanBook, trackUrl } from './library'
+import { asBook, mediaUrl } from '../media/library'
+import { noteMedia } from '../recent'
+import type { MediaFile } from '../db'
 import { bookLengthMs, chapterAt, chaptersOf, fractionAt, resumePoint, trackStartMs, type Chapter } from './timeline'
 
 export type BookStatus = 'idle' | 'loading' | 'playing' | 'paused'
@@ -23,6 +31,12 @@ export interface Sleep {
 
 export interface BookPlayerState {
   bookId: string | null
+  /** What is playing: an audiobook, or a file from Library > Player */
+  source: 'audiobook' | 'media'
+  /** A Player file with pictures: its watch page shows the video */
+  video: boolean
+  /** Player files that come next (their ids), in order */
+  queue: string[]
   status: BookStatus
   /** File playing, and ms into it */
   i: number
@@ -43,7 +57,7 @@ const RATES_KEY = 'audiobookRates'
 const LAST_RATE = 'feeder.audiobookRate'
 const FADE_MS = 10_000
 
-const initial: BookPlayerState = { bookId: null, status: 'idle', i: 0, ms: 0, bookMs: 0, bookLength: 0, chapter: 0, chapters: [], rate: 1, sleep: null, scan: null, error: null }
+const initial: BookPlayerState = { bookId: null, source: 'audiobook', video: false, queue: [], status: 'idle', i: 0, ms: 0, bookMs: 0, bookLength: 0, chapter: 0, chapters: [], rate: 1, sleep: null, scan: null, error: null }
 
 type Listener = (s: BookPlayerState) => void
 
@@ -51,7 +65,13 @@ class AudiobookPlayer {
   state: BookPlayerState = initial
   book: Audiobook | null = null
   private listeners = new Set<Listener>()
-  private audio: HTMLAudioElement | null = null
+  private audio: HTMLVideoElement | null = null
+  /** The Player file playing, when it is one */
+  media: MediaFile | null = null
+  /** Where the element waits while no page shows the video */
+  private holder: HTMLElement | null = null
+  /** Opens a Player file by id (set by media/queue.ts), for the queue */
+  openMediaById: ((id: string, queue: string[]) => Promise<void>) | null = null
   private generation = 0
   private lastSaved = 0
   private retried = false
@@ -77,10 +97,18 @@ class AudiobookPlayer {
     return !!this.state.bookId
   }
 
-  private ensureAudio(): HTMLAudioElement {
+  private ensureAudio(): HTMLVideoElement {
     if (this.audio) return this.audio
-    const a = new Audio()
+    const a = document.createElement('video')
     a.preload = 'auto'
+    a.playsInline = true
+    a.className = 'media-video'
+    this.holder = document.createElement('div')
+    this.holder.className = 'media-holder'
+    this.holder.hidden = true
+    document.body.appendChild(this.holder)
+    this.holder.appendChild(a)
+    a.addEventListener('loadedmetadata', () => this.onMetadata())
     a.addEventListener('timeupdate', () => this.onTime())
     a.addEventListener('playing', () => {
       this.retried = false
@@ -128,11 +156,57 @@ class AudiobookPlayer {
     this.updatePositionState()
   }
 
+  /** Shows the video inside [box] (the Player's watch page), or puts it away again with null. */
+  attachVideo(box: HTMLElement | null) {
+    const a = this.ensureAudio()
+    const to = box ?? this.holder
+    if (!to || a.parentElement === to) return
+    to.appendChild(a)
+    a.controls = !!box
+  }
+
+  /** Subtitles for the video (a WebVTT link), shown by default; null takes them away. */
+  setSubtitles(url: string | null, label = 'Subtitles') {
+    const a = this.ensureAudio()
+    a.querySelectorAll('track').forEach((t) => t.remove())
+    if (!url) return
+    const t = document.createElement('track')
+    t.kind = 'subtitles'
+    t.label = label
+    t.src = url
+    t.default = true
+    a.appendChild(t)
+    // Chrome leaves a track added after loading hidden: show it
+    t.addEventListener('load', () => {
+      if (a.textTracks[0]) a.textTracks[0].mode = 'showing'
+    })
+  }
+
+  /** A file's real length, when it wasn't known: kept for the book and, for a Player file, saved. */
+  private onMetadata() {
+    const a = this.audio
+    const b = this.book
+    if (!a || !b || !Number.isFinite(a.duration) || a.duration <= 0) return
+    const t = b.tracks[this.state.i]
+    if (!t || t.duration) return
+    const tracks = b.tracks.map((x, k) => (k === this.state.i ? { ...x, duration: a.duration } : x))
+    this.refreshBook({ ...b, tracks })
+    if (this.media && this.media.id === b.id) {
+      this.media = { ...this.media, duration: a.duration }
+      void db.media.update(b.id, { duration: a.duration })
+    }
+    this.set({ video: this.state.source === 'media' && a.videoWidth > 0 })
+  }
+
   /** Notes a play or pause in the book's history, with the chapter and time into it. */
   private note(a: 'play' | 'pause', reason: string) {
     const b = this.book
     if (!b) return
     const s = this.state
+    if (s.source === 'media' && this.media) {
+      void noteMedia({ id: b.id, title: b.title, folder: this.media.folder }, a === 'play', fractionAt(b, s.i, s.ms), `0:${Math.round(s.ms)}`)
+      return
+    }
     const ch = s.chapters[s.chapter]
     const inChapter = ch && ch.i === s.i ? s.ms - ch.startMs : s.ms
     void recordHistory(
@@ -174,8 +248,9 @@ class AudiobookPlayer {
   }
 
   /** Opens a book where it was left (or [at]), and plays it unless [play] is false. */
-  async open(id: string, opts: { play?: boolean; at?: { i: number; ms: number }; reason?: string } = {}) {
+  async open(id: string, opts: { play?: boolean; at?: { i: number; ms: number }; reason?: string; media?: MediaFile; queue?: string[] } = {}) {
     if (this.state.bookId === id && !opts.at) {
+      if (opts.queue) this.set({ queue: opts.queue })
       if (opts.play !== false) this.play(opts.reason)
       return
     }
@@ -183,15 +258,17 @@ class AudiobookPlayer {
     this.stopAudio()
     this.playReason = opts.reason ?? 'app'
     const gen = ++this.generation
-    const b = await db.audiobooks.get(id)
+    const b = opts.media ? asBook(opts.media) : await db.audiobooks.get(id)
     if (!b || gen !== this.generation) return
     const rate = await this.rateFor(id)
     this.book = b
-    this.set({ ...initial, bookId: id, status: 'loading', rate, sleep: this.state.sleep })
+    this.media = opts.media ?? null
+    this.set({ ...initial, bookId: id, source: opts.media ? 'media' : 'audiobook', video: opts.media?.kind === 'video', queue: opts.queue ?? [], status: 'loading', rate, sleep: this.state.sleep })
     this.refreshBook(b)
-    void db.audiobooks.update(id, { lastOpenedAt: Date.now() })
+    if (opts.media) void db.media.update(id, { lastOpenedAt: Date.now() })
+    else void db.audiobooks.update(id, { lastOpenedAt: Date.now() })
     // Chapters and lengths: read once, in the background; playing doesn't wait for them
-    if (b.tracks.some((t) => !t.scanned)) {
+    if (!opts.media && b.tracks.some((t) => !t.scanned)) {
       this.set({ scan: { done: b.tracks.filter((t) => t.scanned).length, total: b.tracks.length } })
       void scanBook(id, (done, total) => gen === this.generation && this.set({ scan: { done, total } }))
         .then((fresh) => {
@@ -218,7 +295,7 @@ class AudiobookPlayer {
     this.set({ i, ms, bookMs: trackStartMs(b, i) + ms, chapter: chapterAt(this.state.chapters, i, ms), status: play ? 'loading' : 'paused' })
     let url: string
     try {
-      url = await trackUrl(t, freshLink)
+      url = this.media ? await mediaUrl(this.media, freshLink) : await trackUrl(t, freshLink)
     } catch (e) {
       if (gen !== this.generation) return
       this.set({ status: 'paused', error: e instanceof Error ? e.message : String(e) })
@@ -279,8 +356,14 @@ class AudiobookPlayer {
     }
     // The end of the book
     const last = b.tracks[b.tracks.length - 1]
-    void saveAudioPos(b.id, b.tracks.length - 1, last.hash, (last.duration ?? 0) * 1000, 1)
+    void saveAudioPos(b.id, b.tracks.length - 1, last.hash, (last.duration ?? this.audio?.duration ?? 0) * 1000, 1)
     this.notePause('end')
+    // A Player file: on to the next one in its folder
+    const [next, ...rest] = this.state.queue
+    if (this.state.source === 'media' && next && this.openMediaById) {
+      await this.openMediaById(next, rest)
+      return
+    }
     this.cancelSleep()
     this.set({ status: 'paused' })
     this.onMessage?.(`Finished ${b.title}`)
@@ -445,7 +528,7 @@ class AudiobookPlayer {
     const chapter = this.state.chapters[this.state.chapter]
     ms.metadata = new MediaMetadata({
       title: chapter?.title || b.title,
-      artist: b.author || 'Audiobook',
+      artist: b.author || (this.state.source === 'media' ? 'Feeder' : 'Audiobook'),
       album: b.title,
       artwork: b.cover ? [{ src: b.cover }] : [],
     })
@@ -456,7 +539,7 @@ class AudiobookPlayer {
       ['seekbackward', () => this.seekBy(-10)],
       ['seekforward', () => this.seekBy(30)],
       ['previoustrack', () => this.prevChapter()],
-      ['nexttrack', () => this.nextChapter()],
+      ['nexttrack', () => (this.state.source === 'media' ? this.skipNext() : this.nextChapter())],
       [
         'seekto',
         (d) => {
@@ -488,7 +571,14 @@ class AudiobookPlayer {
     if (this.audio.src && this.book) this.save()
     this.audio.pause()
     this.audio.removeAttribute('src')
+    this.audio.querySelectorAll('track').forEach((t) => t.remove())
     this.audio.load()
+  }
+
+  /** A Player file: the next one in its folder now. */
+  skipNext() {
+    const [next, ...rest] = this.state.queue
+    if (next && this.openMediaById) void this.openMediaById(next, rest)
   }
 
   /** Stops and closes the player (the position is kept). */
@@ -498,6 +588,7 @@ class AudiobookPlayer {
     this.stopAudio()
     this.cancelSleep()
     this.book = null
+    this.media = null
     this.set(initial)
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none'
   }

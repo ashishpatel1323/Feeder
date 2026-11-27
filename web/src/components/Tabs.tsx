@@ -18,7 +18,7 @@ export const TABS: { tab: BarTab; label: string; icon: IconName; key: string; hi
   { tab: 'feeds', label: 'Feeds', icon: 'dynamicFeed', key: 'f', hint: 'Latest, By feed and Discover' },
   { tab: 'youtube', label: 'YouTube', icon: 'subscriptions', key: 'y', hint: 'Your YouTube subscriptions' },
   { tab: 'playlists', label: 'Playlists', icon: 'queue', key: 'p', hint: 'Smart and hand-made playlists' },
-  { tab: 'library', label: 'Library', icon: 'library', key: 'l', hint: 'Saved, Highlights and Downloads' },
+  { tab: 'library', label: 'Library', icon: 'library', key: 'l', hint: 'Saved, Highlights, Downloads and Player' },
   { tab: 'books', label: 'Books', icon: 'book', key: 'b', hint: 'Ebooks, audiobooks and offline websites' },
   { tab: 'history', label: 'History', icon: 'history', key: 'h', hint: 'Everything you opened, on all your devices' },
 ]
@@ -259,6 +259,8 @@ export function LibraryPage(p: {
   onSaved: () => void
   onHighlights: () => void
   onDownloads: () => void
+  onPlayer: () => void
+  playerCount: number
   onSettings: () => void
   onManageFeeds: () => void
   onSearch: () => void
@@ -294,6 +296,7 @@ export function LibraryPage(p: {
           {row('bookmark', 'Saved', 'Read later and shared links', p.savedCount, p.onSaved)}
           {row('highlight', 'Highlights', 'Notes and quotes', p.highlightCount, p.onHighlights)}
           {p.showDownloads ? row('download', 'Downloads', 'Videos saved for offline', p.downloadCount, p.onDownloads) : null}
+          {row('movie', 'Player', 'Audio and video files from this device or Dropbox', p.playerCount, p.onPlayer)}
           {row(history.icon, history.label, history.hint, null, () => p.onTab('history'))}
           {elsewhere.map((t) => (
             <Fragment key={t.tab}>{row(t.icon, t.label, t.hint, null, () => p.onTab(t.tab))}</Fragment>

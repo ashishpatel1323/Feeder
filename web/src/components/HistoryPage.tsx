@@ -32,6 +32,7 @@ const ICONS: Record<RecentType, IconName> = {
   audiobook: 'headphones',
   ebook: 'book',
   zim: 'public',
+  media: 'movie',
   highlight: 'highlight',
   note: 'note',
   feed: 'rss',

@@ -316,7 +316,7 @@ function useNow(on: boolean): number {
   return now
 }
 
-function SpeedMenu({ rate }: { rate: number }) {
+export function SpeedMenu({ rate }: { rate: number }) {
   return (
     <MenuButton label={`Speed ${formatSpeed(rate)}`} icon="speed" text={formatSpeed(rate)}>
       {(close) =>
@@ -340,7 +340,7 @@ function SpeedMenu({ rate }: { rate: number }) {
   )
 }
 
-function SleepMenu({ sleep }: { sleep: BookPlayerState['sleep'] }) {
+export function SleepMenu({ sleep }: { sleep: BookPlayerState['sleep'] }) {
   const now = useNow(!!sleep?.endsAt)
   return (
     <MenuButton label="Sleep timer" icon="bedtime" text={sleepText(sleep, now)} active={!!sleep}>
@@ -545,17 +545,17 @@ export function AudiobookBar({ onOpen }: { onOpen: (id: string) => void }) {
   const inChapter = chapter && s.i === chapter.i ? s.ms - chapter.startMs : 0
   const fraction = chapterLen ? inChapter / chapterLen : 0
   return (
-    <div className="queue-player ab-bar" role="region" aria-label="Audiobook playing">
+    <div className="queue-player ab-bar" role="region" aria-label={s.source === 'media' ? 'Now playing' : 'Audiobook playing'}>
       <div className="qp-progress ab-bar-progress" aria-hidden>
         <i style={{ width: `${Math.min(100, fraction * 100)}%` }} />
       </div>
       <div className="qp-bar">
         <button className="qp-info" onClick={() => onOpen(book.id)} title="Open the player">
-          {book.cover ? <img className="qp-thumb" src={book.cover} alt="" width={48} height={48} /> : <span className="qp-thumb gen" style={{ width: 48, height: 48 }}><Icon name="headphones" size={24} /></span>}
+          {book.cover ? <img className="qp-thumb" src={book.cover} alt="" width={48} height={48} /> : <span className="qp-thumb gen" style={{ width: 48, height: 48 }}><Icon name={s.source === 'media' ? (s.video ? 'movie' : 'musicNote') : 'headphones'} size={24} /></span>}
           <span className="qp-titles">
             <span className="qp-title">{chapter?.title ?? book.title}</span>
             <span className="qp-sub">
-              {book.title}
+              {s.source === 'media' ? book.author || 'Player' : book.title}
               {chapterLen ? ` · −${clock(chapterLen - inChapter)}` : ''}
               {s.sleep ? ' · sleep timer on' : ''}
             </span>
@@ -572,7 +572,7 @@ export function AudiobookBar({ onOpen }: { onOpen: (id: string) => void }) {
               {formatSpeed(s.rate)}
             </button>
           </span>
-          <IconButton icon="close" label="Close the audiobook player" onClick={() => audiobookPlayer.close()} />
+          <IconButton icon="close" label={s.source === 'media' ? 'Close the player' : 'Close the audiobook player'} onClick={() => audiobookPlayer.close()} />
         </div>
       </div>
     </div>
