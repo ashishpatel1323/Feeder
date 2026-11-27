@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { asBook, filesUnder, folderView, kindOf, mediaInListing, mergeMedia, playsHere, srtToVtt, uploadPath } from '../media/library'
 import type { DropboxFile } from '../dropbox'
 import type { MediaFile } from '../db'
+import { frameAt, RETRY_MS, shouldTry } from '../media/thumbs'
+import { youtubePictureUrl } from '../media/fromDownloads'
 
 const file = (path: string, hash = path, size = 100): DropboxFile => ({ id: `id:${path}`, name: path.split('/').pop()!, path, size, hash, modified: '2026-11-01T10:00:00Z' })
 
@@ -82,8 +84,8 @@ describe('Player listing', () => {
       media({ id: 'd', name: 'd.mp4', dropboxPath: null, local: true }),
     ]
     const { put, remove } = mergeMedia(have, [
-      { id: 'a', name: 'a.mp4', folder: 'New', dropboxPath: '/Media/New/a.mp4', size: 100, kind: 'video', subs: null, addedAt: 1 },
-      { id: 'e', name: 'e.mp3', folder: '', dropboxPath: '/Media/e.mp3', size: 5, kind: 'audio', subs: null, addedAt: 2 },
+      { id: 'a', name: 'a.mp4', folder: 'New', dropboxPath: '/Media/New/a.mp4', size: 100, kind: 'video', subs: null, thumb: null, addedAt: 1 },
+      { id: 'e', name: 'e.mp3', folder: '', dropboxPath: '/Media/e.mp3', size: 5, kind: 'audio', subs: null, thumb: null, addedAt: 2 },
     ])
     expect(remove).toEqual(['b'])
     const byId = new Map(put.map((m) => [m.id, m]))
@@ -127,5 +129,43 @@ describe('Downloads to Player', async () => {
     expect(pickSubtitle(['de', 'en-GB'])).toBe('en-GB')
     expect(pickSubtitle(['fr'])).toBe('fr')
     expect(pickSubtitle([])).toBeNull()
+  })
+})
+
+describe('Player row pictures (same cases as the Android app\'s MediaThumbRulesTest)', () => {
+  it('takes the frame a tenth of the way in', () => {
+    expect(frameAt(null)).toBe(5)
+    expect(frameAt(1)).toBe(0.5)
+    expect(frameAt(5)).toBe(1)
+    expect(frameAt(360)).toBe(36)
+    expect(frameAt(3600)).toBe(60)
+  })
+
+  it('tries again after a week, once on this device, or when a picture appears in Dropbox', () => {
+    const now = 10 * RETRY_MS
+    expect(shouldTry(undefined, { local: false }, now)).toBe(true)
+    expect(shouldTry({ id: 'a', url: null, at: now - 1000, local: false }, { local: false }, now)).toBe(false)
+    expect(shouldTry({ id: 'a', url: null, at: now - 1000, local: false }, { local: true }, now)).toBe(true)
+    expect(shouldTry({ id: 'a', url: null, at: now - 1000, local: true }, { local: true }, now)).toBe(false)
+    expect(shouldTry({ id: 'a', url: null, at: now - RETRY_MS - 1, local: true }, { local: true }, now)).toBe(true)
+    expect(shouldTry({ id: 'a', url: 'data:x', at: 0, local: false }, { local: false }, now)).toBe(false)
+    expect(shouldTry({ id: 'a', url: 'data:x', at: now, local: false }, { local: false, thumb: '/Media/a.jpg' }, now)).toBe(true)
+    expect(shouldTry({ id: 'a', url: 'data:y', at: now, local: false, from: '/Media/a.jpg' }, { local: false, thumb: '/Media/a.jpg' }, now)).toBe(false)
+  })
+
+  it('finds a picture next to the file in Dropbox', () => {
+    const drafts = mediaInListing([file('/Media/YouTube/Ch/Talk.mp4', 'h1'), file('/Media/YouTube/Ch/talk.JPG', 'p1'), file('/Media/YouTube/Ch/Other.mp4', 'h2'), file('/Media/Elsewhere/Other.png', 'p2')])
+    expect(drafts.find((d) => d.id === 'h1')?.thumb).toBe('/Media/YouTube/Ch/talk.JPG')
+    expect(drafts.find((d) => d.id === 'h2')?.thumb).toBeNull()
+    expect(drafts).toHaveLength(2)
+  })
+
+  it('drops the picture when the file leaves Dropbox', () => {
+    const { put } = mergeMedia([media({ id: 'a', name: 'a.mp4', thumb: '/Media/a.jpg', local: true })], [])
+    expect(put[0].thumb).toBeNull()
+  })
+
+  it("keeps a moved YouTube video's own 16:9 thumbnail", () => {
+    expect(youtubePictureUrl('dQw4w9WgXcQ')).toBe('https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg')
   })
 })

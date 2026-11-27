@@ -9,7 +9,8 @@ import { db, feedDisplayTitle, type Item } from '../db'
 import type { Progress } from '../dropbox'
 import { saveAudioPos } from '../audiobooks/library'
 import { removeVideo, savedVideoBlob, savedSubtitleBlobs } from '../offline'
-import { addLocalMediaIds, uploadMedia } from './library'
+import { addLocalMediaIds, keepThumb, uploadMedia } from './library'
+import { setThumb } from './thumbs'
 
 /** A file or folder name from a title: no slashes or characters Dropbox and file systems refuse. */
 export function safeName(s: string, fallback: string): string {
@@ -33,6 +34,24 @@ export function pickSubtitle(langs: string[]): string | null {
   return langs.find((l) => l === 'en') ?? langs.find((l) => l.startsWith('en')) ?? langs[0] ?? null
 }
 
+/** The video's own thumbnail (the 16:9 size, without the black bars of the bigger ones). */
+export const youtubePictureUrl = (videoId: string) => `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`
+
+/**
+ * Shows the video's own thumbnail on its Player row, and keeps a copy of it next to the file
+ * (when YouTube lets this page read it), which goes to Dropbox with the file on upload.
+ */
+async function keepYouTubePicture(id: string, videoId: string): Promise<void> {
+  const url = youtubePictureUrl(videoId)
+  await setThumb(id, url).catch(() => undefined)
+  try {
+    const res = await fetch(url)
+    if (res.ok) await keepThumb(id, await res.blob())
+  } catch {
+    // The row still shows the picture from YouTube; other devices take a frame
+  }
+}
+
 export async function moveDownloadToPlayer(item: Item, videoId: string, opts: { upload: boolean; onProgress?: Progress }): Promise<string> {
   const blob = await savedVideoBlob(videoId)
   if (!blob) throw new Error('The saved copy is gone. Save it again.')
@@ -46,6 +65,7 @@ export async function moveDownloadToPlayer(item: Item, videoId: string, opts: { 
     if (sub) picked.push({ file: new File([sub.blob], name.replace(/\.mp4$/, '.vtt'), { type: 'text/vtt' }), rel: `${folder}/${name.replace(/\.mp4$/, '.vtt')}` })
   }
   const [id] = await addLocalMediaIds(picked)
+  await keepYouTubePicture(id, videoId)
   // Where it was watched to carries over (the Player keeps places by file)
   const pos = await db.videoPos.get(item.id)
   if (pos && pos.t > 0 && !(await db.audioPos.get(id))) await saveAudioPos(id, 0, id, pos.t * 1000, pos.d ? Math.min(1, pos.t / pos.d) : 0)

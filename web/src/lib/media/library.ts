@@ -49,6 +49,8 @@ const baseOf = (rel: string) => rel.slice(rel.lastIndexOf('/') + 1)
 /** "keynote.en.srt" and "keynote.srt" both belong to "keynote.mp4" */
 const subStem = (name: string) => name.replace(/\.(vtt|srt)$/i, '').replace(/\.[a-z]{2,3}(-[a-z]{2,4})?$/i, '')
 const mediaStem = (name: string) => name.replace(/\.[a-z0-9]+$/i, '')
+const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp']
+export const isImageName = (name: string) => IMAGE_EXTENSIONS.includes(extOf(name))
 
 /** A file found in a listing of /Media, before what is known about it is merged in. */
 export interface MediaDraft {
@@ -59,6 +61,8 @@ export interface MediaDraft {
   size: number
   kind: 'audio' | 'video'
   subs: string | null
+  /** A picture next to it with the same name */
+  thumb: string | null
   addedAt: number
 }
 
@@ -69,6 +73,7 @@ export interface MediaDraft {
 export function mediaInListing(files: DropboxFile[], root = MEDIA_FOLDER): MediaDraft[] {
   const prefix = root.toLowerCase() + '/'
   const subs = new Map<string, string>()
+  const images = new Map<string, string>()
   const media: { rel: string; f: DropboxFile; kind: 'audio' | 'video' }[] = []
   for (const f of files) {
     if (!f.path.toLowerCase().startsWith(prefix)) continue
@@ -77,6 +82,11 @@ export function mediaInListing(files: DropboxFile[], root = MEDIA_FOLDER): Media
       const key = `${dirOf(rel).toLowerCase()}/${subStem(f.name).toLowerCase()}`
       // A .vtt beats an .srt; the first one found otherwise
       if (!subs.has(key) || extOf(f.name) === 'vtt') subs.set(key, f.path)
+      continue
+    }
+    if (isImageName(f.name)) {
+      const key = `${dirOf(rel).toLowerCase()}/${mediaStem(f.name).toLowerCase()}`
+      if (!images.has(key)) images.set(key, f.path)
       continue
     }
     const kind = kindOf(f.name)
@@ -89,6 +99,7 @@ export function mediaInListing(files: DropboxFile[], root = MEDIA_FOLDER): Media
     if (seen.has(f.hash)) continue
     seen.add(f.hash)
     const folder = dirOf(rel)
+    const key = `${folder.toLowerCase()}/${mediaStem(f.name).toLowerCase()}`
     out.push({
       id: f.hash,
       name: f.name,
@@ -96,7 +107,8 @@ export function mediaInListing(files: DropboxFile[], root = MEDIA_FOLDER): Media
       dropboxPath: f.path,
       size: f.size,
       kind,
-      subs: subs.get(`${folder.toLowerCase()}/${mediaStem(f.name).toLowerCase()}`) ?? null,
+      subs: subs.get(key) ?? null,
+      thumb: images.get(key) ?? null,
       addedAt: Date.parse(f.modified) || Date.now(),
     })
   }
@@ -117,12 +129,13 @@ export function mergeMedia(have: MediaFile[], drafts: MediaDraft[]): { put: Medi
     }
     // A file first added on this device keeps its folder there until it is in Dropbox
     const subs = d.subs ?? (old.subs?.startsWith(LOCAL) ? old.subs : null)
-    if (old.dropboxPath !== d.dropboxPath || old.folder !== d.folder || old.name !== d.name || old.subs !== subs) put.push({ ...old, dropboxPath: d.dropboxPath, folder: d.folder, name: d.name, subs })
+    if (old.dropboxPath !== d.dropboxPath || old.folder !== d.folder || old.name !== d.name || old.subs !== subs || (old.thumb ?? null) !== d.thumb)
+      put.push({ ...old, dropboxPath: d.dropboxPath, folder: d.folder, name: d.name, subs, thumb: d.thumb })
   }
   const remove: string[] = []
   for (const m of have) {
     if (seen.has(m.id) || !m.dropboxPath) continue
-    if (m.local) put.push({ ...m, dropboxPath: null, subs: m.subs?.startsWith(LOCAL) ? m.subs : null })
+    if (m.local) put.push({ ...m, dropboxPath: null, subs: m.subs?.startsWith(LOCAL) ? m.subs : null, thumb: null })
     else remove.push(m.id)
   }
   return { put, remove }
@@ -221,6 +234,9 @@ export async function uploadMedia(id: string, onProgress?: Progress): Promise<vo
   // uploadFile goes on from the last piece that got there, after a failure
   await uploadFile(path, file, onProgress)
   if (subs) await uploadFile(path.replace(/\.[a-z0-9]+$/i, '') + (extOf(m.subs!) === 'srt' ? '.srt' : '.vtt'), subs).catch((e) => console.warn('Subtitles not uploaded', e))
+  // A moved YouTube download's own picture goes next to it, so other devices show it too
+  const thumb = m.thumb ? null : await localByName(keptThumbName(id))
+  if (thumb) await uploadFile(path.replace(/\.[a-z0-9]+$/i, '') + '.jpg', thumb).catch((e) => console.warn('Thumbnail not uploaded', e))
   await db.media.update(id, { dropboxPath: path })
   await refreshMedia()
 }
@@ -231,7 +247,8 @@ export async function deleteMediaFromDropbox(id: string): Promise<void> {
   if (!m?.dropboxPath) return
   await deleteFile(m.dropboxPath)
   if (m.subs && !m.subs.startsWith(LOCAL)) await deleteFile(m.subs).catch(() => undefined)
-  if (m.local) await db.media.update(id, { dropboxPath: null, subs: m.subs?.startsWith(LOCAL) ? m.subs : null })
+  if (m.thumb) await deleteFile(m.thumb).catch(() => undefined)
+  if (m.local) await db.media.update(id, { dropboxPath: null, subs: m.subs?.startsWith(LOCAL) ? m.subs : null, thumb: null })
   else await db.media.delete(id)
   await refreshMedia()
 }
@@ -249,7 +266,15 @@ async function mediaDir(): Promise<FileSystemDirectoryHandle> {
 /** A file is kept once, by content. */
 const storedName = (m: Pick<MediaFile, 'id' | 'name'>) => `${m.id}.${extOf(m.name) || 'media'}`
 
-async function localByName(name: string): Promise<File | null> {
+/** A moved download's own picture, kept next to the file on this device. */
+export const keptThumbName = (id: string) => `${id}.jpg`
+
+/** Keeps [blob] as the file's own picture on this device. */
+export async function keepThumb(id: string, blob: Blob): Promise<void> {
+  await writeLocal(keptThumbName(id), blob)
+}
+
+export async function localByName(name: string): Promise<File | null> {
   try {
     return await (await (await mediaDir()).getFileHandle(name)).getFile()
   } catch {
@@ -416,7 +441,11 @@ export async function removeMediaFromDevice(id: string): Promise<void> {
   objectUrls.delete(storedName(m))
   if (m.subs?.startsWith(LOCAL)) await d.removeEntry(m.subs.slice(LOCAL.length)).catch(() => undefined)
   if (m.dropboxPath) await db.media.update(id, { local: false, subs: m.subs?.startsWith(LOCAL) ? null : m.subs })
-  else await db.media.delete(id)
+  else {
+    await d.removeEntry(keptThumbName(id)).catch(() => undefined)
+    await db.mediaThumbs.delete(id)
+    await db.media.delete(id)
+  }
 }
 
 // ---- Playing ----

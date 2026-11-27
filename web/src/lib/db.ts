@@ -258,6 +258,21 @@ export interface MediaFile {
   local: boolean
   addedAt: number
   lastOpenedAt: number
+  /** A picture in Dropbox next to it with the same name (.jpg, .png, .webp): its row's thumbnail */
+  thumb?: string | null
+}
+
+/** A Player file's row picture, found once and kept on this device (media/thumbs.ts). */
+export interface MediaThumb {
+  id: string
+  /** A small JPEG data URL, an image link (a YouTube thumbnail), or null when none was found */
+  url: string | null
+  /** When it was looked for */
+  at: number
+  /** Whether the file was on this device then (a miss is tried again once it is) */
+  local: boolean
+  /** The Dropbox picture next to the file it came from, if any (a new one there replaces a frame) */
+  from?: string | null
 }
 
 /** Where an audiobook was left (synced as kind "audiopos"). */
@@ -352,6 +367,7 @@ class FeederDb extends Dexie {
   audiobooks!: EntityTable<Audiobook, 'id'>
   audioPos!: EntityTable<AudioPos, 'id'>
   media!: EntityTable<MediaFile, 'id'>
+  mediaThumbs!: EntityTable<MediaThumb, 'id'>
   history!: EntityTable<HistoryEvent, 'id'>
   recent!: EntityTable<RecentEntry, 'key'>
   ytMeta!: EntityTable<YouTubeMeta, 'id'>
@@ -404,6 +420,8 @@ class FeederDb extends Dexie {
     this.version(11).stores({ shelfStatus: '&key', bookCovers: '&key' })
     // Library > Player: audio and video files from Dropbox's /Media and this device (media/library.ts)
     this.version(12).stores({ media: '&id, folder, lastOpenedAt' })
+    // Library > Player: each file's row picture (media/thumbs.ts), local only
+    this.version(13).stores({ mediaThumbs: '&id' })
   }
 }
 
