@@ -12,14 +12,14 @@ import { Icon, IconButton, type IconName } from './Icon'
 export type Tab = 'feeds' | 'discover' | 'youtube' | 'playlists' | 'library' | 'books' | BookTab | 'history'
 export type BarTab = Exclude<Tab, 'discover' | BookTab>
 /** The subtabs of Books. */
-export type BookTab = 'ebooks' | 'audiobooks' | 'zim'
+export type BookTab = 'ebooks' | 'audiobooks' | 'zim' | 'player'
 
 export const TABS: { tab: BarTab; label: string; icon: IconName; key: string; hint: string }[] = [
   { tab: 'feeds', label: 'Feeds', icon: 'dynamicFeed', key: 'f', hint: 'Latest, By feed and Discover' },
   { tab: 'youtube', label: 'YouTube', icon: 'subscriptions', key: 'y', hint: 'Your YouTube subscriptions' },
   { tab: 'playlists', label: 'Playlists', icon: 'queue', key: 'p', hint: 'Smart and hand-made playlists' },
-  { tab: 'library', label: 'Library', icon: 'library', key: 'l', hint: 'Saved, Highlights, Downloads and Player' },
-  { tab: 'books', label: 'Books', icon: 'book', key: 'b', hint: 'Ebooks, audiobooks and offline websites' },
+  { tab: 'library', label: 'Library', icon: 'library', key: 'l', hint: 'Saved, Highlights and Downloads' },
+  { tab: 'books', label: 'Books', icon: 'book', key: 'b', hint: 'Ebooks, audiobooks, offline websites and Player' },
   { tab: 'history', label: 'History', icon: 'history', key: 'h', hint: 'Everything you opened, on all your devices' },
 ]
 
@@ -29,6 +29,7 @@ const EXTRA_KEYS: { tab: Tab; key: string }[] = [
   { tab: 'ebooks', key: 'e' },
   { tab: 'audiobooks', key: 'a' },
   { tab: 'zim', key: 'z' },
+  { tab: 'player', key: 'm' },
 ]
 
 /** Books' subtabs, in order; [hash] is each one's listing (reader URLs hang off it). */
@@ -36,6 +37,7 @@ export const BOOK_TABS: { tab: BookTab; label: string; icon: IconName; hash: str
   { tab: 'ebooks', label: 'Ebooks', icon: 'menuBook', hash: '#/books', search: 'Search ebooks' },
   { tab: 'audiobooks', label: 'Audiobooks', icon: 'headphones', hash: '#/audiobooks', search: 'Search audiobooks' },
   { tab: 'zim', label: 'ZIM', icon: 'public', hash: '#/zim', search: 'Search ZIM' },
+  { tab: 'player', label: 'Player', icon: 'movie', hash: '#/player', search: 'Search files' },
 ]
 
 const BOOK_TAB_KEY = 'feeder.booksTab'
@@ -159,7 +161,7 @@ export function useBarTabs(): BarTab[] {
 /** The tab to light up: a screen whose tab isn't in the bar belongs to Library. */
 export function shownTab(current: Tab | null, bar: BarTab[]): Tab | null {
   if (!current || current === 'discover') return current === 'discover' ? 'feeds' : null
-  const tab: BarTab = current === 'ebooks' || current === 'audiobooks' || current === 'zim' ? 'books' : current
+  const tab: BarTab = current === 'ebooks' || current === 'audiobooks' || current === 'zim' || current === 'player' ? 'books' : current
   return bar.includes(tab) ? tab : 'library'
 }
 
@@ -259,8 +261,6 @@ export function LibraryPage(p: {
   onSaved: () => void
   onHighlights: () => void
   onDownloads: () => void
-  onPlayer: () => void
-  playerCount: number
   onSettings: () => void
   onManageFeeds: () => void
   onSearch: () => void
@@ -296,7 +296,6 @@ export function LibraryPage(p: {
           {row('bookmark', 'Saved', 'Read later and shared links', p.savedCount, p.onSaved)}
           {row('highlight', 'Highlights', 'Notes and quotes', p.highlightCount, p.onHighlights)}
           {p.showDownloads ? row('download', 'Downloads', 'Videos saved for offline', p.downloadCount, p.onDownloads) : null}
-          {row('movie', 'Player', 'Audio and video files from this device or Dropbox', p.playerCount, p.onPlayer)}
           {row(history.icon, history.label, history.hint, null, () => p.onTab('history'))}
           {elsewhere.map((t) => (
             <Fragment key={t.tab}>{row(t.icon, t.label, t.hint, null, () => p.onTab(t.tab))}</Fragment>

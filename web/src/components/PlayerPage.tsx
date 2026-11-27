@@ -27,22 +27,23 @@ import { confirmDelete } from '../lib/confirmDelete'
 import { confirmDropboxDelete, DropboxButton, needsDropbox, useDropbox } from './DropboxPanel'
 import { Icon, IconButton } from './Icon'
 import { MoreMenu } from './MoreMenu'
-import { GeneratedCover, Shelf, ShelfControls, useShelfPrefs, type ShelfAction, type ShelfItem, type Where } from './Shelf'
+import { BooksTabs, GeneratedCover, Shelf, ShelfControls, useShelfPrefs, type ShelfAction, type ShelfItem, type Where } from './Shelf'
 import { SleepMenu, SpeedMenu } from './AudiobooksPage'
+import { rememberBookCount, rememberBookTab } from './Tabs'
 
 /**
- * Library > Player: any audio or video file on this device or in Dropbox › Apps › Feeder › Media,
+ * Books > Player: any audio or video file on this device or in Dropbox › Apps › Feeder › Media,
  * with Dropbox's folders as folders, and one file's page (the video, or the sound's controls, then
  * what plays next in its folder). The Android app's Player screens (ui/compose/media) are the same.
  *
  * [page]: '' = the top, 'f:<folder>' = inside a folder, 'p:<id>' = one file's page.
  */
-export function PlayerPage(p: { page: string; onPage: (page: string, replace?: boolean) => void; onBack: () => void; toast: (m: string) => void }) {
+export function PlayerPage(p: { page: string; onPage: (page: string, replace?: boolean) => void; onBack: () => void; onMenu: () => void; toast: (m: string) => void }) {
   useEffect(() => {
     audiobookPlayer.onMessage = p.toast
   }, [p.toast])
   if (p.page.startsWith('p:')) return <MediaWatch key={p.page} id={p.page.slice(2)} onPage={p.onPage} onBack={p.onBack} toast={p.toast} />
-  return <MediaListing folder={p.page.startsWith('f:') ? p.page.slice(2) : ''} onPage={p.onPage} onBack={p.onBack} toast={p.toast} />
+  return <MediaListing folder={p.page.startsWith('f:') ? p.page.slice(2) : ''} onPage={p.onPage} onMenu={p.onMenu} toast={p.toast} />
 }
 
 interface Job {
@@ -159,7 +160,7 @@ function Breadcrumbs({ folder, onPage }: { folder: string; onPage: (page: string
   )
 }
 
-function MediaListing({ folder, onPage, onBack, toast }: { folder: string; onPage: (page: string, replace?: boolean) => void; onBack: () => void; toast: (m: string) => void }) {
+function MediaListing({ folder, onPage, onMenu, toast }: { folder: string; onPage: (page: string, replace?: boolean) => void; onMenu: () => void; toast: (m: string) => void }) {
   const all = useLiveQuery(() => db.media.toArray(), [])
   const positions = useLiveQuery(() => db.audioPos.toArray(), []) ?? []
   const posOf = useMemo(() => new Map(positions.map((x) => [x.id, x])), [positions])
@@ -185,6 +186,10 @@ function MediaListing({ folder, onPage, onBack, toast }: { folder: string; onPag
   }, [refresh])
 
   const items = all ?? []
+  useEffect(() => rememberBookTab('player'), [])
+  useEffect(() => {
+    if (all) rememberBookCount('player', all.length)
+  }, [all])
   const view = useMemo(() => folderView(items, folder), [items, folder])
   const q = query.trim().toLowerCase()
   // A search looks through every folder
@@ -269,8 +274,10 @@ function MediaListing({ folder, onPage, onBack, toast }: { folder: string; onPag
     >
       <div className="mf-page">
         <div className="mf-head">
-          <IconButton icon="back" label={folder ? 'Up a folder' : 'Library'} onClick={() => (folder ? onPage(folder.includes('/') ? `f:${folder.slice(0, folder.lastIndexOf('/'))}` : '') : onBack())} />
-          <h1>{title}</h1>
+          <span className="only-narrow">
+            <IconButton icon="menu" label="Feeds" onClick={onMenu} />
+          </span>
+          <h1>Books</h1>
           <span className="shelf-actions">
             <label className="books-search">
               <Icon name="search" size={18} />
@@ -322,6 +329,7 @@ function MediaListing({ folder, onPage, onBack, toast }: { folder: string; onPag
             }}
           />
         </div>
+        <BooksTabs current="player" />
         <Breadcrumbs folder={folder} onPage={onPage} />
 
         {jobRows.length ? (

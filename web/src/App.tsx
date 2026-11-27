@@ -260,7 +260,6 @@ export default function App() {
   const watchPushed = useRef(false)
   const queue = useQueue()
   const audiobook = useAudiobookPlayer()
-  const playerCount = useLiveQuery(() => db.media.count(), []) ?? 0
   // Whether the feed page was opened from inside the app, so its Back button can go back there
   const feedPageFromApp = useRef(false)
   const [focusHighlight, setFocusHighlight] = useState<string | null>(null)
@@ -1344,7 +1343,7 @@ export default function App() {
     { id: 'audiobooks', label: 'Go to Books: Audiobooks', icon: 'headphones', keywords: 'audiobooks listen m4b dropbox g a', run: () => openTab('audiobooks') },
     { id: 'zim', label: 'Go to Books: ZIM', icon: 'public', keywords: 'zim offline websites wikipedia kiwix g z', run: () => openTab('zim') },
     { id: 'history', label: 'Go to History', icon: 'history', keywords: 'recent opened watched read listened log g h', run: () => openTab('history') },
-    { id: 'player', label: 'Go to Library: Player', icon: 'movie', keywords: 'player play audio video music movie mp4 mp3 dropbox media', run: () => showPlayer('') },
+    { id: 'player', label: 'Go to Books: Player', icon: 'movie', keywords: 'player play audio video music movie mp4 mp3 dropbox media g m', run: () => showPlayer('') },
     { id: 'library', label: 'Go to Library', icon: 'library', keywords: 'saved highlights downloads g l', run: () => openTab('library') },
     { id: 'saved', label: 'Go to Saved', icon: 'bookmark', keywords: 'bookmarks read later', run: () => selectList({ kind: 'saved' }) },
     { id: 'playlists', label: 'Go to Playlists', icon: 'queue', keywords: 'queue listen', run: () => showPlaylists('') },
@@ -1385,11 +1384,11 @@ export default function App() {
     ? 'youtube'
     : onPlaylists
     ? 'playlists'
-    : zimPage !== null || bookPage !== null || audiobookPage !== null
+    : zimPage !== null || bookPage !== null || audiobookPage !== null || playerPage !== null
       ? 'books'
     : historyPage
       ? 'history'
-      : libraryPage || highlightsPage || downloadsPage || playerPage !== null || (selection.kind === 'saved' && !anyPage && !searchView)
+      : libraryPage || highlightsPage || downloadsPage || (selection.kind === 'saved' && !anyPage && !searchView)
         ? 'library'
         : searchView && !anyPage
           ? null
@@ -1426,6 +1425,7 @@ export default function App() {
     else if (t === 'zim') showZim('')
     else if (t === 'ebooks') showBooks('')
     else if (t === 'audiobooks') showAudiobooks('')
+    else if (t === 'player') showPlayer('')
     else if (t === 'history') showHistory(true)
     else showLibrary(true)
   }
@@ -1589,7 +1589,7 @@ export default function App() {
       ) : audiobookPage !== null ? (
         <AudiobooksPage book={audiobookPage || null} onOpen={(id) => showAudiobooks(id ?? '')} onMenu={() => setDrawer(true)} toast={toast} />
       ) : playerPage !== null ? (
-        <PlayerPage page={playerPage} onPage={(page, replace) => showPlayer(page, replace)} onBack={() => (playerPage ? history.back() : showLibrary(true))} toast={toast} />
+        <PlayerPage page={playerPage} onPage={(page, replace) => showPlayer(page, replace)} onBack={() => (playerPage ? history.back() : showPlayer(''))} onMenu={() => setDrawer(true)} toast={toast} />
       ) : zimPage !== null ? (
         <ZimPage book={zimPage || null} jump={zimJump} settings={settings} onOpen={(id) => showZim(id ?? '')} onMenu={() => setDrawer(true)} toast={toast} />
       ) : historyPage ? (
@@ -1603,8 +1603,6 @@ export default function App() {
           onSaved={() => selectList({ kind: 'saved' })}
           onHighlights={() => showHighlights(true)}
           onDownloads={() => showDownloads(true)}
-          onPlayer={() => showPlayer('')}
-          playerCount={playerCount}
           onSettings={() => setDialog({ kind: 'settings' })}
           onManageFeeds={() => showManage(true)}
           onSearch={() => setPaletteOpen(true)}
