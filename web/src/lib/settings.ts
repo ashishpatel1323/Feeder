@@ -34,6 +34,8 @@ export interface Settings {
   bookAudioAhead: number
   /** Delete a chapter's prepared audio once reading moves past it. */
   bookAudioDeletePlayed: boolean
+  /** Mac app: speak the phone's next ebook chapters with the natural voice into Dropbox (macBookAudio.ts). */
+  macBookAudio: boolean
   summaryProvider: 'none' | 'openai'
   /** OpenAI-compatible base URL, e.g. https://api.openai.com/v1 or http://localhost:11434/v1 for Ollama. */
   summaryBaseUrl: string
@@ -71,6 +73,7 @@ export const DEFAULT_SETTINGS: Settings = {
   readAloudKokoroUseGpu: true,
   bookAudioAhead: 3,
   bookAudioDeletePlayed: true,
+  macBookAudio: true,
   summaryProvider: 'none',
   summaryBaseUrl: 'http://localhost:11434/v1',
   summaryApiKey: '',

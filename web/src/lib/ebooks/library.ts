@@ -202,7 +202,7 @@ export async function importBook(file: File, onProgress?: Progress): Promise<Boo
 }
 
 /** The book's file, downloading it from Dropbox first when it isn't on this device. */
-export async function bookFile(id: string, onProgress?: Progress, signal?: AbortSignal): Promise<File> {
+export async function bookFile(id: string, onProgress?: Progress, signal?: AbortSignal, opts: { touch?: boolean } = {}): Promise<File> {
   let b = await db.books.get(id)
   if (!b) throw new Error('This book is no longer in the library')
   let file = b.local ? await localFile(b) : null
@@ -224,7 +224,8 @@ export async function bookFile(id: string, onProgress?: Progress, signal?: Abort
       // opens anyway; the reader shows its own error if it really can't
     }
   }
-  await db.books.update(id, { lastOpenedAt: Date.now() })
+  // Opened by the reader (not by the Mac making audio in the background)
+  if (opts.touch !== false) await db.books.update(id, { lastOpenedAt: Date.now() })
   return file
 }
 

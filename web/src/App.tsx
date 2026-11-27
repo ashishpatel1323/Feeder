@@ -243,6 +243,10 @@ export default function App() {
   const [audiobookPage, setAudiobookPage] = useState<string | null>(audiobookFromHash)
   /** null = not on Library > Player; else what it shows (see playerFromHash). */
   const [playerPage, setPlayerPage] = useState<string | null>(playerFromHash)
+  // Mac app: the phone's next ebook chapters spoken here into Dropbox (does nothing in a browser)
+  useEffect(() => {
+    void import('./lib/macBookAudio').then((m) => m.macBookAudio.start())
+  }, [])
   // Start on Home: give it its own address, so Back from the article list returns to it
   useEffect(() => {
     if (!window.location.hash && !feedsViewIsLatest()) history.replaceState(null, '', window.location.pathname + window.location.search + HOME_HASH)

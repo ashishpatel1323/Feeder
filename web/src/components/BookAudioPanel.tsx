@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AHEAD_CHOICES, bookAudio, type BookAudioState, type SectionAudio } from '../lib/bookAudio'
+import { macBookAudio, WHOLE_BOOK, type MacRunState } from '../lib/macBookAudio'
 import { updateSettings, type Settings } from '../lib/settings'
 import { Icon } from './Icon'
 
@@ -74,7 +75,7 @@ export function BookAudioStatus({ settings }: { settings: Settings }) {
   )
 }
 
-function BookAudioPanel({ s, settings }: { s: BookAudioState; settings: Settings }) {
+export function BookAudioPanel({ s, settings }: { s: BookAudioState; settings: Settings }) {
   return (
     <div className="book-audio-panel" role="dialog" aria-label="Offline audio">
       <h2>Offline audio</h2>
@@ -85,6 +86,7 @@ function BookAudioPanel({ s, settings }: { s: BookAudioState; settings: Settings
       </p>
       {s.supported ? (
         <>
+          <MacCard s={s} />
           <ul className="book-audio-rows">
             {s.sections.map((x) => (
               <Row key={`${x.state}:${x.index}`} x={x} s={s} />
@@ -98,13 +100,13 @@ function BookAudioPanel({ s, settings }: { s: BookAudioState; settings: Settings
                 type="button"
                 role="radio"
                 aria-checked={settings.bookAudioAhead === n}
-                className={settings.bookAudioAhead === n ? 'on' : ''}
+                className={[settings.bookAudioAhead === n ? 'on' : '', n === WHOLE_BOOK ? 'wide' : ''].join(' ').trim()}
                 onClick={() => {
                   bookAudio.setAhead(n)
                   void updateSettings({ bookAudioAhead: n })
                 }}
               >
-                {n === settings.bookAudioAhead ? `${n} chapter${n === 1 ? '' : 's'}` : n}
+                {n === WHOLE_BOOK ? 'Whole book' : n === settings.bookAudioAhead ? `${n} chapter${n === 1 ? '' : 's'}` : n}
               </button>
             ))}
           </div>
@@ -125,6 +127,28 @@ function BookAudioPanel({ s, settings }: { s: BookAudioState; settings: Settings
           </label>
         </>
       ) : null}
+    </div>
+  )
+}
+
+/** Mac app: what this Mac is making for the phone, above the chapters (design B). */
+function MacCard({ s }: { s: BookAudioState }) {
+  const [mac, setMac] = useState<MacRunState>(macBookAudio.state)
+  useEffect(() => macBookAudio.subscribe(setMac), [])
+  if (!mac.available || !mac.enabled || !mac.status) return null
+  const book = mac.status.books.find((b) => b.id === s.bookId)
+  const working = mac.status.working
+  const title = working ? 'Your Mac is making audio' : 'Your Mac is keeping audio ready'
+  const detail = book
+    ? `${book.ready.length} of ${book.planned.length} chapters ready for your phone${book.bytes ? ` · ${formatBytes(book.bytes)} in Dropbox` : ''}`
+    : 'For your phone, from the books you opened in the last week'
+  return (
+    <div className="book-audio-mac">
+      <Icon name="laptop" size={20} />
+      <span>
+        <b>{title}</b>
+        <small>{detail}</small>
+      </span>
     </div>
   )
 }
