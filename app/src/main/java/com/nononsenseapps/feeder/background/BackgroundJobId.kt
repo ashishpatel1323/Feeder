@@ -12,6 +12,8 @@ enum class BackgroundJobId(
     SYNC_CHAIN_SEND_READ(5),
     BLOCKLIST_UPDATE(6),
     CLEANUP_ORPHANED_FILES(7),
+    BOOK_AUDIO(8),
+    PLAYLIST_AUDIO(9),
 }
 
 interface BackgroundJob {
