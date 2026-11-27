@@ -195,6 +195,15 @@ export async function setThumb(id: string, url: string): Promise<void> {
     });
 }
 
+/** Whether a picture was written for the file after [before] was read (compared by row, not by clock). */
+export function changedMeanwhile(
+    before: MediaThumb | undefined,
+    now: MediaThumb | undefined,
+): boolean {
+    if (!now?.url) return false;
+    return !before || before.at !== now.at || before.url !== now.url;
+}
+
 const running = new Map<string, Promise<void>>();
 let chain: Promise<unknown> = Promise.resolve();
 
@@ -209,14 +218,13 @@ export function requestThumb(m: MediaFile): Promise<void> {
         .then(async () => {
             const known = await db.mediaThumbs.get(m.id);
             if (!shouldTry(known, m)) return;
-            const started = Date.now();
             const found = await find(m).catch(
                 (): Found => ({ url: null, from: null, sideFailed: false }),
             );
             await db.transaction("rw", db.mediaThumbs, async () => {
                 // A picture set meanwhile (a moved download's own) wins over what was found
                 const now = await db.mediaThumbs.get(m.id);
-                if (now?.url && now.at >= started) return;
+                if (changedMeanwhile(known, now)) return;
                 await db.mediaThumbs.put({
                     id: m.id,
                     url: found.url ?? now?.url ?? null,

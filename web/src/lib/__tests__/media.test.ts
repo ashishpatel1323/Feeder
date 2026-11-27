@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { asBook, filesUnder, folderView, kindOf, mediaInListing, mergeMedia, playsHere, srtToVtt, uploadPath } from '../media/library'
 import type { DropboxFile } from '../dropbox'
 import type { MediaFile } from '../db'
-import { frameAt, RETRY_MS, SIDECAR_RETRY_MS, shouldTry } from '../media/thumbs'
+import { changedMeanwhile, frameAt, RETRY_MS, SIDECAR_RETRY_MS, shouldTry } from '../media/thumbs'
 import { youtubePictureUrl } from '../media/fromDownloads'
 
 const file = (path: string, hash = path, size = 100): DropboxFile => ({ id: `id:${path}`, name: path.split('/').pop()!, path, size, hash, modified: '2026-11-01T10:00:00Z' })
@@ -170,5 +170,19 @@ describe('Player row pictures (same cases as the Android app\'s MediaThumbRulesT
 
   it("keeps a moved YouTube video's own 16:9 thumbnail", () => {
     expect(youtubePictureUrl('dQw4w9WgXcQ')).toBe('https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg')
+  })
+})
+
+describe('changedMeanwhile', () => {
+  const row = (url: string | null, at: number) => ({ id: 'a', url, at, local: false })
+  it('keeps a picture written while the file was looked at, whatever its clock time', () => {
+    // setThumb stamped before the lookup read the old row, but wrote after it
+    expect(changedMeanwhile(row(null, 100), row('yt.jpg', 90))).toBe(true)
+    expect(changedMeanwhile(undefined, row('yt.jpg', 90))).toBe(true)
+  })
+  it('lets the lookup write when nothing changed or nothing was set', () => {
+    expect(changedMeanwhile(row('old.jpg', 100), row('old.jpg', 100))).toBe(false)
+    expect(changedMeanwhile(row(null, 100), row(null, 200))).toBe(false)
+    expect(changedMeanwhile(undefined, undefined)).toBe(false)
   })
 })
