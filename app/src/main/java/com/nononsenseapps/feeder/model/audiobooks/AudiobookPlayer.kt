@@ -9,6 +9,7 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
@@ -19,8 +20,13 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.nononsenseapps.feeder.ApplicationCoroutineScope
 import com.nononsenseapps.feeder.dropbox.DropboxClient
+import com.nononsenseapps.feeder.model.history.CentralHistory
 import com.nononsenseapps.feeder.model.history.HistoryWhere
 import com.nononsenseapps.feeder.model.history.ItemHistory
+import com.nononsenseapps.feeder.model.history.RecentNote
+import com.nononsenseapps.feeder.model.media.MediaFile
+import com.nononsenseapps.feeder.model.media.MediaLibrary
+import com.nononsenseapps.feeder.model.media.MediaRules
 import com.nononsenseapps.feeder.model.playlists.PlaylistPlaybackService
 import com.nononsenseapps.feeder.model.playlists.PlaylistPlayer
 import kotlinx.coroutines.Dispatchers
@@ -61,6 +67,12 @@ data class AudiobookState(
     /** Reading the files' chapters and lengths: files done of files in all, or null */
     val scan: Pair<Int, Int>? = null,
     val error: String? = null,
+    /** A file from Books > Player, not an audiobook */
+    val media: Boolean = false,
+    /** A Player file with pictures: its screen shows the video */
+    val video: Boolean = false,
+    /** Player files that come next (their ids), in order */
+    val queue: List<String> = emptyList(),
 ) {
     val active: Boolean get() = bookId != null
     val sleepOn: Boolean get() = sleepEndsAt > 0 || sleepEndOfChapter
@@ -78,6 +90,11 @@ data class AudiobookState(
  * "audiopos"), a speed per book, and a sleep timer (minutes or end of chapter, fading out over the
  * last 10 s). The notification, lock screen, Bluetooth buttons and Android Auto come from
  * [PlaylistPlaybackService], whose player shows the audiobook while no playlist plays.
+ *
+ * It also plays Books > Player's files ([openMedia]), audio or video, as one-file books: the
+ * same notification, speed, sleep timer and synced place. The Player's screen shows the video by
+ * putting [exoPlayer] in a PlayerView; leaving the screen keeps the sound going. Files of a
+ * folder play one after another ([AudiobookState.queue]).
  */
 @OptIn(UnstableApi::class)
 class AudiobookPlayer(
@@ -92,6 +109,14 @@ class AudiobookPlayer(
     // Started with the player, so a book with its transcript on is transcribed ahead while it plays
     private val transcriptsAhead: AudiobookTranscripts by instance()
     private val library by lazy { AudiobookLibrary.get(app) }
+    private val mediaLibrary by lazy { MediaLibrary.get(app) }
+    private val centralHistory by lazy { CentralHistory.get(app) }
+
+    /** The Player file playing, when it is one */
+    private var mediaFile: MediaFile? = null
+
+    /** The ExoPlayer, for a PlayerView that shows a Player file's video */
+    val exoPlayer: Player? get() = player
     private val dropbox by lazy { DropboxClient.get(app) }
     private val prefs by lazy { app.getSharedPreferences("audiobook_player", android.content.Context.MODE_PRIVATE) }
 
@@ -121,6 +146,18 @@ class AudiobookPlayer(
     ) {
         val b = book ?: return
         val s = _state.value
+        mediaFile?.takeIf { s.media }?.let { m ->
+            val f = AudiobookRules.fractionAt(b, s.i, s.ms)
+            val starts = action == ItemHistory.PLAY
+            scope.launch(Dispatchers.IO) {
+                centralHistory.note(
+                    RecentNote(CentralHistory.MEDIA, m.id, n = m.title, s = m.folder, f = f.takeIf { it > 0 }, d = f >= 0.99, x = "0:${s.ms}"),
+                    touch = starts,
+                    create = starts,
+                )
+            }
+            return
+        }
         val ch = s.currentChapter
         history.record(
             ItemHistory.AUDIOBOOK,
@@ -237,18 +274,34 @@ class AudiobookPlayer(
             }.also { player = it }
     }
 
+    private fun dropboxUri(path: String) =
+        Uri
+            .Builder()
+            .scheme(SCHEME)
+            .path(path)
+            .build()
+
     private fun mediaItems(b: Audiobook): List<MediaItem> =
         b.tracks.mapIndexed { k, t ->
             val uri =
-                library.localFile(t)?.let(Uri::fromFile) ?: t.uri?.let(Uri::parse) ?: Uri
-                    .Builder()
-                    .scheme(SCHEME)
-                    .path(t.path)
-                    .build()
+                (if (mediaFile != null) mediaLibrary.localFile(t) else library.localFile(t))?.let(Uri::fromFile) ?: t.uri?.let(Uri::parse) ?: dropboxUri(t.path)
+            // A Player file's subtitles (a .vtt or .srt next to it), read through the same data source
+            val subs =
+                mediaFile?.let { m ->
+                    m.subs?.let { s ->
+                        MediaItem.SubtitleConfiguration
+                            .Builder(if (s.startsWith("content:")) Uri.parse(s) else dropboxUri(s))
+                            .setMimeType(if (MediaRules.subtitlesAreSrt(app, m)) MimeTypes.APPLICATION_SUBRIP else MimeTypes.TEXT_VTT)
+                            .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                            .setLanguage("und")
+                            .build()
+                    }
+                }
             MediaItem
                 .Builder()
                 .setMediaId("${b.id}:$k")
                 .setUri(uri)
+                .setSubtitleConfigurations(listOfNotNull(subs))
                 .setMediaMetadata(
                     MediaMetadata
                         .Builder()
@@ -279,6 +332,7 @@ class AudiobookPlayer(
         playReason = reason
         save()
         player?.stop()
+        mediaFile = null
         book = b
         val chapters = AudiobookRules.chaptersOf(b)
         val start = at ?: AudiobookRules.resumePoint(b, positions.get(id)) ?: (0 to 0L)
@@ -300,6 +354,7 @@ class AudiobookPlayer(
             )
         library.markOpened(id)
         val p = player ?: createPlayer()
+        p.setAudioAttributes(attributes(speech = true), true)
         p.setMediaItems(mediaItems(b), start.first, start.second)
         p.playbackParameters = PlaybackParameters(_state.value.speed)
         p.volume = 1f
@@ -321,6 +376,74 @@ class AudiobookPlayer(
                 }
             }
         }
+    }
+
+    private fun attributes(speech: Boolean) =
+        AudioAttributes
+            .Builder()
+            .setUsage(C.USAGE_MEDIA)
+            .setContentType(if (speech) C.AUDIO_CONTENT_TYPE_SPEECH else C.AUDIO_CONTENT_TYPE_MOVIE)
+            .build()
+
+    /**
+     * Opens a Books > Player file where it was left (or at [atMs]) and plays it unless [play] is
+     * false. [queue] is what plays after it (ids, in order).
+     */
+    fun openMedia(
+        id: String,
+        queue: List<String> = emptyList(),
+        play: Boolean = true,
+        atMs: Long? = null,
+        reason: String = REASON_APP,
+    ) {
+        if (_state.value.bookId == id && _state.value.media && atMs == null) {
+            _state.value = _state.value.copy(queue = queue)
+            if (play) play(reason)
+            return
+        }
+        val m = mediaLibrary.get(id) ?: return
+        tick()
+        notePause(REASON_APP)
+        playReason = reason
+        save()
+        player?.stop()
+        mediaFile = m
+        val b = MediaRules.asBook(m)
+        book = b
+        val start = atMs?.let { 0 to it } ?: AudiobookRules.resumePoint(b, positions.get(id)) ?: (0 to 0L)
+        val chapters = AudiobookRules.chaptersOf(b)
+        _state.value =
+            AudiobookState(
+                bookId = id,
+                title = b.title,
+                author = b.author,
+                loading = play,
+                ms = start.second,
+                bookMs = start.second,
+                bookLength = AudiobookRules.bookLengthMs(b),
+                chapters = chapters,
+                speed = speedFor(id),
+                sleepEndsAt = _state.value.sleepEndsAt,
+                sleepEndOfChapter = _state.value.sleepEndOfChapter,
+                media = true,
+                video = m.isVideo,
+                queue = queue,
+            )
+        mediaLibrary.markOpened(id)
+        val p = player ?: createPlayer()
+        p.setAudioAttributes(attributes(speech = false), true)
+        p.setMediaItems(mediaItems(b), 0, start.second)
+        p.playbackParameters = PlaybackParameters(_state.value.speed)
+        p.volume = 1f
+        p.prepare()
+        if (play) startPlaying()
+        startTicker()
+    }
+
+    /** A Player file: the next one in its folder now. */
+    fun skipNext() {
+        val q = _state.value.queue
+        if (_state.value.media && q.isNotEmpty()) openMedia(q.first(), q.drop(1))
     }
 
     private fun refreshBook(b: Audiobook) {
@@ -350,7 +473,7 @@ class AudiobookPlayer(
 
     fun play(reason: String = REASON_APP) {
         val id = _state.value.bookId ?: return
-        if (player == null) return open(id, reason = reason)
+        if (player == null) return if (_state.value.media) openMedia(id, _state.value.queue, reason = reason) else open(id, reason = reason)
         if (!noted) playReason = reason
         startPlaying()
     }
@@ -410,6 +533,8 @@ class AudiobookPlayer(
 
     fun nextChapter() {
         val s = _state.value
+        // A Player file has one chapter: Next is the next file in its folder
+        if (s.media) return skipNext()
         if (s.chapter < s.chapters.size - 1) jumpToChapter(s.chapter + 1)
     }
 
@@ -474,6 +599,7 @@ class AudiobookPlayer(
         if (dur > 0 && b.tracks.getOrNull(i)?.duration == null) {
             val tracks = b.tracks.mapIndexed { k, t -> if (k == i) t.copy(duration = dur / 1000.0) else t }
             refreshBook(b.copy(tracks = tracks))
+            if (_state.value.media) mediaLibrary.setDuration(b.id, dur / 1000.0)
         }
         _state.value = _state.value.copy(i = i, ms = ms, bookMs = AudiobookRules.trackStartMs(book!!, i) + ms, chapter = chapter)
         if (chapter != old.chapter && old.sleepEndOfChapter && old.isPlaying) {
@@ -513,8 +639,14 @@ class AudiobookPlayer(
     private fun finished() {
         val b = book ?: return
         val last = b.tracks.lastOrNull() ?: return
-        positions.save(b.id, b.tracks.size - 1, last.hash, last.lengthMs, 1.0)
+        positions.save(b.id, b.tracks.size - 1, last.hash, last.lengthMs.takeIf { it > 0 } ?: (player?.duration ?: 0L).coerceAtLeast(0), 1.0)
         notePause(REASON_END)
+        // A Player file: on to the next one in its folder
+        val q = _state.value.queue
+        if (_state.value.media && q.isNotEmpty()) {
+            scope.launch(Dispatchers.Main) { openMedia(q.first(), q.drop(1)) }
+            return
+        }
         cancelSleep()
         _state.value = _state.value.copy(isPlaying = false, loading = false)
         _messages.tryEmit("Finished ${b.title}")
@@ -529,6 +661,7 @@ class AudiobookPlayer(
         player?.release()
         player = null
         book = null
+        mediaFile = null
         _state.value = AudiobookState()
         if (!playlistPlayer.state.value.active) stopService()
     }

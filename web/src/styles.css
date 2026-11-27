@@ -10657,3 +10657,164 @@ mark.sr-mark {
   }
 }
 .ab-top-gap { flex: 1; }
+
+/* ---- Library > Player (PlayerPage.tsx) ---- */
+.media-holder {
+  display: none;
+}
+.mp-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1);
+  margin: 0 0 var(--sp-3);
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.mp-crumbs button {
+  border: 0;
+  background: none;
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-sm);
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mp-crumbs button:hover {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.mp-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+.mp-crumb [aria-current] {
+  padding: var(--sp-1) var(--sp-2);
+  color: var(--text);
+  font-weight: 600;
+}
+.mp-playall {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0 0 var(--sp-3);
+}
+.mp-count {
+  font-size: var(--fs-sm);
+}
+.mp-folders {
+  margin-bottom: var(--sp-3);
+}
+.mp-folders .lib-row {
+  width: 100%;
+  text-align: left;
+}
+.mp-folder-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft);
+  color: var(--text-2);
+}
+.mp-watch {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+}
+.mp-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
+  gap: var(--sp-5);
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: var(--sp-4) var(--sp-4) var(--sp-6);
+}
+.mp-watch:not(.is-video) .mp-body {
+  max-width: 1000px;
+}
+.mp-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.mp-watch:not(.is-video) .mp-main {
+  align-items: center;
+  text-align: center;
+}
+.mp-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: black;
+}
+.mp-stage .media-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: black;
+}
+.mp-stage-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: white;
+  cursor: pointer;
+}
+.mp-stage-play:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.mp-art {
+  width: min(100%, 280px);
+}
+.mp-title {
+  margin: var(--sp-3) 0 0;
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.mp-meta {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-sm);
+}
+.mp-watch.is-video .ab-extras {
+  flex-wrap: wrap;
+  margin-top: var(--sp-3);
+}
+.mp-next {
+  min-width: 0;
+}
+.mp-next .lib-section {
+  margin-top: 0;
+}
+.mp-next .lib-row {
+  width: 100%;
+  text-align: left;
+}
+@media (max-width: 900px) {
+  .mp-body {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0 0 var(--sp-6);
+  }
+  .mp-watch.is-video .mp-stage {
+    border-radius: 0;
+  }
+  .mp-main > :not(.mp-stage),
+  .mp-next {
+    padding: 0 var(--sp-4);
+  }
+  .mp-watch:not(.is-video) .mp-main {
+    padding-top: var(--sp-4);
+  }
+}

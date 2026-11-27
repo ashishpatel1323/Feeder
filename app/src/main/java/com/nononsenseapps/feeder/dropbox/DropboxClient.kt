@@ -567,6 +567,7 @@ class DropboxClient private constructor(
         const val EBOOKS_FOLDER = "/Ebooks"
         const val ZIM_FOLDER = "/ZIM"
         const val AUDIOBOOKS_FOLDER = "/Audiobooks"
+        const val MEDIA_FOLDER = "/Media"
         private const val LINK_REUSE_MS = 3 * 60 * 60 * 1000L
         private const val KEY_LINK = "link"
         private const val KEY_TS = "ts"

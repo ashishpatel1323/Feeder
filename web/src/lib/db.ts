@@ -235,6 +235,31 @@ export interface Audiobook {
   lastOpenedAt: number
 }
 
+/**
+ * One audio or video file in Library > Player (media/library.ts): in Dropbox's /Media folder
+ * (subfolders are folders here too) and/or kept on this device. Its place syncs as kind
+ * "audiopos", by [id], like a one-file audiobook.
+ */
+export interface MediaFile {
+  /** Dropbox content hash of the file */
+  id: string
+  name: string
+  /** The folder it is in, under /Media or inside what was picked ("Talks/2024"), '' at the top */
+  folder: string
+  /** Where it is in Dropbox, or null when it is only on this device */
+  dropboxPath: string | null
+  size: number
+  kind: 'audio' | 'video'
+  /** Length in seconds, once known */
+  duration: number | null
+  /** A subtitle file next to it (.vtt or .srt): its Dropbox path, or "local:" + its stored name */
+  subs: string | null
+  /** Whether this browser keeps a copy (in its private storage) */
+  local: boolean
+  addedAt: number
+  lastOpenedAt: number
+}
+
 /** Where an audiobook was left (synced as kind "audiopos"). */
 export interface AudioPos {
   id: string
@@ -278,7 +303,7 @@ export interface HistoryEvent {
 export interface RecentEntry {
   /** "t:i" for opens, "t:i:a" for changes; "*" is the Clear history marker (at = cleared up to) */
   key: string
-  t: 'article' | 'youtube' | 'podcast' | 'audiobook' | 'ebook' | 'zim' | 'highlight' | 'note' | 'feed'
+  t: 'article' | 'youtube' | 'podcast' | 'audiobook' | 'ebook' | 'zim' | 'media' | 'highlight' | 'note' | 'feed'
   a: 'open' | 'create' | 'delete'
   i: string
   n: string
@@ -326,6 +351,7 @@ class FeederDb extends Dexie {
   bookPos!: EntityTable<BookPos, 'id'>
   audiobooks!: EntityTable<Audiobook, 'id'>
   audioPos!: EntityTable<AudioPos, 'id'>
+  media!: EntityTable<MediaFile, 'id'>
   history!: EntityTable<HistoryEvent, 'id'>
   recent!: EntityTable<RecentEntry, 'key'>
   ytMeta!: EntityTable<YouTubeMeta, 'id'>
@@ -376,6 +402,8 @@ class FeederDb extends Dexie {
     this.version(10).stores({ recent: '&key, at, synced' })
     // Books: statuses and covers picked by hand (shelfMarks.ts; synced as "shelfstatus" / "bookcover")
     this.version(11).stores({ shelfStatus: '&key', bookCovers: '&key' })
+    // Library > Player: audio and video files from Dropbox's /Media and this device (media/library.ts)
+    this.version(12).stores({ media: '&id, folder, lastOpenedAt' })
   }
 }
 

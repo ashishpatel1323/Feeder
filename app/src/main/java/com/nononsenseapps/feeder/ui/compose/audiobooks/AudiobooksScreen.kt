@@ -92,10 +92,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.nononsenseapps.feeder.R
-import com.nononsenseapps.feeder.model.shelf.BookStatus
-import com.nononsenseapps.feeder.model.shelf.ShelfMarks
-import com.nononsenseapps.feeder.model.shelf.ShelfStatusRules
-import com.nononsenseapps.feeder.ui.compose.shelf.CoverPickerDialog
 import com.nononsenseapps.feeder.dropbox.DropboxClient
 import com.nononsenseapps.feeder.model.audiobooks.AudioPos
 import com.nononsenseapps.feeder.model.audiobooks.AudioPositions
@@ -105,6 +101,9 @@ import com.nononsenseapps.feeder.model.audiobooks.AudiobookPlayer
 import com.nononsenseapps.feeder.model.audiobooks.AudiobookRules
 import com.nononsenseapps.feeder.model.audiobooks.AudiobookState
 import com.nononsenseapps.feeder.model.history.ItemHistory
+import com.nononsenseapps.feeder.model.shelf.BookStatus
+import com.nononsenseapps.feeder.model.shelf.ShelfMarks
+import com.nononsenseapps.feeder.model.shelf.ShelfStatusRules
 import com.nononsenseapps.feeder.sync2.SyncNudge
 import com.nononsenseapps.feeder.sync2.ThisDevice
 import com.nononsenseapps.feeder.sync2.otherDeviceText
@@ -118,6 +117,7 @@ import com.nononsenseapps.feeder.ui.compose.ebooks.uploadOrExplain
 import com.nononsenseapps.feeder.ui.compose.feed.PlainTooltipBox
 import com.nononsenseapps.feeder.ui.compose.history.historyItems
 import com.nononsenseapps.feeder.ui.compose.history.rememberHistory
+import com.nononsenseapps.feeder.ui.compose.shelf.CoverPickerDialog
 import com.nononsenseapps.feeder.ui.compose.shelf.GeneratedCover
 import com.nononsenseapps.feeder.ui.compose.shelf.LibraryListingScreen
 import com.nononsenseapps.feeder.ui.compose.shelf.ShelfAction
@@ -291,7 +291,12 @@ fun AudiobooksScreen(
             val actions = mutableListOf<ShelfAction>()
             if (b.dropboxPath != null && !downloaded && !b.onPhone && job == null) actions += ShelfAction(downloadText) { library.download(b.id) }
             if (downloaded && b.dropboxPath != null && !b.onPhone) actions += ShelfAction(removeDownloadText) { askRemoveDownload(b) }
-            if (b.dropboxPath == null && job == null) actions += ShelfAction(if (library.hasPendingUpload(b.id)) resumeUploadText else uploadText) { uploadOrExplain(context, link != null, audiobooksWhat) { library.uploadToDropbox(b.id) } }
+            if (b.dropboxPath == null &&
+                job == null
+            ) {
+                actions +=
+                    ShelfAction(if (library.hasPendingUpload(b.id)) resumeUploadText else uploadText) { uploadOrExplain(context, link != null, audiobooksWhat) { library.uploadToDropbox(b.id) } }
+            }
             if (b.tracks.any { it.uri != null }) actions += ShelfAction(forgetText) { askForget(b) }
             actions += ShelfAction(coverText) { coverFor = b }
             if (b.dropboxPath != null && job == null) actions += ShelfAction(deleteDropboxText) { deleting = b }
@@ -698,7 +703,7 @@ internal fun SpeedButton(
 }
 
 @Composable
-private fun SleepButton(
+internal fun SleepButton(
     s: AudiobookState,
     player: AudiobookPlayer,
 ) {
@@ -793,7 +798,16 @@ fun AudiobookMiniBar(
                 Column(Modifier.weight(1f)) {
                     Text(s.currentChapter?.title ?: s.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
-                        listOfNotNull(s.title, if (s.chapterLengthMs > 0) "−" + AudiobookRules.clock(s.chapterLengthMs - s.inChapterMs) else null).joinToString(" · "),
+                        listOfNotNull(
+                            if (s.media) s.author.ifBlank { stringResource(R.string.media_player) } else s.title,
+                            if (s.chapterLengthMs >
+                                0
+                            ) {
+                                "−" + AudiobookRules.clock(s.chapterLengthMs - s.inChapterMs)
+                            } else {
+                                null
+                            },
+                        ).joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,

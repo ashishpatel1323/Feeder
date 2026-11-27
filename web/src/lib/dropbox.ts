@@ -1,5 +1,5 @@
 /**
- * Dropbox as the shared place for big files: ebooks (/Ebooks), ZIM books (/ZIM) and audiobooks
+ * Dropbox as the shared place for big files: ebooks (/Ebooks), ZIM books (/ZIM), audio and video (/Media) and audiobooks
  * (/Audiobooks) live in the
  * app's own folder (Apps/<app name>/), so every device sees the same library. Reading positions
  * and highlights don't go here; they travel in Feeder's own encrypted sync (sync2.ts).
@@ -22,6 +22,7 @@ export const DROPBOX_SCOPES = 'account_info.read files.metadata.read files.metad
 export const EBOOKS_FOLDER = '/Ebooks'
 export const ZIM_FOLDER = '/ZIM'
 export const AUDIOBOOKS_FOLDER = '/Audiobooks'
+export const MEDIA_FOLDER = '/Media'
 
 /** What sync2 carries between devices (kind "dropbox", key "main"). */
 export interface DropboxLink {

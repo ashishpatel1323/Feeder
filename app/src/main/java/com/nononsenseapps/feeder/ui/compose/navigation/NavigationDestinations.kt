@@ -448,6 +448,95 @@ data object LibraryDestination : NavigationDestination(
     }
 }
 
+/** A folder of Books > Player (the top is Books' Player subtab). */
+data object MediaDestination : NavigationDestination(
+    path = "player",
+    navArguments =
+        listOf(
+            QueryParamArgument("folder") {
+                type = NavType.StringType
+                defaultValue = ""
+            },
+        ),
+    deepLinks = emptyList(),
+) {
+    fun navigate(
+        navController: NavController,
+        folder: String = "",
+    ) {
+        navController.navigate("$path?folder=${Uri.encode(folder)}")
+    }
+
+    @Composable
+    override fun RegisterScreen(
+        navController: NavController,
+        backStackEntry: NavBackStackEntry,
+        navDrawerListState: LazyListState,
+        mainActivityViewModel: MainActivityViewModel,
+    ) {
+        val folder = backStackEntry.arguments?.getString("folder").orEmpty()
+        com.nononsenseapps.feeder.ui.compose.media.MediaScreen(
+            folder = folder,
+            onOpenFolder = { target ->
+                // The top is Books' Player subtab: back there, past the folders opened on the way
+                if (target.isEmpty()) {
+                    if (!navController.popBackStack(BooksDestination.route, false)) {
+                        BooksDestination.navigate(navController, com.nononsenseapps.feeder.ui.compose.books.BookTab.PLAYER)
+                    }
+                } else {
+                    navigate(navController, target)
+                }
+            },
+            onOpenFile = { MediaPlayerDestination.navigate(navController, it) },
+            onNavigateUp = { navController.popBackStack() },
+        )
+    }
+}
+
+/** One Books > Player file: the video, or the sound's controls, and what plays next. */
+data object MediaPlayerDestination : NavigationDestination(
+    path = "player/play",
+    navArguments =
+        listOf(
+            QueryParamArgument("id") {
+                type = NavType.StringType
+                defaultValue = ""
+            },
+        ),
+    deepLinks =
+        listOf(
+            navDeepLink {
+                uriPattern = "$DEEP_LINK_BASE_URI/player?id={id}"
+            },
+        ),
+) {
+    fun navigate(
+        navController: NavController,
+        id: String,
+    ) {
+        val onPlayer = navController.currentDestination?.route == route
+        navController.navigate("$path?id=${Uri.encode(id)}") {
+            launchSingleTop = true
+            // From one file to the next: replace, so Back leaves the Player screen
+            if (onPlayer) popUpTo(route) { inclusive = true }
+        }
+    }
+
+    @Composable
+    override fun RegisterScreen(
+        navController: NavController,
+        backStackEntry: NavBackStackEntry,
+        navDrawerListState: LazyListState,
+        mainActivityViewModel: MainActivityViewModel,
+    ) {
+        com.nononsenseapps.feeder.ui.compose.media.MediaPlayerScreen(
+            id = backStackEntry.arguments?.getString("id").orEmpty(),
+            onNavigateUp = { navController.popBackStack() },
+            onOpenFile = { navigate(navController, it) },
+        )
+    }
+}
+
 /** One audiobook's player: chapters, speed, sleep timer. */
 data object AudiobookPlayerDestination : NavigationDestination(
     path = "audiobooks/play",
@@ -536,7 +625,7 @@ data object EbookReaderDestination : NavigationDestination(
     }
 }
 
-/** Books: Ebooks, Audiobooks and ZIM as subtabs, opening on the one used last (or [BookTab] in "tab"). */
+/** Books: Ebooks, Audiobooks, ZIM and Player as subtabs, opening on the one used last (or [BookTab] in "tab"). */
 data object BooksDestination : NavigationDestination(
     path = "books",
     navArguments =
@@ -567,10 +656,14 @@ data object BooksDestination : NavigationDestination(
     ) {
         val asked = backStackEntry.arguments?.getString("tab").orEmpty()
         com.nononsenseapps.feeder.ui.compose.books.BooksScreen(
-            askedTab = com.nononsenseapps.feeder.ui.compose.books.BookTab.entries.firstOrNull { it.name == asked },
+            askedTab =
+                com.nononsenseapps.feeder.ui.compose.books.BookTab.entries
+                    .firstOrNull { it.name == asked },
             onOpenEbook = { EbookReaderDestination.navigate(navController, it, null) },
             onOpenAudiobook = { AudiobookPlayerDestination.navigate(navController, it) },
             onOpenZim = { ZimReaderDestination.navigate(navController, it) },
+            onOpenMediaFolder = { MediaDestination.navigate(navController, it) },
+            onOpenMediaFile = { MediaPlayerDestination.navigate(navController, it) },
         )
     }
 }
@@ -605,6 +698,7 @@ data object HistoryDestination : NavigationDestination(
                     openAudiobook = { book -> AudiobookPlayerDestination.navigate(navController, book) },
                     openZim = { book -> ZimReaderDestination.navigate(navController, book) },
                     openFeed = { id -> FeedDestination.navigate(navController, feedId = id, keepBackStack = true) },
+                    openMedia = { id -> MediaPlayerDestination.navigate(navController, id) },
                 ),
         )
     }

@@ -17,13 +17,13 @@ import { isWatched } from './videopos'
 import { articleVideoId } from './youtube'
 import { dateBucketKey, dateLabel } from './listquery'
 
-export type RecentType = 'article' | 'youtube' | 'podcast' | 'audiobook' | 'ebook' | 'zim' | 'highlight' | 'note' | 'feed'
+export type RecentType = 'article' | 'youtube' | 'podcast' | 'audiobook' | 'ebook' | 'zim' | 'media' | 'highlight' | 'note' | 'feed'
 export type RecentAction = 'open' | 'create' | 'delete'
 
 /** The synced value of an entry: everything but the local bookkeeping. */
 export type RecentValue = Omit<RecentEntry, 'key' | 'ts' | 'synced' | 'del'>
 
-export const TYPES: RecentType[] = ['article', 'youtube', 'podcast', 'audiobook', 'ebook', 'zim', 'highlight', 'note', 'feed']
+export const TYPES: RecentType[] = ['article', 'youtube', 'podcast', 'audiobook', 'ebook', 'zim', 'media', 'highlight', 'note', 'feed']
 const ACTIONS: RecentAction[] = ['open', 'create', 'delete']
 
 /** Entries kept on a device, and for how long. */
@@ -177,6 +177,12 @@ export async function noteItemProgress(itemId: string, t: number, d: number): Pr
   const key = (await db.recent.get(recentKey('youtube', itemId))) ? 'youtube' : (await db.recent.get(recentKey('podcast', itemId))) ? 'podcast' : null
   if (!key) return
   await noteRecent({ t: key, i: itemId, ...progressOf(t, d) }, { touch: false, create: false })
+}
+
+/** Library > Player: a file played ([starts]) or paused, with how far through it is (0–1). */
+export async function noteMedia(m: { id: string; title: string; folder: string }, starts: boolean, f: number | undefined, x?: string): Promise<void> {
+  const frac = typeof f === 'number' && Number.isFinite(f) && f > 0 ? Math.round(f * 10000) / 10000 : undefined
+  await noteRecent({ t: 'media', i: m.id, n: clip(m.title, 300) ?? 'File', s: clip(m.folder, 200), f: frac, d: frac !== undefined && frac >= 0.99 ? 1 : undefined, x }, { touch: starts, create: starts })
 }
 
 /** From history.ts: an audiobook played or paused, an ebook or ZIM site opened or closed. */
@@ -406,7 +412,7 @@ export async function applyRecent(key: string, v: unknown, ts: number): Promise<
 // ---------------------------------------------------------------------------------------------
 // Showing it
 
-export type RecentFilter = 'all' | 'article' | 'youtube' | 'podcast' | 'playlist' | 'books' | 'marks' | 'feed'
+export type RecentFilter = 'all' | 'article' | 'youtube' | 'podcast' | 'playlist' | 'books' | 'media' | 'marks' | 'feed'
 
 export const FILTERS: { id: RecentFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -415,6 +421,7 @@ export const FILTERS: { id: RecentFilter; label: string }[] = [
   { id: 'podcast', label: 'Podcasts' },
   { id: 'playlist', label: 'Playlists' },
   { id: 'books', label: 'Books' },
+  { id: 'media', label: 'Player' },
   { id: 'marks', label: 'Highlights & notes' },
   { id: 'feed', label: 'Feeds' },
 ]
@@ -424,6 +431,7 @@ export function matchesFilter(e: Pick<RecentEntry, 't' | 'pl'>, f: RecentFilter)
   if (f === 'playlist') return !!e.pl
   if (f === 'marks') return e.t === 'highlight' || e.t === 'note'
   if (f === 'books') return e.t === 'audiobook' || e.t === 'ebook' || e.t === 'zim'
+  if (f === 'media') return e.t === 'media'
   return e.t === f
 }
 
@@ -479,6 +487,7 @@ export const TYPE_LABEL: Record<RecentType, string> = {
   audiobook: 'Audiobook',
   ebook: 'Ebook',
   zim: 'ZIM page',
+  media: 'Player',
   highlight: 'Highlight',
   note: 'Note',
   feed: 'Feed',
@@ -486,5 +495,5 @@ export const TYPE_LABEL: Record<RecentType, string> = {
 
 /** "the article", "the video"…: what removing an entry does not delete. */
 export function thingText(t: RecentType): string {
-  return { article: 'article', youtube: 'video', podcast: 'episode', audiobook: 'audiobook', ebook: 'ebook', zim: 'page', highlight: 'highlight', note: 'note', feed: 'feed' }[t]
+  return { article: 'article', youtube: 'video', podcast: 'episode', audiobook: 'audiobook', ebook: 'ebook', zim: 'page', media: 'file', highlight: 'highlight', note: 'note', feed: 'feed' }[t]
 }

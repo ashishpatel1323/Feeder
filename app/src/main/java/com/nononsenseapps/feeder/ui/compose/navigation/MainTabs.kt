@@ -163,7 +163,7 @@ fun mainTabOf(
         PlaylistsDestination.route -> own(MainTab.PLAYLISTS)
         LibraryDestination.route, DownloadsDestination.route, HighlightsDestination.route -> MainTab.LIBRARY
         YouTubeDestination.route -> own(MainTab.YOUTUBE)
-        BooksDestination.route -> own(MainTab.BOOKS)
+        BooksDestination.route, MediaDestination.route -> own(MainTab.BOOKS)
         HistoryDestination.route -> own(MainTab.HISTORY)
         else -> null
     }
@@ -177,6 +177,7 @@ fun NavBackStackEntry.wantsSharedMiniPlayer(): Boolean =
         LibraryDestination.route,
         DownloadsDestination.route,
         HighlightsDestination.route,
+        MediaDestination.route,
         YouTubeDestination.route,
         BooksDestination.route,
         HistoryDestination.route,
