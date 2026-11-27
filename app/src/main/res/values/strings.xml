@@ -664,4 +664,16 @@
     <item quantity="one">Next chapter ready offline</item>
     <item quantity="other">Next %1$d chapters ready offline</item>
   </plurals>
+  <string name="offline_audio_ready_row">Ready offline</string>
+  <string name="playlist_prepare_articles">Get next %1$d articles ready offline</string>
+  <string name="playlist_prepare_articles_size">About %1$s · fetches the text once</string>
+  <string name="playlist_preparing">Getting %1$d articles ready · %2$d of %1$d</string>
+  <string name="playlist_preparing_hint">%1$s so far · keeps going in the background</string>
+  <string name="playlist_preparing_hint_empty">Keeps going in the background</string>
+  <string name="playlist_prepared">%1$d articles ready offline · %2$s</string>
+  <string name="playlist_prepared_hint">Played articles delete themselves · unplayed ones after 7 days</string>
+  <string name="playlist_prepared_none">Nothing could be made ready (no text to read)</string>
+  <string name="playlist_prepare_remove">Remove</string>
+  <string name="playlist_prepare_nothing">No articles to get ready here</string>
+  <string name="playlist_prepare_started">Getting %1$d articles ready offline</string>
 </resources>

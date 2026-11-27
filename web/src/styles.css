@@ -10705,3 +10705,45 @@ mark.sr-mark {
   height: 20px;
   accent-color: var(--accent);
 }
+
+/* Playlist articles made ready offline (Playlists.tsx, playlistAudio.ts) */
+.pl-offline-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px var(--page-pad) 4px;
+  padding: 12px 14px;
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+}
+.pl-offline-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-md);
+  color: var(--accent);
+}
+.pl-offline-row b {
+  color: var(--text);
+  font-weight: 500;
+}
+.pl-offline-card small {
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+}
+.pl-offline-bar {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--surface-3);
+}
+.pl-offline-bar div {
+  height: 100%;
+  background: var(--accent);
+}
+.pl-offline {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--accent);
+}
