@@ -43,6 +43,7 @@
     <string name="central_history_thing_audiobook">audiobook</string>
     <string name="central_history_thing_ebook">ebook</string>
     <string name="central_history_thing_zim">page</string>
+    <string name="central_history_thing_media">file</string>
     <string name="central_history_thing_highlight">highlight</string>
     <string name="central_history_thing_note">note</string>
     <string name="central_history_thing_feed">feed</string>

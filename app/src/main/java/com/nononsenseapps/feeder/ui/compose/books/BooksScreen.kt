@@ -36,11 +36,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,7 +49,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
@@ -69,7 +69,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 
 /**
- * Books: Ebooks, Audiobooks and ZIM as swipeable subtabs under one header (search, Dropbox, ⋮).
+ * Books: Ebooks, Audiobooks, ZIM and Player as swipeable subtabs under one header (search, Dropbox, ⋮).
  * Opens on [askedTab] when a link names one, else on the subtab used last.
  */
 @Composable
@@ -78,6 +78,8 @@ fun BooksScreen(
     onOpenEbook: (String) -> Unit,
     onOpenAudiobook: (String) -> Unit,
     onOpenZim: (String) -> Unit,
+    onOpenMediaFolder: (String) -> Unit = {},
+    onOpenMediaFile: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -104,8 +106,9 @@ fun BooksScreen(
             .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal)),
     ) {
         BooksTopRow(host, tab)
-        PrimaryTabRow(
+        PrimaryScrollableTabRow(
             selectedTabIndex = pager.currentPage,
+            edgePadding = 0.dp,
             modifier = Modifier.semantics { contentDescription = context.getString(R.string.books_subtabs) },
         ) {
             BookTab.entries.forEach { t ->
@@ -136,6 +139,13 @@ fun BooksScreen(
                     BookTab.EBOOKS -> EbooksScreen(onOpenBook = onOpenEbook)
                     BookTab.AUDIOBOOKS -> AudiobooksScreen(onOpenBook = onOpenAudiobook)
                     BookTab.ZIM -> ZimLibraryScreen(onOpenBook = onOpenZim)
+                    BookTab.PLAYER ->
+                        com.nononsenseapps.feeder.ui.compose.media.MediaScreen(
+                            folder = "",
+                            onOpenFolder = onOpenMediaFolder,
+                            onOpenFile = onOpenMediaFile,
+                            onNavigateUp = {},
+                        )
                 }
             }
         }
@@ -147,6 +157,7 @@ fun BookTab.label(): Int =
         BookTab.EBOOKS -> R.string.tab_ebooks
         BookTab.AUDIOBOOKS -> R.string.tab_audiobooks
         BookTab.ZIM -> R.string.tab_zim
+        BookTab.PLAYER -> R.string.media_player
     }
 
 private fun BookTab.searchHint(): Int =
@@ -154,6 +165,7 @@ private fun BookTab.searchHint(): Int =
         BookTab.EBOOKS -> R.string.books_search_ebooks
         BookTab.AUDIOBOOKS -> R.string.books_search_audiobooks
         BookTab.ZIM -> R.string.books_search_zim
+        BookTab.PLAYER -> R.string.media_search
     }
 
 /** Search pill (with the Dropbox button inside) and ⋮, for the shelf shown now. */

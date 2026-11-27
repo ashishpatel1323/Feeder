@@ -31,6 +31,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Headphones
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Podcasts
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.RssFeed
@@ -115,6 +116,7 @@ class CentralHistoryNav(
     val openAudiobook: (bookId: String) -> Unit,
     val openZim: (bookId: String) -> Unit,
     val openFeed: (feedId: Long) -> Unit = {},
+    val openMedia: (id: String) -> Unit = {},
 )
 
 /** The chips of History. */
@@ -127,6 +129,7 @@ enum class RecentFilter(
     PODCAST(R.string.central_history_filter_podcasts),
     PLAYLIST(R.string.central_history_filter_playlists),
     BOOKS(R.string.central_history_filter_books),
+    MEDIA(R.string.media_player),
     MARKS(R.string.central_history_filter_marks),
     FEED(R.string.central_history_filter_feeds),
     ;
@@ -141,6 +144,7 @@ enum class RecentFilter(
             PODCAST -> e.t == CentralHistory.PODCAST
             BOOKS -> e.t == CentralHistory.AUDIOBOOK || e.t == CentralHistory.EBOOK || e.t == CentralHistory.ZIM
             FEED -> e.t == CentralHistory.FEED
+            MEDIA -> e.t == CentralHistory.MEDIA
         }
 }
 
@@ -203,6 +207,15 @@ fun CentralHistoryScreen(
                     }
                 }
                 CentralHistory.AUDIOBOOK -> nav.openAudiobook(e.i)
+                CentralHistory.MEDIA ->
+                    if (com.nononsenseapps.feeder.model.media.MediaLibrary
+                            .get(context)
+                            .get(e.i) != null
+                    ) {
+                        nav.openMedia(e.i)
+                    } else {
+                        missing()
+                    }
                 CentralHistory.EBOOK -> nav.openBook(e.i, e.x.ifEmpty { null })
                 CentralHistory.ZIM -> {
                     val cut = e.i.indexOf('\n')
@@ -423,6 +436,7 @@ private fun thingOf(t: String): Int =
         CentralHistory.AUDIOBOOK -> R.string.central_history_thing_audiobook
         CentralHistory.EBOOK -> R.string.central_history_thing_ebook
         CentralHistory.ZIM -> R.string.central_history_thing_zim
+        CentralHistory.MEDIA -> R.string.central_history_thing_media
         CentralHistory.HIGHLIGHT -> R.string.central_history_thing_highlight
         CentralHistory.NOTE -> R.string.central_history_thing_note
         CentralHistory.FEED -> R.string.central_history_thing_feed
@@ -436,6 +450,7 @@ private fun iconOf(t: String): ImageVector =
         CentralHistory.AUDIOBOOK -> Icons.Outlined.Headphones
         CentralHistory.EBOOK -> Icons.AutoMirrored.Outlined.MenuBook
         CentralHistory.ZIM -> Icons.Outlined.Public
+        CentralHistory.MEDIA -> Icons.Outlined.Movie
         CentralHistory.HIGHLIGHT -> Icons.Outlined.BorderColor
         CentralHistory.NOTE -> Icons.AutoMirrored.Outlined.StickyNote2
         CentralHistory.FEED -> Icons.Outlined.RssFeed

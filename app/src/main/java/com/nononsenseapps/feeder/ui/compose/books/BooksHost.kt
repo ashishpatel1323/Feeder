@@ -13,7 +13,7 @@ import com.nononsenseapps.feeder.ui.compose.shelf.ShelfAdd
 import com.nononsenseapps.feeder.ui.compose.shelf.ShelfPrefs
 
 /** The subtabs of Books, in order. */
-enum class BookTab { EBOOKS, AUDIOBOOKS, ZIM }
+enum class BookTab { EBOOKS, AUDIOBOOKS, ZIM, PLAYER }
 
 /** Books opens on the subtab used last on this phone (not synced). */
 object BooksTabPreference {

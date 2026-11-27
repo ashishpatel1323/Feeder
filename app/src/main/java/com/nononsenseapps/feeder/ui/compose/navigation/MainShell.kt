@@ -105,7 +105,7 @@ fun MainShell(
                         }
                         if (showAudiobook) {
                             com.nononsenseapps.feeder.ui.compose.audiobooks.AudiobookMiniBar(
-                                onOpen = { AudiobookPlayerDestination.navigate(navController, it) },
+                                onOpen = { if (audiobookState.media) MediaPlayerDestination.navigate(navController, it) else AudiobookPlayerDestination.navigate(navController, it) },
                             )
                         }
                         MainBottomBar(current = tab, tabs = bar, onSelect = { navController.openTab(context, it, tab) })

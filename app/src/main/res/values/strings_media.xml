@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Library > Player: audio and video files from the phone or Dropbox /Media -->
+  <string name="media_player">Player</string>
+  <string name="media_player_desc">Audio and video files from this phone or Dropbox</string>
+  <string name="media_what">Player</string>
+  <string name="media_empty">Nothing to play yet. Add audio or video files or a folder from this phone (they stay where they are), or put them in Dropbox › Apps › Feeder › Media. Folders there show up as folders here, and their files play one after another.</string>
+  <string name="media_empty_phone">Nothing in this folder is on this phone yet. Download one from the In Dropbox list.</string>
+  <string name="media_add">Add files</string>
+  <string name="media_refresh">Check Dropbox for new files</string>
+  <string name="media_play_all">Play all</string>
+  <string name="media_shuffle">Shuffle</string>
+  <string name="media_up_folder">Up a folder</string>
+  <plurals name="media_files">
+    <item quantity="one">%1$d file</item>
+    <item quantity="other">%1$d files</item>
+  </plurals>
+  <string name="media_watched_pct">%1$d%% watched</string>
+  <string name="media_played_pct">%1$d%% played</string>
+  <string name="media_watched">Watched</string>
+  <string name="media_played">Played</string>
+  <string name="media_up_next">Up next in %1$s</string>
+  <string name="media_next">Next</string>
+  <string name="media_gone">This file is no longer here or in Dropbox.</string>
+  <string name="media_adding">Reading %1$s…</string>
+  <string name="media_only_phone">Only on this phone</string>
+  <string name="media_phone_and_dropbox">On this phone and in Dropbox</string>
+  <string name="media_in_dropbox">In Dropbox</string>
+  <string name="media_pip">Picture in picture</string>
+  <string name="media_remove_from_feeder">Remove from Feeder</string>
+  <string name="media_search">Search files</string>
+  <string name="media_confirm_forget_title">Remove from Feeder?</string>
+</resources>

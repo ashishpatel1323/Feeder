@@ -414,6 +414,9 @@ class CentralHistory(
         const val AUDIOBOOK = "audiobook"
         const val EBOOK = "ebook"
         const val ZIM = "zim"
+
+        /** A file in Books > Player */
+        const val MEDIA = "media"
         const val HIGHLIGHT = "highlight"
         const val NOTE = "note"
         const val FEED = "feed"
@@ -421,7 +424,7 @@ class CentralHistory(
         const val CREATE = "create"
         const val DELETE = "delete"
 
-        val TYPES = setOf(ARTICLE, YOUTUBE, PODCAST, AUDIOBOOK, EBOOK, ZIM, HIGHLIGHT, NOTE, FEED)
+        val TYPES = setOf(ARTICLE, YOUTUBE, PODCAST, AUDIOBOOK, EBOOK, ZIM, MEDIA, HIGHLIGHT, NOTE, FEED)
         val ACTIONS = setOf(OPEN, CREATE, DELETE)
 
         fun keyOf(
