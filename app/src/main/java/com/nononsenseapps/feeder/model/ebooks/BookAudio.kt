@@ -16,6 +16,8 @@ import com.nononsenseapps.feeder.model.ForcedLocale
 import com.nononsenseapps.feeder.model.LocaleOverride
 import com.nononsenseapps.feeder.model.PreparedSpeech
 import com.nononsenseapps.feeder.model.SpeechSegment
+import com.nononsenseapps.feeder.model.SpeechWaveFile
+import com.nononsenseapps.feeder.model.appendWaveFile
 import com.nononsenseapps.feeder.model.encodeSpeechToAac
 import com.nononsenseapps.feeder.model.openSpeechEngine
 import com.nononsenseapps.feeder.model.speechParts
@@ -64,7 +66,38 @@ private data class AudioMeta(
     val durationMillis: Long,
     val segments: List<Span>,
     val words: List<Span>,
+    /** Where in the text the audio starts: 0, or later for the chapter being read (spoken from where reading began) */
+    val from: Int = 0,
 )
+
+/** Which text a chapter's saved chunks belong to. */
+@Serializable
+private data class ChunkInfo(
+    val textHash: Int,
+    val textLength: Int,
+    val lang: String,
+)
+
+/** One chunk of a chapter being made: its sentences and words (times from the chunk's start), up to [end] in the text. */
+@Serializable
+private data class ChunkMeta(
+    val end: Int,
+    val segments: List<Span>,
+    val words: List<Span>,
+)
+
+/** The sentences still to speak, when the chunks made so far reach [reached] in the text. */
+internal fun remainingParts(
+    parts: List<SpeechSegment>,
+    reached: Int,
+): List<SpeechSegment> = parts.filter { it.start >= reached }
+
+/** The timeline moved [millis] later. */
+internal fun List<SpeechSegment>.shiftedBy(millis: Long): List<SpeechSegment> = map { it.copy(startMillis = it.startMillis + millis, endMillis = it.endMillis + millis) }
+
+private fun Span.segment() = SpeechSegment(s, e, a, b)
+
+private fun SpeechSegment.span() = Span(start, end, startMillis, endMillis)
 
 @Immutable
 enum class SectionAudioState { PLAYED, PLAYING, READY, PREPARING, WAITING }
@@ -87,6 +120,8 @@ data class BookAudioState(
     val bytes: Long = 0,
     /** Chapters prepared ahead of the one being read */
     val readyAhead: Int = 0,
+    /** The chapter being read is saved too, from where reading began */
+    val currentReady: Boolean = false,
     val preparing: Boolean = false,
 )
 
@@ -94,8 +129,11 @@ data class BookAudioState(
  * Ebook chapters spoken ahead of time, so read aloud goes on from one chapter to the next without
  * waiting for speech to be made (and without the reader page, which may be asleep in the
  * background). Audio lives in files/book-audio/<book>/, made by [BookAudioJob] with the device's
- * offline voice. Played chapters are deleted as reading moves on, and a book's audio goes when the
- * book is finished or not opened for [STALE_DAYS] days.
+ * offline voice, in chunks of [CHUNK_PARTS] sentences so a job the system stops picks up where it
+ * left off instead of starting the chapter again. The chapter being read is kept too: read aloud
+ * speaks it live, and that audio is saved once it is complete ([saveSpoken]). Played chapters are
+ * deleted as reading moves on, and a book's audio goes when the book is finished or not opened for
+ * [STALE_DAYS] days.
  */
 class BookAudio private constructor(
     private val context: Context,
@@ -161,6 +199,17 @@ class BookAudio private constructor(
         bookId: String,
         index: Int,
     ) = File(bookDir(bookId), "s$index.json")
+
+    /** Chunks of a chapter being made, kept until the chapter's audio is complete. */
+    private fun chunkDir(
+        bookId: String,
+        index: Int,
+    ) = File(bookDir(bookId), "s$index.chunks")
+
+    private fun readMeta(
+        bookId: String,
+        index: Int,
+    ): AudioMeta? = runCatching { json.decodeFromString(AudioMeta.serializer(), metaFile(bookId, index).readText()) }.getOrNull()
 
     private fun activeBook(): String? = prefs.getString(PREF_BOOK, null)
 
@@ -245,7 +294,7 @@ class BookAudio private constructor(
         if (current < 0) return
         val keep = window(bookId, current).toSet() + current
         for (i in sectionIndices(bookId)) {
-            if (i in keep || !audioFile(bookId, i).exists()) continue
+            if (i in keep || (!audioFile(bookId, i).exists() && !chunkDir(bookId, i).exists())) continue
             if (i < current) {
                 if (!_deletePlayed.value) continue
                 synchronized(deletedPlayed) { deletedPlayed.getOrPut(bookId) { mutableSetOf() } += i }
@@ -286,6 +335,8 @@ class BookAudio private constructor(
         File(bookDir(bookId), "s$index.m4a").delete()
         File(bookDir(bookId), "s$index.wav").delete()
         File(bookDir(bookId), "s$index.part").delete()
+        File(bookDir(bookId), "s$index.spoken").delete()
+        chunkDir(bookId, index).deleteRecursively()
     }
 
     /** The saved text of a chapter. */
@@ -300,15 +351,18 @@ class BookAudio private constructor(
         current: Int,
     ): Int? = sectionIndices(bookId).firstOrNull { it > current }
 
-    /** Audio of chapter [index] made for exactly [text], or null. */
+    /** Audio of chapter [index] made for exactly [text] that covers reading from [offset], or null. */
     fun prepared(
         bookId: String,
         index: Int,
         text: String,
+        offset: Int = 0,
     ): PreparedSpeech? {
         val audio = audioFile(bookId, index)
-        val meta = runCatching { json.decodeFromString(AudioMeta.serializer(), metaFile(bookId, index).readText()) }.getOrNull() ?: return null
+        val meta = readMeta(bookId, index) ?: return null
         if (!audio.isFile || meta.textHash != text.hashCode() || meta.textLength != text.length || meta.lang != langSetting()) return null
+        // Saved from where reading began: of no use for reading from before that
+        if (offset < meta.from) return null
         return PreparedSpeech(
             audio = audio,
             segments = meta.segments.map { SpeechSegment(it.s, it.e, it.a, it.b) },
@@ -358,7 +412,60 @@ class BookAudio private constructor(
                 bytes = bytes,
                 readyAhead = ready,
                 preparing = now?.first == bookId,
+                currentReady = current >= 0 && metaFile(bookId, current).exists(),
             )
+    }
+
+    /**
+     * Read aloud finished speaking chapter [index] live into [audio] (from where reading began to the
+     * chapter's end): keeps it as the chapter's audio, unless audio covering more is already saved.
+     */
+    fun saveSpoken(
+        bookId: String,
+        index: Int,
+        label: String,
+        text: String,
+        audio: File,
+        segments: List<SpeechSegment>,
+        words: List<SpeechSegment>,
+    ) {
+        if (activeBook() != bookId || currentOf(bookId) != index || segments.isEmpty()) return
+        val from = segments.first().start
+        readMeta(bookId, index)?.let { if (it.textHash == text.hashCode() && it.lang == langSetting() && it.from <= from && audioFile(bookId, index).isFile) return }
+        val dir = bookDir(bookId).apply { mkdirs() }
+        val spoken = File(dir, "s$index.spoken")
+        try {
+            // The live file goes when read aloud starts something else: copy it first
+            audio.copyTo(spoken, overwrite = true)
+            val lang = langSetting()
+            textFile(bookId, index).takeUnless { it.exists() }?.writeText(json.encodeToString(SectionText.serializer(), SectionText(index, label, text)))
+            metaFile(bookId, index).delete()
+            File(dir, "s$index.m4a").delete()
+            File(dir, "s$index.wav").delete()
+            chunkDir(bookId, index).deleteRecursively()
+            if (encodeSpeechToAac(spoken, File(dir, "s$index.m4a"))) spoken.delete() else spoken.renameTo(File(dir, "s$index.wav"))
+            if (currentOf(bookId) != index && index !in window(bookId, currentOf(bookId))) {
+                // Reading moved on while this was saved
+                deleteAudio(bookId, index)
+                return
+            }
+            val meta =
+                AudioMeta(
+                    textHash = text.hashCode(),
+                    textLength = text.length,
+                    lang = lang,
+                    durationMillis = segments.last().endMillis,
+                    segments = segments.map { it.span() },
+                    words = words.map { it.span() },
+                    from = from,
+                )
+            metaFile(bookId, index).writeText(json.encodeToString(AudioMeta.serializer(), meta))
+        } catch (e: Exception) {
+            Log.w(LOG_TAG, "Could not keep the audio of chapter $index", e)
+            spoken.delete()
+        } finally {
+            refresh()
+        }
     }
 
     /** Starts the background job that makes missing chapter audio, unless it is running. */
@@ -404,6 +511,18 @@ class BookAudio private constructor(
         }
     }
 
+    /** The saved chunks of a chapter being made, in order (each with its audio and timeline). */
+    private fun loadChunks(dir: File): List<Triple<Int, File, ChunkMeta>> =
+        dir
+            .listFiles()
+            ?.mapNotNull { f ->
+                val k = f.name.takeIf { it.startsWith("c") && it.endsWith(".json") }?.removePrefix("c")?.removeSuffix(".json")?.toIntOrNull() ?: return@mapNotNull null
+                val wav = File(dir, "c$k.wav").takeIf { it.isFile } ?: return@mapNotNull null
+                val meta = runCatching { json.decodeFromString(ChunkMeta.serializer(), f.readText()) }.getOrNull() ?: return@mapNotNull null
+                Triple(k, wav, meta)
+            }?.sortedBy { it.first }
+            .orEmpty()
+
     private suspend fun make(
         bookId: String,
         section: SectionText,
@@ -415,47 +534,93 @@ class BookAudio private constructor(
                 "auto" -> ForcedAuto
                 else -> ForcedLocale(Locale.forLanguageTag(lang))
             }
-        making = bookId to section.index
-        makingProgress = 0f
-        refresh()
+        val index = section.index
         val dir = bookDir(bookId)
-        val part = File(dir, "s${section.index}.part")
+        val chunks = chunkDir(bookId, index)
+        // Chunks made before (the job was stopped, or failed) carry on, when they are for this text
+        val done =
+            withContext(Dispatchers.IO) {
+                val info = ChunkInfo(section.text.hashCode(), section.text.length, lang)
+                val infoFile = File(chunks, "info.json")
+                val saved = runCatching { json.decodeFromString(ChunkInfo.serializer(), infoFile.readText()) }.getOrNull()
+                if (saved != info) {
+                    chunks.deleteRecursively()
+                    chunks.mkdirs()
+                    infoFile.writeText(json.encodeToString(ChunkInfo.serializer(), info))
+                }
+                loadChunks(chunks)
+            }
+        val reached = done.lastOrNull()?.third?.end ?: 0
+        making = bookId to index
+        makingProgress = reached.toFloat() / section.text.length
+        refresh()
         val speech = openSpeechEngine(context, section.text, language, detectLanguage = false)
         try {
-            val parts = speechParts(section.text, speech.locale)
-            if (parts.isEmpty()) error("No text to read")
+            val todo = remainingParts(speechParts(section.text, speech.locale), reached)
+            if (todo.isEmpty() && done.isEmpty()) error("No text to read")
+            var k = (done.lastOrNull()?.first ?: -1) + 1
             var lastRefresh = 0L
-            val (segments, words) =
-                synthesizeSpeech(speech.engine, section.text, parts, dir, part) { made ->
-                    makingProgress = made.part.end.toFloat() / section.text.length
-                    val now = System.currentTimeMillis()
-                    if (now - lastRefresh > 1000) {
-                        lastRefresh = now
-                        refresh()
+            for (batch in todo.chunked(CHUNK_PARTS)) {
+                val temporary = File(chunks, "c$k.tmp")
+                try {
+                    val (segments, words) =
+                        synthesizeSpeech(speech.engine, section.text, batch, chunks, temporary) { made ->
+                            makingProgress = made.part.end.toFloat() / section.text.length
+                            val now = System.currentTimeMillis()
+                            if (now - lastRefresh > 1000) {
+                                lastRefresh = now
+                                refresh()
+                            }
+                        }
+                    withContext(Dispatchers.IO) {
+                        check(temporary.renameTo(File(chunks, "c$k.wav"))) { "Could not keep chapter audio" }
+                        // Written last: a chunk counts once its timeline is saved
+                        File(chunks, "c$k.json").writeText(json.encodeToString(ChunkMeta.serializer(), ChunkMeta(batch.last().end, segments.map { it.span() }, words.map { it.span() })))
                     }
+                } finally {
+                    temporary.delete()
                 }
-            withContext(Dispatchers.IO) {
-                // Reading may have moved past this chapter meanwhile
-                if (section.index !in window(bookId, currentOf(bookId))) {
-                    part.delete()
-                    return@withContext
+                k++
+            }
+        } finally {
+            speech.shutdown()
+        }
+        withContext(Dispatchers.IO) {
+            // Reading may have moved past this chapter meanwhile
+            val current = currentOf(bookId)
+            if (index != current && index !in window(bookId, current)) {
+                deleteAudio(bookId, index)
+                return@withContext
+            }
+            val part = File(dir, "s$index.part")
+            try {
+                val segments = mutableListOf<SpeechSegment>()
+                val words = mutableListOf<SpeechSegment>()
+                SpeechWaveFile(part).use { wave ->
+                    for ((_, wav, meta) in loadChunks(chunks)) {
+                        val offset = wave.durationMillis()
+                        appendWaveFile(wave, wav)
+                        segments += meta.segments.map { it.segment() }.shiftedBy(offset)
+                        words += meta.words.map { it.segment() }.shiftedBy(offset)
+                    }
+                    wave.finish()
                 }
                 // Kept compressed: about an eighth of the size
-                if (encodeSpeechToAac(part, File(dir, "s${section.index}.m4a"))) part.delete() else part.renameTo(File(dir, "s${section.index}.wav"))
+                if (encodeSpeechToAac(part, File(dir, "s$index.m4a"))) part.delete() else part.renameTo(File(dir, "s$index.wav"))
                 val meta =
                     AudioMeta(
                         textHash = section.text.hashCode(),
                         textLength = section.text.length,
                         lang = lang,
                         durationMillis = segments.lastOrNull()?.endMillis ?: 0,
-                        segments = segments.map { Span(it.start, it.end, it.startMillis, it.endMillis) },
-                        words = words.map { Span(it.start, it.end, it.startMillis, it.endMillis) },
+                        segments = segments.map { it.span() },
+                        words = words.map { it.span() },
                     )
-                metaFile(bookId, section.index).writeText(json.encodeToString(AudioMeta.serializer(), meta))
+                metaFile(bookId, index).writeText(json.encodeToString(AudioMeta.serializer(), meta))
+                chunks.deleteRecursively()
+            } finally {
+                if (!metaFile(bookId, index).exists()) part.delete()
             }
-        } finally {
-            speech.shutdown()
-            if (!metaFile(bookId, section.index).exists()) part.delete()
         }
     }
 
@@ -481,6 +646,9 @@ class BookAudio private constructor(
         private const val PREF_CURRENT_LABEL = "current_label"
         private const val PREF_LANG = "lang"
         const val DEFAULT_AHEAD = 3
+
+        /** Sentences per saved chunk: the most that is made again after the job is stopped. */
+        const val CHUNK_PARTS = 12
         const val STALE_DAYS = 7L
         val AHEAD_CHOICES = listOf(1, 2, 3, 5)
 

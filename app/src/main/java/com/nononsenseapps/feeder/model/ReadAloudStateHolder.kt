@@ -32,7 +32,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.Locale
@@ -78,6 +77,13 @@ class TTSStateHolder(
     private var preparation: Job? = null
     private var ticker: Job? = null
     private var segments = emptyList<SpeechSegment>()
+
+    /**
+     * Called once a text read aloud live has been spoken to its end into [File] (from where reading
+     * began), with its sentence and word timelines, so it can be kept (the ebook chapter being read).
+     * The file goes when read aloud starts something else.
+     */
+    var onSpoken: ((articleId: Long, text: String, audio: File, segments: List<SpeechSegment>, words: List<SpeechSegment>) -> Unit)? = null
     private var words = emptyList<SpeechSegment>()
     private var playWhenReady = true
     private var cacheDirectory: File? = null
@@ -340,8 +346,11 @@ class TTSStateHolder(
                         }
                     cacheDirectory = directory
                     val audio = File(directory, "article.wav")
-                    val timeline = withTimeout(5 * 60_000L) { synthesize(current, directory, audio) }
+                    // No limit on the whole text: a long ebook chapter on a slow voice takes many
+                    // minutes, and each sentence has its own time limit (synthesizeSpeech)
+                    val (timeline, spokenWords) = synthesize(current, directory, audio)
                     if (request !== current) return@launch
+                    onSpoken?.invoke(current.articleId, current.text, audio, timeline, spokenWords)
                     segments = timeline
                     val duration = timeline.lastOrNull()?.endMillis ?: error("No speech audio")
                     _progress.value = _progress.value.copy(durationMillis = duration, generatedMillis = duration, isDurationEstimated = false)
@@ -428,7 +437,7 @@ class TTSStateHolder(
         current: SpeechRequest,
         directory: File,
         audio: File,
-    ): List<SpeechSegment> {
+    ): Pair<List<SpeechSegment>, List<SpeechSegment>> {
         val speech = openSpeechEngine(context, current.text, _language.value, current.detectLanguage)
         try {
             _availableLanguages.value = speech.available
@@ -437,7 +446,7 @@ class TTSStateHolder(
             var buffer: SpeechAudioBuffer? = null
             var finished = false
             try {
-                val (timeline, _) =
+                val made =
                     synthesizeSpeech(speech.engine, current.text, parts, directory, audio) { made ->
                         val streaming = buffer ?: SpeechAudioBuffer(audio, made.wave.audioFormat()).also { buffer = it }
                         streaming.publish(made.wave.sizeBytes(), finished = made.isLast)
@@ -459,7 +468,7 @@ class TTSStateHolder(
                         }
                     }
                 finished = true
-                return timeline
+                return made
             } finally {
                 if (!finished) buffer?.abort()
             }

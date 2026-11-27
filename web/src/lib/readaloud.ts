@@ -294,7 +294,14 @@ export class ReadAloudEngine {
   /** Use the GPU for the natural voice when the browser supports WebGPU. */
   kokoroGpu = true
   /** Natural-voice audio made ahead of time (ebook chapters, bookAudio.ts), used before asking the voice. */
-  storedAudio: { has(voice: string, text: string): boolean; load(voice: string, text: string): Promise<KokoroAudio> } | null = null
+  storedAudio: {
+    has(voice: string, text: string): boolean
+    load(voice: string, text: string): Promise<KokoroAudio>
+    /** The piece being read now (so the rest of an ebook chapter can be kept from there) */
+    reading?(voice: string, text: string): void
+    /** A piece the voice made for read aloud (kept when it belongs to an ebook chapter) */
+    spoken?(voice: string, text: string, audio: Promise<KokoroAudio>): void
+  } | null = null
   private storedIds = 0
   /** Audio ran up to this point without a pause or skip, so a wait now is a stall. */
   private kokoroWasPlaying = false
@@ -948,6 +955,7 @@ export class ReadAloudEngine {
     }
     if (!entry) {
       const made = kokoro.generate(text, voice)
+      stored?.spoken?.(voice, text, made.audio)
       entry = made
       made.audio.catch(() => {
         if (this.kokoroCache.get(key) === made) this.kokoroCache.delete(key)
@@ -964,6 +972,7 @@ export class ReadAloudEngine {
    */
   private kokoroWindow(voice: string, index: number, begin: number, end: number) {
     const current = this.kokoroChunks(begin, end).map((c) => ({ ...c, ...this.kokoroFor(voice, this.text.slice(c.start, c.end)) }))
+    if (current.length) this.storedAudio?.reading?.(voice, this.text.slice(current[0].start, current[0].end))
     const keep = new Set(current.map((c) => c.id))
     const aheadChars = KOKORO_AHEAD_SECONDS * CHARS_PER_SECOND * Math.max(1, this.state.rate)
     let chars = 0

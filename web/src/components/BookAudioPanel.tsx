@@ -87,7 +87,7 @@ function BookAudioPanel({ s, settings }: { s: BookAudioState; settings: Settings
         <>
           <ul className="book-audio-rows">
             {s.sections.map((x) => (
-              <Row key={`${x.state}:${x.index}`} x={x} />
+              <Row key={`${x.state}:${x.index}`} x={x} s={s} />
             ))}
           </ul>
           <div className="book-audio-sec">Prepare ahead</div>
@@ -129,7 +129,7 @@ function BookAudioPanel({ s, settings }: { s: BookAudioState; settings: Settings
   )
 }
 
-function Row({ x }: { x: SectionAudio }) {
+function Row({ x, s }: { x: SectionAudio; s: BookAudioState }) {
   const title = x.label || `Section ${x.index + 1}`
   let sub: string
   switch (x.state) {
@@ -137,7 +137,7 @@ function Row({ x }: { x: SectionAudio }) {
       sub = 'Played · audio deleted'
       break
     case 'playing':
-      sub = 'Reading now'
+      sub = s.currentReady ? 'Reading now · ready offline' : s.currentProgress > 0 ? `Reading now · preparing ${Math.round(s.currentProgress * 100)}%` : 'Reading now'
       break
     case 'ready':
       sub = `Ready · ${Math.max(1, Math.round(x.seconds / 60))} min`

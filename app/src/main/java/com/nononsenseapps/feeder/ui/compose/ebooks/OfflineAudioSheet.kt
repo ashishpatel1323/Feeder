@@ -73,6 +73,8 @@ fun offlineAudioStatusLine(
 @Composable
 fun OfflineAudioSheet(
     state: BookAudioState,
+    /** How much of the chapter being read read aloud has spoken so far (0–1), or null when it isn't reading */
+    spokenProgress: Float?,
     ahead: Int,
     deletePlayed: Boolean,
     onSetAhead: (Int) -> Unit,
@@ -93,7 +95,7 @@ fun OfflineAudioSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 8.dp),
             )
-            for (section in state.sections) SectionRow(section)
+            for (section in state.sections) SectionRow(section, state.currentReady, spokenProgress)
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             Text(
                 stringResource(R.string.offline_audio_prepare_ahead),
@@ -131,7 +133,11 @@ fun OfflineAudioSheet(
 }
 
 @Composable
-private fun SectionRow(section: SectionAudio) {
+private fun SectionRow(
+    section: SectionAudio,
+    currentReady: Boolean,
+    spokenProgress: Float?,
+) {
     val playing = section.state == SectionAudioState.PLAYING
     val played = section.state == SectionAudioState.PLAYED
     Row(
@@ -170,7 +176,13 @@ private fun SectionRow(section: SectionAudio) {
             Text(
                 when (section.state) {
                     SectionAudioState.PLAYED -> stringResource(R.string.offline_audio_played)
-                    SectionAudioState.PLAYING -> stringResource(R.string.offline_audio_playing)
+                    SectionAudioState.PLAYING ->
+                        when {
+                            currentReady -> stringResource(R.string.offline_audio_playing_ready)
+                            spokenProgress == null -> stringResource(R.string.offline_audio_playing)
+                            spokenProgress >= 1f -> stringResource(R.string.offline_audio_playing_saving)
+                            else -> stringResource(R.string.offline_audio_playing_preparing, (spokenProgress * 100).toInt())
+                        }
                     SectionAudioState.READY ->
                         stringResource(R.string.offline_audio_ready, stringResource(R.string.offline_audio_minutes, maxOf(1, (section.durationMillis / 60_000).toInt())))
                     SectionAudioState.PREPARING -> stringResource(R.string.offline_audio_preparing, (section.progress * 100).toInt())
