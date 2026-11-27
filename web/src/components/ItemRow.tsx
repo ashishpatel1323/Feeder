@@ -18,7 +18,7 @@ import { syncNow } from '../lib/sync2'
 import type { Toast } from '../lib/toast'
 import { openAddToPlaylist } from './AddToPlaylist'
 import { Icon, type IconName } from './Icon'
-import { MoreMenu } from './MoreMenu'
+import { MoreMenu, type MoreMenuEntry } from './MoreMenu'
 
 /** Everything a row needs to know besides the item itself (feed kinds, play positions, lengths), kept live. */
 export function usePlaylistContext(feeds: Map<string, Feed>, rate: number): PlaylistContext {
@@ -119,6 +119,8 @@ interface RowProps {
   thumbOverlay?: ReactNode
   /** Page buttons after the shared five. */
   extras?: ReactNode
+  /** More entries for the row's ⋮ menu, before Delete (Downloads: Move to Player) */
+  moreEntries?: MoreMenuEntry[]
   /** More meta (size of a download, "needs download"). */
   metaExtra?: ReactNode
   snippetLines?: number
@@ -212,6 +214,7 @@ export function ItemRow(p: RowProps) {
             { icon: item.saved ? 'bookmarkFilled' : 'bookmark', label: item.saved ? 'Saved' : 'Save', checked: !!item.saved, onClick: () => void toggleSaved(item) },
             { icon: 'playlistAdd', label: p.inPlaylist ? 'In playlist: add to another' : 'Add to playlist', onClick: () => trail.current && openAddToPlaylist([item.id], item.title, trail.current) },
             { icon: item.read ? 'unread' : 'read', label: facts.readLabel, onClick: () => setRead(!item.read) },
+            ...(p.moreEntries ?? []),
             'separator',
             { icon: 'delete', label: 'Delete', onClick: p.onDelete, danger: true },
           ]}
