@@ -84,10 +84,7 @@ val networkModule =
                     .also { store ->
                         store.onChanged = { nudge.changed(false) }
                         // A cover picked on another device is fetched here too
-                        store.onRemoteCover = { key, url ->
-                            com.nononsenseapps.feeder.model.shelf.BookCovers
-                                .fetchInBackground(app, key, url)
-                        }
+                        store.onRemoteCover = { key, url -> com.nononsenseapps.feeder.model.shelf.BookCovers.fetchInBackground(app, key, url) }
                     }
             }
         bind<com.nononsenseapps.feeder.model.audiobooks.AudioPositions>() with
@@ -133,11 +130,6 @@ val networkModule =
                 com.nononsenseapps.feeder.dropbox.DropboxClient
                     .get(instance<android.app.Application>())
             }
-        bind<com.nononsenseapps.feeder.model.playlists.PlaylistAudio>() with
-            singleton {
-                com.nononsenseapps.feeder.model.playlists
-                    .PlaylistAudio(di)
-            }
         bind<com.nononsenseapps.feeder.model.playlists.PlaylistPlayer>() with
             singleton {
                 com.nononsenseapps.feeder.model.playlists
@@ -149,4 +141,9 @@ val networkModule =
                     .AddToPlaylistRequests()
             }
         bind<Transcripts>() with singleton { Transcripts(di) }
+        bind<com.nononsenseapps.feeder.model.audiobooks.AudiobookTranscripts>() with
+            singleton {
+                com.nononsenseapps.feeder.model.audiobooks
+                    .AudiobookTranscripts(di)
+            }
     }

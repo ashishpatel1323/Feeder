@@ -13,7 +13,7 @@ export interface FoliateBook {
     language?: string | string[]
   }
   toc?: TocItem[]
-  sections: { linear?: string; cfi?: string; size: number; createDocument?: () => Promise<Document> }[]
+  sections: { linear?: string; cfi?: string; size: number }[]
   dir?: string
   getCover?: () => Promise<Blob | null>
   transformTarget?: EventTarget
@@ -70,7 +70,6 @@ export declare class FoliateView extends HTMLElement {
   showAnnotation(a: Annotation): Promise<void>
   deselect(): void
   getSectionFractions(): number[]
-  getProgressOf(index: number, range?: Range): { tocItem?: { label?: string; href?: string } | null }
 }
 
 export declare const makeBook: (file: File | Blob | string) => Promise<FoliateBook>

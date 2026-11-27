@@ -147,102 +147,6 @@ export function chunkForKokoro(text: string, max = 280): { start: number; end: n
   return out
 }
 
-/**
- * The text read aloud from an element (clutter, footnote markers and citations left out), with
- * where each piece of it is in the page's text nodes.
- */
-export function indexSpeechText(root: Element): { text: string; segments: Segment[] } {
-  const raw: Segment[] = []
-  let text = ''
-  let lastBlock: Element | null = null
-  const clutter = new Map<Element, boolean>()
-  const blockOf = (n: Node): Element | null => {
-    let block: Element | null = n.parentElement
-    while (block && block !== root && !BLOCK_TAGS.test(block.tagName)) block = block.parentElement
-    return block
-  }
-  const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-    acceptNode: (n) => {
-      for (let p = n.parentElement; p && p !== root; p = p.parentElement) {
-        let skip = clutter.get(p)
-        if (skip === undefined) {
-          skip = isClutter(p) || (isLeafBlock(p) && isSkippedLine(p.textContent ?? ''))
-          clutter.set(p, skip)
-        }
-        if (skip) return NodeFilter.FILTER_REJECT
-      }
-      return n.textContent && n.textContent.length ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
-    },
-  })
-  for (let n = walker.nextNode() as Text | null; n; n = walker.nextNode() as Text | null) {
-    const block = blockOf(n)
-    if (lastBlock && block !== lastBlock && text && !/\s$/.test(text)) {
-      // Paragraph break: end the sentence here even without punctuation
-      text += '\n\n'
-    }
-    lastBlock = block
-    const start = text.length
-    text += n.textContent!
-    raw.push({ node: n, start, end: text.length, nodeStart: 0 })
-  }
-  // Leave reference numbers, URLs and citations out of the spoken text; the pieces around them
-  // keep pointing at their text nodes so highlights and tap-to-read still land on the right words
-  const removed = new Uint8Array(text.length)
-  for (const [s, e] of speechRemovals(text)) removed.fill(1, s, e)
-  const newIndex = new Int32Array(text.length + 1)
-  let kept = ''
-  for (let i = 0; i < text.length; i++) {
-    newIndex[i] = kept.length
-    if (!removed[i]) kept += text[i]
-  }
-  newIndex[text.length] = kept.length
-  const segments: Segment[] = []
-  for (const g of raw) {
-    for (let i = g.start; i < g.end; ) {
-      if (removed[i]) {
-        i++
-        continue
-      }
-      let j = i
-      while (j < g.end && !removed[j]) j++
-      segments.push({ node: g.node, start: newIndex[i], end: newIndex[i] + (j - i), nodeStart: i - g.start })
-      i = j
-    }
-  }
-  return { text: kept, segments }
-}
-
-/** Sentences of [text] (split again at paragraph breaks), as read aloud speaks them. */
-export function splitSentences(text: string, lang: string): Sentence[] {
-  const out: Sentence[] = []
-  const push = (start: number, end: number) => {
-    // Split again on paragraph breaks, trim whitespace
-    const slice = text.slice(start, end)
-    const re = /\S(?:[^\n]|\n(?!\s*\n))*/g
-    for (let m = re.exec(slice); m; m = re.exec(slice)) {
-      const body = m[0].trimEnd()
-      if (/[\p{L}\p{N}]/u.test(body)) out.push({ start: start + m.index, end: start + m.index + body.length })
-    }
-  }
-  if (typeof Intl !== 'undefined' && 'Segmenter' in Intl) {
-    const seg = new Intl.Segmenter(lang, { granularity: 'sentence' })
-    for (const s of seg.segment(text)) push(s.index, s.index + s.segment.length)
-  } else {
-    const re = /[^.!?\n]+[.!?]*["')\]]*\s*/g
-    for (let m = re.exec(text); m; m = re.exec(text)) push(m.index, m.index + m[0].length)
-  }
-  return out
-}
-
-/** The text pieces the natural voice is asked for, sentence by sentence, as read aloud asks. */
-export function kokoroPieces(text: string, lang: string): string[] {
-  const out: string[] = []
-  for (const s of splitSentences(text, lang)) {
-    for (const c of chunkForKokoro(text.slice(s.start, s.end))) out.push(text.slice(s.start + c.start, s.start + c.end))
-  }
-  return out
-}
-
 type HighlightWindow = Window & { CSS?: typeof CSS; Highlight?: typeof Highlight }
 
 /** The highlight registry of the window `el` is in: an ebook page lives in its own iframe. */
@@ -293,9 +197,6 @@ export class ReadAloudEngine {
   private wordFrame: number | null = null
   /** Use the GPU for the natural voice when the browser supports WebGPU. */
   kokoroGpu = true
-  /** Natural-voice audio made ahead of time (ebook chapters, bookAudio.ts), used before asking the voice. */
-  storedAudio: { has(voice: string, text: string): boolean; load(voice: string, text: string): Promise<KokoroAudio> } | null = null
-  private storedIds = 0
   /** Audio ran up to this point without a pause or skip, so a wait now is a stall. */
   private kokoroWasPlaying = false
   private kokoroAdvancing = false
@@ -371,8 +272,64 @@ export class ReadAloudEngine {
     this.container = container
     this.watchUserScroll(container.closest('[data-scroll]') as HTMLElement | null)
     this.lang = lang || document.documentElement.lang || navigator.language || 'en'
-    const { text, segments } = indexSpeechText(container)
-    this.segments = segments
+    const raw: Segment[] = []
+    let text = ''
+    let lastBlock: Element | null = null
+    const clutter = new Map<Element, boolean>()
+    const blockOf = (n: Node): Element | null => {
+      let block: Element | null = n.parentElement
+      while (block && block !== container && !BLOCK_TAGS.test(block.tagName)) block = block.parentElement
+      return block
+    }
+    const walker = container.ownerDocument.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => {
+        for (let p = n.parentElement; p && p !== container; p = p.parentElement) {
+          let skip = clutter.get(p)
+          if (skip === undefined) {
+            skip = isClutter(p) || (isLeafBlock(p) && isSkippedLine(p.textContent ?? ''))
+            clutter.set(p, skip)
+          }
+          if (skip) return NodeFilter.FILTER_REJECT
+        }
+        return n.textContent && n.textContent.length ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
+      },
+    })
+    for (let n = walker.nextNode() as Text | null; n; n = walker.nextNode() as Text | null) {
+      const block = blockOf(n)
+      if (lastBlock && block !== lastBlock && text && !/\s$/.test(text)) {
+        // Paragraph break: end the sentence here even without punctuation
+        text += '\n\n'
+      }
+      lastBlock = block
+      const start = text.length
+      text += n.textContent!
+      raw.push({ node: n, start, end: text.length, nodeStart: 0 })
+    }
+    // Leave reference numbers, URLs and citations out of the spoken text; the pieces around them
+    // keep pointing at their text nodes so highlights and tap-to-read still land on the right words
+    const removed = new Uint8Array(text.length)
+    for (const [s, e] of speechRemovals(text)) removed.fill(1, s, e)
+    const newIndex = new Int32Array(text.length + 1)
+    let kept = ''
+    for (let i = 0; i < text.length; i++) {
+      newIndex[i] = kept.length
+      if (!removed[i]) kept += text[i]
+    }
+    newIndex[text.length] = kept.length
+    this.segments = []
+    for (const g of raw) {
+      for (let i = g.start; i < g.end; ) {
+        if (removed[i]) {
+          i++
+          continue
+        }
+        let j = i
+        while (j < g.end && !removed[j]) j++
+        this.segments.push({ node: g.node, start: newIndex[i], end: newIndex[i] + (j - i), nodeStart: i - g.start })
+        i = j
+      }
+    }
+    text = kept
     this.text = text
     this.sentences = this.splitSentences(text)
     const patch: Partial<ReadAloudState> = {
@@ -392,7 +349,24 @@ export class ReadAloudEngine {
   }
 
   private splitSentences(text: string): Sentence[] {
-    return splitSentences(text, this.lang)
+    const out: Sentence[] = []
+    const push = (start: number, end: number) => {
+      // Split again on paragraph breaks, trim whitespace
+      const slice = text.slice(start, end)
+      const re = /\S(?:[^\n]|\n(?!\s*\n))*/g
+      for (let m = re.exec(slice); m; m = re.exec(slice)) {
+        const body = m[0].trimEnd()
+        if (/[\p{L}\p{N}]/u.test(body)) out.push({ start: start + m.index, end: start + m.index + body.length })
+      }
+    }
+    if (typeof Intl !== 'undefined' && 'Segmenter' in Intl) {
+      const seg = new Intl.Segmenter(this.lang, { granularity: 'sentence' })
+      for (const s of seg.segment(text)) push(s.index, s.index + s.segment.length)
+    } else {
+      const re = /[^.!?\n]+[.!?]*["')\]]*\s*/g
+      for (let m = re.exec(text); m; m = re.exec(text)) push(m.index, m.index + m[0].length)
+    }
+    return out
   }
 
   /** DOM range for a span of the indexed text. */
@@ -940,12 +914,6 @@ export class ReadAloudEngine {
   private kokoroFor(voice: string, text: string): { id: number; audio: Promise<KokoroAudio> } {
     const key = `${voice}\n${text}`
     let entry = this.kokoroCache.get(key)
-    const stored = this.storedAudio
-    if (!entry && stored?.has(voice, text)) {
-      // Prepared ahead (an ebook chapter): no need to wait for the voice
-      entry = { id: -++this.storedIds, audio: stored.load(voice, text).catch(() => kokoro.generate(text, voice).audio) }
-      this.kokoroCache.set(key, entry)
-    }
     if (!entry) {
       const made = kokoro.generate(text, voice)
       entry = made

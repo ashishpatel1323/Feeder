@@ -9,6 +9,9 @@
  *   POST /api/ytdl/pause?id=VIDEO  stops yt-dlp but keeps the partial files; start resumes
  *   POST /api/ytdl/cancel?id=VIDEO stops yt-dlp and deletes what it saved
  *   GET  /api/ytdl/file?id=VIDEO   the finished MP4; the temp copy is removed once sent
+ *   GET  /api/ytdl/pcm?url=U&start=MS&dur=MS  that stretch of an audio file (an audiobook's
+ *                                  streaming link) as 16 kHz mono float32, decoded by ffmpeg, for
+ *                                  Whisper in the browser (audiobook transcripts)
  *   POST /api/ytdl/subs?id=VIDEO   subtitles (own, else YouTube's auto captions) as WebVTT text
  *   POST /api/ytdl/iina?id=VIDEO[&lang=L]  a saved copy from the browser: with lang, a WebVTT
  *                                  track to keep beside it; without, the MP4, then opens it in IINA
@@ -257,6 +260,32 @@ async function openInIina(req: IncomingMessage, id: string, lang: string | null)
 const status = (job: Job | undefined) =>
   job ? { state: job.state, percent: Math.round(job.percent), size: job.size ?? 0, error: job.error ?? null } : { state: 'none', percent: 0, size: 0, error: null }
 
+/** Decodes a stretch of an audio file with ffmpeg and streams the samples. */
+async function pcm(url: URL, res: ServerResponse): Promise<void> {
+  const src = url.searchParams.get('url') ?? ''
+  const start = Number(url.searchParams.get('start') ?? 0)
+  const dur = Number(url.searchParams.get('dur') ?? 0)
+  if (!/^https:\/\//.test(src) || !Number.isFinite(start) || start < 0 || !Number.isFinite(dur) || dur <= 0 || dur > 15 * 60_000) {
+    return send(res, 400, { error: 'Bad request' })
+  }
+  const { ffmpeg } = await findTools()
+  if (!ffmpeg) return send(res, 503, { error: 'ffmpeg is not installed on this Mac' })
+  const child = spawn(
+    ffmpeg,
+    ['-nostdin', '-v', 'error', '-ss', String(start / 1000), '-t', String(dur / 1000), '-i', src, '-vn', '-ac', '1', '-ar', '16000', '-f', 'f32le', 'pipe:1'],
+    { stdio: ['ignore', 'pipe', 'pipe'] },
+  )
+  let err = ''
+  child.stderr.on('data', (d: Buffer) => (err += d.toString()).length > 4000 && (err = err.slice(-4000)))
+  res.statusCode = 200
+  res.setHeader('content-type', 'application/octet-stream')
+  res.setHeader('cache-control', 'no-store')
+  child.stdout.pipe(res)
+  res.on('close', () => child.kill('SIGKILL'))
+  await new Promise<void>((resolve) => child.on('close', () => resolve()))
+  if (err && !res.writableEnded) res.destroy(new Error(err))
+}
+
 function send(res: ServerResponse, code: number, body: unknown) {
   res.statusCode = code
   res.setHeader('content-type', 'application/json')
@@ -277,6 +306,7 @@ export async function ytdlMiddleware(req: IncomingMessage, res: ServerResponse, 
       const r = await run(ytdlp, ['--version'])
       return r.code === 0 ? send(res, 200, { ok: true, version: r.out.trim() }) : send(res, 503, { ok: false, error: 'yt-dlp is not installed on this Mac' })
     }
+    if (action === 'pcm') return await pcm(url, res)
     const id = url.searchParams.get('id') ?? ''
     if (!ID.test(id)) return send(res, 400, { error: 'Bad video id' })
     if (action === 'start' && req.method === 'POST') return send(res, 200, status(await startJob(id)))

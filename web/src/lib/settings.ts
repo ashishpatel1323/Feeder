@@ -30,10 +30,6 @@ export interface Settings {
   /** Run the natural (Kokoro) voice on the GPU where WebGPU exists: faster, bigger download. */
   /** Replaces readAloudKokoroGpu (off by default), so saved settings pick up the new default. */
   readAloudKokoroUseGpu: boolean
-  /** Ebook chapters after the one being read aloud to speak ahead with the natural voice. */
-  bookAudioAhead: number
-  /** Delete a chapter's prepared audio once reading moves past it. */
-  bookAudioDeletePlayed: boolean
   summaryProvider: 'none' | 'openai'
   /** OpenAI-compatible base URL, e.g. https://api.openai.com/v1 or http://localhost:11434/v1 for Ollama. */
   summaryBaseUrl: string
@@ -69,8 +65,6 @@ export const DEFAULT_SETTINGS: Settings = {
   readAloudShowWord: false,
   // On by default; Kokoro falls back to the processor where WebGPU is missing
   readAloudKokoroUseGpu: true,
-  bookAudioAhead: 3,
-  bookAudioDeletePlayed: true,
   summaryProvider: 'none',
   summaryBaseUrl: 'http://localhost:11434/v1',
   summaryApiKey: '',

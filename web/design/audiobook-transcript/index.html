@@ -1,0 +1,238 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Serif:opsz,wght@8..144,400;8..144,500&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0" rel="stylesheet">
+<style>
+:root{--bg:#F9F9FF;--surf:#EFF0F8;--surf2:#E3E5F0;--on:#1A1B21;--on2:#454652;--sec:#DCE2F9;--pri:#4A5C8E;--pc:#DAE2FF;--outline:#C5C6D3;--hl:#FFE08A}
+body{margin:0;background:#dde0e8;font-family:Roboto,sans-serif;color:var(--on);padding:24px}
+section{display:flex;gap:24px;align-items:flex-start;padding:22px;background:#e9ebf2;border-radius:18px;margin-bottom:26px;width:max-content}
+.notes{width:270px;font-size:13.5px;line-height:1.45;color:#333}
+.notes h2{font-size:20px;margin:0 0 4px}.tag{display:inline-block;font-size:12px;font-weight:500;padding:2px 8px;border-radius:8px;background:#BCF0B4;color:#0b3a10;margin-bottom:10px}
+.tag.mid{background:#ffe08a;color:#3d2e00}
+.notes h3{font-size:12px;margin:12px 0 4px;text-transform:uppercase;letter-spacing:.04em;color:#555}
+.notes ul{margin:0;padding-left:18px}.notes li{margin:3px 0}
+.col{display:flex;flex-direction:column;align-items:center}
+.cap{font-size:12px;color:#555;text-align:center;margin-top:8px}
+.phone{width:360px;height:760px;background:var(--bg);border-radius:28px;overflow:hidden;position:relative;box-shadow:0 2px 14px #0002;border:6px solid #222;flex:none;display:flex;flex-direction:column}
+.ms{font-family:'Material Symbols Rounded';font-size:24px;line-height:1;font-variation-settings:'FILL' 0}
+.fill{font-variation-settings:'FILL' 1}
+.status{height:24px;display:flex;justify-content:space-between;padding:4px 18px 0;font-size:12px;color:var(--on2);flex:none}
+.topbar{height:52px;display:flex;align-items:center;padding:0 4px 0 12px;gap:10px;flex:none}
+.topbar .t{flex:1;font-size:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ib{width:40px;height:40px;border-radius:20px;display:flex;align-items:center;justify-content:center;color:var(--on2);flex:none}
+.ib.on{background:var(--sec);color:var(--on)}
+.cover{border-radius:22px;background:linear-gradient(150deg,#5b6fa8,#2c3a63);color:#fff;display:flex;align-items:flex-end;padding:14px;box-sizing:border-box;font-weight:700;font-family:'Roboto Serif',serif}
+.center{text-align:center}
+.title{font-size:20px;margin-top:10px}.author{font-size:13.5px;color:var(--on2)}
+.chap{font-size:13.5px;font-weight:500;margin-top:8px}
+.seek{height:4px;background:var(--surf2);border-radius:2px;margin:14px 16px 4px;position:relative}.seek i{position:absolute;left:0;top:0;bottom:0;background:var(--pri);border-radius:2px}
+.seek b{position:absolute;top:-10px;width:4px;height:24px;background:var(--pri);border-radius:2px}
+.times{display:flex;justify-content:space-between;font-size:11.5px;color:var(--on2);margin:0 16px}
+.ctr{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:6px}
+.round{width:52px;height:52px;border-radius:26px;background:var(--sec);display:flex;align-items:center;justify-content:center;color:var(--on)}
+.play{width:80px;height:64px;border-radius:22px;background:var(--pri);color:#fff;display:flex;align-items:center;justify-content:center}
+.play .ms{font-size:34px}
+.pills{display:flex;gap:8px;justify-content:center;margin-top:12px}
+.pill{height:36px;border-radius:18px;background:var(--sec);display:flex;align-items:center;gap:6px;padding:0 14px;font-size:13.5px;font-weight:500}
+.pill .ms{font-size:18px}
+.seg{display:flex;border:1px solid var(--outline);border-radius:20px;overflow:hidden;margin:14px 16px 6px;height:38px;flex:none}
+.seg div{flex:1;display:flex;align-items:center;justify-content:center;gap:4px;font-size:13px;font-weight:500;border-left:1px solid var(--outline)}
+.seg div:first-child{border-left:0}.seg .on{background:var(--sec)}
+.seg .ms{font-size:17px}
+.jobline{font-size:12px;color:var(--on2);display:flex;align-items:center;gap:6px;padding:4px 16px}
+.jobline .ms{font-size:16px;color:var(--pri)}
+.tx{padding:2px 16px 0;overflow:hidden;flex:1;position:relative}
+.cue{display:flex;gap:10px;padding:7px 8px;border-radius:10px;font-size:14.5px;line-height:1.45;color:var(--on2)}
+.cue .tm{font-size:11.5px;color:var(--on2);width:34px;flex:none;padding-top:3px;opacity:.8}
+.cue.now{background:var(--pc);color:var(--on)}
+.cue .w{background:var(--pri);color:#fff;border-radius:4px;padding:0 2px}
+.cue.past{color:#8a8b96}
+.mark{background:var(--hl);border-radius:3px}
+.fade{position:absolute;left:0;right:0;bottom:0;height:40px;background:linear-gradient(transparent,var(--bg))}
+.pending{margin:8px 8px;padding:12px;border-radius:12px;border:1px dashed var(--outline);font-size:13px;color:var(--on2);display:flex;gap:10px;align-items:center}
+.gesture{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);width:110px;height:4px;border-radius:2px;background:#1a1c18aa}
+.dock{flex:none;background:var(--surf);padding:8px 12px 18px;border-radius:24px 24px 0 0}
+.minirow{display:flex;align-items:center;gap:10px}
+.lyr{flex:1;overflow:hidden;padding:4px 22px;position:relative}
+.lyr p{font-size:22px;line-height:1.35;font-weight:500;margin:0 0 18px;color:#9a9cab}
+.lyr p.now{color:var(--on);font-size:24px}
+.lyr p.near{color:#6b6d7c}
+.dark{background:#1d2235;color:#e6e8f2}
+.dark .lyr p{color:#5d6380}.dark .lyr p.now{color:#fff}.dark .lyr p.near{color:#9aa0bd}
+.dark .topbar .ib,.dark .status{color:#c5c8da}
+.dark .dock{background:#2a3048}
+.dark .seek{background:#3b425e}.dark .seek i,.dark .seek b{background:#b6c4ff}
+.dark .times{color:#aab0c8}
+.dark .play{background:#b6c4ff;color:#1d2235}
+.dark .round{background:#3b425e;color:#e6e8f2}
+.page{flex:1;overflow:hidden;padding:6px 22px 0;font-family:'Roboto Serif',serif;font-size:16px;line-height:1.65;color:#2b2c33;position:relative}
+.page h4{font-family:Roboto;font-size:12px;color:var(--on2);font-weight:500;margin:4px 0 8px;letter-spacing:.03em}
+.page .said{background:#DAE2FF;border-radius:4px;box-shadow:0 0 0 2px #DAE2FF}
+.page .done{color:#7d7e88}
+.chipbar{display:flex;gap:8px;padding:6px 16px 8px;flex:none}
+.chip{height:32px;border:1px solid var(--outline);border-radius:8px;display:flex;align-items:center;gap:6px;padding:0 12px;font-size:13px;font-weight:500;color:var(--on2);white-space:nowrap}
+.chip.on{background:var(--sec);border-color:var(--sec);color:var(--on)}.chip .ms{font-size:17px}
+/* web */
+.web{width:980px;height:600px;background:var(--bg);border-radius:12px;overflow:hidden;box-shadow:0 2px 14px #0002;display:flex;font-size:14px;flex:none}
+.side{width:200px;background:#EEF0F8;padding:14px 10px;box-sizing:border-box;flex:none}
+.side .lg{font-weight:700;color:var(--pri);font-size:18px;margin:0 6px 14px}
+.side .nv{display:flex;gap:12px;align-items:center;padding:8px 10px;border-radius:20px;font-size:14px;color:var(--on2)}
+.side .nv.on{background:var(--sec);color:var(--on);font-weight:500}.side .nv .ms{font-size:20px}
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.wtop{height:48px;border-bottom:1px solid var(--outline);display:flex;align-items:center;gap:12px;padding:0 14px;font-weight:500;flex:none}
+.wtop .sp{flex:1}
+.wbody{flex:1;display:flex;min-height:0}
+.wleft{width:330px;padding:18px 20px;box-sizing:border-box;flex:none;display:flex;flex-direction:column;align-items:center}
+.wright{flex:1;display:flex;flex-direction:column;min-width:0;padding:10px 18px 0 6px}
+.search{height:36px;border-radius:18px;background:var(--surf2);display:flex;align-items:center;gap:8px;padding:0 12px;color:var(--on2);font-size:13px;margin:6px 0}
+.search .ms{font-size:18px}
+</style></head><body>
+
+<!-- ============ A ============ -->
+<section id="a">
+<div class="notes">
+<h2>A · Transcript tab</h2><span class="tag">Recommended</span>
+<p>The player page stays as it is. The row under the controls becomes <b>Chapters · Transcript · History</b>. Transcript follows playback line by line, the line being said is filled, and the word being said is marked.</p>
+<h3>How it works</h3>
+<ul>
+<li>Tap a line to jump there. Long press or select text to highlight, same as articles.</li>
+<li>Search icon in the tab filters and jumps to matches.</li>
+<li>One status line says what's ready: "Ready to 2:41:00 · Mac is transcribing Ch 6".</li>
+<li>Chapters not done yet show a card with <i>Transcribe now</i>.</li>
+</ul>
+<h3>Trade-off</h3>
+<ul><li>Cover and controls take the top half, so you see 6–8 lines unless you scroll up past them.</li></ul>
+</div>
+<div class="col"><div class="phone">
+<div class="status"><span>9:41</span><span>▮▮ ◔</span></div>
+<div class="topbar"><span class="ms">arrow_back</span><span class="t">The Quiet Orchard</span></div>
+<div class="center" style="display:flex;flex-direction:column;align-items:center">
+<div class="cover" style="width:132px;height:132px;font-size:14px">The Quiet Orchard</div>
+<div class="title" style="font-size:18px">The Quiet Orchard</div><div class="author">Lena Marsh</div>
+<div class="chap">Chapter 5 · The Frost</div></div>
+<div class="seek"><i style="width:38%"></i><b style="left:38%"></b></div>
+<div class="times"><span>8:12</span><span>−13:20</span></div>
+<div class="ctr"><span class="ms">skip_previous</span><div class="round"><span class="ms">replay_10</span></div><div class="play"><span class="ms fill">pause</span></div><div class="round"><span class="ms">forward_30</span></div><span class="ms">skip_next</span></div>
+<div class="seg"><div>Chapters</div><div class="on"><span class="ms">subtitles</span>Transcript</div><div>History</div></div>
+<div class="jobline"><span class="ms">check_circle</span>Ready to Ch 6 · Mac is transcribing Ch 7<span style="flex:1"></span><span class="ms" style="color:var(--on2);font-size:20px">search</span></div>
+<div class="tx">
+<div class="cue past"><span class="tm">8:01</span><span>The first frost came early that year, a week before anyone had picked the late apples.</span></div>
+<div class="cue now"><span class="tm">8:09</span><span>Ada walked the rows at dawn, <span class="w">counting</span> the trees that had already lost their leaves.</span></div>
+<div class="cue"><span class="tm">8:16</span><span>Her father had always said the orchard <span class="mark">kept its own calendar</span>.</span></div>
+<div class="cue"><span class="tm">8:21</span><span>She had never believed him until now.</span></div>
+<div class="cue"><span class="tm">8:25</span><span>At the far wall the old pear tree was still green.</span></div>
+<div class="fade"></div></div>
+<div class="gesture"></div>
+</div><div class="cap">Android · player page, Transcript tab</div></div>
+
+<div class="col"><div class="web">
+<div class="side"><div class="lg">Feeder</div><div class="nv"><span class="ms">rss_feed</span>Feeds</div><div class="nv"><span class="ms">queue_music</span>Playlists</div><div class="nv on"><span class="ms">auto_stories</span>Books</div><div class="nv"><span class="ms">history</span>History</div></div>
+<div class="main"><div class="wtop"><span class="ms">arrow_back</span>The Quiet Orchard</div>
+<div class="wbody">
+<div class="wleft"><div class="cover" style="width:190px;height:190px;font-size:18px">The Quiet Orchard</div>
+<div class="title">The Quiet Orchard</div><div class="author">Lena Marsh</div><div class="chap">Chapter 5 · The Frost</div>
+<div class="seek" style="width:280px"><i style="width:38%"></i><b style="left:38%"></b></div>
+<div class="times" style="width:280px"><span>8:12</span><span>−13:20</span></div>
+<div class="ctr"><span class="ms">skip_previous</span><span class="ms">replay_10</span><div class="play" style="width:64px;height:56px"><span class="ms fill">pause</span></div><span class="ms">forward_30</span><span class="ms">skip_next</span></div>
+<div class="pills"><div class="pill"><span class="ms">speed</span>1.2×</div><div class="pill"><span class="ms">bedtime</span>Sleep</div></div></div>
+<div class="wright">
+<div class="seg" style="margin:6px 0;width:380px"><div>Chapters · 18</div><div class="on"><span class="ms">subtitles</span>Transcript</div><div>History</div></div>
+<div class="jobline" style="padding:6px 0"><span class="ms">check_circle</span>Ready to Ch 6 · transcribing Ch 7 on this Mac (6× real time)</div>
+<div class="search"><span class="ms">search</span>Search transcript</div>
+<div class="tx" style="padding:0">
+<div class="cue past"><span class="tm">7:52</span><span>Nobody in the village spoke about the winter of the long rain.</span></div>
+<div class="cue past"><span class="tm">8:01</span><span>The first frost came early that year, a week before anyone had picked the late apples.</span></div>
+<div class="cue now"><span class="tm">8:09</span><span>Ada walked the rows at dawn, <span class="w">counting</span> the trees that had already lost their leaves.</span></div>
+<div class="cue"><span class="tm">8:16</span><span>Her father had always said the orchard <span class="mark">kept its own calendar</span>.</span></div>
+<div class="cue"><span class="tm">8:21</span><span>She had never believed him until now.</span></div>
+<div class="cue"><span class="tm">8:25</span><span>At the far wall the old pear tree was still green, as if it had not heard the news.</span></div>
+<div class="cue"><span class="tm">8:33</span><span>She put her hand on the bark. It was warm.</span></div>
+<div class="fade"></div></div></div></div></div></div><div class="cap">Web / Mac app · transcript replaces the chapter list on the right</div></div>
+</section>
+
+<!-- ============ B ============ -->
+<section id="b">
+<div class="notes">
+<h2>B · Full-screen read-along</h2><span class="tag mid">Most immersive</span>
+<p>A <b>Transcript</b> button (<span class="ms" style="font-size:16px;vertical-align:-3px">subtitles</span>) in the top bar flips the page into big, lyrics-style text on a dark background. The current sentence is large and bright, the next ones fade. Controls shrink into a dock at the bottom.</p>
+<h3>How it works</h3>
+<ul>
+<li>Tap a sentence to jump. Scroll freely; a <i>Back to now</i> chip brings it back.</li>
+<li>Search and Highlight in the ⋮ menu.</li>
+<li>The screen stays on while it is open.</li>
+</ul>
+<h3>Trade-off</h3>
+<ul><li>Separate mode to enter and leave; less context (time stamps, chapter list hidden).</li></ul>
+</div>
+<div class="col"><div class="phone dark">
+<div class="status"><span>9:41</span><span>▮▮ ◔</span></div>
+<div class="topbar"><span class="ms" style="color:#c5c8da">close</span><span class="t" style="font-size:15px;color:#c5c8da">Chapter 5 · The Frost</span><span class="ib"><span class="ms">search</span></span><span class="ib"><span class="ms">more_vert</span></span></div>
+<div class="lyr">
+<p>The first frost came early that year, a week before anyone had picked the late apples.</p>
+<p class="now">Ada walked the rows at dawn, counting the trees that had already lost their leaves.</p>
+<p class="near">Her father had always said the orchard kept its own calendar.</p>
+<p>She had never believed him until now.</p>
+<p>At the far wall the old pear tree was still green.</p>
+</div>
+<div class="dock">
+<div class="minirow"><div class="cover" style="width:44px;height:44px;border-radius:10px;padding:0"></div><div style="flex:1;font-size:13.5px"><div style="font-weight:500">The Quiet Orchard</div><div style="font-size:12px;color:#aab0c8">Lena Marsh</div></div><span class="ms" style="color:#c5c8da">speed</span></div>
+<div class="seek" style="margin:14px 4px 4px"><i style="width:38%"></i><b style="left:38%"></b></div>
+<div class="times" style="margin:0 4px"><span>8:12</span><span>−13:20</span></div>
+<div class="ctr"><span class="ms">skip_previous</span><div class="round"><span class="ms">replay_10</span></div><div class="play"><span class="ms fill">pause</span></div><div class="round"><span class="ms">forward_30</span></div><span class="ms">skip_next</span></div>
+</div><div class="gesture" style="background:#fff8"></div>
+</div><div class="cap">Android · after tapping Transcript on the player</div></div>
+
+<div class="col"><div class="web dark" style="background:#1d2235">
+<div class="main"><div class="wtop" style="border-color:#3b425e;color:#e6e8f2"><span class="ms">close</span>The Quiet Orchard · Chapter 5 · The Frost<span class="sp"></span><span class="ms">search</span><span class="ms">more_vert</span></div>
+<div class="lyr" style="padding:40px 140px">
+<p style="font-size:26px">The first frost came early that year, a week before anyone had picked the late apples.</p>
+<p class="now" style="font-size:30px">Ada walked the rows at dawn, counting the trees that had already lost their leaves.</p>
+<p class="near" style="font-size:26px">Her father had always said the orchard kept its own calendar.</p>
+<p style="font-size:26px">She had never believed him until now.</p>
+</div>
+<div class="dock" style="border-radius:0;display:flex;align-items:center;gap:18px;padding:10px 20px">
+<div class="cover" style="width:44px;height:44px;border-radius:10px;padding:0;flex:none"></div>
+<div class="ctr" style="margin:0"><span class="ms">replay_10</span><div class="play" style="width:52px;height:44px;border-radius:16px"><span class="ms fill" style="font-size:26px">pause</span></div><span class="ms">forward_30</span></div>
+<span class="times" style="margin:0">8:12</span><div class="seek" style="flex:1;margin:0"><i style="width:38%"></i><b style="left:38%"></b></div><span class="times" style="margin:0">−13:20</span><span class="ms" style="color:#c5c8da">speed</span></div>
+</div></div><div class="cap">Web / Mac app · full-window read-along</div></div>
+</section>
+
+<!-- ============ C ============ -->
+<section id="c">
+<div class="notes">
+<h2>C · Read along in the ebook</h2><span class="tag mid">Extra, on top of A or B</span>
+<p>When the same book is in your Ebooks, the transcript is matched to the ebook text, so you read the <b>real book pages</b> (proper paragraphs, spelling, italics) with the spoken sentence highlighted. Whisper's words are only used to line the two up.</p>
+<h3>How it works</h3>
+<ul>
+<li>A chip on the player: <i>Read along: Ebook · Transcript</i>. Picked automatically when titles match; you can link a book by hand.</li>
+<li>Your ebook position follows the audio, so switching from listening to reading lands on the same sentence (and back).</li>
+<li>Highlights land in the ebook, so they show up in both.</li>
+</ul>
+<h3>Trade-off</h3>
+<ul><li>Needs the ebook. Abridged audiobooks or intros that differ from the text fall back to the plain transcript for those parts.</li></ul>
+</div>
+<div class="col"><div class="phone">
+<div class="status"><span>9:41</span><span>▮▮ ◔</span></div>
+<div class="topbar"><span class="ms">arrow_back</span><span class="t">The Quiet Orchard</span><span class="ib"><span class="ms">search</span></span></div>
+<div class="chipbar"><div class="chip on"><span class="ms">menu_book</span>Ebook</div><div class="chip"><span class="ms">subtitles</span>Transcript</div><span style="flex:1"></span><span style="font-size:12px;color:var(--on2);align-self:center">p. 87 of 312</span></div>
+<div class="page"><h4>CHAPTER FIVE · THE FROST</h4>
+<span class="done">The first frost came early that year, a week before anyone had picked the late apples. In the village they said it was the river's fault, or the moon's, depending on who you asked.</span>
+<span class="said">Ada walked the rows at dawn, counting the trees that had already lost their leaves.</span> Her father had always said the orchard <i>kept its own calendar</i>. She had never believed him until now.<br><br>At the far wall the old pear tree was still green, as if it had not heard the news. She put her hand on the bark. It was warm.
+<div class="fade"></div></div>
+<div class="dock" style="padding-bottom:20px">
+<div class="seek" style="margin:6px 4px 4px"><i style="width:38%"></i><b style="left:38%"></b></div>
+<div class="ctr" style="margin-top:8px"><span class="ms">skip_previous</span><div class="round"><span class="ms">replay_10</span></div><div class="play"><span class="ms fill">pause</span></div><div class="round"><span class="ms">forward_30</span></div><span class="ms">skip_next</span></div>
+</div><div class="gesture"></div>
+</div><div class="cap">Android · ebook pages follow the audio</div></div>
+
+<div class="col"><div class="web">
+<div class="side"><div class="lg">Feeder</div><div class="nv"><span class="ms">rss_feed</span>Feeds</div><div class="nv"><span class="ms">queue_music</span>Playlists</div><div class="nv on"><span class="ms">auto_stories</span>Books</div><div class="nv"><span class="ms">history</span>History</div></div>
+<div class="main"><div class="wtop"><span class="ms">arrow_back</span>The Quiet Orchard<span class="sp"></span><div class="chip on" style="height:28px"><span class="ms">menu_book</span>Ebook</div><div class="chip" style="height:28px"><span class="ms">subtitles</span>Transcript</div></div>
+<div class="wbody"><div class="page" style="padding:22px 120px;font-size:18px"><h4>CHAPTER FIVE · THE FROST</h4>
+<span class="done">The first frost came early that year, a week before anyone had picked the late apples. In the village they said it was the river's fault, or the moon's, depending on who you asked.</span>
+<span class="said">Ada walked the rows at dawn, counting the trees that had already lost their leaves.</span> Her father had always said the orchard <i>kept its own calendar</i>. She had never believed him until now.<br><br>At the far wall the old pear tree was still green, as if it had not heard the news. She put her hand on the bark. It was warm.<div class="fade"></div></div></div>
+<div class="dock" style="border-radius:0;display:flex;align-items:center;gap:18px;padding:10px 20px">
+<div class="cover" style="width:40px;height:40px;border-radius:10px;padding:0;flex:none"></div>
+<div class="ctr" style="margin:0"><span class="ms">replay_10</span><div class="play" style="width:52px;height:44px;border-radius:16px"><span class="ms fill" style="font-size:26px">pause</span></div><span class="ms">forward_30</span></div>
+<span class="times" style="margin:0">8:12</span><div class="seek" style="flex:1;margin:0"><i style="width:38%"></i><b style="left:38%"></b></div><span class="times" style="margin:0">p. 87 / 312</span></div>
+</div></div><div class="cap">Web / Mac app · ebook with the spoken sentence marked</div></div>
+</section>
+</body></html>

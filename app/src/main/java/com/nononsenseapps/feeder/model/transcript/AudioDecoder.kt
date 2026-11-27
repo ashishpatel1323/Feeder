@@ -12,13 +12,17 @@ import java.nio.ByteOrder
  * reads: 16 kHz mono floats. Streams, so an hour-long episode never sits in memory at once.
  */
 class AudioDecoder(
-    private val file: File,
+    /** Points a fresh extractor at the audio: a file, a document URI or a streaming link. */
+    private val source: (MediaExtractor) -> Unit,
+    private val name: String = "audio",
 ) {
+    constructor(file: File) : this({ it.setDataSource(file.absolutePath) }, file.name)
+
     /** Length of the audio in ms, or 0 if the file does not say. */
     val durationMs: Long by lazy {
         val extractor = MediaExtractor()
         try {
-            extractor.setDataSource(file.absolutePath)
+            source(extractor)
             audioTrack(extractor)?.let { (_, format) ->
                 if (format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION) / 1000 else 0L
             } ?: 0L
@@ -40,8 +44,8 @@ class AudioDecoder(
         val extractor = MediaExtractor()
         var codec: MediaCodec? = null
         try {
-            extractor.setDataSource(file.absolutePath)
-            val (track, format) = audioTrack(extractor) ?: error("No audio in ${file.name}")
+            source(extractor)
+            val (track, format) = audioTrack(extractor) ?: error("No audio in $name")
             extractor.selectTrack(track)
             val startUs = startMs * 1000
             if (startUs > 0) extractor.seekTo(startUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)

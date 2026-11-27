@@ -14,7 +14,6 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -45,8 +44,6 @@ import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.Forward10
@@ -171,7 +168,6 @@ fun HideableCompactTTSPlayer(
     onSetWpm: (Int) -> Unit = {},
     onSkipWords: (Int) -> Unit = {},
     onJumpToWord: (Int) -> Unit = {},
-    statusLine: PlayerStatusLine? = null,
 ) {
     AnimatedVisibility(
         modifier = modifier,
@@ -205,52 +201,7 @@ fun HideableCompactTTSPlayer(
             onSetWpm = onSetWpm,
             onSkipWords = onSkipWords,
             onJumpToWord = onJumpToWord,
-            statusLine = statusLine,
         )
-    }
-}
-
-/** One line of status above the seek bar (e.g. an ebook's offline audio); tapping it opens [onClick]. */
-@Immutable
-data class PlayerStatusLine(
-    val text: String,
-    val detail: String = "",
-    val busy: Boolean = false,
-    val onClick: () -> Unit = {},
-)
-
-@Composable
-private fun StatusLineRow(
-    line: PlayerStatusLine,
-    colors: PlayerColors,
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(end = 4.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .clickable(onClick = line.onClick)
-                .padding(vertical = 6.dp),
-    ) {
-        if (line.busy) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(16.dp),
-                strokeWidth = 2.dp,
-                color = colors.accent,
-                trackColor = colors.track,
-            )
-        } else {
-            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = colors.accent, modifier = Modifier.size(16.dp))
-        }
-        Text(line.text, style = MaterialTheme.typography.labelMedium, color = colors.accent, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-        if (line.detail.isNotEmpty()) {
-            Text("· ${line.detail}", style = MaterialTheme.typography.labelMedium, color = colors.muted, maxLines = 1)
-        }
-        Spacer(Modifier.weight(1f))
-        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = colors.muted, modifier = Modifier.size(18.dp))
     }
 }
 
@@ -326,7 +277,6 @@ fun CompactTTSPlayer(
     onSetWpm: (Int) -> Unit = {},
     onSkipWords: (Int) -> Unit = {},
     onJumpToWord: (Int) -> Unit = {},
-    statusLine: PlayerStatusLine? = null,
 ) {
     var diagnosticsText by remember { mutableStateOf<String?>(null) }
     diagnosticsText?.let { text ->
@@ -398,7 +348,6 @@ fun CompactTTSPlayer(
                 onSetMuted = onSetMuted,
                 onSetWpm = onSetWpm,
             )
-            if (statusLine != null && !muted) StatusLineRow(statusLine, colors)
             if (wordMode.showWord && onSetShowWord != null) {
                 RsvpWordDisplay(
                     word = wordMode.word,
@@ -982,7 +931,6 @@ private fun WavySeekBar(
                     }
                 }.pointerInput(enabled, rtl) {
                     if (!enabled) return@pointerInput
-
                     fun toFraction(x: Float) = (x / size.width).coerceIn(0f, 1f).let { if (rtl) 1f - it else it }
                     detectTapGestures { offset ->
                         currentOnScrub(toFraction(offset.x))
@@ -990,7 +938,6 @@ private fun WavySeekBar(
                     }
                 }.pointerInput(enabled, rtl) {
                     if (!enabled) return@pointerInput
-
                     fun toFraction(x: Float) = (x / size.width).coerceIn(0f, 1f).let { if (rtl) 1f - it else it }
                     detectHorizontalDragGestures(
                         onDragStart = { currentOnScrub(toFraction(it.x)) },
@@ -1009,7 +956,6 @@ private fun WavySeekBar(
         val start = stroke / 2
         val end = size.width - stroke / 2
         val thumbX = start + (end - start) * fraction
-
         fun x(value: Float) = if (rtl) size.width - value else value
 
         val playedEnd = thumbX - thumb - gap

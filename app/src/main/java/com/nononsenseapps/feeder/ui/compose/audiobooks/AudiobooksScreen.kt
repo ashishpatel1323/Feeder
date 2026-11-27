@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.outlined.AudioFile
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material3.DropdownMenu
@@ -173,7 +174,7 @@ private fun rememberCovers(
 }
 
 @Composable
-private fun Cover(
+internal fun Cover(
     cover: ImageBitmap?,
     title: String,
     modifier: Modifier = Modifier,
@@ -403,6 +404,7 @@ fun AudiobookPlayerScreen(
     val s by player.state.collectAsState()
     val mine = s.bookId == bookId
     val cover = rememberCovers(library, listOfNotNull(book), version)[bookId]
+    var showTranscript by rememberSaveable(bookId) { mutableStateOf(false) }
 
     // Opening the page loads the book where it was left, without playing it yet
     LaunchedEffect(bookId) {
@@ -415,18 +417,34 @@ fun AudiobookPlayerScreen(
     Scaffold(
         modifier = modifier,
         topBar = {
-            TopAppBar(
-                title = { Text(book?.title.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateUp) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.go_back))
-                    }
-                },
-            )
+            if (!showTranscript) {
+                TopAppBar(
+                    title = { Text(book?.title.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    navigationIcon = {
+                        IconButton(onClick = onNavigateUp) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.go_back))
+                        }
+                    },
+                    actions = {
+                        if (book != null) {
+                            val label = stringResource(R.string.audiobook_transcript)
+                            PlainTooltipBox(tooltip = { Text(label) }) {
+                                IconButton(onClick = { showTranscript = true }) {
+                                    Icon(Icons.Default.Subtitles, contentDescription = label)
+                                }
+                            }
+                        }
+                    },
+                )
+            }
         },
     ) { padding ->
         if (book == null) {
             Text(stringResource(R.string.audiobook_gone), modifier = Modifier.padding(padding).padding(FeederTokens.Space.lg))
+            return@Scaffold
+        }
+        if (showTranscript) {
+            AudiobookReadAlong(book, cover, s, mine, player, onClose = { showTranscript = false })
             return@Scaffold
         }
         val chapters = if (mine) s.chapters else remember(book) { AudiobookRules.chaptersOf(book) }
@@ -626,7 +644,7 @@ private fun NowPlaying(
 }
 
 @Composable
-private fun Control(
+internal fun Control(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     enabled: Boolean,
@@ -638,7 +656,7 @@ private fun Control(
 }
 
 @Composable
-private fun Round(
+internal fun Round(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     enabled: Boolean,
@@ -652,7 +670,7 @@ private fun Round(
 }
 
 @Composable
-private fun SpeedButton(
+internal fun SpeedButton(
     speed: Float,
     enabled: Boolean,
     onPick: (Float) -> Unit,

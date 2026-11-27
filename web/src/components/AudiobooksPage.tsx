@@ -14,6 +14,7 @@ import { Icon, IconButton } from './Icon'
 import { formatSpeed } from './Player'
 import { GeneratedCover, LibraryListing, useShelfPrefs, type ShelfItem } from './Shelf'
 import { CoverPicker } from './CoverPicker'
+import { AudiobookReadAlong } from './AudiobookReadAlong'
 import { autoStatus, effectiveStatus, markKey, setStatus } from '../lib/shelfMarks'
 
 const RATES = [0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.5, 1.75, 2, 2.5, 3]
@@ -381,6 +382,7 @@ function BookPlayer({ id, onBack }: { id: string; onBack: () => void }) {
   const mine = s.bookId === id
   const listRef = useRef<HTMLOListElement>(null)
   const [view, setView] = useState<'chapters' | 'history'>('chapters')
+  const [transcript, setTranscript] = useState(false)
 
   // Opening the page loads the book where it was left, without playing it yet
   useEffect(() => {
@@ -414,11 +416,28 @@ function BookPlayer({ id, onBack }: { id: string; onBack: () => void }) {
   const left = bookLen ? (bookLen - bookAt) / (mine ? s.rate : 1) : 0
   const startOrResume = pos && pos.f > 0 && pos.f < 0.999 ? 'Resume' : 'Play'
 
+  if (transcript) {
+    return (
+      <AudiobookReadAlong
+        book={book}
+        onClose={() => setTranscript(false)}
+        extras={
+          <>
+            <SpeedMenu rate={mine ? s.rate : 1} />
+            <SleepMenu sleep={s.sleep} />
+          </>
+        }
+      />
+    )
+  }
+
   return (
     <section className="manage-pane ab-player" aria-label={book.title}>
       <div className="ab-top">
         <IconButton icon="back" label="Audiobooks" onClick={onBack} />
         <span className="ab-top-title">{book.title}</span>
+        <span className="ab-top-gap" />
+        <IconButton icon="closedCaption" label="Transcript" onClick={() => setTranscript(true)} />
       </div>
       <div className="ab-body">
         <div className="ab-now">

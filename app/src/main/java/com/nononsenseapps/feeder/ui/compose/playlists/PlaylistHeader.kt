@@ -1,7 +1,6 @@
 package com.nononsenseapps.feeder.ui.compose.playlists
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
@@ -15,7 +14,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material3.DropdownMenu
@@ -105,9 +103,6 @@ internal fun PlaylistTopBarActions(
     downloadCount: Int,
     onDownload: () -> Unit,
     onDelete: () -> Unit,
-    prepareCount: Int = 0,
-    prepareSize: String = "",
-    onPrepare: () -> Unit = {},
 ) {
     val flipLabel = stringResource(R.string.show_as_flip_pages)
     PlainTooltipBox(tooltip = { Text(flipLabel) }) {
@@ -139,27 +134,6 @@ internal fun PlaylistTopBarActions(
                     onClick = {
                         expanded = false
                         onDownload()
-                    },
-                )
-            }
-            if (prepareCount > 0) {
-                DropdownMenuItem(
-                    text = {
-                        Column {
-                            Text(stringResource(R.string.playlist_prepare_articles, prepareCount))
-                            if (prepareSize.isNotEmpty()) {
-                                Text(
-                                    stringResource(R.string.playlist_prepare_articles_size, prepareSize),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    },
-                    leadingIcon = { Icon(Icons.Default.Headphones, contentDescription = null) },
-                    onClick = {
-                        expanded = false
-                        onPrepare()
                     },
                 )
             }

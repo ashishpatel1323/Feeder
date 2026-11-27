@@ -115,17 +115,56 @@ fun TranscriptPanel(
     LaunchedEffect(itemId) { transcripts.load(itemId) }
     val state by remember(itemId) { transcripts.state(itemId) }.collectAsState(transcripts.current(itemId))
 
+    TranscriptView(
+        cues = state.cues,
+        positionMs = positionMs,
+        onSeek = onSeek,
+        resetKey = itemId,
+        copyText = { transcripts.plainText(itemId) },
+        chapters = chapters,
+        modifier = modifier,
+        status = {
+            TranscriptStatusRow(
+                state = state,
+                video = video,
+                canGenerate = transcripts.canGenerate,
+                modelSizeMb = transcripts.modelSizeMb,
+                onGenerate = { transcripts.generate(itemId) },
+                onStop = transcripts::stopGenerating,
+                onRedo = { transcripts.delete(itemId) },
+            )
+        },
+    )
+}
+
+/**
+ * Lines that follow playback, with Search and Copy next to [status]: the same look for podcast
+ * episodes, YouTube videos and audiobooks. With [chapters], the lines go under chapter headings
+ * (only the playing one open); [pendingText] then shows under a playing chapter with no lines yet.
+ */
+@Composable
+fun TranscriptView(
+    cues: List<TranscriptCue>,
+    positionMs: Long,
+    onSeek: (Long) -> Unit,
+    resetKey: Any,
+    copyText: suspend () -> String,
+    modifier: Modifier = Modifier,
+    chapters: List<TranscriptChapter>? = null,
+    pendingText: String? = null,
+    status: @Composable () -> Unit,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val copyLabel = stringResource(R.string.transcript)
     val copiedMessage = stringResource(R.string.transcript_copied)
-    var searchOpen by rememberSaveable(itemId) { mutableStateOf(false) }
-    var query by rememberSaveable(itemId) { mutableStateOf("") }
-    var active by remember(itemId) { mutableIntStateOf(0) }
-    val matches = remember(searchOpen, state.cues, query) { if (searchOpen) state.cues.findMatches(query) else emptyList() }
+    var searchOpen by rememberSaveable(resetKey) { mutableStateOf(false) }
+    var query by rememberSaveable(resetKey) { mutableStateOf("") }
+    var active by remember(resetKey) { mutableIntStateOf(0) }
+    val matches = remember(searchOpen, cues, query) { if (searchOpen) cues.findMatches(query) else emptyList() }
     // A new search starts at the first match from where the episode is now
     LaunchedEffect(query) {
-        val now = state.cues.indexAt(positionMs)
+        val now = cues.indexAt(positionMs)
         active = matches.indexOfFirst { it.cue >= now }.coerceAtLeast(0)
     }
     fun step(by: Int) {
@@ -134,25 +173,15 @@ fun TranscriptPanel(
 
     Column(modifier = modifier) {
         Row(verticalAlignment = Alignment.Top) {
-            Box(modifier = Modifier.weight(1f)) {
-                TranscriptStatusRow(
-                    state = state,
-                    video = video,
-                    canGenerate = transcripts.canGenerate,
-                    modelSizeMb = transcripts.modelSizeMb,
-                    onGenerate = { transcripts.generate(itemId) },
-                    onStop = transcripts::stopGenerating,
-                    onRedo = { transcripts.delete(itemId) },
-                )
-            }
-            if (state.cues.isNotEmpty() && !searchOpen) {
+            Box(modifier = Modifier.weight(1f)) { status() }
+            if (cues.isNotEmpty() && !searchOpen) {
                 IconButton(onClick = { searchOpen = true }) {
                     Icon(Icons.Default.Search, contentDescription = stringResource(R.string.transcript_search))
                 }
                 IconButton(
                     onClick = {
                         scope.launch {
-                            val text = transcripts.plainText(itemId)
+                            val text = copyText()
                             val clipboard = context.getSystemService(ClipboardManager::class.java)
                             clipboard?.setPrimaryClip(ClipData.newPlainText(copyLabel, text))
                             // Android 13 and newer confirm copies on their own
@@ -180,18 +209,19 @@ fun TranscriptPanel(
                 },
             )
         }
-        val sections = remember(state.cues, chapters) { chapters?.let { transcriptSections(state.cues, it) }.orEmpty() }
-        if (state.cues.isNotEmpty() && sections.isNotEmpty() && !(searchOpen && query.isNotBlank())) {
+        val sections = remember(cues, chapters) { chapters?.let { transcriptSections(cues, it) }.orEmpty() }
+        if (cues.isNotEmpty() && sections.isNotEmpty() && !(searchOpen && query.isNotBlank())) {
             SectionedTranscriptLines(
-                cues = state.cues,
+                cues = cues,
                 sections = sections,
                 positionMs = positionMs,
                 onSeek = onSeek,
+                pendingText = pendingText,
                 modifier = Modifier.weight(1f, fill = false),
             )
-        } else if (state.cues.isNotEmpty()) {
+        } else if (cues.isNotEmpty()) {
             TranscriptLines(
-                cues = state.cues,
+                cues = cues,
                 positionMs = positionMs,
                 onSeek = onSeek,
                 matches = matches,
@@ -471,6 +501,8 @@ private sealed interface SectionRow {
     data class Heading(val section: Int) : SectionRow
 
     data class Line(val cue: Int) : SectionRow
+
+    data class Pending(val section: Int) : SectionRow
 }
 
 /**
@@ -483,6 +515,7 @@ private fun SectionedTranscriptLines(
     sections: List<TranscriptSection>,
     positionMs: Long,
     onSeek: (Long) -> Unit,
+    pendingText: String?,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -494,11 +527,12 @@ private fun SectionedTranscriptLines(
     var open by remember(sections) { mutableStateOf(setOf(currentSection)) }
     LaunchedEffect(currentSection) { open = open + currentSection }
     val rows =
-        remember(sections, open) {
+        remember(sections, open, pendingText, currentSection) {
             buildList {
                 sections.forEachIndexed { i, section ->
                     add(SectionRow.Heading(i))
                     if (i in open) for (c in section.firstCue until section.endCue) add(SectionRow.Line(c))
+                    if (pendingText != null && i == currentSection && section.isEmpty) add(SectionRow.Pending(i))
                 }
             }
         }
@@ -546,6 +580,19 @@ private fun SectionedTranscriptLines(
                                     }
                                 },
                             )
+                        }
+                    }
+
+                    is SectionRow.Pending -> {
+                        item(key = "p${row.section}") {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                Spacer(Modifier.width(12.dp))
+                                Text(pendingText.orEmpty(), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                     }
 
