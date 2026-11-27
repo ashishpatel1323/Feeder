@@ -56,6 +56,8 @@ data class Highlight(
     val cfi: String? = null,
     /** A margin sketch tied to the text instead of a colored highlight (JSON, see Sketch.kt). */
     val sketch: String? = null,
+    /** Handwriting on the page (Kobo style), tied to the layout it was written in (JSON, see InkCodec). */
+    val ink: String? = null,
 ) {
     val highlightColor: HighlightColor get() = HighlightColor.of(color)
 }
@@ -157,6 +159,19 @@ class HighlightStore(
                 if (it.id == id) it.copy(sketch = sketch, color = color.id, modifiedAt = maxOf(now, it.modifiedAt + 1)) else it
             },
         )
+        onChanged?.invoke()
+        if (before != null) onEdit?.invoke(before, get(id))
+    }
+
+    /** Changes a handwritten note's strokes (after erasing part of it). */
+    @Synchronized
+    fun updateInk(
+        id: String,
+        ink: String,
+    ) {
+        val now = System.currentTimeMillis()
+        val before = get(id)
+        write(_highlights.value.map { if (it.id == id) it.copy(ink = ink, modifiedAt = maxOf(now, it.modifiedAt + 1)) else it })
         onChanged?.invoke()
         if (before != null) onEdit?.invoke(before, get(id))
     }

@@ -113,3 +113,67 @@ object SketchCodec {
         }.toString()
     }
 }
+
+/**
+ * Handwriting on the page (Kobo style), the same JSON as the web app's InkData (web/src/lib/pageink.ts):
+ * { v, sig, ox, oy, w, h, s: [{ c, w, p }], prefs? }. Coordinates are CSS px (dp in the article
+ * reader) from the note's corner; [sig] is the layout of the paragraph it was written on.
+ */
+data class InkData(
+    val sig: String,
+    val ox: Float,
+    val oy: Float,
+    val w: Float,
+    val h: Float,
+    val strokes: List<SketchStroke>,
+    val prefs: Map<String, kotlinx.serialization.json.JsonElement> = emptyMap(),
+)
+
+object InkCodec {
+    private val json = Json { ignoreUnknownKeys = true }
+
+    fun parse(raw: String?): InkData? {
+        if (raw.isNullOrBlank()) return null
+        return runCatching {
+            val o = json.parseToJsonElement(raw).jsonObject
+            val sig = o["sig"]?.jsonPrimitive?.content ?: return null
+            fun num(k: String) = o[k]?.jsonPrimitive?.doubleOrNull?.toFloat() ?: 0f
+            val strokes =
+                (o["s"] as? JsonArray).orEmpty().mapNotNull { el ->
+                    val st = el as? JsonObject ?: return@mapNotNull null
+                    val pts = (st["p"] as? JsonArray)?.map { it.jsonPrimitive.doubleOrNull?.toFloat() ?: 0f }?.toFloatArray() ?: return@mapNotNull null
+                    if (pts.size < 2) return@mapNotNull null
+                    SketchStroke(HighlightColor.of(st["c"]?.jsonPrimitive?.content), st["w"]?.jsonPrimitive?.doubleOrNull?.toFloat() ?: 2f, pts)
+                }
+            if (strokes.isEmpty()) return null
+            InkData(sig, num("ox"), num("oy"), maxOf(1f, num("w")), maxOf(1f, num("h")), strokes, (o["prefs"] as? JsonObject)?.toMap().orEmpty())
+        }.getOrNull()
+    }
+
+    fun encode(d: InkData): String {
+        fun r(f: Float) = (f * 10).roundToInt() / 10f
+        return buildJsonObject {
+            put("v", 1)
+            put("sig", d.sig)
+            put("ox", r(d.ox))
+            put("oy", r(d.oy))
+            put("w", r(d.w))
+            put("h", r(d.h))
+            put(
+                "s",
+                buildJsonArray {
+                    for (st in d.strokes) {
+                        add(
+                            buildJsonObject {
+                                put("c", st.color.id)
+                                put("w", r(st.w))
+                                put("p", buildJsonArray { st.p.forEach { add(kotlinx.serialization.json.JsonPrimitive(r(it))) } })
+                            },
+                        )
+                    }
+                },
+            )
+            if (d.prefs.isNotEmpty()) put("prefs", JsonObject(d.prefs))
+        }.toString()
+    }
+}
