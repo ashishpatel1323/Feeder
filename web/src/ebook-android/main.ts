@@ -23,7 +23,8 @@ interface Bridge {
   onRelocate(json: string): void
   onSelection(json: string): void
   onHighlightTap(cfi: string): void
-  onTtsText(text: string, offset: number): void
+  onTtsText(text: string, offset: number, section: number): void
+  onSectionTexts(json: string): void
   onSectionLoaded(): void
   onTap(zone: string): void
   onError(message: string): void
@@ -213,7 +214,43 @@ function ttsText() {
     const seg = index.segments.find((s) => s.node === r.startContainer)
     if (seg) offset = seg.start + Math.min(r.startOffset, seg.end - seg.start)
   }
-  bridge.onTtsText(index.text, offset)
+  bridge.onTtsText(index.text, offset, view.lastLocation?.section?.current ?? -1)
+}
+
+/** Indexes the shown chapter for marking spoken text, when its audio was prepared ahead. */
+function ttsIndex() {
+  const c = readableContent(view)
+  if (!view || !c?.doc.body) return
+  tts = { index: indexText(c.doc.body), doc: c.doc }
+}
+
+/**
+ * Text of up to `count` chapters after section `after` (the same text ttsText gives once a
+ * chapter shows), so the app can speak them ahead of time. Skips sections with nothing to read.
+ */
+async function sectionTexts(after: number, count: number) {
+  const out: { index: number; label: string; text: string }[] = []
+  let end = false
+  try {
+    const sections = view?.book?.sections
+    if (!view || view.isFixedLayout || !sections) return
+    for (let i = after + 1; i < sections.length && out.length < count; i++) {
+      const s = sections[i]
+      if (s.linear === 'no' || !s.createDocument) continue
+      const doc = await s.createDocument()
+      if (!doc?.body) continue
+      const text = indexText(doc.body).text
+      if (!/[\p{L}\p{N}]/u.test(text) || text.trim().length < 40) continue
+      const label = (view.getProgressOf(i)?.tocItem?.label ?? '').trim()
+      out.push({ index: i, label, text })
+    }
+    // Nothing more to read after these: the app knows which chapter ends the book
+    end = out.length < count
+  } catch (e) {
+    console.warn('Chapter text for read aloud failed', e)
+  } finally {
+    bridge.onSectionTexts(JSON.stringify({ texts: out, last: end ? (out[out.length - 1]?.index ?? after) : -1 }))
+  }
 }
 
 type HighlightWindow = Window & { CSS: typeof CSS; Highlight: typeof Highlight }
@@ -271,6 +308,9 @@ function ttsClear() {
   prevSection: () => void prevSection(view),
   clearSelection: () => view?.deselect(),
   ttsText,
+  ttsIndex,
+  sectionTexts: (after: number, count: number) => void sectionTexts(after, count),
+  goToSection: (index: number) => void view?.goTo(index),
   ttsMark,
   ttsClear,
 }

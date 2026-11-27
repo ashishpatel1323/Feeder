@@ -21,6 +21,8 @@ import { deleteHighlight, HIGHLIGHT_COLORS, quoteText, saveHighlight, updateHigh
 import { bookChip, trackOpen, type Where } from '../lib/history'
 import { formatBytes } from '../lib/offline'
 import { readAloud, type ReadAloudState } from '../lib/readaloud'
+import { bookAudio } from '../lib/bookAudio'
+import { BookAudioStatus } from './BookAudioPanel'
 import type { Settings } from '../lib/settings'
 import type { FoliateView, Location, TocItem } from '../vendor/foliate-js/view.js'
 import { confirmDropboxDelete, needsDropbox, useDropbox } from './DropboxPanel'
@@ -411,6 +413,7 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
       if (v?.lastLocation) void savePosition(id, v.lastLocation.cfi, v.lastLocation.fraction ?? 0, pageNumbers(v.lastLocation, v.isFixedLayout))
       if (readAloud.state.itemId === bookItemId(id)) readAloud.stop()
       readAloud.revealHook = null
+      bookAudio.setBook(null, null, '', true, 3, true)
       v?.close()
       v?.remove()
       viewRef.current = null
@@ -487,10 +490,19 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
       void reveal(viewRef.current, r)
       return true
     }
+    // Chapters after this one are spoken ahead with the natural voice (bookAudio.ts)
+    readAloud.storedAudio = bookAudio
+    bookAudio.setBook(id, view, settings.readAloudVoice, settings.readAloudKokoroUseGpu, settings.bookAudioAhead, settings.bookAudioDeletePlayed)
+    bookAudio.setPosition(view.lastLocation?.section?.current ?? -1)
     readAloud.onFinished = (done) => {
       if (done !== itemId) return
       const v = viewRef.current
-      if (!v || atEnd(v)) return
+      if (!v) return
+      if (atEnd(v)) {
+        // Read to the end: the book's audio is no longer needed
+        void bookAudio.finished(id)
+        return
+      }
       continueNext.current = true
       void nextSection(v)
     }
@@ -753,6 +765,7 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
             readAloud.stop()
             void nextSection(viewRef.current)
           }}
+          status={<BookAudioStatus settings={settings} />}
         />
       ) : null}
     </section>

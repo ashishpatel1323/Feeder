@@ -644,4 +644,24 @@
   <string name="youtube_close_player">Close player</string>
   <string name="player_previous">Previous video</string>
   <string name="player_next">Next video</string>
+  <string name="offline_audio">Offline audio</string>
+  <string name="offline_audio_lead">Chapters ahead are spoken on this phone so reading never stops. %1$s.</string>
+  <string name="offline_audio_lead_empty">Chapters ahead are spoken on this phone so reading never stops.</string>
+  <string name="offline_audio_played">Played · audio deleted</string>
+  <string name="offline_audio_playing">Reading now</string>
+  <string name="offline_audio_ready">Ready · %1$s</string>
+  <string name="offline_audio_preparing">Preparing · %1$d%%</string>
+  <string name="offline_audio_up_next">Up next</string>
+  <string name="offline_audio_section">Section %1$d</string>
+  <string name="offline_audio_prepare_ahead">Prepare ahead</string>
+  <string name="offline_audio_ahead_hint">Chapters after the one you\'re on</string>
+  <string name="offline_audio_delete_played">Delete played audio</string>
+  <string name="offline_audio_delete_played_hint">After you finish a chapter</string>
+  <string name="offline_audio_status_preparing">Preparing chapter audio · %1$d%%</string>
+  <string name="offline_audio_status_waiting">Chapters ahead will be prepared</string>
+  <string name="offline_audio_minutes">%1$d min</string>
+  <plurals name="offline_audio_status_ready">
+    <item quantity="one">Next chapter ready offline</item>
+    <item quantity="other">Next %1$d chapters ready offline</item>
+  </plurals>
 </resources>

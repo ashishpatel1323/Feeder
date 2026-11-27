@@ -10509,3 +10509,199 @@ mark.sr-mark {
   outline: 2px solid var(--text);
   outline-offset: 2px;
 }
+
+/* Ebook offline audio: status line in the read-aloud player and its panel (BookAudioPanel.tsx) */
+.book-audio {
+  position: relative;
+  margin: 2px 0 2px;
+}
+.book-audio-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 28px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--player-accent);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.book-audio-status:hover {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+.book-audio-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.book-audio-size {
+  flex: 1;
+  color: var(--player-muted, currentColor);
+  opacity: 0.8;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.book-audio-spin {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: book-audio-spin 0.9s linear infinite;
+}
+@keyframes book-audio-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.book-audio-panel {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 20;
+  width: min(380px, calc(100vw - 24px));
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
+  padding: 8px 0 12px;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28);
+}
+.book-audio-panel h2 {
+  margin: 8px 18px 2px;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+.book-audio-lead {
+  margin: 2px 18px 8px;
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+}
+.book-audio-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 6px;
+  border-bottom: 1px solid var(--border);
+}
+.book-audio-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 48px;
+  padding: 6px 18px;
+}
+.book-audio-row.playing {
+  background: var(--accent-soft);
+}
+.book-audio-row-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.book-audio-row-text b {
+  overflow: hidden;
+  font-size: var(--fs-md);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.book-audio-row-text small {
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+}
+.book-audio-row.played b {
+  color: var(--text-3);
+  font-weight: 400;
+}
+.book-audio-mark {
+  display: grid;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  color: var(--accent);
+}
+.book-audio-row.played .book-audio-mark {
+  color: var(--text-3);
+}
+.book-audio-ring {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: conic-gradient(var(--accent) var(--p), var(--surface-3) 0);
+  mask: radial-gradient(circle, transparent 6px, #000 7px);
+}
+.book-audio-dot {
+  width: 16px;
+  height: 16px;
+  border: 2px dashed var(--border);
+  border-radius: 50%;
+}
+.book-audio-sec {
+  margin: 12px 18px 6px;
+  color: var(--accent);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.book-audio-seg {
+  display: flex;
+  margin: 0 18px 6px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+}
+.book-audio-seg button {
+  flex: 1;
+  height: var(--control-h);
+  border: 0;
+  border-left: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-md);
+  font-weight: 500;
+  cursor: pointer;
+}
+.book-audio-seg button:first-child {
+  border-left: 0;
+}
+.book-audio-seg button.on {
+  background: var(--accent-soft);
+}
+.book-audio-switch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 18px 0;
+  cursor: pointer;
+}
+.book-audio-switch span {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+.book-audio-switch b {
+  font-size: var(--fs-md);
+  font-weight: 500;
+}
+.book-audio-switch small {
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+}
+.book-audio-switch input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+}
