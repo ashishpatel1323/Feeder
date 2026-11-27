@@ -160,9 +160,11 @@ export function ShelfControls(p: { show: Show; setShow: (s: Show) => void; view:
 
 /** A picture, or [fallback] when it fails to load (a picture from the web while offline, say). */
 export function PictureOr({ src, fallback, className, lazy }: { src: string; fallback: ReactNode; className?: string; lazy?: boolean }) {
-  const [failed, setFailed] = useState<string | null>(null)
-  if (failed === src) return <>{fallback}</>
-  return <img className={className} src={src} alt="" loading={lazy ? 'lazy' : undefined} onError={() => setFailed(src)} />
+  // Each new src gets a fresh try (A fails, B loads, back to A tries A again)
+  const [state, setState] = useState({ src, failed: false })
+  if (state.src !== src) setState({ src, failed: false })
+  if (state.src === src && state.failed) return <>{fallback}</>
+  return <img className={className} src={src} alt="" loading={lazy ? 'lazy' : undefined} onError={() => setState({ src, failed: true })} />
 }
 
 /** A cover made from the title when there is no picture: the same colour for the same title. */
