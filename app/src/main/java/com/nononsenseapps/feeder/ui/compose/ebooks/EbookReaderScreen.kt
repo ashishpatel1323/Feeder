@@ -403,7 +403,7 @@ fun EbookReaderScreen(
                     bookAudio.setLanguage(ttsStateHolder.language.value, detect)
                     scope.launch {
                         // This chapter's audio may already be made (it was ahead before)
-                        val prepared = if (section >= 0) withContext(Dispatchers.IO) { bookAudio.prepared(bookId, section, text) } else null
+                        val prepared = if (section >= 0) withContext(Dispatchers.IO) { bookAudio.prepared(bookId, section, text, start) } else null
                         if (prepared != null) {
                             ttsStateHolder.playPrepared(ttsId, text, prepared, detect, b?.title ?: "", b?.author ?: "", chapter, start)
                         } else {
@@ -453,6 +453,15 @@ fun EbookReaderScreen(
     // Chapters are read aloud one after another, like articles in a list
     DisposableEffect(bookId) {
         val previous = ttsStateHolder.articleNavigator
+        val previousSpoken = ttsStateHolder.onSpoken
+        // The chapter being read, once spoken to its end, is kept with the chapters ahead
+        ttsStateHolder.onSpoken = { articleId, text, audio, segments, words ->
+            val section = speakingSection.intValue
+            val label = loc.chapter
+            if (articleId == ttsId && section >= 0) {
+                ttsStateHolder.coroutineScope.launch(Dispatchers.IO) { bookAudio.saveSpoken(bookId, section, label, text, audio, segments, words) }
+            }
+        }
         ttsStateHolder.articleNavigator =
             object : TTSStateHolder.ArticleNavigator {
                 override fun hasPrevious(): Boolean = !loc.atStart
@@ -486,6 +495,7 @@ fun EbookReaderScreen(
             }
         onDispose {
             ttsStateHolder.articleNavigator = previous
+            ttsStateHolder.onSpoken = previousSpoken
             if (ttsStateHolder.progress.value.articleId == ttsId) ttsStateHolder.stop()
         }
     }
@@ -825,6 +835,7 @@ fun EbookReaderScreen(
                 "audio" ->
                     OfflineAudioSheet(
                         state = audioState,
+                        spokenProgress = if (reading && ttsProgress.preparationProgress == null) ttsProgress.synthesisProgress else null,
                         ahead = audioAhead,
                         deletePlayed = audioDeletePlayed,
                         onSetAhead = { n -> scope.launch(Dispatchers.IO) { bookAudio.setAhead(n) } },

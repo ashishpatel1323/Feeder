@@ -649,12 +649,15 @@
   <string name="offline_audio_lead_empty">Chapters ahead are spoken on this phone so reading never stops.</string>
   <string name="offline_audio_played">Played · audio deleted</string>
   <string name="offline_audio_playing">Reading now</string>
+  <string name="offline_audio_playing_preparing">Reading now · preparing %1$d%%</string>
+  <string name="offline_audio_playing_saving">Reading now · saving</string>
+  <string name="offline_audio_playing_ready">Reading now · ready offline</string>
   <string name="offline_audio_ready">Ready · %1$s</string>
   <string name="offline_audio_preparing">Preparing · %1$d%%</string>
   <string name="offline_audio_up_next">Up next</string>
   <string name="offline_audio_section">Section %1$d</string>
   <string name="offline_audio_prepare_ahead">Prepare ahead</string>
-  <string name="offline_audio_ahead_hint">Chapters after the one you\'re on</string>
+  <string name="offline_audio_ahead_hint">Chapters after the one you\'re on. The one you\'re on is kept too.</string>
   <string name="offline_audio_delete_played">Delete played audio</string>
   <string name="offline_audio_delete_played_hint">After you finish a chapter</string>
   <string name="offline_audio_status_preparing">Preparing chapter audio · %1$d%%</string>

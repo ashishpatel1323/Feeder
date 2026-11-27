@@ -64,3 +64,38 @@ describe('book audio prepared ahead', () => {
     expect(bookAudio.state.bytes).toBe(0)
   })
 })
+
+describe('the chapter being read', () => {
+  const keys = Array.from({ length: 20 }, (_, i) => `v\npiece ${i}`)
+
+  it('makes the rest of the chapter past what read aloud makes itself, skipping kept pieces', async () => {
+    const { currentChapterTodo } = await import('../bookAudio')
+    const kept = new Set([keys[12], keys[13]])
+    expect(currentChapterTodo(keys, (k) => kept.has(k), 2, 8)).toEqual([10, 11, 14, 15, 16, 17, 18, 19])
+    // Near the end: read aloud covers the rest itself
+    expect(currentChapterTodo(keys, () => false, 15, 8)).toEqual([])
+  })
+
+  it('counts what is kept from where reading is, so a reload carries on instead of starting over', async () => {
+    const { keptFrom } = await import('../bookAudio')
+    const kept = new Set(keys.slice(5, 15))
+    expect(keptFrom(keys, (k) => kept.has(k), 5)).toBe(10 / 15)
+    expect(keptFrom(keys, (k) => keys.indexOf(k) >= 5, 5)).toBe(1)
+  })
+
+  it('keeps pieces read aloud made for the chapter being read', async () => {
+    const { bookAudio } = await import('../bookAudio')
+    bookAudio.setBook('book2', fakeView() as never, 'kokoro:af_heart', true, 1, true)
+    bookAudio.setPosition(1)
+    await vi.waitFor(() => expect(bookAudio.state.readyAhead).toBe(1), { timeout: 3000 })
+    // A piece of chapter 1 as read aloud asks for it (same pieces as the plan)
+    const { indexSpeechText, kokoroPieces } = await import('../readaloud')
+    const doc = new DOMParser().parseFromString(chapter(1), 'application/xhtml+xml')
+    const pieces = kokoroPieces(indexSpeechText(doc.body).text, 'en')
+    bookAudio.reading('af_heart', pieces[0])
+    for (const p of pieces) bookAudio.spoken('af_heart', p, Promise.resolve({ samples: new Float32Array(10), sampleRate: 24000 }))
+    await vi.waitFor(() => expect(bookAudio.state.currentReady).toBe(true), { timeout: 3000 })
+    expect(bookAudio.has('af_heart', pieces[0])).toBe(true)
+    await bookAudio.finished('book2')
+  })
+})
