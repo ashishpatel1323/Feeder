@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
@@ -74,6 +75,8 @@ data class ItemRowModel(
     // A URL string or a local File; null = the type's icon on a plain tile
     val image: Any?,
     val progress: ItemProgress? = null,
+    /** Audio made ahead for offline listening: 1 = ready, below 1 = being made. Null = none. */
+    val offlineAudio: Float? = null,
 )
 
 /**
@@ -236,6 +239,22 @@ fun ItemRow(
                             length?.label(),
                         )
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        model.offlineAudio?.let { made ->
+                            if (made >= 1f) {
+                                Icon(
+                                    Icons.Default.CheckCircle,
+                                    contentDescription = stringResource(R.string.offline_audio_ready_row),
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp).padding(end = 2.dp),
+                                )
+                            } else {
+                                androidx.compose.material3.CircularProgressIndicator(
+                                    progress = { made.coerceIn(0.05f, 1f) },
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(14.dp).padding(end = 2.dp),
+                                )
+                            }
+                        }
                         if (model.saved) {
                             Icon(
                                 saveIcon(true),

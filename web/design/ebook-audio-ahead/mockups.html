@@ -1,0 +1,402 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+:root{
+  --font-ui: Roboto, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-read: Georgia, 'Iowan Old Style', serif;
+  --bg:#fbfdf9; --surface:#fff; --surface-2:#eef4ee; --surface-3:#e1ebe2;
+  --text:#191c1a; --text-2:#4f5a52; --text-3:#6d776f; --border:#d6ddd7;
+  --accent:#1f6f4a; --accent-ink:#fff; --accent-soft:#cdeedb; --hl:rgba(31,111,74,.16);
+  --warn:#8a5a00;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-ui);background:#e9ece9;color:var(--text);-webkit-font-smoothing:antialiased}
+.board{display:none;padding:28px 32px 32px;width:2060px}
+.board:target{display:block}
+.board h1{font-size:26px;font-weight:600;letter-spacing:-.2px}
+.board .sub{font-size:15px;color:var(--text-2);margin:6px 0 20px;max-width:1500px;line-height:1.45}
+.row{display:flex;gap:28px;align-items:flex-start}
+.cap{font-size:13px;color:var(--text-2);margin-top:10px;max-width:360px;line-height:1.4}
+.cap b{color:var(--text)}
+svg.i{width:24px;height:24px;fill:currentColor;flex:none}
+svg.s{width:18px;height:18px}
+svg.xs{width:16px;height:16px}
+
+/* ---------- phone ---------- */
+.phone{width:360px;height:760px;background:var(--bg);border-radius:28px;overflow:hidden;position:relative;
+  box-shadow:0 0 0 8px #1b1d1c,0 10px 30px rgba(0,0,0,.25);display:flex;flex-direction:column}
+.status{height:28px;display:flex;justify-content:space-between;align-items:center;padding:0 18px;font-size:12px;font-weight:500;color:var(--text)}
+.appbar{height:56px;display:flex;align-items:center;gap:6px;padding:0 6px}
+.appbar .t{flex:1;font-size:18px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .t small{display:block;font-size:12px;font-weight:400;color:var(--text-2)}
+.ib{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;color:var(--text-2)}
+.read{flex:1;padding:6px 22px;font-family:var(--font-read);font-size:16.5px;line-height:1.62;color:var(--text);overflow:hidden}
+.read h3{font-family:var(--font-ui);font-size:13px;letter-spacing:.6px;text-transform:uppercase;color:var(--text-2);font-weight:500;margin:4px 0 10px}
+.read p{margin-bottom:12px}
+.hl{background:var(--hl);border-radius:3px;box-shadow:0 0 0 2px var(--hl)}
+
+/* read aloud player (Android, docked) */
+.player{background:var(--surface-2);border-radius:24px 24px 0 0;padding:12px 16px 14px}
+.bar{height:4px;border-radius:2px;background:var(--surface-3);position:relative;margin:4px 0 6px}
+.bar>i{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:var(--accent)}
+.bar>u{position:absolute;top:0;bottom:0;background:#9fcfb3;border-radius:2px}
+.times{display:flex;justify-content:space-between;font-size:12px;color:var(--text-2)}
+.ctrls{display:flex;align-items:center;justify-content:space-between;margin-top:6px}
+.fab{width:56px;height:56px;border-radius:18px;background:var(--accent);color:#fff;display:grid;place-items:center}
+.chip{height:32px;border-radius:8px;border:1px solid var(--border);padding:0 12px;display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--text);background:var(--surface)}
+.chip.on{background:var(--accent-soft);border-color:transparent}
+.statusline{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--accent);font-weight:500;margin-bottom:6px}
+.statusline .g{color:var(--text-2);font-weight:400}
+
+/* sheet */
+.scrim{position:absolute;inset:0;background:rgba(0,0,0,.32)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--surface);border-radius:28px 28px 0 0;padding:8px 0 16px}
+.handle{width:32px;height:4px;border-radius:2px;background:#c4cbc5;margin:6px auto 12px}
+.sheet h2{font-size:20px;font-weight:500;padding:0 20px}
+.sheet .lead{font-size:13px;color:var(--text-2);padding:4px 20px 10px;line-height:1.4}
+.sec{font-size:12px;font-weight:600;letter-spacing:.4px;color:var(--accent);padding:12px 20px 4px}
+.li{display:flex;align-items:center;gap:14px;padding:9px 20px;min-height:56px}
+.li .m{flex:1;min-width:0}
+.li .m b{display:block;font-size:15px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.li .m span{display:block;font-size:12.5px;color:var(--text-2);margin-top:2px}
+.li.past b{color:var(--text-3);font-weight:400}
+.li.now{background:var(--accent-soft)}
+.st{width:24px;height:24px;display:grid;place-items:center;color:var(--accent);flex:none}
+.st.grey{color:#a5aea7}
+.ring{width:22px;height:22px;border-radius:50%;background:conic-gradient(var(--accent) var(--p),var(--surface-3) 0);display:grid;place-items:center}
+.ring::after{content:"";width:14px;height:14px;border-radius:50%;background:var(--surface)}
+.now .ring::after{background:var(--accent-soft)}
+.dot{width:20px;height:20px;border-radius:50%;border:2px dashed #b8c1ba}
+.eq{display:flex;gap:2px;align-items:flex-end;height:16px}.eq i{width:3px;background:var(--accent);border-radius:1px}
+.lin{height:4px;border-radius:2px;background:var(--surface-3);margin-top:6px;overflow:hidden}.lin i{display:block;height:100%;background:var(--accent)}
+.seg{display:flex;border:1px solid #8a948c;border-radius:20px;overflow:hidden;height:40px;margin:6px 20px 4px}
+.seg div{flex:1;display:flex;align-items:center;justify-content:center;gap:4px;font-size:14px;font-weight:500;border-left:1px solid #8a948c}
+.seg div:first-child{border-left:0}
+.seg div.on{background:var(--accent-soft)}
+.sw{width:52px;height:32px;border-radius:16px;background:var(--accent);position:relative;flex:none}
+.sw::after{content:"";position:absolute;right:4px;top:4px;width:24px;height:24px;border-radius:50%;background:#fff}
+.sw.off{background:var(--surface-3);border:2px solid #8a948c}.sw.off::after{left:6px;right:auto;top:6px;width:16px;height:16px;background:#8a948c}
+.hint{font-size:12px;color:var(--text-2);padding:0 20px 6px;line-height:1.4}
+.divider{height:1px;background:var(--border);margin:6px 0}
+.tbtn{font-size:14px;font-weight:500;color:var(--accent);padding:10px 12px;border-radius:20px}
+.navbar{height:20px;display:grid;place-items:center}.navbar i{width:108px;height:4px;border-radius:2px;background:#1b1d1c;opacity:.7}
+
+/* settings screen */
+.set .li{min-height:64px}
+.storage{margin:4px 20px 8px;height:10px;border-radius:5px;background:var(--surface-3);display:flex;overflow:hidden}
+.storage i{display:block;height:100%}
+
+/* ---------- web ---------- */
+.web{width:1180px;height:760px;background:var(--bg);border-radius:12px;overflow:hidden;position:relative;
+  box-shadow:0 0 0 1px #c9cfca,0 10px 30px rgba(0,0,0,.18);display:flex;flex-direction:column}
+.wtop{height:36px;background:#dfe3df;display:flex;align-items:center;gap:7px;padding:0 14px}
+.wtop i{width:12px;height:12px;border-radius:50%;background:#c3c8c4}
+.wtop span{margin-left:16px;font-size:12px;color:#5d655f;background:#f3f5f3;border-radius:6px;padding:4px 14px;width:420px}
+.whead{height:56px;display:flex;align-items:center;gap:10px;padding:0 20px;border-bottom:1px solid var(--border);background:var(--surface)}
+.whead .t{flex:1;font-size:16px;font-weight:600}
+.whead .t small{font-weight:400;color:var(--text-2);margin-left:8px;font-size:13px}
+.btn{height:36px;border-radius:8px;padding:0 14px;display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:500;color:var(--text);border:1px solid var(--border);background:var(--surface)}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.pri{background:var(--accent);color:#fff;border-color:var(--accent)}
+.wbody{flex:1;display:flex;min-height:0;position:relative}
+.wread{flex:1;padding:34px 0;overflow:hidden}
+.wread .col{width:640px;margin:0 auto;font-family:var(--font-read);font-size:19px;line-height:1.7}
+.wread .col h3{font-family:var(--font-ui);font-size:13px;letter-spacing:.6px;text-transform:uppercase;color:var(--text-2);font-weight:500;margin-bottom:14px}
+.wread .col p{margin-bottom:16px}
+.dock{position:absolute;left:50%;transform:translateX(-50%);bottom:18px;width:760px;background:var(--surface);border:1px solid var(--border);border-radius:24px;
+  box-shadow:0 6px 24px rgba(0,0,0,.12);padding:12px 18px;display:flex;align-items:center;gap:14px}
+.dock .mid{flex:1}
+.dock .fab{width:48px;height:48px;border-radius:16px}
+.pill{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:14px;background:var(--accent-soft);color:#0f4d31;font-size:12.5px;font-weight:500}
+.pop{position:absolute;width:380px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 12px 36px rgba(0,0,0,.18);padding:8px 0 12px}
+.pop h2{font-size:17px;font-weight:600;padding:10px 18px 2px}
+.pop .lead{font-size:12.5px;color:var(--text-2);padding:2px 18px 6px;line-height:1.4}
+.pop .li{padding:7px 18px;min-height:48px}.pop .li .m b{font-size:14px}.pop .li .m span{font-size:12px}
+.pop .sec{padding:10px 18px 4px}.pop .seg{margin:6px 18px 4px;height:36px}.pop .hint{padding:0 18px 4px}
+.side{width:300px;border-right:1px solid var(--border);background:var(--surface);padding:12px 0;overflow:hidden}
+.side .hdr{font-size:13px;font-weight:600;padding:6px 18px 4px}
+.side .hdr2{font-size:12px;color:var(--text-2);padding:0 18px 8px;display:flex;align-items:center;gap:6px}
+.side .li{padding:6px 18px;min-height:42px}.side .li .m b{font-size:14px}.side .li .m span{font-size:11.5px}
+.dialog{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:560px;background:var(--surface);border-radius:24px;box-shadow:0 20px 50px rgba(0,0,0,.25);padding:18px 0 14px}
+.dialog h2{font-size:20px;font-weight:500;padding:4px 24px 6px}
+.dialog .sec{padding:12px 24px 4px}.dialog .li{padding:8px 24px}.dialog .seg{margin:6px 24px 4px}.dialog .hint{padding:0 24px 6px}.dialog .storage{margin:4px 24px 8px}
+.wscrim{position:absolute;inset:0;background:rgba(0,0,0,.28)}
+.tabs{display:flex;gap:4px;padding:0 20px;border-bottom:1px solid var(--border);background:var(--surface)}
+.tabs div{padding:12px 14px;font-size:14px;font-weight:500;color:var(--text-2)}
+.tabs div.on{color:var(--accent);box-shadow:inset 0 -3px 0 var(--accent)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;gap:14px;align-items:center}
+.cover{width:48px;height:68px;border-radius:4px;flex:none;background:linear-gradient(160deg,#4a6b57,#22382b);color:#e8efe9;font-family:var(--font-read);font-size:9px;padding:6px;line-height:1.2}
+.cover.b2{background:linear-gradient(160deg,#7a5b3a,#3b2a18)}
+.cover.b3{background:linear-gradient(160deg,#3d4f72,#1c2538)}
+.note{background:#fff8e6;border:1px solid #f0dca8;border-radius:12px;padding:10px 14px;font-size:13px;line-height:1.45;color:#5a4300}
+</style></head>
+<body>
+
+<!-- ==================== OPTION A ==================== -->
+<section class="board" id="a">
+  <h1>A · Status in the player, details in one sheet <span style="color:var(--accent);font-size:16px;font-weight:600;margin-left:8px">Recommended</span></h1>
+  <p class="sub">Nothing to set up: when you start reading a book aloud, Feeder quietly prepares the next chapters as audio. The player shows one line of status. Tapping it opens a sheet with each chapter's state and the two settings. Played chapters delete themselves.</p>
+  <div class="row">
+    <div>
+      <div class="phone">
+        <div class="status"><span>9:41</span><span>▾ ▴ ■ 82%</span></div>
+        <div class="appbar"><div class="ib" data-i="back"></div><div class="t">Middlemarch<small>Chapter 7 · Book I</small></div><div class="ib" data-i="toc"></div><div class="ib" data-i="more"></div></div>
+        <div class="read">
+          <h3>Chapter VII</h3>
+          <p>Mr. Casaubon, as might be expected, spent a great deal of his time at the Grange in these weeks, and the hindrance which courtship occasioned to the progress of his great work naturally made him look forward the more eagerly to the happy termination of courtship.</p>
+          <p><span class="hl">But he had deliberately incurred the hindrance, having made up his mind that it was now time for him to adorn his life with the graces of female companionship.</span> And here Dorothea came, in whom the tones were all in harmony.</p>
+          <p>He was not surprised that he had not made the discovery before.</p>
+        </div>
+        <div class="player">
+          <div class="statusline"><span data-i="okc" data-c="s"></span>Next 3 chapters ready offline <span class="g">· 41 MB</span><span style="flex:1"></span><span data-i="chev" data-c="s"></span></div>
+          <div class="bar"><u style="left:38%;right:0"></u><i style="width:38%"></i></div>
+          <div class="times"><span>12:04</span><span>−19:30</span></div>
+          <div class="ctrls">
+            <div class="chip">1.25×</div><div class="ib" data-i="replay"></div><div class="fab" data-i="pause"></div><div class="ib" data-i="fwd"></div><div class="ib" data-i="next"></div>
+          </div>
+        </div>
+        <div class="navbar"><i></i></div>
+      </div>
+      <p class="cap"><b>Android · player.</b> One status line above the scrubber, no new buttons. The lighter part of the bar is audio that is already prepared.</p>
+    </div>
+
+    <div>
+      <div class="phone">
+        <div class="status"><span>9:41</span><span>▾ ▴ ■ 82%</span></div>
+        <div class="appbar"><div class="ib" data-i="back"></div><div class="t">Middlemarch</div></div>
+        <div class="read" style="opacity:.6"><h3>Chapter VII</h3><p>Mr. Casaubon, as might be expected, spent a great deal of his time at the Grange…</p></div>
+        <div class="scrim"></div>
+        <div class="sheet">
+          <div class="handle"></div>
+          <h2>Offline audio</h2>
+          <p class="lead">Prepared on this phone so reading never stops. 41 MB.</p>
+          <div class="li past"><div class="st grey" data-i="del"></div><div class="m"><b>6 · Mr. Brooke's house</b><span>Played · audio deleted</span></div></div>
+          <div class="li now"><div class="st"><div class="eq"><i style="height:9px"></i><i style="height:15px"></i><i style="height:6px"></i><i style="height:12px"></i></div></div><div class="m"><b>7 · Courtship</b><span>Playing · 12 of 31 min</span></div></div>
+          <div class="li"><div class="st" data-i="okc"></div><div class="m"><b>8 · Lowick</b><span>Ready · 34 min</span></div></div>
+          <div class="li"><div class="st"><div class="ring" style="--p:64%"></div></div><div class="m"><b>9 · The visit</b><span>Preparing · 64%</span></div></div>
+          <div class="li"><div class="st"><div class="dot"></div></div><div class="m"><b>10 · Marriage</b><span>Up next</span></div></div>
+          <div class="divider"></div>
+          <div class="sec">PREPARE AHEAD</div>
+          <div class="seg"><div>1</div><div>2</div><div class="on"><span data-i="ok" data-c="xs"></span>3</div><div>5</div></div>
+          <div class="hint">chapters after the one you're on</div>
+          <div class="li" style="min-height:52px"><div class="m"><b>Delete played audio</b><span>After you finish a chapter</span></div><div class="sw"></div></div>
+        </div>
+      </div>
+      <p class="cap"><b>Android · sheet.</b> Five rows show the whole window: played, playing, ready, preparing, up next. Two settings, both with good defaults.</p>
+    </div>
+
+    <div>
+      <div class="web">
+        <div class="wtop"><i></i><i></i><i></i><span>localhost:5173/#/books/middlemarch</span></div>
+        <div class="whead"><div class="btn ghost" data-i="back"></div><div class="t">Middlemarch<small>Chapter 7 · Book I</small></div><div class="btn ghost"><span data-i="toc" data-c="s"></span>Contents</div><div class="btn ghost" data-i="more"></div></div>
+        <div class="wbody">
+          <div class="wread"><div class="col">
+            <h3>Chapter VII</h3>
+            <p>Mr. Casaubon, as might be expected, spent a great deal of his time at the Grange in these weeks, and the hindrance which courtship occasioned to the progress of his great work naturally made him look forward the more eagerly to the happy termination of courtship.</p>
+            <p><span class="hl">But he had deliberately incurred the hindrance, having made up his mind that it was now time for him to adorn his life with the graces of female companionship.</span> And here Dorothea came.</p>
+          </div></div>
+          <div class="pop" style="right:200px;bottom:108px">
+            <h2>Offline audio</h2>
+            <p class="lead">Prepared in this browser while Feeder is open. 41 MB.</p>
+            <div class="li past"><div class="st grey" data-i="del"></div><div class="m"><b>6 · Mr. Brooke's house</b><span>Played · audio deleted</span></div></div>
+            <div class="li now"><div class="st"><div class="eq"><i style="height:9px"></i><i style="height:15px"></i><i style="height:6px"></i><i style="height:12px"></i></div></div><div class="m"><b>7 · Courtship</b><span>Playing · 12 of 31 min</span></div></div>
+            <div class="li"><div class="st" data-i="okc"></div><div class="m"><b>8 · Lowick</b><span>Ready · 34 min</span></div></div>
+            <div class="li"><div class="st"><div class="ring" style="--p:64%"></div></div><div class="m"><b>9 · The visit</b><span>Preparing · 64%</span></div></div>
+            <div class="li"><div class="st"><div class="dot"></div></div><div class="m"><b>10 · Marriage</b><span>Up next</span></div></div>
+            <div class="divider"></div>
+            <div class="sec">PREPARE AHEAD</div>
+            <div class="seg"><div>1</div><div>2</div><div class="on">3 chapters</div><div>5</div></div>
+            <div class="li" style="min-height:44px"><div class="m"><b>Delete played audio</b><span>After you finish a chapter</span></div><div class="sw"></div></div>
+          </div>
+          <div class="dock">
+            <div class="fab" data-i="pause"></div>
+            <div class="mid">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><span style="font-size:14px;font-weight:500">Chapter 7 · Courtship</span><span style="flex:1"></span><span class="pill"><span data-i="okc" data-c="xs"></span>3 chapters ready · 41 MB</span></div>
+              <div class="bar"><u style="left:38%;right:0"></u><i style="width:38%"></i></div>
+              <div class="times"><span>12:04</span><span>−19:30</span></div>
+            </div>
+            <div class="btn ghost" data-i="replay"></div><div class="btn ghost" data-i="fwd"></div><div class="btn">1.25×</div>
+          </div>
+        </div>
+      </div>
+      <p class="cap" style="max-width:1100px"><b>Web and Mac app.</b> The same status as a chip in the read-aloud dock; clicking it opens the same panel. The browser can only prepare audio while the tab is open, so the panel says so instead of promising background work.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== OPTION B ==================== -->
+<section class="board" id="b">
+  <h1>B · Badges in the table of contents, settings in Settings</h1>
+  <p class="sub">No new surface at all. Each chapter in Contents carries a small status mark, and the rules live with the other read-aloud settings. Quietest option, but you only see what's happening if you open Contents.</p>
+  <div class="row">
+    <div>
+      <div class="phone">
+        <div class="status"><span>9:41</span><span>▾ ▴ ■ 82%</span></div>
+        <div class="appbar"><div class="ib" data-i="close"></div><div class="t">Contents</div></div>
+        <div style="padding:0 20px 8px;font-size:12.5px;color:var(--text-2);display:flex;gap:6px;align-items:center"><span data-i="head" data-c="xs"></span>Offline audio · 3 chapters ahead · 41 MB</div>
+        <div class="li past"><div class="m"><b>5 · Dorothea's choice</b></div><div class="st grey" data-i="ok"></div></div>
+        <div class="li past"><div class="m"><b>6 · Mr. Brooke's house</b></div><div class="st grey" data-i="ok"></div></div>
+        <div class="li now"><div class="m"><b>7 · Courtship</b><span>Reading aloud · 38%</span></div><div class="st"><div class="eq"><i style="height:9px"></i><i style="height:15px"></i><i style="height:6px"></i><i style="height:12px"></i></div></div></div>
+        <div class="li"><div class="m"><b>8 · Lowick</b></div><div class="st" data-i="okc"></div></div>
+        <div class="li"><div class="m"><b>9 · The visit</b></div><div class="st"><div class="ring" style="--p:64%"></div></div></div>
+        <div class="li"><div class="m"><b>10 · Marriage</b></div><div class="st"><div class="dot"></div></div></div>
+        <div class="li"><div class="m"><b>11 · Rome</b></div></div>
+        <div class="li"><div class="m"><b>12 · Lydgate</b></div></div>
+        <div class="li"><div class="m"><b>13 · Mr. Vincy</b></div></div>
+        <div style="flex:1"></div><div class="navbar"><i></i></div>
+      </div>
+      <p class="cap"><b>Android · Contents.</b> Filled check = audio ready, ring = preparing, dashed = queued. Grey tick = already heard; its audio is gone.</p>
+    </div>
+
+    <div>
+      <div class="phone set">
+        <div class="status"><span>9:41</span><span>▾ ▴ ■ 82%</span></div>
+        <div class="appbar"><div class="ib" data-i="back"></div><div class="t">Read aloud</div></div>
+        <div class="sec">VOICE</div>
+        <div class="li"><div class="m"><b>Voice</b><span>Device voice · English (UK)</span></div></div>
+        <div class="li"><div class="m"><b>Default speed</b><span>1.25×</span></div></div>
+        <div class="divider"></div>
+        <div class="sec">OFFLINE AUDIO FOR BOOKS</div>
+        <div class="li"><div class="m"><b>Prepare ahead</b><span>3 chapters</span></div><div class="st" style="color:var(--text-2)" data-i="chev"></div></div>
+        <div class="li"><div class="m"><b>Delete played audio</b><span>After you finish a chapter</span></div><div class="sw"></div></div>
+        <div class="li" style="min-height:56px"><div class="m"><b>Storage used</b><span>41 MB · Middlemarch 41 MB</span></div><div class="tbtn">Clear</div></div>
+        <div class="storage"><i style="width:9%;background:var(--accent)"></i></div>
+        <div class="hint">Audio is made on this phone with no internet. It pauses when the battery is low.</div>
+        <div style="flex:1"></div><div class="navbar"><i></i></div>
+      </div>
+      <p class="cap"><b>Android · Settings › Read aloud.</b> Same two rules plus storage and Clear. Not reachable from the player.</p>
+    </div>
+
+    <div>
+      <div class="web">
+        <div class="wtop"><i></i><i></i><i></i><span>localhost:5173/#/books/middlemarch</span></div>
+        <div class="whead"><div class="btn ghost" data-i="back"></div><div class="t">Middlemarch<small>Chapter 7 · Book I</small></div><div class="btn"><span data-i="toc" data-c="s"></span>Contents</div><div class="btn ghost" data-i="more"></div></div>
+        <div class="wbody">
+          <div class="side">
+            <div class="hdr">Contents</div>
+            <div class="hdr2"><span data-i="head" data-c="xs"></span>Offline audio · 3 ahead · 41 MB</div>
+            <div class="li past"><div class="m"><b>5 · Dorothea's choice</b></div><div class="st grey" data-i="ok"></div></div>
+            <div class="li past"><div class="m"><b>6 · Mr. Brooke's house</b></div><div class="st grey" data-i="ok"></div></div>
+            <div class="li now"><div class="m"><b>7 · Courtship</b><span>Reading aloud · 38%</span></div><div class="st"><div class="eq"><i style="height:9px"></i><i style="height:15px"></i><i style="height:6px"></i><i style="height:12px"></i></div></div></div>
+            <div class="li"><div class="m"><b>8 · Lowick</b></div><div class="st" data-i="okc"></div></div>
+            <div class="li"><div class="m"><b>9 · The visit</b></div><div class="st"><div class="ring" style="--p:64%"></div></div></div>
+            <div class="li"><div class="m"><b>10 · Marriage</b></div><div class="st"><div class="dot"></div></div></div>
+            <div class="li"><div class="m"><b>11 · Rome</b></div></div>
+            <div class="li"><div class="m"><b>12 · Lydgate</b></div></div>
+          </div>
+          <div class="wread"><div class="col" style="width:560px">
+            <h3>Chapter VII</h3>
+            <p>Mr. Casaubon, as might be expected, spent a great deal of his time at the Grange in these weeks, and the hindrance which courtship occasioned to the progress of his great work naturally made him look forward the more eagerly.</p>
+            <p><span class="hl">But he had deliberately incurred the hindrance, having made up his mind that it was now time for him to adorn his life with the graces of female companionship.</span></p>
+          </div></div>
+          <div class="dock" style="left:calc(50% + 150px);width:640px">
+            <div class="fab" data-i="pause"></div>
+            <div class="mid"><div style="font-size:14px;font-weight:500;margin-bottom:4px">Chapter 7 · Courtship</div><div class="bar"><i style="width:38%"></i></div><div class="times"><span>12:04</span><span>−19:30</span></div></div>
+            <div class="btn ghost" data-i="replay"></div><div class="btn ghost" data-i="fwd"></div><div class="btn">1.25×</div>
+          </div>
+        </div>
+      </div>
+      <p class="cap" style="max-width:1100px"><b>Web and Mac app.</b> Badges in the Contents sidebar; the settings go in the Settings dialog's Read aloud section. The dock stays exactly as it is today.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== OPTION C ==================== -->
+<section class="board" id="c">
+  <h1>C · An “Offline audio” page in Library, like Downloads</h1>
+  <p class="sub">A page that lists every book with prepared audio, total storage, and per-book controls. Most control, but it turns an invisible safety net into one more thing to manage. Only worth it if you read aloud many books at once.</p>
+  <div class="row">
+    <div>
+      <div class="phone">
+        <div class="status"><span>9:41</span><span>▾ ▴ ■ 82%</span></div>
+        <div class="appbar"><div class="ib" data-i="back"></div><div class="t">Offline audio</div><div class="ib" data-i="more"></div></div>
+        <div style="padding:0 20px"><div style="font-size:13px;color:var(--text-2);margin-bottom:6px">58 MB of book audio on this phone</div>
+          <div class="storage" style="margin:0 0 14px"><i style="width:22%;background:var(--accent)"></i><i style="width:9%;background:#7fb898"></i></div></div>
+        <div style="padding:0 16px;display:flex;flex-direction:column;gap:10px">
+          <div class="card"><div class="cover">Middle-<br>march</div><div class="m" style="flex:1"><b style="font-size:15px;font-weight:500">Middlemarch</b><div style="font-size:12.5px;color:var(--text-2);margin-top:3px">Ch 8–10 ready · 1 preparing</div><div class="lin"><i style="width:80%"></i></div><div style="font-size:12px;color:var(--text-2);margin-top:4px">41 MB</div></div><div class="ib" data-i="more"></div></div>
+          <div class="card"><div class="cover b2">Walden</div><div class="m" style="flex:1"><b style="font-size:15px;font-weight:500">Walden</b><div style="font-size:12.5px;color:var(--text-2);margin-top:3px">Ch 3–5 ready</div><div style="font-size:12px;color:var(--text-2);margin-top:4px">17 MB · not opened in 4 days</div></div><div class="ib" data-i="more"></div></div>
+        </div>
+        <div class="sec" style="margin-top:8px">SETTINGS</div>
+        <div class="li"><div class="m"><b>Prepare ahead</b><span>3 chapters</span></div></div>
+        <div class="li"><div class="m"><b>Delete played audio</b><span>After you finish a chapter</span></div><div class="sw"></div></div>
+        <div class="li"><div class="m"><b>Clear books not opened for</b><span>7 days</span></div></div>
+        <div style="flex:1"></div><div class="navbar"><i></i></div>
+      </div>
+      <p class="cap"><b>Android · Library › Offline audio.</b> One card per book, with storage and a ⋮ for Prepare now / Delete audio.</p>
+    </div>
+
+    <div>
+      <div class="phone">
+        <div class="status"><span>9:41</span><span>▾ ▴ ■ 82%</span></div>
+        <div class="appbar"><div class="ib" data-i="back"></div><div class="t">Middlemarch<small>Offline audio · 41 MB</small></div></div>
+        <div class="li past"><div class="st grey" data-i="del"></div><div class="m"><b>6 · Mr. Brooke's house</b><span>Played · audio deleted</span></div></div>
+        <div class="li now"><div class="st"><div class="eq"><i style="height:9px"></i><i style="height:15px"></i><i style="height:6px"></i><i style="height:12px"></i></div></div><div class="m"><b>7 · Courtship</b><span>Playing · 12 of 31 min</span></div></div>
+        <div class="li"><div class="st" data-i="okc"></div><div class="m"><b>8 · Lowick</b><span>Ready · 14 MB</span></div><div class="ib" data-i="del"></div></div>
+        <div class="li"><div class="st"><div class="ring" style="--p:64%"></div></div><div class="m"><b>9 · The visit</b><span>Preparing · 64%</span><div class="lin"><i style="width:64%"></i></div></div></div>
+        <div class="li"><div class="st"><div class="dot"></div></div><div class="m"><b>10 · Marriage</b><span>Up next</span></div></div>
+        <div class="li"><div class="st grey"><div class="dot" style="border-style:solid;border-width:1.5px"></div></div><div class="m"><b>11 · Rome</b><span>Not prepared</span></div><div class="tbtn">Prepare</div></div>
+        <div style="flex:1"></div><div class="navbar"><i></i></div>
+      </div>
+      <p class="cap"><b>Android · book detail.</b> Per-chapter delete and Prepare. This is the part that adds buttons you shouldn't need.</p>
+    </div>
+
+    <div>
+      <div class="web">
+        <div class="wtop"><i></i><i></i><i></i><span>localhost:5173/#/library/offline-audio</span></div>
+        <div class="whead"><div class="t">Library</div></div>
+        <div class="tabs"><div>Saved</div><div>Highlights</div><div>Downloads</div><div class="on">Offline audio</div><div>History</div></div>
+        <div style="display:flex;gap:28px;padding:24px 28px">
+          <div style="flex:1;display:flex;flex-direction:column;gap:12px">
+            <div style="font-size:13px;color:var(--text-2)">58 MB of book audio in this browser</div>
+            <div class="storage" style="margin:0 0 6px;width:100%"><i style="width:22%;background:var(--accent)"></i><i style="width:9%;background:#7fb898"></i></div>
+            <div class="card"><div class="cover">Middle-<br>march</div><div style="flex:1"><b style="font-size:15px;font-weight:500">Middlemarch</b><div style="font-size:13px;color:var(--text-2);margin-top:3px">Ch 8–10 ready · 1 preparing · 41 MB</div><div class="lin" style="width:260px"><i style="width:80%"></i></div></div><div class="btn ghost"><span data-i="del" data-c="s"></span>Delete audio</div></div>
+            <div class="card"><div class="cover b2">Walden</div><div style="flex:1"><b style="font-size:15px;font-weight:500">Walden</b><div style="font-size:13px;color:var(--text-2);margin-top:3px">Ch 3–5 ready · 17 MB · not opened in 4 days</div></div><div class="btn ghost"><span data-i="del" data-c="s"></span>Delete audio</div></div>
+          </div>
+          <div style="width:360px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:8px 0 12px">
+            <div class="sec">SETTINGS</div>
+            <div class="li"><div class="m"><b>Prepare ahead</b><span>3 chapters</span></div></div>
+            <div class="li"><div class="m"><b>Delete played audio</b><span>After you finish a chapter</span></div><div class="sw"></div></div>
+            <div class="li"><div class="m"><b>Clear books not opened for</b><span>7 days</span></div></div>
+            <div class="hint" style="padding:6px 20px">Audio is made only while Feeder is open in this browser.</div>
+          </div>
+        </div>
+      </div>
+      <p class="cap" style="max-width:1100px"><b>Web and Mac app.</b> A new Library tab next to Downloads. Useful overview of storage, but it duplicates what the player already knows.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== RULES ==================== -->
+<section class="board" id="rules" style="width:1180px">
+  <h1>How it behaves (same for every option)</h1>
+  <p class="sub">The UI is small because the behaviour is automatic. These are the rules the design depends on.</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div class="card" style="display:block"><b>Starts by itself.</b><p class="hint" style="padding:6px 0 0;font-size:14px">Pressing Read aloud in a book starts preparing the next chapters. Opening a book you were listening to tops up the window. No Prepare buttons.</p></div>
+    <div class="card" style="display:block"><b>Never stops reading.</b><p class="hint" style="padding:6px 0 0;font-size:14px">If the next chapter isn't ready yet, the live voice reads it as today and the prepared audio takes over at the next sentence once it exists.</p></div>
+    <div class="card" style="display:block"><b>Played audio deletes itself.</b><p class="hint" style="padding:6px 0 0;font-size:14px">When you finish a chapter and move on, its audio is deleted. Skipping ahead also drops chapters you jumped over. Finishing a book, or not opening it for 7 days, clears all of its audio.</p></div>
+    <div class="card" style="display:block"><b>Speed doesn't throw work away.</b><p class="hint" style="padding:6px 0 0;font-size:14px">Audio is made at 1× and sped up while playing, so 1.25× ↔ 2× is instant. Changing the voice re-prepares only what's ahead.</p></div>
+    <div class="card" style="display:block"><b>Highlight still follows.</b><p class="hint" style="padding:6px 0 0;font-size:14px">Each file stores where every sentence starts, so the green highlight, tap-a-sentence and Back 10 s work exactly as now.</p></div>
+    <div class="card" style="display:block"><b>Android: background, battery-aware.</b><p class="hint" style="padding:6px 0 0;font-size:14px">WorkManager job, offline voice only, pauses when the battery is low. No notifications unless Android requires one for a long job.</p></div>
+  </div>
+  <div class="note" style="margin-top:16px"><b>Web caveat to accept up front:</b> a browser can't work in the background, so on web and the Mac app audio is prepared only while Feeder is open. Kokoro on the CPU is slower than real time, so the window grows only with the graphics card on (the default) or while you're reading, not listening.</div>
+</section>
+
+<script>
+const P={
+ play:"M8 5v14l11-7z",pause:"M6 19h4V5H6v14zm8-14v14h4V5h-4z",next:"M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z",
+ chev:"M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z",close:"M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z",
+ back:"M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z",
+ more:"M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z",
+ toc:"M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z",
+ ok:"M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z",
+ okc:"M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z",
+ replay:"M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z",
+ del:"M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z",
+ head:"M12 3a9 9 0 0 0-9 9v7c0 1.1.9 2 2 2h3v-8H5v-1a7 7 0 0 1 14 0v1h-3v8h3c1.1 0 2-.9 2-2v-7a9 9 0 0 0-9-9z"
+};
+document.querySelectorAll('[data-i]').forEach(e=>{
+  const k=e.dataset.i, fwd=k==='fwd', d=P[fwd?'replay':k];
+  e.insertAdjacentHTML('afterbegin',`<svg class="i ${e.dataset.c||''}" viewBox="0 0 24 24"${fwd?' style="transform:scaleX(-1)"':''}><path d="${d}"/></svg>`);
+});
+</script>
+</body></html>
