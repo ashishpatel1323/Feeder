@@ -115,6 +115,7 @@ import com.nononsenseapps.feeder.ui.compose.ebooks.DeleteFromDropboxDialog
 import com.nononsenseapps.feeder.ui.compose.ebooks.DropboxAccountButton
 import com.nononsenseapps.feeder.ui.compose.ebooks.uploadOrExplain
 import com.nononsenseapps.feeder.ui.compose.feed.PlainTooltipBox
+import com.nononsenseapps.feeder.ui.compose.history.HistoryGraphCard
 import com.nononsenseapps.feeder.ui.compose.history.historyItems
 import com.nononsenseapps.feeder.ui.compose.history.rememberHistory
 import com.nononsenseapps.feeder.ui.compose.shelf.CoverPickerDialog
@@ -487,6 +488,9 @@ fun AudiobookPlayerScreen(
                 }
             }
             if (showHistory) {
+                item(key = "history-graph") {
+                    HistoryGraphCard(ItemHistory.AUDIOBOOK, bookId, chapters = chapters, bookLengthMs = if (mine) s.bookLength else AudiobookRules.bookLengthMs(book))
+                }
                 historyItems(history, R.string.history_empty_audio) { e ->
                     val parts = e.x.split(':')
                     val i = parts.getOrNull(0)?.toIntOrNull()

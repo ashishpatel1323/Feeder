@@ -504,6 +504,8 @@ function BookPlayer({ id, onBack }: { id: string; onBack: () => void }) {
             <HistoryList
               c="audiobook"
               i={id}
+              chapters={chapters}
+              bookLengthMs={bookLen}
               onJump={(e) => {
                 const [i, ms] = (e.x ?? '').split(':').map(Number)
                 if (Number.isFinite(i) && Number.isFinite(ms)) void audiobookPlayer.open(id, { at: { i, ms }, play: playing })
