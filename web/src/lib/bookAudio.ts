@@ -12,18 +12,17 @@ import Dexie, { type Table } from 'dexie'
 import type { FoliateView } from '../vendor/foliate-js/view.js'
 import { kokoro, KOKORO_PREFIX, type KokoroAudio } from './kokoro'
 import { indexSpeechText, kokoroPieces } from './readaloud'
+import { decodeSpeech, encodeSpeech, type StoredSpeech } from './speechCodec'
 
 const STALE_DAYS = 7
 export const AHEAD_CHOICES = [1, 2, 3, 5]
 
 interface Piece {
   key: string
+  /** The book, or "item:<id>" for a playlist article (playlistAudio.ts) */
   bookId: string
   section: number
-  /** 16-bit mono PCM */
-  pcm: ArrayBuffer
-  sampleRate: number
-  samples: number
+  speech: StoredSpeech
   at: number
 }
 
@@ -32,6 +31,10 @@ class AudioDb extends Dexie {
   constructor() {
     super('feeder-book-audio')
     this.version(1).stores({ pieces: '&key, bookId, [bookId+section], at' })
+    // Pieces are kept compressed now (speechCodec.ts); the old uncompressed ones are dropped
+    this.version(2)
+      .stores({ pieces: '&key, bookId, [bookId+section], at' })
+      .upgrade((tx) => tx.table('pieces').clear())
   }
 }
 
@@ -101,7 +104,7 @@ class BookAudioManager {
       const cutoff = Date.now() - STALE_DAYS * 86400_000
       await this.db.pieces.where('at').below(cutoff).delete()
       await this.db.pieces.each((p) => {
-        this.index.set(p.key, { bookId: p.bookId, section: p.section, bytes: p.pcm.byteLength, seconds: p.samples / p.sampleRate })
+        this.index.set(p.key, { bookId: p.bookId, section: p.section, bytes: p.speech.bytes, seconds: p.speech.samples / p.speech.sampleRate })
       })
     })().catch((e) => console.warn('Book audio storage unavailable', e))
     return this.loaded
@@ -116,10 +119,37 @@ class BookAudioManager {
     await this.open()
     const p = await this.db?.pieces.get(keyOf(voice, text))
     if (!p) throw new Error('Prepared audio is gone')
-    const pcm = new Int16Array(p.pcm)
-    const samples = new Float32Array(pcm.length)
-    for (let i = 0; i < pcm.length; i++) samples[i] = pcm[i] / 0x8000
-    return { samples, sampleRate: p.sampleRate }
+    return decodeSpeech(p.speech)
+  }
+
+  /** Keeps audio for [text] (made with [voice]) for [owner]: a book's chapter, or "item:<id>". */
+  async keep(owner: string, section: number, voice: string, text: string, audio: KokoroAudio) {
+    await this.open()
+    if (!this.db) return
+    const speech = await encodeSpeech(audio.samples, audio.sampleRate)
+    const piece: Piece = { key: keyOf(voice, text), bookId: owner, section, speech, at: Date.now() }
+    await this.db.pieces.put(piece)
+    this.index.set(piece.key, { bookId: owner, section, bytes: speech.bytes, seconds: speech.samples / speech.sampleRate })
+  }
+
+  /** Deletes all audio kept for [owner]. */
+  async removeOwner(owner: string) {
+    await this.open()
+    await this.remove([...this.index].filter(([, v]) => v.bookId === owner).map(([k]) => k))
+  }
+
+  /** How much is kept for [owner], and how long it plays. */
+  ownerStats(owner: string): { bytes: number; seconds: number; pieces: number } {
+    let bytes = 0
+    let seconds = 0
+    let pieces = 0
+    for (const v of this.index.values()) {
+      if (v.bookId !== owner) continue
+      bytes += v.bytes
+      seconds += v.seconds
+      pieces++
+    }
+    return { bytes, seconds, pieces }
   }
 
   /** The book being read aloud (null when reading stopped or with a browser voice). */
@@ -262,14 +292,7 @@ class BookAudioManager {
         if (gen !== this.generation || !this.db || !this.bookId) break
         // Reading may have moved past this chapter meanwhile
         if (next.index <= this.current) continue
-        const pcm = new Int16Array(audio.samples.length)
-        for (let j = 0; j < pcm.length; j++) {
-          const v = Math.max(-1, Math.min(1, audio.samples[j]))
-          pcm[j] = v < 0 ? v * 0x8000 : v * 0x7fff
-        }
-        const piece: Piece = { key: next.keys[i], bookId: this.bookId, section: next.index, pcm: pcm.buffer, sampleRate: audio.sampleRate, samples: pcm.length, at: Date.now() }
-        await this.db.pieces.put(piece)
-        this.index.set(piece.key, { bookId: piece.bookId, section: piece.section, bytes: piece.pcm.byteLength, seconds: piece.samples / piece.sampleRate })
+        await this.keep(this.bookId, next.index, this.voice, next.texts[i], audio)
       }
     } catch (e) {
       console.warn('Preparing chapter audio stopped', e)

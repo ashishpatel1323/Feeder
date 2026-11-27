@@ -65,6 +65,9 @@ class FeederJobService : DIAwareJobService() {
             BackgroundJobId.BOOK_AUDIO.jobId -> {
                 runJob(BookAudioJob(context = this, params = params))
             }
+            BackgroundJobId.PLAYLIST_AUDIO.jobId -> {
+                runJob(PlaylistAudioJob(context = this, params = params))
+            }
             else -> {
                 Log.i(LOG_TAG, "Unknown job id: ${params.jobId}")
                 false
@@ -80,6 +83,8 @@ class FeederJobService : DIAwareJobService() {
     override fun onStopJob(params: JobParameters): Boolean {
         jobs[params.jobId]?.cancel()
 
+        // Audio made ahead picks up where it stopped (the system stops long jobs after a while)
+        if (params.jobId == BackgroundJobId.BOOK_AUDIO.jobId || params.jobId == BackgroundJobId.PLAYLIST_AUDIO.jobId) return true
         // False means no reschedule necessary.
         // Periodic jobs will re-run at their next interval.
         return false

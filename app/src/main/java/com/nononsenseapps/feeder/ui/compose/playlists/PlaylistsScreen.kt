@@ -70,6 +70,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -151,6 +152,7 @@ fun PlaylistsScreen(
     val flipItems by viewModel.flipItems.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     LaunchedEffect(viewModel) {
         viewModel.messages.collect { m ->
@@ -206,6 +208,19 @@ fun PlaylistsScreen(
                         run {
                             val items = remember(open, state) { open.items(state.candidates, state.ctx, state.byId) }
                             val toDownload = items.filter { it.kind != ItemKind.ARTICLE && !it.isDownloaded(state.ctx) }
+                            val toPrepare = remember(open, state, queue.index, queue.playlistId) { viewModel.nextArticlesToPrepare(open) }
+                            // Compressed speech: about 6 kB a second
+                            val prepareSize =
+                                remember(toPrepare) {
+                                    // Speech runs at about 150 words a minute
+                                    val seconds = toPrepare.sumOf { (if (it.fullTextByDefault && it.wordCountFull > 0) it.wordCountFull else it.wordCount).toLong() * 2 / 5 }
+                                    if (seconds > 0) {
+                                        android.text.format.Formatter
+                                            .formatShortFileSize(context, seconds * 6_000)
+                                    } else {
+                                        ""
+                                    }
+                                }
                             PlaylistTopBarActions(
                                 smart = open.smart,
                                 canFlip = items.isNotEmpty(),
@@ -217,6 +232,16 @@ fun PlaylistsScreen(
                                     scope.launch { snackbar.showSnackbar("Downloading $n items") }
                                 },
                                 onDelete = { confirmDelete = open },
+                                prepareCount = toPrepare.size,
+                                prepareSize = prepareSize,
+                                onPrepare = {
+                                    val n = viewModel.prepareArticles(open)
+                                    scope.launch {
+                                        snackbar.showSnackbar(
+                                            if (n > 0) context.getString(R.string.playlist_prepare_started, n) else context.getString(R.string.playlist_prepare_nothing),
+                                        )
+                                    }
+                                },
                             )
                         }
                     },
@@ -376,6 +401,7 @@ private fun PlaylistDetail(
     val feedTitles = remember(state.feeds) { state.feeds.toMap() }
     val playingId = if (queue.playlistId == pl.id) queue.currentId else null
     val addToPlaylist = rememberAddToPlaylist()
+    val offline by viewModel.offlineAudio.collectAsStateWithLifecycle()
     // Swiping in the reader goes through the playlist as shown here
     val openArticle: (Long) -> Unit = { id ->
         viewModel.openingArticle(pl.id, items.map { it.id })
@@ -447,6 +473,13 @@ private fun PlaylistDetail(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
                 )
             }
+            if (offline.playlistId == pl.id && offline.ids.isNotEmpty()) {
+                OfflineArticlesCard(
+                    state = offline,
+                    onCancel = viewModel::cancelPreparing,
+                    onRemove = viewModel::removePrepared,
+                )
+            }
             Spacer(Modifier.height(6.dp))
             HorizontalDivider()
         }
@@ -486,6 +519,12 @@ private fun PlaylistDetail(
                         saved = it.bookmarked,
                         image = it.image?.url ?: it.feedImage,
                         progress = progress,
+                        offlineAudio =
+                            when {
+                                it.id in offline.ready -> 1f
+                                it.id == offline.preparingId -> offline.progress
+                                else -> null
+                            },
                     ),
                 actions =
                     ItemRowActions(
@@ -912,4 +951,65 @@ private fun Chip(
     onClick: () -> Unit,
 ) {
     FilterChip(selected = selected, onClick = onClick, label = { Text(label) })
+}
+
+/** "Getting 20 articles ready · 7 of 20" with Cancel, then "20 articles ready offline · 58 MB" with Remove. */
+@Composable
+private fun OfflineArticlesCard(
+    state: com.nononsenseapps.feeder.model.playlists.PlaylistAudioState,
+    onCancel: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val size =
+        android.text.format.Formatter
+            .formatShortFileSize(context, state.bytes)
+    val total = state.ids.size
+    androidx.compose.material3.Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape =
+            androidx.compose.foundation.shape
+                .RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (state.running) {
+                    androidx.compose.material3.CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(
+                    when {
+                        state.running -> stringResource(R.string.playlist_preparing, total, state.done)
+                        state.readyInBatch > 0 -> stringResource(R.string.playlist_prepared, state.readyInBatch, size)
+                        else -> stringResource(R.string.playlist_prepared_none)
+                    },
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.weight(1f),
+                )
+                if (state.running) {
+                    TextButton(onClick = onCancel) { Text(stringResource(android.R.string.cancel)) }
+                } else if (state.readyInBatch > 0) {
+                    TextButton(onClick = onRemove) { Text(stringResource(R.string.playlist_prepare_remove)) }
+                }
+            }
+            if (state.running) {
+                val within = if (state.preparingId != null) state.progress else 0f
+                androidx.compose.material3.LinearProgressIndicator(
+                    progress = { ((state.done + within) / total.coerceAtLeast(1)).coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth().padding(end = 8.dp, top = 6.dp),
+                )
+            }
+            Text(
+                when {
+                    !state.running -> stringResource(R.string.playlist_prepared_hint)
+                    state.bytes > 0 -> stringResource(R.string.playlist_preparing_hint, size)
+                    else -> stringResource(R.string.playlist_preparing_hint_empty)
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+    }
 }

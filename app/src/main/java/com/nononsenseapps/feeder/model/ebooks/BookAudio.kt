@@ -16,6 +16,7 @@ import com.nononsenseapps.feeder.model.ForcedLocale
 import com.nononsenseapps.feeder.model.LocaleOverride
 import com.nononsenseapps.feeder.model.PreparedSpeech
 import com.nononsenseapps.feeder.model.SpeechSegment
+import com.nononsenseapps.feeder.model.encodeSpeechToAac
 import com.nononsenseapps.feeder.model.openSpeechEngine
 import com.nononsenseapps.feeder.model.speechParts
 import com.nononsenseapps.feeder.model.synthesizeSpeech
@@ -150,10 +151,11 @@ class BookAudio private constructor(
         index: Int,
     ) = File(bookDir(bookId), "s$index.txt")
 
+    /** The chapter's audio: compressed (.m4a), or the WAV when the device couldn't compress it. */
     private fun audioFile(
         bookId: String,
         index: Int,
-    ) = File(bookDir(bookId), "s$index.wav")
+    ): File = File(bookDir(bookId), "s$index.m4a").takeIf { it.exists() } ?: File(bookDir(bookId), "s$index.wav")
 
     private fun metaFile(
         bookId: String,
@@ -281,7 +283,8 @@ class BookAudio private constructor(
         index: Int,
     ) {
         metaFile(bookId, index).delete()
-        audioFile(bookId, index).delete()
+        File(bookDir(bookId), "s$index.m4a").delete()
+        File(bookDir(bookId), "s$index.wav").delete()
         File(bookDir(bookId), "s$index.part").delete()
     }
 
@@ -346,7 +349,7 @@ class BookAudio private constructor(
                     else -> SectionAudio(i, label(i), SectionAudioState.WAITING)
                 }
         }
-        val bytes = bookDir(bookId).listFiles()?.filter { it.name.endsWith(".wav") }?.sumOf { it.length() } ?: 0L
+        val bytes = bookDir(bookId).listFiles()?.filter { it.name.endsWith(".wav") || it.name.endsWith(".m4a") }?.sumOf { it.length() } ?: 0L
         _state.value =
             BookAudioState(
                 bookId = bookId,
@@ -437,7 +440,8 @@ class BookAudio private constructor(
                     part.delete()
                     return@withContext
                 }
-                part.renameTo(audioFile(bookId, section.index))
+                // Kept compressed: about an eighth of the size
+                if (encodeSpeechToAac(part, File(dir, "s${section.index}.m4a"))) part.delete() else part.renameTo(File(dir, "s${section.index}.wav"))
                 val meta =
                     AudioMeta(
                         textHash = section.text.hashCode(),

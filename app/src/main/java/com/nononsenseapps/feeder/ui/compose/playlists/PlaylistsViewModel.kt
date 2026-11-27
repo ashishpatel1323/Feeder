@@ -59,8 +59,46 @@ class PlaylistsViewModel(
     private val offlineVideos: OfflineVideos by instance()
     private val feedItemStore: FeedItemStore by instance()
     private val repository: Repository by instance()
+    private val playlistAudio: com.nononsenseapps.feeder.model.playlists.PlaylistAudio by instance()
 
     val queue: StateFlow<QueueState> = player.state
+
+    /** Articles made ready offline on demand. */
+    val offlineAudio: StateFlow<com.nononsenseapps.feeder.model.playlists.PlaylistAudioState> = playlistAudio.state
+
+    /**
+     * The next [com.nononsenseapps.feeder.model.playlists.PlaylistAudio.BATCH_SIZE] text articles
+     * of [playlist] to make ready offline: after the one playing when this playlist plays, else
+     * from the top. Podcasts and videos are left to Downloads.
+     */
+    fun nextArticlesToPrepare(playlist: Playlist): List<PlaylistCandidate> {
+        val s = viewState.value
+        val items = playlist.items(s.candidates, s.ctx, s.byId)
+        val q = queue.value
+        val ordered =
+            if (q.playlistId == playlist.id && q.ids.isNotEmpty()) {
+                val byId = items.associateBy { it.id }
+                q.ids.drop(q.index + 1).mapNotNull { byId[it] }
+            } else {
+                items
+            }
+        return ordered.filter { it.kind == ItemKind.ARTICLE }.take(com.nononsenseapps.feeder.model.playlists.PlaylistAudio.BATCH_SIZE)
+    }
+
+    fun prepareArticles(playlist: Playlist): Int {
+        val ids = nextArticlesToPrepare(playlist).map { it.id }
+        if (ids.isNotEmpty()) playlistAudio.start(playlist.id, ids)
+        return ids.size
+    }
+
+    fun cancelPreparing() {
+        viewModelScope.launch(Dispatchers.IO) { playlistAudio.cancel() }
+    }
+
+    fun removePrepared() {
+        viewModelScope.launch(Dispatchers.IO) { playlistAudio.removeAll() }
+    }
+
     val messages: SharedFlow<QueueMessage> = player.messages
 
     /** The playlist open on screen, null for the list of playlists. */

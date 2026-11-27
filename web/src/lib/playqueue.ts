@@ -9,6 +9,7 @@ import { db, feedDisplayTitle, getKv, type Item } from './db'
 import { FEED_KINDS_KEY, type FeedKind } from './home'
 import { addToPlaylist, itemKind, removeFromAllManual, type ItemKind } from './playlists'
 import { readAloud } from './readaloud'
+import { playlistAudio } from './playlistAudio'
 import { savedVideoUrl } from './offline'
 import { articleVideoId } from './youtube'
 import { resumeAt, saveVideoPos } from './videopos'
@@ -234,6 +235,8 @@ class PlayQueue {
   /** The read-aloud engine finished an article. True when it was ours. */
   articleFinished(itemId: string): boolean {
     if (!this.active || this.state.kind !== 'article' || this.currentId !== itemId) return false
+    // Its audio made ahead is no longer needed
+    void playlistAudio.played(itemId)
     void this.finishCurrent()
     return true
   }
