@@ -25,4 +25,35 @@
     <string name="history_reason_background">Left the app</string>
     <string name="history_reason_system">System</string>
     <string name="history_reason_widget">Home screen widget</string>
+    <!-- Graphs at the top of History -->
+    <string name="history_graph_listening_week">listening this week</string>
+    <string name="history_graph_reading_week">reading this week</string>
+    <string name="history_graph_streak">%d-day streak</string>
+    <string name="history_graph_minutes_label">Minutes a day · last 14 days</string>
+    <string name="history_graph_progress">Progress</string>
+    <string name="history_graph_progress_later">Progress shows up here after the next pause or close.</string>
+    <string name="history_graph_today">Today</string>
+    <string name="history_graph_chapter">Ch. %1$d of %2$d</string>
+    <string name="history_graph_done">%d done</string>
+    <string name="history_graph_of">%1$s of %2$s</string>
+    <string name="history_graph_left">%s left</string>
+    <string name="history_graph_pages_left">%d pages left</string>
+    <string name="history_graph_finished">Finished</string>
+    <string name="history_graph_days_left">About %1$s left at this pace (%2$s)</string>
+    <string name="history_graph_min_a_day">%d min a day</string>
+    <string name="history_graph_pages_a_day">%d pages a day</string>
+    <string name="history_graph_pages_label">Pages visited a day</string>
+    <string name="history_graph_last_page">Last page: %s</string>
+    <string name="history_graph_zim_note">No progress line: a ZIM site has no end. Each page counts once, on the day it was last opened.</string>
+    <string name="history_graph_minutes">%d min</string>
+    <string name="history_graph_hours">%d h</string>
+    <string name="history_graph_hours_minutes">%1$d h %2$d min</string>
+    <plurals name="history_graph_days">
+        <item quantity="one">%d day</item>
+        <item quantity="other">%d days</item>
+    </plurals>
+    <plurals name="history_graph_pages">
+        <item quantity="one">%d page</item>
+        <item quantity="other">%d pages</item>
+    </plurals>
 </resources>

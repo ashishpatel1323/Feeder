@@ -337,6 +337,7 @@ fun HistorySheet(
             modifier = Modifier.fillMaxWidth().navigationBarsPadding(),
             contentPadding = PaddingValues(horizontal = FeederTokens.Space.md, vertical = FeederTokens.Space.sm),
         ) {
+            item(key = "history-graph") { HistoryGraphCard(c, i) }
             historyItems(days, if (c == ItemHistory.AUDIOBOOK) R.string.history_empty_audio else R.string.history_empty_read) {
                 onJump(it)
                 onDismiss()

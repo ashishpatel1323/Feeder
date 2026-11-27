@@ -105,6 +105,7 @@ import com.nononsenseapps.feeder.model.history.ItemHistory
 import com.nononsenseapps.feeder.ui.compose.components.askHighlight
 import com.nononsenseapps.feeder.ui.compose.components.rememberDeleteConfirmer
 import com.nononsenseapps.feeder.ui.compose.highlights.SketchEditorDialog
+import com.nononsenseapps.feeder.ui.compose.history.HistoryGraphCard
 import com.nononsenseapps.feeder.ui.compose.history.historyItems
 import com.nononsenseapps.feeder.ui.compose.history.rememberHistory
 import com.nononsenseapps.feeder.ui.compose.history.rememberOpenTracker
@@ -892,6 +893,7 @@ fun EbookReaderScreen(
                     val days = rememberHistory(ItemHistory.EBOOK, bookId)
                     LazyColumn(Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = 8.dp)) {
                         item { SheetTitle(stringResource(R.string.history)) }
+                        item { HistoryGraphCard(ItemHistory.EBOOK, bookId, Modifier.padding(horizontal = 8.dp)) }
                         historyItems(days, R.string.history_empty_read) { e ->
                             js("feeder.goTo(${q(e.x)})")
                             sheet = null
