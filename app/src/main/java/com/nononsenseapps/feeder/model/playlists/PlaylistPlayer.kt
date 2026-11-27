@@ -89,7 +89,6 @@ class PlaylistPlayer(
     private val repository: Repository by instance()
     private val tts: TTSStateHolder by instance()
     private val readAloudQueue: ReadAloudQueue by instance()
-    private val playlistAudio: PlaylistAudio by instance()
     private val offlineFiles: OfflineFiles by instance()
     private val downloadsPlayback: DownloadsPlayback by instance()
     private val scope: ApplicationCoroutineScope by instance()
@@ -226,21 +225,6 @@ class PlaylistPlayer(
                 if (kind == ItemKind.ARTICLE) {
                     releaseAudio()
                     if (tts.ttsState.value != PlaybackStatus.STOPPED) tts.pause()
-                    // Made ahead ("Get next 20 articles ready offline"): plays at once, no connection needed
-                    val ready = withContext(Dispatchers.IO) { playlistAudio.prepared(id) }
-                    if (ready != null) {
-                        tts.playPrepared(
-                            articleId = id,
-                            text = ready.first,
-                            prepared = ready.second,
-                            useDetectLanguage = repository.useDetectLanguage.value,
-                            title = article.title,
-                            author = article.author.orEmpty(),
-                            feedTitle = article.feedDisplayTitle,
-                        )
-                        if (article.isUnread) repository.markAsReadAndNotified(id)
-                        return@launch
-                    }
                     val text = readAloudQueue.speechTextFor(article)
                     if (_state.value.currentId != id) return@launch
                     if (text.isNullOrBlank()) {
@@ -403,8 +387,6 @@ class PlaylistPlayer(
             _player.value?.let { store.savePosition(id, it.duration.coerceAtLeast(0) / 1000, it.duration.coerceAtLeast(0) / 1000) }
         }
         scope.launch {
-            // Its audio made ahead is no longer needed
-            if (s.kind == ItemKind.ARTICLE) withContext(Dispatchers.IO) { playlistAudio.played(id) }
             repository.markAsReadAndNotified(id)
             val from = store.removeFromAllManual(id)
             if (from.isNotEmpty()) {

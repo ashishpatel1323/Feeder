@@ -88,6 +88,9 @@ class AudiobookPlayer(
     private val playlistPlayer: PlaylistPlayer by instance()
     private val positions: AudioPositions by instance()
     private val history: ItemHistory by instance()
+
+    // Started with the player, so a book with its transcript on is transcribed ahead while it plays
+    private val transcriptsAhead: AudiobookTranscripts by instance()
     private val library by lazy { AudiobookLibrary.get(app) }
     private val dropbox by lazy { DropboxClient.get(app) }
     private val prefs by lazy { app.getSharedPreferences("audiobook_player", android.content.Context.MODE_PRIVATE) }
@@ -265,6 +268,7 @@ class AudiobookPlayer(
         at: Pair<Int, Long>? = null,
         reason: String = REASON_APP,
     ) {
+        transcriptsAhead.load(id)
         if (_state.value.bookId == id && at == null) {
             if (play) play(reason)
             return

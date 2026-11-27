@@ -46,7 +46,7 @@ class KokoroClient {
    * Requests not yet sent to the worker. The worker gets one at a time, so the sentence being
    * read can jump ahead of prefetched ones and requests for passages left behind can be dropped.
    */
-  private queue: { id: number; text: string; voice: string; background?: boolean }[] = []
+  private queue: { id: number; text: string; voice: string }[] = []
   private inFlight: number | null = null
   private listeners = new Set<Listener>()
   private readyWaiters: { resolve: () => void; reject: (e: Error) => void }[] = []
@@ -79,21 +79,14 @@ class KokoroClient {
     return wait
   }
 
-  /**
-   * Queues speech for [text]; [urgent] puts it ahead of everything still waiting. [background]
-   * work (chapters prepared ahead) waits behind everything else and is never dropped.
-   */
-  generate(text: string, voice: string, urgent = false, background = false): { id: number; audio: Promise<KokoroAudio> } {
+  /** Queues speech for [text]; [urgent] puts it ahead of everything still waiting. */
+  generate(text: string, voice: string, urgent = false): { id: number; audio: Promise<KokoroAudio> } {
     const id = this.nextId++
     const audio = new Promise<KokoroAudio>((resolve, reject) => {
       this.pending.set(id, { resolve, reject })
     })
-    if (background) this.queue.push({ id, text, voice, background })
-    else if (urgent) this.queue.unshift({ id, text, voice })
-    else {
-      const firstBackground = this.queue.findIndex((q) => q.background)
-      this.queue.splice(firstBackground < 0 ? this.queue.length : firstBackground, 0, { id, text, voice })
-    }
+    if (urgent) this.queue.unshift({ id, text, voice })
+    else this.queue.push({ id, text, voice })
     this.pump()
     return { id, audio }
   }
@@ -107,9 +100,9 @@ class KokoroClient {
 
   /** Drops waiting requests other than [keep] and returns their ids (their promises reject). */
   dropWaiting(keep: Set<number>): number[] {
-    const dropped = this.queue.filter((q) => !keep.has(q.id) && !q.background)
+    const dropped = this.queue.filter((q) => !keep.has(q.id))
     if (!dropped.length) return []
-    this.queue = this.queue.filter((q) => keep.has(q.id) || q.background)
+    this.queue = this.queue.filter((q) => keep.has(q.id))
     const err = new Error('Dropped')
     for (const q of dropped) {
       this.pending.get(q.id)?.reject(err)

@@ -32,8 +32,6 @@ import {
   type SmartRules,
 } from '../lib/playlists'
 import { playQueue, useQueue } from '../lib/playqueue'
-import { BATCH_SIZE as PREPARE_BATCH, playlistAudio, type PlaylistAudioState } from '../lib/playlistAudio'
-import { readAloud } from '../lib/readaloud'
 import { saveVideo, useVideoSavingAvailable } from '../lib/offline'
 import { articleVideoId } from '../lib/youtube'
 import { Icon, IconButton } from './Icon'
@@ -252,20 +250,6 @@ function PlaylistDetail(p: {
   const chips = pl.smart ? describeRules(pl.rules, p.feeds) : []
   const toDownload = its.filter((i) => kindOf(i, p.ctx) === 'youtube' && !i.offlineVideo)
   const playingId = q.playlistId === pl.id ? q.ids[q.index] : null
-  const offline = usePlaylistAudio()
-  // The next text articles: after the one playing when this playlist plays, else from the top
-  const toPrepare = (() => {
-    const order = q.playlistId === pl.id && q.ids.length ? q.ids.slice(q.index + 1).map((id) => its.find((i) => i.id === id)).filter((i): i is Item => !!i) : its
-    return order.filter((i) => kindOf(i, p.ctx) === 'article').slice(0, PREPARE_BATCH)
-  })()
-  const prepare = () => {
-    if (!playlistAudio.supported(readAloud.voiceURI)) {
-      p.toast('Getting articles ready offline needs the natural voice. Pick one under Settings › Read aloud.')
-      return
-    }
-    void playlistAudio.start(pl.id, toPrepare.map((i) => i.id), readAloud.voiceURI, readAloud.kokoroGpu)
-    p.toast(`Getting ${toPrepare.length} article${toPrepare.length === 1 ? '' : 's'} ready offline. Keep Feeder open while it works.`)
-  }
 
   const setSort = (sort: Playlist['sort']) => void savePlaylist({ ...pl, sort })
   const move = (id: string, to: number) => void savePlaylist(moveItem(pl, id, to))
@@ -312,12 +296,6 @@ function PlaylistDetail(p: {
                 onClick: () => void downloadAll(),
                 hidden: !(canSave && toDownload.length),
               },
-              {
-                icon: 'headphones',
-                label: `Get next ${toPrepare.length} article${toPrepare.length === 1 ? '' : 's'} ready offline`,
-                onClick: prepare,
-                hidden: !toPrepare.length,
-              },
               'separator',
               { icon: 'delete', label: 'Delete playlist', onClick: p.onDelete, danger: true },
             ]}
@@ -345,7 +323,6 @@ function PlaylistDetail(p: {
       ) : (
         <p className="mf-note pl-hint">Drag rows (or use the arrows) to change the order. Items leave this playlist once they are played to the end.</p>
       )}
-      {offline.playlistId === pl.id && offline.ids.length ? <OfflineArticlesCard s={offline} /> : null}
       {!its.length ? (
         <div className="dl-empty">
           <Icon name="queue" size={40} />
@@ -394,18 +371,7 @@ function PlaylistDetail(p: {
                   onPrimary={() => p.onPlay(index)}
                   primaryLabel={it.id === playingId ? 'Playing' : 'Play'}
                   primaryIcon="play"
-                  metaExtra={
-                    needsDownload ? (
-                      <span>Needs download to play</span>
-                    ) : offline.ready.has(it.id) ? (
-                      <span className="pl-offline">
-                        <Icon name="check" size={14} />
-                        Ready offline
-                      </span>
-                    ) : offline.preparingId === it.id ? (
-                      <span className="pl-offline">Preparing · {Math.round(offline.progress * 100)}%</span>
-                    ) : null
-                  }
+                  metaExtra={needsDownload ? <span>Needs download to play</span> : null}
                   inPlaylist
                   onDelete={() => void deleteItemWithUndo(it, p.toast)}
                   extras={
@@ -610,46 +576,6 @@ function PlaylistEditor(p: {
           </button>
         </div>
       </div>
-    </div>
-  )
-}
-
-function usePlaylistAudio(): PlaylistAudioState {
-  const [s, setS] = useState<PlaylistAudioState>(playlistAudio.state)
-  useEffect(() => playlistAudio.subscribe(setS), [])
-  return s
-}
-
-const formatMB = (n: number) => (n >= 1024 * 1024 ? `${Math.round(n / 1024 / 1024)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`)
-
-/** "Getting 20 articles ready · 7 of 20" with Cancel, then "20 articles ready offline · 58 MB" with Remove. */
-function OfflineArticlesCard({ s }: { s: PlaylistAudioState }) {
-  const total = s.ids.length
-  const ready = s.ids.filter((id) => s.ready.has(id)).length
-  const done = s.ids.filter((id) => s.ready.has(id) || s.failed.has(id)).length
-  const within = s.preparingId ? s.progress : 0
-  return (
-    <div className="pl-offline-card">
-      <div className="pl-offline-row">
-        {s.running ? <span className="book-audio-spin" aria-hidden /> : null}
-        <b>{s.running ? `Getting ${total} articles ready · ${done} of ${total}` : ready ? `${ready} article${ready === 1 ? '' : 's'} ready offline · ${formatMB(s.bytes)}` : 'Nothing could be made ready (no text to read)'}</b>
-        <span className="mf-sp" />
-        {s.running ? (
-          <button type="button" className="mf-btn" onClick={() => playlistAudio.cancel()}>
-            Cancel
-          </button>
-        ) : ready ? (
-          <button type="button" className="mf-btn" onClick={() => void playlistAudio.removeAll()}>
-            Remove
-          </button>
-        ) : null}
-      </div>
-      {s.running ? (
-        <div className="pl-offline-bar" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}>
-          <div style={{ width: `${Math.round(((done + within) / Math.max(1, total)) * 100)}%` }} />
-        </div>
-      ) : null}
-      <small>{s.running ? `${s.bytes ? `${formatMB(s.bytes)} so far · ` : ''}Prepared while Feeder is open` : 'Played articles delete themselves · unplayed ones after 7 days'}</small>
     </div>
   )
 }

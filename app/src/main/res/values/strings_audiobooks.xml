@@ -40,4 +40,20 @@
   <string name="audiobook_close">Close the audiobook player</string>
   <string name="audiobook_open_player">Open the player</string>
   <string name="audiobook_more_for">More for %1$s</string>
+  <string name="audiobook_transcript">Transcript</string>
+  <string name="audiobook_transcript_close">Close transcript</string>
+  <string name="audiobook_transcript_intro">See the words as the book plays. Feeder transcribes a chapter or two ahead of where you are, on this phone or on your Mac with the Feeder app, and your devices share it through sync. Nothing leaves your devices.</string>
+  <string name="audiobook_transcript_start">Transcribe this book</string>
+  <string name="audiobook_transcript_model_note">The speech model (%1$d MB) downloads once. English only.</string>
+  <string name="audiobook_transcript_unsupported">Speech to text isn\'t built for this phone. Transcripts made on your Mac still show here.</string>
+  <string name="audiobook_transcript_ready_to">Ready to %1$s</string>
+  <string name="audiobook_transcript_working">Ready to %1$s · transcribing ahead</string>
+  <string name="audiobook_transcript_waiting">Transcribing starts when the book plays</string>
+  <string name="audiobook_transcript_model">Downloading the speech model %1$d%%</string>
+  <string name="audiobook_transcript_from_devices">From your devices · ready to %1$s</string>
+  <string name="audiobook_transcript_ahead">Transcribe ahead</string>
+  <string name="audiobook_transcript_stop">Stop</string>
+  <string name="audiobook_transcript_pending">Transcribing this chapter…</string>
+  <string name="audiobook_transcript_pending_off">Not transcribed yet</string>
+  <string name="audiobook_transcript_failed">Couldn\'t transcribe: %1$s</string>
 </resources>

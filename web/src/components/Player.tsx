@@ -20,8 +20,6 @@ interface Props {
   nextTitle: string | null
   onPrev: () => void
   onNext: () => void
-  /** A line of status under the title (an ebook's offline audio). */
-  status?: ReactNode
 }
 
 export const formatSpeed = (speed: number) => `${speed.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')}×`
@@ -38,7 +36,7 @@ function formatTime(ms: number): string {
  * a wavy seek line and a big play button. "Show word" puts speed reading inside it, and Mute hands
  * over from the voice to a silent timer reader.
  */
-export function Player({ state, settings, currentTitle, hasPrev, hasNext, nextTitle, onPrev, onNext, status }: Props) {
+export function Player({ state, settings, currentTitle, hasPrev, hasNext, nextTitle, onPrev, onNext }: Props) {
   const [voice, setVoice] = useState<KokoroStatus>(kokoro.status)
   useEffect(() => kokoro.subscribe(setVoice), [])
   const [scrub, setScrub] = useState<number | null>(null)
@@ -95,7 +93,6 @@ export function Player({ state, settings, currentTitle, hasPrev, hasNext, nextTi
           <RoundButton icon="close" label="Close" onClick={() => readAloud.stop()} />
         </div>
 
-        {status && !muted ? status : null}
         {settings.readAloudShowWord ? <RsvpWordView word={state.word} /> : null}
 
         {downloading ? (

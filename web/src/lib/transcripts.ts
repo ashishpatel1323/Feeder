@@ -131,7 +131,11 @@ export async function deleteTranscript(item: Pick<Item, 'id' | 'feedUrl' | 'guid
 let worker: Worker | null = null
 let nextId = 1
 const pending = new Map<number, { resolve: (c: TranscriptCue[]) => void; reject: (e: Error) => void; offsetMs: number }>()
-let onModelProgress: ((fraction: number) => void) | null = null
+export let onModelProgress: ((fraction: number) => void) | null = null
+/** For audiobook transcripts: the model download's progress while no episode is being done. */
+export function setModelProgressListener(l: ((fraction: number) => void) | null) {
+  onModelProgress = l
+}
 let running: { id: string; stop: boolean } | null = null
 
 function getWorker(): Worker {
@@ -177,7 +181,7 @@ export function chunksToCues(chunks: { start: number; end: number | null; text: 
 
 let device: WhisperDevice | null = null
 
-function transcribePiece(samples: Float32Array, offsetMs: number): Promise<TranscriptCue[]> {
+export function transcribePiece(samples: Float32Array, offsetMs: number): Promise<TranscriptCue[]> {
   const id = nextId++
   const chosen: WhisperDevice = device ?? ('gpu' in navigator ? 'webgpu' : 'wasm')
   return new Promise<TranscriptCue[]>((resolve, reject) => {
@@ -250,7 +254,7 @@ async function fetchAudio(url: string, onProgress: (f: number) => void): Promise
 }
 
 /** Decodes to 16 kHz mono, what Whisper reads. */
-async function decode16k(bytes: ArrayBuffer): Promise<Float32Array> {
+export async function decode16k(bytes: ArrayBuffer): Promise<Float32Array> {
   const ctx = new OfflineAudioContext(1, 1, RATE)
   const audio = await ctx.decodeAudioData(bytes)
   if (audio.numberOfChannels === 1) return audio.getChannelData(0)

@@ -70,7 +70,7 @@ export interface SyncState {
   lastError?: string | null
 }
 
-export type Kind = 'feed' | 'read' | 'saved' | 'hidden' | 'layout' | 'video' | 'playlist' | 'highlight' | 'bookpos' | 'audiopos' | 'shelfstatus' | 'bookcover' | 'dropbox' | 'history' | 'recent'
+export type Kind = 'feed' | 'read' | 'saved' | 'hidden' | 'layout' | 'video' | 'playlist' | 'highlight' | 'bookpos' | 'audiopos' | 'shelfstatus' | 'bookcover' | 'dropbox' | 'history' | 'recent' | 'abtx'
 
 /** The plaintext inside a record. */
 export interface Payload {
@@ -440,6 +440,12 @@ interface Pending extends Payload {
 const isHistory = (p: { k: string }) => p.k === 'history'
 /** History entries keep their own synced flag too (db.recent.synced). */
 const isRecent = (p: { k: string }) => p.k === 'recent'
+/**
+ * Audiobook transcript pieces (key "<book id>:<start ms>", { e, c: [[start, end, text]…] } in book
+ * ms): never change, keep their own synced flag (audiobooks/transcripts.ts), not in syncKnown.
+ */
+const isAbtx = (p: { k: string }) => p.k === 'abtx'
+const abtx = () => import('./audiobooks/transcripts')
 
 /** Everything that differs from what was last exchanged. */
 export async function collectChanges(now = Date.now()): Promise<Pending[]> {
@@ -614,6 +620,9 @@ export async function collectChanges(now = Date.now()): Promise<Pending[]> {
   for (const e of await db.recent.where('synced').equals(0).toArray()) {
     out.push({ k: 'recent', key: e.key, v: recentValue(e), ts: Math.max(1, e.ts) })
   }
+
+  // Audiobook transcript pieces made here and not sent yet
+  for (const p of await (await abtx()).unsyncedPieces()) out.push({ k: 'abtx', key: p.key, v: p.v, ts: now })
   return out
 }
 
@@ -641,6 +650,10 @@ export async function applyRemote(p: Payload, ts: number, result: ApplyResult): 
   }
   if (isRecent(p)) {
     if (await applyRecent(p.key, p.v, ts)) result.applied++
+    return
+  }
+  if (isAbtx(p)) {
+    if (await (await abtx()).applyRemotePiece(p.key, p.v)) result.applied++
     return
   }
   const k = knownKey(p.k, p.key)
@@ -898,11 +911,13 @@ async function runSync(state: SyncState): Promise<SyncResult> {
     // What was sent is now the known value; the server's answer below may still override it
     const sent = toSend.slice(i, i + BATCH)
     await db.syncKnown.bulkPut(
-      sent.filter((p) => !isHistory(p) && !isRecent(p)).map((p) => ({ k: knownKey(p.k, p.key), v: p.v, ts: p.ts, ...(p.a ? { a: p.a } : {}) })),
+      sent.filter((p) => !isHistory(p) && !isRecent(p) && !isAbtx(p)).map((p) => ({ k: knownKey(p.k, p.key), v: p.v, ts: p.ts, ...(p.a ? { a: p.a } : {}) })),
     )
     const sentHistory = sent.filter(isHistory).map((p) => p.key)
     if (sentHistory.length) await db.history.bulkUpdate(sentHistory.map((key) => ({ key, changes: { synced: 1 } })))
     await markRecentSent(sent.filter(isRecent))
+    const sentPieces = sent.filter(isAbtx).map((p) => p.key)
+    if (sentPieces.length) await (await abtx()).markPiecesSent(sentPieces)
     for (;;) {
       for (const c of res.changes) {
         let payload: Payload
@@ -995,6 +1010,7 @@ async function resetExchange(state: SyncState) {
     await db.items.toCollection().modify({ readSynced: 0 })
     await setKv(STATE_KEY, { ...state, cursor: 0 })
   })
+  await (await abtx()).markAllPiecesUnsent()
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1018,6 +1034,7 @@ async function start(syncCode: string, secretKey: string, extra: Partial<SyncSta
     await db.recent.toCollection().modify({ synced: 0 })
     await setKv(STATE_KEY, state)
   })
+  await (await abtx()).markAllPiecesUnsent()
   return state
 }
 

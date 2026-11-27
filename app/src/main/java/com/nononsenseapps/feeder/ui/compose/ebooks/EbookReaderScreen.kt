@@ -72,10 +72,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -93,10 +91,8 @@ import com.nononsenseapps.feeder.archmodel.Repository
 import com.nononsenseapps.feeder.model.PlaybackStatus
 import com.nononsenseapps.feeder.model.ReadAloudNeighbors
 import com.nononsenseapps.feeder.model.TTSStateHolder
-import com.nononsenseapps.feeder.model.ebooks.BookAudio
 import com.nononsenseapps.feeder.model.ebooks.BookPositions
 import com.nononsenseapps.feeder.model.ebooks.EbookLibrary
-import com.nononsenseapps.feeder.model.ebooks.SectionTexts
 import com.nononsenseapps.feeder.model.highlights.Highlight
 import com.nononsenseapps.feeder.model.highlights.HighlightColor
 import com.nononsenseapps.feeder.model.highlights.HighlightStore
@@ -111,9 +107,6 @@ import com.nononsenseapps.feeder.ui.compose.history.rememberOpenTracker
 import com.nononsenseapps.feeder.ui.compose.navigation.HideMainBar
 import com.nononsenseapps.feeder.ui.compose.readaloud.HideableCompactTTSPlayer
 import com.nononsenseapps.feeder.ui.compose.utils.ImmutableHolder
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -128,6 +121,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.kodein.di.compose.LocalDI
+import java.io.File
 import org.kodein.di.instance
 import java.util.UUID
 
@@ -151,11 +145,7 @@ private fun loadPrefs(context: Context): ReaderPrefs =
 private fun savePrefs(
     context: Context,
     p: ReaderPrefs,
-) = context
-    .getSharedPreferences("ebook_reader", Context.MODE_PRIVATE)
-    .edit()
-    .putString("prefs", prefsJson.encodeToString(ReaderPrefs.serializer(), p))
-    .apply()
+) = context.getSharedPreferences("ebook_reader", Context.MODE_PRIVATE).edit().putString("prefs", prefsJson.encodeToString(ReaderPrefs.serializer(), p)).apply()
 
 private data class Relocation(
     val cfi: String = "",
@@ -212,14 +202,6 @@ fun EbookReaderScreen(
     val allHighlights by highlightStore.highlights.collectAsState()
     val highlights = remember(allHighlights, itemKey) { allHighlights.filter { it.itemKey == itemKey && !it.cfi.isNullOrBlank() } }
     val ttsId = remember(bookId) { ttsIdOf(bookId) }
-    val bookAudio = remember { BookAudio.get(context) }
-    val scope = rememberCoroutineScope()
-
-    /** Book section (spine index) being read aloud, -1 when not known. */
-    val speakingSection = remember { mutableIntStateOf(-1) }
-
-    /** Prepared audio of the next chapter took over: mark spoken text once that chapter shows. */
-    val indexOnLoad = remember { mutableStateOf(false) }
 
     var file by remember { mutableStateOf<com.nononsenseapps.feeder.model.ebooks.BookSource?>(null) }
     var progress by remember { mutableStateOf(0L to 0L) }
@@ -237,7 +219,6 @@ fun EbookReaderScreen(
     var webView by remember { mutableStateOf<WebView?>(null) }
     var sliding by remember { mutableStateOf<Float?>(null) }
     val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-
     /** Read aloud reached the end of a chapter: keep reading once the next one is shown. */
     val continueNext = remember { mutableStateOf(false) }
 
@@ -277,52 +258,6 @@ fun EbookReaderScreen(
 
     fun startListening() {
         js("feeder.ttsText()")
-    }
-
-    /** Asks the page for the text of the chapters after [section], for audio made ahead. */
-    fun requestTexts(section: Int) {
-        if (section >= 0) js("feeder.sectionTexts($section, ${bookAudio.ahead.value})")
-    }
-
-    /** Reading is now at [section]: played audio goes, the chapters after it get prepared. */
-    fun readingAt(
-        section: Int,
-        label: String,
-    ) {
-        speakingSection.intValue = section
-        if (section < 0) return
-        scope.launch(Dispatchers.IO) { bookAudio.setPosition(bookId, section, label) }
-        requestTexts(section)
-    }
-
-    /**
-     * Plays the chapter after the one being read from audio made ahead, without waiting for the
-     * page (which may be asleep in the background). False when that audio is not ready.
-     */
-    suspend fun playNextPrepared(): Boolean {
-        val current = speakingSection.intValue
-        if (current < 0) return false
-        val next =
-            withContext(Dispatchers.IO) {
-                val index = bookAudio.nextSection(bookId, current) ?: return@withContext null
-                val text = bookAudio.text(bookId, index) ?: return@withContext null
-                bookAudio.prepared(bookId, index, text.text)?.let { text to it }
-            } ?: return false
-        val (section, prepared) = next
-        val b = currentBook
-        ttsStateHolder.playPrepared(
-            articleId = ttsId,
-            text = section.text,
-            prepared = prepared,
-            useDetectLanguage = repository.useDetectLanguage.value,
-            title = b?.title ?: "",
-            author = b?.author ?: "",
-            feedTitle = section.label,
-        )
-        indexOnLoad.value = true
-        js("feeder.goToSection(${section.index})")
-        readingAt(section.index, section.label)
-        return true
     }
 
     val bridge =
@@ -392,50 +327,24 @@ fun EbookReaderScreen(
                 fun onTtsText(
                     text: String,
                     offset: Int,
-                    section: Int,
                 ) = main.post {
                     if (text.isBlank()) return@post
                     val b = currentBook
-                    val detect = repository.useDetectLanguage.value
-                    val start = offset.coerceIn(0, maxOf(0, text.length - 1))
-                    val chapter = loc.chapter
-                    bookAudio.setLanguage(ttsStateHolder.language.value, detect)
-                    scope.launch {
-                        // This chapter's audio may already be made (it was ahead before)
-                        val prepared = if (section >= 0) withContext(Dispatchers.IO) { bookAudio.prepared(bookId, section, text) } else null
-                        if (prepared != null) {
-                            ttsStateHolder.playPrepared(ttsId, text, prepared, detect, b?.title ?: "", b?.author ?: "", chapter, start)
-                        } else {
-                            ttsStateHolder.tts(
-                                textArray = listOf(AnnotatedString(text)),
-                                useDetectLanguage = detect,
-                                articleId = ttsId,
-                                title = b?.title ?: "",
-                                author = b?.author ?: "",
-                                feedTitle = chapter,
-                                startOffset = start,
-                            )
-                        }
-                        readingAt(section, chapter)
-                    }
-                }
-
-                @JavascriptInterface
-                fun onSectionTexts(json: String) {
-                    val got = runCatching { prefsJson.decodeFromString(SectionTexts.serializer(), json) }.getOrNull() ?: return
-                    scope.launch(Dispatchers.IO) {
-                        if (got.last >= 0) bookAudio.setLastSection(bookId, got.last)
-                        if (got.texts.isNotEmpty()) bookAudio.saveTexts(bookId, got.texts)
-                    }
+                    ttsStateHolder.tts(
+                        textArray = listOf(AnnotatedString(text)),
+                        useDetectLanguage = repository.useDetectLanguage.value,
+                        articleId = ttsId,
+                        title = b?.title ?: "",
+                        author = b?.author ?: "",
+                        feedTitle = loc.chapter,
+                        startOffset = offset.coerceIn(0, maxOf(0, text.length - 1)),
+                    )
                 }
 
                 @JavascriptInterface
                 fun onSectionLoaded() =
                     main.post {
-                        if (indexOnLoad.value) {
-                            indexOnLoad.value = false
-                            js("feeder.ttsIndex()")
-                        } else if (continueNext.value) {
+                        if (continueNext.value) {
                             continueNext.value = false
                             js("feeder.ttsText()")
                         }
@@ -469,18 +378,9 @@ fun EbookReaderScreen(
                 }
 
                 override fun onArticleFinished(articleId: Long) {
-                    if (articleId != ttsId) return
-                    scope.launch {
-                        if (playNextPrepared()) return@launch
-                        val last = speakingSection.intValue >= 0 && withContext(Dispatchers.IO) { bookAudio.isLastSection(bookId, speakingSection.intValue) }
-                        if (loc.atEnd || last) {
-                            // Read to the end: the book's audio is no longer needed
-                            withContext(Dispatchers.IO) { bookAudio.finished(bookId) }
-                            return@launch
-                        }
-                        continueNext.value = true
-                        js("feeder.nextSection()")
-                    }
+                    if (articleId != ttsId || loc.atEnd) return
+                    continueNext.value = true
+                    js("feeder.nextSection()")
                 }
             }
         onDispose {
@@ -509,10 +409,6 @@ fun EbookReaderScreen(
         if (opened) js("feeder.setPrefs(${q(prefsJson.encodeToString(ReaderPrefs.serializer(), prefs))}, $dark)")
     }
     LaunchedEffect(at, opened) { if (opened && !at.isNullOrBlank()) js("feeder.goTo(${q(at)})") }
-
-    val audioState by bookAudio.state.collectAsState()
-    val audioAhead by bookAudio.ahead.collectAsState()
-    val audioDeletePlayed by bookAudio.deletePlayed.collectAsState()
 
     val playerVisible = remember { MutableTransitionState(false) }
     playerVisible.targetState = reading
@@ -641,15 +537,11 @@ fun EbookReaderScreen(
                     onStop = { ttsStateHolder.stop() },
                     onSkipNext = { ttsStateHolder.skipNext() },
                     languages = ImmutableHolder(ttsStateHolder.availableLanguages.collectAsState().value),
-                    onSelectLanguage = {
-                        ttsStateHolder.setLanguage(it)
-                        bookAudio.setLanguage(it, repository.useDetectLanguage.value)
-                    },
+                    onSelectLanguage = { ttsStateHolder.setLanguage(it) },
                     progress = ttsStateHolder.progress,
                     onSeekTo = { ttsStateHolder.seekTo(it) },
                     onGoToSpokenText = { },
                     displayedArticleId = ttsId,
-                    statusLine = offlineAudioStatusLine(audioState, bookId, audioAhead) { sheet = "audio" },
                     onSelectSpeed = { ttsStateHolder.setSpeed(it) },
                     diagnostics = { ttsStateHolder.diagnostics() },
                     neighbors =
@@ -750,10 +642,8 @@ fun EbookReaderScreen(
                         Text(
                             stringResource(
                                 R.string.ebook_downloading,
-                                android.text.format.Formatter
-                                    .formatShortFileSize(context, done),
-                                android.text.format.Formatter
-                                    .formatShortFileSize(context, total),
+                                android.text.format.Formatter.formatShortFileSize(context, done),
+                                android.text.format.Formatter.formatShortFileSize(context, total),
                             ),
                         )
                         Spacer(Modifier.height(8.dp))
@@ -821,15 +711,6 @@ fun EbookReaderScreen(
     if (sheet != null) {
         ModalBottomSheet(onDismissRequest = { sheet = null }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = sheet != "look")) {
             when (sheet) {
-                "audio" ->
-                    OfflineAudioSheet(
-                        state = audioState,
-                        ahead = audioAhead,
-                        deletePlayed = audioDeletePlayed,
-                        onSetAhead = { n -> scope.launch(Dispatchers.IO) { bookAudio.setAhead(n) } },
-                        onSetAutoDelete = { d -> scope.launch(Dispatchers.IO) { bookAudio.setDeletePlayed(d) } },
-                        onDismiss = { sheet = null },
-                    )
                 "toc" ->
                     LazyColumn(Modifier.fillMaxWidth()) {
                         item {
@@ -844,21 +725,7 @@ fun EbookReaderScreen(
                         }
                         items(toc) { t ->
                             ListItem(
-                                headlineContent = {
-                                    Text(
-                                        t.label,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
-                                        color =
-                                            if (t.label ==
-                                                loc.chapter
-                                            ) {
-                                                MaterialTheme.colorScheme.primary
-                                            } else {
-                                                Color.Unspecified
-                                            },
-                                    )
-                                },
+                                headlineContent = { Text(t.label, maxLines = 2, overflow = TextOverflow.Ellipsis, color = if (t.label == loc.chapter) MaterialTheme.colorScheme.primary else Color.Unspecified) },
                                 modifier =
                                     Modifier.padding(start = (t.depth * 16).dp).clickable {
                                         js("feeder.goTo(${q(t.href)})")

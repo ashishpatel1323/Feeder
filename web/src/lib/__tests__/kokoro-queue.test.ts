@@ -45,19 +45,4 @@ describe('kokoro request queue', () => {
     answer(d.id)
     await expect(d.audio).resolves.toMatchObject({ sampleRate: 24000 })
   })
-
-  it('keeps background work (chapters prepared ahead) behind reading and never drops it', async () => {
-    const { kokoro } = await import('../kokoro')
-    const first = kokoro.generate('first', 'v')
-    const bg = kokoro.generate('bg', 'v', false, true)
-    const live = kokoro.generate('live', 'v')
-    expect(kokoro.dropWaiting(new Set([live.id]))).toEqual([])
-    answer(first.id)
-    await first.audio
-    expect(sent.map((s) => s.text)).toEqual(['first', 'live'])
-    answer(live.id)
-    expect(sent.map((s) => s.text)).toEqual(['first', 'live', 'bg'])
-    answer(bg.id)
-    await expect(bg.audio).resolves.toMatchObject({ sampleRate: 24000 })
-  })
 })

@@ -185,7 +185,7 @@ class Transcripts(
         generating =
             scope.launch(Dispatchers.Default) {
                 try {
-                    runWhisper(itemId)
+                    whisperLock.withLock { runWhisper(itemId) }
                 } catch (e: CancellationException) {
                     set(itemId) { it.copy(status = if (it.cues.isEmpty() && it.doneMs == 0L) TranscriptStatus.NONE else TranscriptStatus.PAUSED) }
                     throw e
@@ -379,6 +379,9 @@ class Transcripts(
         return target to true
     }
 
+    /** The speech model file, downloaded the first time. Shared with audiobook transcripts. */
+    suspend fun whisperModel(onProgress: (Float) -> Unit): File = ensureModel(onProgress)
+
     private suspend fun ensureModel(onProgress: (Float) -> Unit): File {
         val model = File(modelDir, MODEL_FILE)
         if (model.isFile && model.length() > MODEL_SIZE_MB * 900_000L) return model
@@ -449,6 +452,9 @@ class Transcripts(
 
     companion object {
         private const val LOG_TAG = "FeederTranscripts"
+
+        /** One Whisper run at a time: episodes and audiobook chapters share the native model. */
+        val whisperLock = Mutex()
 
         // whisper.cpp's English base model, 5-bit quantized: good accuracy, several times faster
         // than real time on a recent phone

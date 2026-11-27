@@ -85,7 +85,7 @@ class ReadAloudQueue(
                     _neighbors.value = articleId?.let { loadNeighbors(it) } ?: ReadAloudNeighbors()
                 }
         }
-        ttsStateHolder.defaultNavigator =
+        ttsStateHolder.articleNavigator =
             object : TTSStateHolder.ArticleNavigator {
                 override fun hasPrevious(): Boolean = _neighbors.value.previousId != null
 

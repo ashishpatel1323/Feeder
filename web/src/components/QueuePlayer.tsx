@@ -3,7 +3,8 @@ import { feedDisplayTitle, type Feed, type Item } from '../lib/db'
 import { playQueue, useQueue } from '../lib/playqueue'
 import { readAloud, type ReadAloudState } from '../lib/readaloud'
 import { paragraphsOf } from '../lib/flip'
-import { articleText, playlistAudio } from '../lib/playlistAudio'
+import { loadFullText } from '../lib/extras'
+import { isOnline } from '../lib/offline'
 import { formatClock } from '../lib/videopos'
 import { ITEM_KIND_LABELS, itemKind, readAloudSeconds } from '../lib/playlists'
 import { wordsOf } from '../lib/listquery'
@@ -19,6 +20,16 @@ interface Props {
   readRate: number
   onReadRate: (rate: number) => void
   onOpenArticle: (id: string) => void
+}
+
+/** Fetches the full text first for feeds set to it, giving up after a few seconds. */
+async function textFor(item: Item, feed: Feed | undefined): Promise<string> {
+  if (item.fullHtml || !feed?.fullTextByDefault || !item.link || !isOnline()) return item.fullHtml || item.contentHtml || item.snippet
+  try {
+    return await Promise.race([loadFullText(item), new Promise<string>((_, no) => setTimeout(() => no(new Error('slow')), 10_000))])
+  } catch {
+    return item.contentHtml || item.snippet
+  }
 }
 
 /**
@@ -54,11 +65,10 @@ export function QueuePlayer(p: Props) {
   useEffect(() => {
     if (q.kind !== 'article' || !item || q.status !== 'loading') return
     let cancelled = false
-    void (async () => {
-      // Made ready offline: read the same paragraphs the audio was made from
-      const list = (await playlistAudio.parasFor(item.id, readAloud.voiceURI)) ?? paragraphsOf(await articleText(item, feed))
-      if (!cancelled) setParas({ id: item.id, list })
-    })()
+    void textFor(item, feed).then((html) => {
+      if (cancelled) return
+      setParas({ id: item.id, list: paragraphsOf(html) })
+    })
     return () => {
       cancelled = true
     }
