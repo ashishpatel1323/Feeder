@@ -1,0 +1,433 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+:root{
+  --font-ui: Roboto, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-read: Georgia, 'Iowan Old Style', serif;
+  --bg:#fbfdf9; --surface:#fff; --surface-2:#eef4ee; --surface-3:#e1ebe2;
+  --text:#191c1a; --text-2:#4f5a52; --text-3:#6d776f; --border:#d6ddd7;
+  --accent:#1f6f4a; --accent-ink:#fff; --accent-soft:#cdeedb; --hl:rgba(31,111,74,.16);
+  --warn:#8a5a00;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-ui);background:#e9ece9;color:var(--text);-webkit-font-smoothing:antialiased}
+.board{display:none;padding:28px 32px 32px;width:2060px}
+.board:target{display:block}
+.board h1{font-size:26px;font-weight:600;letter-spacing:-.2px}
+.board .sub{font-size:15px;color:var(--text-2);margin:6px 0 20px;max-width:1500px;line-height:1.45}
+.row{display:flex;gap:28px;align-items:flex-start}
+.cap{font-size:13px;color:var(--text-2);margin-top:10px;max-width:360px;line-height:1.4}
+.cap b{color:var(--text)}
+svg.i{width:24px;height:24px;fill:currentColor;flex:none}
+svg.s{width:18px;height:18px}
+svg.xs{width:16px;height:16px}
+
+/* ---------- phone ---------- */
+.phone{width:360px;height:760px;background:var(--bg);border-radius:28px;overflow:hidden;position:relative;
+  box-shadow:0 0 0 8px #1b1d1c,0 10px 30px rgba(0,0,0,.25);display:flex;flex-direction:column}
+.status{height:28px;display:flex;justify-content:space-between;align-items:center;padding:0 18px;font-size:12px;font-weight:500;color:var(--text)}
+.appbar{height:56px;display:flex;align-items:center;gap:6px;padding:0 6px}
+.appbar .t{flex:1;font-size:18px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .t small{display:block;font-size:12px;font-weight:400;color:var(--text-2)}
+.ib{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;color:var(--text-2)}
+.read{flex:1;padding:6px 22px;font-family:var(--font-read);font-size:16.5px;line-height:1.62;color:var(--text);overflow:hidden}
+.read h3{font-family:var(--font-ui);font-size:13px;letter-spacing:.6px;text-transform:uppercase;color:var(--text-2);font-weight:500;margin:4px 0 10px}
+.read p{margin-bottom:12px}
+.hl{background:var(--hl);border-radius:3px;box-shadow:0 0 0 2px var(--hl)}
+
+/* read aloud player (Android, docked) */
+.player{background:var(--surface-2);border-radius:24px 24px 0 0;padding:12px 16px 14px}
+.bar{height:4px;border-radius:2px;background:var(--surface-3);position:relative;margin:4px 0 6px}
+.bar>i{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:var(--accent)}
+.bar>u{position:absolute;top:0;bottom:0;background:#9fcfb3;border-radius:2px}
+.times{display:flex;justify-content:space-between;font-size:12px;color:var(--text-2)}
+.ctrls{display:flex;align-items:center;justify-content:space-between;margin-top:6px}
+.fab{width:56px;height:56px;border-radius:18px;background:var(--accent);color:#fff;display:grid;place-items:center}
+.chip{height:32px;border-radius:8px;border:1px solid var(--border);padding:0 12px;display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--text);background:var(--surface)}
+.chip.on{background:var(--accent-soft);border-color:transparent}
+.statusline{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--accent);font-weight:500;margin-bottom:6px}
+.statusline .g{color:var(--text-2);font-weight:400}
+
+/* sheet */
+.scrim{position:absolute;inset:0;background:rgba(0,0,0,.32)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--surface);border-radius:28px 28px 0 0;padding:8px 0 16px}
+.handle{width:32px;height:4px;border-radius:2px;background:#c4cbc5;margin:6px auto 12px}
+.sheet h2{font-size:20px;font-weight:500;padding:0 20px}
+.sheet .lead{font-size:13px;color:var(--text-2);padding:4px 20px 10px;line-height:1.4}
+.sec{font-size:12px;font-weight:600;letter-spacing:.4px;color:var(--accent);padding:12px 20px 4px}
+.li{display:flex;align-items:center;gap:14px;padding:9px 20px;min-height:56px}
+.li .m{flex:1;min-width:0}
+.li .m b{display:block;font-size:15px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.li .m span{display:block;font-size:12.5px;color:var(--text-2);margin-top:2px}
+.li.past b{color:var(--text-3);font-weight:400}
+.li.now{background:var(--accent-soft)}
+.st{width:24px;height:24px;display:grid;place-items:center;color:var(--accent);flex:none}
+.st.grey{color:#a5aea7}
+.ring{width:22px;height:22px;border-radius:50%;background:conic-gradient(var(--accent) var(--p),var(--surface-3) 0);display:grid;place-items:center}
+.ring::after{content:"";width:14px;height:14px;border-radius:50%;background:var(--surface)}
+.now .ring::after{background:var(--accent-soft)}
+.dot{width:20px;height:20px;border-radius:50%;border:2px dashed #b8c1ba}
+.eq{display:flex;gap:2px;align-items:flex-end;height:16px}.eq i{width:3px;background:var(--accent);border-radius:1px}
+.lin{height:4px;border-radius:2px;background:var(--surface-3);margin-top:6px;overflow:hidden}.lin i{display:block;height:100%;background:var(--accent)}
+.seg{display:flex;border:1px solid #8a948c;border-radius:20px;overflow:hidden;height:40px;margin:6px 20px 4px}
+.seg div{flex:1;display:flex;align-items:center;justify-content:center;gap:4px;font-size:14px;font-weight:500;border-left:1px solid #8a948c}
+.seg div:first-child{border-left:0}
+.seg div.on{background:var(--accent-soft)}
+.sw{width:52px;height:32px;border-radius:16px;background:var(--accent);position:relative;flex:none}
+.sw::after{content:"";position:absolute;right:4px;top:4px;width:24px;height:24px;border-radius:50%;background:#fff}
+.sw.off{background:var(--surface-3);border:2px solid #8a948c}.sw.off::after{left:6px;right:auto;top:6px;width:16px;height:16px;background:#8a948c}
+.hint{font-size:12px;color:var(--text-2);padding:0 20px 6px;line-height:1.4}
+.divider{height:1px;background:var(--border);margin:6px 0}
+.tbtn{font-size:14px;font-weight:500;color:var(--accent);padding:10px 12px;border-radius:20px}
+.navbar{height:20px;display:grid;place-items:center}.navbar i{width:108px;height:4px;border-radius:2px;background:#1b1d1c;opacity:.7}
+
+/* settings screen */
+.set .li{min-height:64px}
+.storage{margin:4px 20px 8px;height:10px;border-radius:5px;background:var(--surface-3);display:flex;overflow:hidden}
+.storage i{display:block;height:100%}
+
+/* ---------- web ---------- */
+.web{width:1180px;height:760px;background:var(--bg);border-radius:12px;overflow:hidden;position:relative;
+  box-shadow:0 0 0 1px #c9cfca,0 10px 30px rgba(0,0,0,.18);display:flex;flex-direction:column}
+.wtop{height:36px;background:#dfe3df;display:flex;align-items:center;gap:7px;padding:0 14px}
+.wtop i{width:12px;height:12px;border-radius:50%;background:#c3c8c4}
+.wtop span{margin-left:16px;font-size:12px;color:#5d655f;background:#f3f5f3;border-radius:6px;padding:4px 14px;width:420px}
+.whead{height:56px;display:flex;align-items:center;gap:10px;padding:0 20px;border-bottom:1px solid var(--border);background:var(--surface)}
+.whead .t{flex:1;font-size:16px;font-weight:600}
+.whead .t small{font-weight:400;color:var(--text-2);margin-left:8px;font-size:13px}
+.btn{height:36px;border-radius:8px;padding:0 14px;display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:500;color:var(--text);border:1px solid var(--border);background:var(--surface)}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.pri{background:var(--accent);color:#fff;border-color:var(--accent)}
+.wbody{flex:1;display:flex;min-height:0;position:relative}
+.wread{flex:1;padding:34px 0;overflow:hidden}
+.wread .col{width:640px;margin:0 auto;font-family:var(--font-read);font-size:19px;line-height:1.7}
+.wread .col h3{font-family:var(--font-ui);font-size:13px;letter-spacing:.6px;text-transform:uppercase;color:var(--text-2);font-weight:500;margin-bottom:14px}
+.wread .col p{margin-bottom:16px}
+.dock{position:absolute;left:50%;transform:translateX(-50%);bottom:18px;width:760px;background:var(--surface);border:1px solid var(--border);border-radius:24px;
+  box-shadow:0 6px 24px rgba(0,0,0,.12);padding:12px 18px;display:flex;align-items:center;gap:14px}
+.dock .mid{flex:1}
+.dock .fab{width:48px;height:48px;border-radius:16px}
+.pill{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:14px;background:var(--accent-soft);color:#0f4d31;font-size:12.5px;font-weight:500}
+.pop{position:absolute;width:380px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 12px 36px rgba(0,0,0,.18);padding:8px 0 12px}
+.pop h2{font-size:17px;font-weight:600;padding:10px 18px 2px}
+.pop .lead{font-size:12.5px;color:var(--text-2);padding:2px 18px 6px;line-height:1.4}
+.pop .li{padding:7px 18px;min-height:48px}.pop .li .m b{font-size:14px}.pop .li .m span{font-size:12px}
+.pop .sec{padding:10px 18px 4px}.pop .seg{margin:6px 18px 4px;height:36px}.pop .hint{padding:0 18px 4px}
+.side{width:300px;border-right:1px solid var(--border);background:var(--surface);padding:12px 0;overflow:hidden}
+.side .hdr{font-size:13px;font-weight:600;padding:6px 18px 4px}
+.side .hdr2{font-size:12px;color:var(--text-2);padding:0 18px 8px;display:flex;align-items:center;gap:6px}
+.side .li{padding:6px 18px;min-height:42px}.side .li .m b{font-size:14px}.side .li .m span{font-size:11.5px}
+.dialog{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:560px;background:var(--surface);border-radius:24px;box-shadow:0 20px 50px rgba(0,0,0,.25);padding:18px 0 14px}
+.dialog h2{font-size:20px;font-weight:500;padding:4px 24px 6px}
+.dialog .sec{padding:12px 24px 4px}.dialog .li{padding:8px 24px}.dialog .seg{margin:6px 24px 4px}.dialog .hint{padding:0 24px 6px}.dialog .storage{margin:4px 24px 8px}
+.wscrim{position:absolute;inset:0;background:rgba(0,0,0,.28)}
+.tabs{display:flex;gap:4px;padding:0 20px;border-bottom:1px solid var(--border);background:var(--surface)}
+.tabs div{padding:12px 14px;font-size:14px;font-weight:500;color:var(--text-2)}
+.tabs div.on{color:var(--accent);box-shadow:inset 0 -3px 0 var(--accent)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;gap:14px;align-items:center}
+.cover{width:48px;height:68px;border-radius:4px;flex:none;background:linear-gradient(160deg,#4a6b57,#22382b);color:#e8efe9;font-family:var(--font-read);font-size:9px;padding:6px;line-height:1.2}
+.cover.b2{background:linear-gradient(160deg,#7a5b3a,#3b2a18)}
+.cover.b3{background:linear-gradient(160deg,#3d4f72,#1c2538)}
+.note{background:#fff8e6;border:1px solid #f0dca8;border-radius:12px;padding:10px 14px;font-size:13px;line-height:1.45;color:#5a4300}
+
+.prow{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border);min-height:84px}
+.thumb{width:56px;height:56px;border-radius:10px;background:var(--surface-3);display:grid;place-items:center;color:var(--text-2);flex:none;position:relative}
+.thumb.txt{background:#dfe9e2;font-family:var(--font-read);font-size:20px;color:#2d4a39}
+.thumb.pod{background:#e2e4ee}
+.prow .m{flex:1;min-width:0}
+.prow .m b{display:block;font-size:15px;font-weight:500;line-height:1.3;max-height:39px;overflow:hidden}
+.prow .m span{display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--text-2);margin-top:3px}
+.prow.dim .m b{color:var(--text-3);font-weight:400}
+.prow.on{background:var(--accent-soft)}
+.play{width:44px;height:44px;border-radius:50%;background:#dbe8df;display:grid;place-items:center;color:#1d3b2b;flex:none}
+.badge{position:absolute;right:-5px;bottom:-5px;width:22px;height:22px;border-radius:50%;background:var(--surface);display:grid;place-items:center;color:var(--accent);box-shadow:0 0 0 2px var(--bg)}
+.mini{margin:6px 10px 4px;background:var(--surface-2);border-radius:18px;padding:10px 10px 10px 12px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.mini .m{flex:1;min-width:0}
+.mini .m b{display:block;font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini .m span{display:block;font-size:12px;color:var(--text-2)}
+.mini .fab{width:48px;height:48px;border-radius:14px}
+.mini .m .sl{white-space:nowrap;font-size:12px;color:var(--accent);font-weight:500;display:flex;align-items:center;gap:4px}
+.phead{padding:4px 20px 10px}
+.phead h2{font-size:24px;font-weight:500}
+.phead .meta{font-size:13px;color:var(--text-2);margin-top:4px}
+.chips{display:flex;gap:8px;padding:0 16px 10px;flex-wrap:wrap}
+.tag{font-size:11px;font-weight:600;letter-spacing:.3px;color:var(--text-2);background:var(--surface-3);border-radius:6px;padding:1px 6px}
+.wl{flex:1;overflow:hidden;padding:12px 28px}
+.wrow{display:flex;align-items:center;gap:14px;padding:10px 12px;border-bottom:1px solid var(--border)}
+.wrow .m{flex:1}.wrow .m b{font-size:15px;font-weight:500}.wrow .m span{display:flex;gap:6px;align-items:center;font-size:12.5px;color:var(--text-2);margin-top:2px}
+.wrow.on{background:var(--accent-soft);border-radius:10px}
+.wrow.dim .m b{color:var(--text-3);font-weight:400}
+
+.menu{position:absolute;right:12px;top:84px;width:270px;background:var(--surface);border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.22);padding:8px 0;z-index:5}
+.menu div{display:flex;align-items:center;gap:14px;padding:12px 16px;font-size:15px}
+.menu div.hi{background:var(--accent-soft)}
+.menu small{display:block;font-size:12px;color:var(--text-2)}
+.prog{margin:0 12px 8px;border-radius:16px;background:var(--surface-2);padding:12px 14px}
+.prog .t1{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500}
+.prog .t2{font-size:12.5px;color:var(--text-2);margin-top:2px}
+</style></head>
+<body>
+
+
+<section class="board" id="d">
+  <h1>Next 20 articles, on demand</h1>
+  <p class="sub">No setting. In any playlist, ⋮ › "Get next 20 articles ready offline". Feeder fetches their full text and speaks them into audio in the background; a progress card shows under the playlist name until it's done. Each article's audio deletes itself once it has played, and anything unplayed after 7 days is cleared. Podcasts and videos are skipped (Downloads handles them).</p>
+  <div class="row">
+    <div>
+      <div class="phone">
+        <div class="status"><span>9:41</span><span>▾ ▴ ■ 82%</span></div>
+        <div class="appbar"><div class="ib" data-i="back"></div><div class="t"></div><div class="ib" data-i="more"></div></div>
+        <div class="phead"><h2>Commute</h2><div class="meta">34 items · 4 h 10 min</div></div>
+        <div class="prow"><div class="thumb txt">Aa</div><div class="m"><b>The quiet comeback of night trains</b><span>BBC Future · 8 min listen</span></div><div class="play" data-i="play"></div></div>
+        <div class="prow"><div class="thumb txt">Aa</div><div class="m"><b>What a 4-day week did to one factory</b><span>NYT · 9 min listen</span></div><div class="play" data-i="play"></div></div>
+        <div class="prow"><div class="thumb pod" data-i="head"></div><div class="m"><b>Hard Fork: The AI chip shortage</b><span>Podcast · 48 min</span></div><div class="play" data-i="play"></div></div>
+        <div class="prow"><div class="thumb txt">Aa</div><div class="m"><b>How tides are predicted</b><span>Ars Technica · 6 min listen</span></div><div class="play" data-i="play"></div></div>
+        <div class="scrim" style="background:rgba(0,0,0,.08)"></div>
+        <div class="menu">
+          <div><span data-i="play" data-c="s"></span>Play all</div>
+          <div class="hi"><span data-i="head" data-c="s"></span><span>Get next 20 articles ready offline<small>About 70 MB · uses Wi‑Fi once</small></span></div>
+          <div><span data-i="toc" data-c="s"></span>Sort</div>
+          <div><span data-i="del" data-c="s"></span>Delete playlist</div>
+        </div>
+        <div style="flex:1"></div><div class="navbar"><i></i></div>
+      </div>
+      <p class="cap"><b>Android · ⋮ menu.</b> One item, with the size it will take. "Next 20" counts from the article playing now (or the top if nothing plays).</p>
+    </div>
+    <div>
+      <div class="phone">
+        <div class="status"><span>9:41</span><span>▾ ▴ ■ 82%</span></div>
+        <div class="appbar"><div class="ib" data-i="back"></div><div class="t"></div><div class="ib" data-i="more"></div></div>
+        <div class="phead"><h2>Commute</h2><div class="meta">34 items · 4 h 10 min</div></div>
+        <div class="prog"><div class="t1"><span class="book-audio-spin" style="width:16px;height:16px;border:2px solid #b9d9c6;border-top-color:var(--accent);border-radius:50%;display:inline-block"></span>Getting 20 articles ready · 7 of 20<span style="flex:1"></span><span class="tbtn" style="padding:4px 6px">Cancel</span></div><div class="lin"><i style="width:35%"></i></div><div class="t2">24 MB so far · keeps going in the background</div></div>
+        <div class="prow"><div class="thumb txt">Aa<span class="badge" data-i="okc" data-c="xs"></span></div><div class="m"><b>The quiet comeback of night trains</b><span style="color:var(--accent)">Ready offline · 8 min</span></div><div class="play" data-i="play"></div></div>
+        <div class="prow"><div class="thumb txt">Aa<span class="badge" data-i="okc" data-c="xs"></span></div><div class="m"><b>What a 4-day week did to one factory</b><span style="color:var(--accent)">Ready offline · 9 min</span></div><div class="play" data-i="play"></div></div>
+        <div class="prow"><div class="thumb pod" data-i="head"></div><div class="m"><b>Hard Fork: The AI chip shortage</b><span>Podcast · 48 min</span></div><div class="play" data-i="play"></div></div>
+        <div class="prow"><div class="thumb txt">Aa<span class="badge"><span class="ring" style="--p:40%;width:16px;height:16px"></span></span></div><div class="m"><b>How tides are predicted</b><span>Preparing · 40%</span></div><div class="play" data-i="play"></div></div>
+        <div style="flex:1"></div><div class="navbar"><i></i></div>
+      </div>
+      <p class="cap"><b>Android · while preparing.</b> Progress card with Cancel; ready rows get a small check. When done the card turns into one line ("20 articles ready offline · 70 MB") with a Remove button, and shrinks as articles are played and deleted.</p>
+    </div>
+    <div>
+      <div class="web">
+        <div class="wtop"><i></i><i></i><i></i><span>localhost:5173/#/playlists/commute</span></div>
+        <div class="whead"><div class="t">Commute<small>34 items · 4 h 10 min</small></div><div class="btn pri"><span data-i="play" data-c="s"></span>Play</div><div class="btn ghost" data-i="more"></div></div>
+        <div class="wbody"><div class="wl">
+          <div class="prog" style="margin:0 0 10px;display:flex;align-items:center;gap:16px"><div style="flex:1"><div class="t1">20 articles ready offline · 70 MB</div><div class="t2">Played articles delete themselves · unplayed ones after 7 days</div></div><div class="btn ghost">Remove</div></div>
+          <div class="wrow"><div class="thumb txt" style="width:44px;height:44px">Aa<span class="badge" data-i="okc" data-c="xs"></span></div><div class="m"><b>The quiet comeback of night trains</b><span style="color:var(--accent)">Ready offline · 8 min</span></div></div>
+          <div class="wrow"><div class="thumb txt" style="width:44px;height:44px">Aa<span class="badge" data-i="okc" data-c="xs"></span></div><div class="m"><b>What a 4-day week did to one factory</b><span style="color:var(--accent)">Ready offline · 9 min</span></div></div>
+          <div class="wrow"><div class="thumb pod" style="width:44px;height:44px" data-i="head"></div><div class="m"><b>Hard Fork: The AI chip shortage</b><span>Podcast · 48 min</span></div></div>
+          <div class="wrow"><div class="thumb txt" style="width:44px;height:44px">Aa<span class="badge" data-i="okc" data-c="xs"></span></div><div class="m"><b>How tides are predicted</b><span style="color:var(--accent)">Ready offline · 6 min</span></div></div>
+        </div></div>
+      </div>
+      <p class="cap" style="max-width:1100px"><b>Web and Mac app (done state).</b> Same ⋮ item and card. The browser only prepares while Feeder is open, and only with the natural voice; with a browser voice the item is greyed out with a hint to pick the natural voice.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ A ============ -->
+<section class="board" id="a">
+  <h1>A · Same as books: status in the player, details in one sheet <span style="color:var(--accent);font-size:16px;font-weight:600;margin-left:8px">Recommended</span></h1>
+  <p class="sub">When a playlist plays, Feeder gets the next text articles ready: it fetches the full text and speaks it into audio, so the next article starts at once and still plays with no signal. Podcasts and videos are left to Downloads. The player shows one status line; the sheet lists the queue with each item's state. Same two settings as books.</p>
+  <div class="row">
+    <div>
+      <div class="phone">
+        <div class="status"><span>9:41</span><span>▾ ▴ ■ 82%</span></div>
+        <div class="appbar"><div class="ib" data-i="back"></div><div class="t">Commute</div><div class="ib" data-i="more"></div></div>
+        <div class="prow dim"><div class="thumb txt">Aa</div><div class="m"><b>Why cities are banning cars downtown</b><span>The Atlantic · Read</span></div><div class="play" data-i="play"></div></div>
+        <div class="prow on"><div class="thumb txt">Aa</div><div class="m"><b>The quiet comeback of night trains</b><span>BBC Future · Reading now</span></div><div class="play" data-i="pause"></div></div>
+        <div class="prow"><div class="thumb txt">Aa</div><div class="m"><b>What a 4-day week did to one factory</b><span>NYT · 9 min listen</span></div><div class="play" data-i="play"></div></div>
+        <div class="prow"><div class="thumb pod" data-i="head"></div><div class="m"><b>Hard Fork: The AI chip shortage</b><span>Podcast · 48 min</span></div><div class="play" data-i="play"></div></div>
+        <div class="prow"><div class="thumb txt">Aa</div><div class="m"><b>How tides are predicted</b><span>Ars Technica · 6 min listen</span></div><div class="play" data-i="play"></div></div>
+        <div style="flex:1"></div>
+        <div class="mini">
+          <div class="thumb txt" style="width:44px;height:44px">Aa</div>
+          <div class="m"><b>The quiet comeback of night trains</b><span class="sl"><span data-i="okc" data-c="xs"></span>2 articles ready offline · 14 MB</span></div>
+          <div class="ib" data-i="replay"></div><div class="fab" data-i="pause"></div>
+        </div>
+        <div class="navbar"><i></i></div>
+      </div>
+      <p class="cap"><b>Android · playlist.</b> No new buttons in the list. The mini player gets the same status line as the ebook player; tap it for details.</p>
+    </div>
+    <div>
+      <div class="phone">
+        <div class="status"><span>9:41</span><span>▾ ▴ ■ 82%</span></div>
+        <div class="appbar"><div class="ib" data-i="back"></div><div class="t">Commute</div></div>
+        <div class="scrim"></div>
+        <div class="sheet">
+          <div class="handle"></div>
+          <h2>Offline audio</h2>
+          <p class="lead">Articles up next, fetched and spoken on this phone so the playlist never stops. 14 MB.</p>
+          <div class="li past"><div class="st grey" data-i="del"></div><div class="m"><b>Why cities are banning cars downtown</b><span>Played · audio deleted</span></div></div>
+          <div class="li now"><div class="st"><div class="eq"><i style="height:9px"></i><i style="height:15px"></i><i style="height:6px"></i><i style="height:12px"></i></div></div><div class="m"><b>The quiet comeback of night trains</b><span>Reading now</span></div></div>
+          <div class="li"><div class="st" data-i="okc"></div><div class="m"><b>What a 4-day week did to one factory</b><span>Ready · 9 min</span></div></div>
+          <div class="li"><div class="st grey" data-i="head"></div><div class="m"><b>Hard Fork: The AI chip shortage</b><span>Podcast · plays from Downloads</span></div></div>
+          <div class="li"><div class="st"><div class="ring" style="--p:40%"></div></div><div class="m"><b>How tides are predicted</b><span>Getting full text and speaking · 40%</span></div></div>
+          <div class="divider"></div>
+          <div class="sec">PREPARE AHEAD</div>
+          <div class="seg"><div>1</div><div class="on"><span data-i="ok" data-c="xs"></span>2</div><div>3</div><div>5</div></div>
+          <div class="hint">articles after the one playing (podcasts and videos don't count)</div>
+          <div class="li" style="min-height:52px"><div class="m"><b>Delete played audio</b><span>After an article finishes</span></div><div class="sw"></div></div>
+        </div>
+      </div>
+      <p class="cap"><b>Android · sheet.</b> The queue in order, with each item's state. Podcasts show where they play from; only text articles count towards "Prepare ahead".</p>
+    </div>
+    <div>
+      <div class="web">
+        <div class="wtop"><i></i><i></i><i></i><span>localhost:5173/#/playlists/commute</span></div>
+        <div class="whead"><div class="t">Commute<small>8 items · 1 h 32 min</small></div><div class="btn pri"><span data-i="play" data-c="s"></span>Play</div><div class="btn ghost" data-i="more"></div></div>
+        <div class="wbody">
+          <div class="wl">
+            <div class="wrow dim"><div class="thumb txt" style="width:44px;height:44px">Aa</div><div class="m"><b>Why cities are banning cars downtown</b><span>The Atlantic · Read</span></div></div>
+            <div class="wrow on"><div class="thumb txt" style="width:44px;height:44px">Aa</div><div class="m"><b>The quiet comeback of night trains</b><span>BBC Future · Reading now</span></div></div>
+            <div class="wrow"><div class="thumb txt" style="width:44px;height:44px">Aa</div><div class="m"><b>What a 4-day week did to one factory</b><span>NYT · 9 min listen</span></div></div>
+            <div class="wrow"><div class="thumb pod" style="width:44px;height:44px" data-i="head"></div><div class="m"><b>Hard Fork: The AI chip shortage</b><span>Podcast · 48 min</span></div></div>
+            <div class="wrow"><div class="thumb txt" style="width:44px;height:44px">Aa</div><div class="m"><b>How tides are predicted</b><span>Ars Technica · 6 min listen</span></div></div>
+          </div>
+          <div class="pop" style="right:220px;bottom:108px">
+            <h2>Offline audio</h2>
+            <p class="lead">Articles up next, spoken in this browser while Feeder is open. 14 MB.</p>
+            <div class="li now"><div class="st"><div class="eq"><i style="height:9px"></i><i style="height:15px"></i><i style="height:6px"></i><i style="height:12px"></i></div></div><div class="m"><b>The quiet comeback of night trains</b><span>Reading now</span></div></div>
+            <div class="li"><div class="st" data-i="okc"></div><div class="m"><b>What a 4-day week did to one factory</b><span>Ready · 9 min</span></div></div>
+            <div class="li"><div class="st grey" data-i="head"></div><div class="m"><b>Hard Fork: The AI chip shortage</b><span>Podcast · streams</span></div></div>
+            <div class="li"><div class="st"><div class="ring" style="--p:40%"></div></div><div class="m"><b>How tides are predicted</b><span>Preparing · 40%</span></div></div>
+            <div class="divider"></div>
+            <div class="sec">PREPARE AHEAD</div>
+            <div class="seg"><div>1</div><div class="on">2 articles</div><div>3</div><div>5</div></div>
+            <div class="li" style="min-height:44px"><div class="m"><b>Delete played audio</b><span>After an article finishes</span></div><div class="sw"></div></div>
+          </div>
+          <div class="dock">
+            <div class="fab" data-i="pause"></div>
+            <div class="mid">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><span style="font-size:14px;font-weight:500">The quiet comeback of night trains</span><span style="flex:1"></span><span class="pill"><span data-i="okc" data-c="xs"></span>2 articles ready · 14 MB</span></div>
+              <div class="bar"><u style="left:30%;right:0"></u><i style="width:30%"></i></div>
+              <div class="times"><span>2:41</span><span>−6:10</span></div>
+            </div>
+            <div class="btn ghost" data-i="replay"></div><div class="btn ghost" data-i="next"></div><div class="btn">1.25×</div>
+          </div>
+        </div>
+      </div>
+      <p class="cap" style="max-width:1100px"><b>Web and Mac app.</b> Same chip and panel as the ebook reader, in the playlist dock. Only with the natural voice (browser voices can't be recorded).</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ B ============ -->
+<section class="board" id="b">
+  <h1>B · Marks on the playlist rows</h1>
+  <p class="sub">The playlist itself shows which articles are ready: a small mark on the thumbnail and "Ready offline" in the row. A one-line summary under the playlist name. Settings live in Settings › Read aloud. You see it without opening anything, but it adds marks to every row of every playlist.</p>
+  <div class="row">
+    <div>
+      <div class="phone">
+        <div class="status"><span>9:41</span><span>▾ ▴ ■ 82%</span></div>
+        <div class="appbar"><div class="ib" data-i="back"></div><div class="t"></div><div class="ib" data-i="more"></div></div>
+        <div class="phead"><h2>Commute</h2><div class="meta">8 items · 1 h 32 min</div><div class="meta" style="color:var(--accent);display:flex;gap:5px;align-items:center;margin-top:6px"><span data-i="okc" data-c="xs"></span>2 articles ready offline · 14 MB</div></div>
+        <div class="prow on"><div class="thumb txt">Aa</div><div class="m"><b>The quiet comeback of night trains</b><span>BBC Future · Reading now</span></div><div class="play" data-i="pause"></div></div>
+        <div class="prow"><div class="thumb txt">Aa<span class="badge" data-i="okc" data-c="xs"></span></div><div class="m"><b>What a 4-day week did to one factory</b><span style="color:var(--accent)">Ready offline · 9 min</span></div><div class="play" data-i="play"></div></div>
+        <div class="prow"><div class="thumb pod" data-i="head"></div><div class="m"><b>Hard Fork: The AI chip shortage</b><span>Podcast · 48 min</span></div><div class="play" data-i="play"></div></div>
+        <div class="prow"><div class="thumb txt">Aa<span class="badge"><span class="ring" style="--p:40%;width:16px;height:16px"></span></span></div><div class="m"><b>How tides are predicted</b><span>Preparing · 40%</span></div><div class="play" data-i="play"></div></div>
+        <div class="prow"><div class="thumb txt">Aa</div><div class="m"><b>The hidden cost of free returns</b><span>Vox · 7 min listen</span></div><div class="play" data-i="play"></div></div>
+        <div style="flex:1"></div><div class="navbar"><i></i></div>
+      </div>
+      <p class="cap"><b>Android · playlist.</b> Ready and preparing marks on the thumbnails; played articles drop their audio silently.</p>
+    </div>
+    <div>
+      <div class="phone set">
+        <div class="status"><span>9:41</span><span>▾ ▴ ■ 82%</span></div>
+        <div class="appbar"><div class="ib" data-i="back"></div><div class="t">Read aloud</div></div>
+        <div class="sec">OFFLINE AUDIO</div>
+        <div class="li"><div class="m"><b>Ebooks: prepare ahead</b><span>3 chapters</span></div><div class="st" style="color:var(--text-2)" data-i="chev"></div></div>
+        <div class="li"><div class="m"><b>Playlists: prepare ahead</b><span>2 articles</span></div><div class="st" style="color:var(--text-2)" data-i="chev"></div></div>
+        <div class="li"><div class="m"><b>Delete played audio</b><span>After a chapter or article finishes</span></div><div class="sw"></div></div>
+        <div class="li" style="min-height:56px"><div class="m"><b>Storage used</b><span>55 MB · books 41 MB · playlists 14 MB</span></div><div class="tbtn">Clear</div></div>
+        <div class="storage"><i style="width:12%;background:var(--accent)"></i></div>
+        <div class="hint">Made on this phone. Articles need the internet once, to get their full text.</div>
+        <div style="flex:1"></div><div class="navbar"><i></i></div>
+      </div>
+      <p class="cap"><b>Android · Settings › Read aloud.</b> One place for books and playlists.</p>
+    </div>
+    <div>
+      <div class="web">
+        <div class="wtop"><i></i><i></i><i></i><span>localhost:5173/#/playlists/commute</span></div>
+        <div class="whead"><div class="t">Commute<small>8 items · 1 h 32 min</small></div><span class="pill"><span data-i="okc" data-c="xs"></span>2 articles ready offline · 14 MB</span><div class="btn pri"><span data-i="play" data-c="s"></span>Play</div></div>
+        <div class="wbody"><div class="wl">
+          <div class="wrow on"><div class="thumb txt" style="width:44px;height:44px">Aa</div><div class="m"><b>The quiet comeback of night trains</b><span>BBC Future · Reading now</span></div></div>
+          <div class="wrow"><div class="thumb txt" style="width:44px;height:44px">Aa<span class="badge" data-i="okc" data-c="xs"></span></div><div class="m"><b>What a 4-day week did to one factory</b><span style="color:var(--accent)">Ready offline · 9 min</span></div></div>
+          <div class="wrow"><div class="thumb pod" style="width:44px;height:44px" data-i="head"></div><div class="m"><b>Hard Fork: The AI chip shortage</b><span>Podcast · 48 min</span></div></div>
+          <div class="wrow"><div class="thumb txt" style="width:44px;height:44px">Aa<span class="badge"><span class="ring" style="--p:40%;width:16px;height:16px"></span></span></div><div class="m"><b>How tides are predicted</b><span>Preparing · 40%</span></div></div>
+          <div class="wrow"><div class="thumb txt" style="width:44px;height:44px">Aa</div><div class="m"><b>The hidden cost of free returns</b><span>Vox · 7 min listen</span></div></div>
+        </div></div>
+      </div>
+      <p class="cap" style="max-width:1100px"><b>Web and Mac app.</b> Same marks in the playlist page; summary chip next to Play.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ C ============ -->
+<section class="board" id="c">
+  <h1>C · "Keep offline" switch per playlist</h1>
+  <p class="sub">Like downloading a playlist in a music app: switch it on for a playlist and every unplayed text article in it is fetched and spoken now, not just the next few. Good before a flight. Costs much more storage and battery, and it's one more decision per playlist, so I'd only add it on top of A if you ask for it.</p>
+  <div class="row">
+    <div>
+      <div class="phone">
+        <div class="status"><span>9:41</span><span>▾ ▴ ■ 82%</span></div>
+        <div class="appbar"><div class="ib" data-i="back"></div><div class="t"></div><div class="ib" data-i="more"></div></div>
+        <div class="phead"><h2>Commute</h2><div class="meta">8 items · 1 h 32 min</div></div>
+        <div class="li" style="margin:0 12px 8px;border-radius:16px;background:var(--surface-2)"><div class="st" data-i="head"></div><div class="m"><b>Keep offline</b><span>5 of 6 articles ready · 38 MB</span><div class="lin"><i style="width:83%"></i></div></div><div class="sw"></div></div>
+        <div class="prow on"><div class="thumb txt">Aa</div><div class="m"><b>The quiet comeback of night trains</b><span>BBC Future · Reading now</span></div><div class="play" data-i="pause"></div></div>
+        <div class="prow"><div class="thumb txt">Aa<span class="badge" data-i="okc" data-c="xs"></span></div><div class="m"><b>What a 4-day week did to one factory</b><span>NYT · 9 min</span></div><div class="play" data-i="play"></div></div>
+        <div class="prow"><div class="thumb pod" data-i="head"></div><div class="m"><b>Hard Fork: The AI chip shortage</b><span>Podcast · Downloaded</span></div><div class="play" data-i="play"></div></div>
+        <div class="prow"><div class="thumb txt">Aa<span class="badge" data-i="okc" data-c="xs"></span></div><div class="m"><b>How tides are predicted</b><span>Ars Technica · 6 min</span></div><div class="play" data-i="play"></div></div>
+        <div style="flex:1"></div><div class="navbar"><i></i></div>
+      </div>
+      <p class="cap"><b>Android · playlist.</b> One switch under the name; progress for the whole playlist. Played articles still delete themselves.</p>
+    </div>
+    <div>
+      <div class="web">
+        <div class="wtop"><i></i><i></i><i></i><span>localhost:5173/#/playlists/commute</span></div>
+        <div class="whead"><div class="t">Commute<small>8 items · 1 h 32 min</small></div><label class="btn" style="gap:10px"><span data-i="head" data-c="s"></span>Keep offline<span class="sw" style="transform:scale(.7);margin:-4px -8px"></span></label><div class="btn pri"><span data-i="play" data-c="s"></span>Play</div></div>
+        <div class="wbody"><div class="wl">
+          <div style="font-size:13px;color:var(--text-2);margin:2px 12px 10px">5 of 6 articles ready in this browser · 38 MB · prepared while Feeder is open</div>
+          <div class="wrow on"><div class="thumb txt" style="width:44px;height:44px">Aa</div><div class="m"><b>The quiet comeback of night trains</b><span>BBC Future · Reading now</span></div></div>
+          <div class="wrow"><div class="thumb txt" style="width:44px;height:44px">Aa<span class="badge" data-i="okc" data-c="xs"></span></div><div class="m"><b>What a 4-day week did to one factory</b><span>NYT · 9 min</span></div></div>
+          <div class="wrow"><div class="thumb pod" style="width:44px;height:44px" data-i="head"></div><div class="m"><b>Hard Fork: The AI chip shortage</b><span>Podcast · 48 min</span></div></div>
+          <div class="wrow"><div class="thumb txt" style="width:44px;height:44px">Aa<span class="badge" data-i="okc" data-c="xs"></span></div><div class="m"><b>How tides are predicted</b><span>Ars Technica · 6 min</span></div></div>
+        </div></div>
+      </div>
+      <p class="cap" style="max-width:1100px"><b>Web and Mac app.</b> Switch in the playlist header. On web this only works while the tab stays open, which makes "whole playlist" much less useful there.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ RULES ============ -->
+<section class="board" id="rules" style="width:1180px">
+  <h1>How it behaves for playlists (all options)</h1>
+  <p class="sub">Same engine as the ebook chapters, with three differences that matter for playlists.</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div class="card" style="display:block"><b>Full text first, then speech.</b><p class="hint" style="padding:6px 0 0;font-size:14px">Getting an article's full text is often what makes the next article wait, or fail with no signal. Preparing does both ahead, so the next article starts at once even in a tunnel.</p></div>
+    <div class="card" style="display:block"><b>Only text articles count.</b><p class="hint" style="padding:6px 0 0;font-size:14px">Podcasts and YouTube already have Downloads. "Prepare ahead 2" means the next two text articles in the queue, however many podcasts sit between them.</p></div>
+    <div class="card" style="display:block"><b>Follows the queue, not the list.</b><p class="hint" style="padding:6px 0 0;font-size:14px">Play next, reorder and remove change what's prepared. An Unread playlist that drops a read article keeps its queue, as today.</p></div>
+    <div class="card" style="display:block"><b>Played audio deletes itself.</b><p class="hint" style="padding:6px 0 0;font-size:14px">When an article finishes, its audio goes. Skipped articles and anything not played within 7 days are cleared too.</p></div>
+    <div class="card" style="display:block"><b>Never stops reading.</b><p class="hint" style="padding:6px 0 0;font-size:14px">If the next article isn't ready, the live voice reads it as today.</p></div>
+    <div class="card" style="display:block"><b>Also works from the feed list.</b><p class="hint" style="padding:6px 0 0;font-size:14px">The same could prepare the next articles when read aloud continues down a feed (auto-continue). Not in these mockups; easy to add later.</p></div>
+  </div>
+</section>
+
+<script>
+const P={
+ play:"M8 5v14l11-7z",pause:"M6 19h4V5H6v14zm8-14v14h4V5h-4z",next:"M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z",
+ chev:"M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z",close:"M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z",
+ back:"M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z",
+ more:"M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z",
+ toc:"M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z",
+ ok:"M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z",
+ okc:"M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z",
+ replay:"M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z",
+ del:"M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z",
+ head:"M12 3a9 9 0 0 0-9 9v7c0 1.1.9 2 2 2h3v-8H5v-1a7 7 0 0 1 14 0v1h-3v8h3c1.1 0 2-.9 2-2v-7a9 9 0 0 0-9-9z"
+};
+document.querySelectorAll('[data-i]').forEach(e=>{
+  const k=e.dataset.i, fwd=k==='fwd', d=P[fwd?'replay':k];
+  e.insertAdjacentHTML('afterbegin',`<svg class="i ${e.dataset.c||''}" viewBox="0 0 24 24"${fwd?' style="transform:scaleX(-1)"':''}><path d="${d}"/></svg>`);
+});
+</script>
+</body></html>

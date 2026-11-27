@@ -138,6 +138,11 @@ val networkModule =
                 com.nononsenseapps.feeder.dropbox.DropboxClient
                     .get(instance<android.app.Application>())
             }
+        bind<com.nononsenseapps.feeder.model.playlists.PlaylistAudio>() with
+            singleton {
+                com.nononsenseapps.feeder.model.playlists
+                    .PlaylistAudio(di)
+            }
         bind<com.nononsenseapps.feeder.model.playlists.PlaylistPlayer>() with
             singleton {
                 com.nononsenseapps.feeder.model.playlists

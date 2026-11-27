@@ -5,9 +5,6 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.Build
-import android.os.Bundle
-import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import android.view.textclassifier.TextClassificationManager
 import android.view.textclassifier.TextLanguage
@@ -24,7 +21,6 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.nononsenseapps.feeder.R
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -106,6 +102,13 @@ class TTSStateHolder(
     }
 
     var articleNavigator: ArticleNavigator? = null
+
+    /**
+     * Used when no screen set [articleNavigator]: the feed's article queue. Kept apart so that
+     * creating the queue (when the read-aloud service first starts) can't replace the navigator
+     * of a screen that is reading, such as an ebook's chapters.
+     */
+    var defaultNavigator: ArticleNavigator? = null
 
     /** Reading of a flip card that the article screen continues in the full article. */
     data class Handoff(
@@ -202,8 +205,32 @@ class TTSStateHolder(
     ) {
         val text = textArray.filterNot { it.isBlank() }.joinToString("\n\n") { it.text }
         if (text.isBlank()) return
+        start(SpeechRequest(articleId, text, useDetectLanguage, title, author, feedTitle, startOffset.coerceIn(0, text.length - 1)))
+    }
+
+    /**
+     * Reads [text] from audio made earlier ([prepared], e.g. an ebook chapter prepared ahead), so
+     * nothing has to be synthesized before it plays.
+     */
+    fun playPrepared(
+        articleId: Long,
+        text: String,
+        prepared: PreparedSpeech,
+        useDetectLanguage: Boolean,
+        title: String = "",
+        author: String = "",
+        feedTitle: String = "",
+        startOffset: Int = 0,
+    ) {
+        if (text.isBlank()) return
+        start(SpeechRequest(articleId, text, useDetectLanguage, title, author, feedTitle, startOffset.coerceIn(0, text.length - 1), prepared))
+    }
+
+    private fun start(next: SpeechRequest) {
+        val text = next.text
+        val articleId = next.articleId
         coroutineScope.launch(Dispatchers.Main.immediate) {
-            request = SpeechRequest(articleId, text, useDetectLanguage, title, author, feedTitle, startOffset.coerceIn(0, text.length - 1))
+            request = next
             playWhenReady = true
             _ttsState.value = PlaybackStatus.PLAYING
             _progress.value = ReadAloudProgress(articleId = articleId, text = text, preparationProgress = 0f, followSpokenText = true, focusRequestId = ++focusSequence, speed = playbackSpeed)
@@ -253,7 +280,7 @@ class TTSStateHolder(
                         !_progress.value.isDurationEstimated &&
                         _progress.value.error == null
                     ) {
-                        articleNavigator?.onArticleFinished(finished.articleId)
+                        (articleNavigator ?: defaultNavigator)?.onArticleFinished(finished.articleId)
                     }
                 }
 
@@ -293,6 +320,11 @@ class TTSStateHolder(
         player?.playWhenReady = playWhenReady
         segments = emptyList()
         words = emptyList()
+        current.prepared?.let { prepared ->
+            preparation = null
+            startPreparedPlayback(current, prepared)
+            return
+        }
         preparation =
             coroutineScope.launch(Dispatchers.Main.immediate) {
                 try {
@@ -351,210 +383,90 @@ class TTSStateHolder(
         }
     }
 
+    private fun startPreparedPlayback(
+        current: SpeechRequest,
+        prepared: PreparedSpeech,
+    ) {
+        if (!prepared.audio.isFile || prepared.segments.isEmpty()) {
+            fail(IllegalStateException("Prepared audio is missing"))
+            return
+        }
+        segments = prepared.segments
+        words = prepared.words
+        val startAt = prepared.segments.firstOrNull { it.end > current.startOffset }?.startMillis ?: 0L
+        val item =
+            MediaItem
+                .Builder()
+                .setMediaId(current.articleId.toString())
+                .setUri(android.net.Uri.fromFile(prepared.audio))
+                .setMediaMetadata(
+                    MediaMetadata
+                        .Builder()
+                        .setTitle(current.title.ifBlank { context.getString(R.string.read_article) })
+                        .setArtist(current.feedTitle.ifBlank { current.author }.ifBlank { context.getString(R.string.app_name) })
+                        .setArtworkData(artwork, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+                        .build(),
+                ).build()
+        _progress.value =
+            _progress.value.copy(
+                preparationProgress = null,
+                durationMillis = prepared.durationMillis,
+                generatedMillis = prepared.durationMillis,
+                isDurationEstimated = false,
+                synthesisProgress = 1f,
+                positionMillis = startAt,
+            )
+        player?.apply {
+            setMediaItem(item, startAt)
+            playbackParameters = PlaybackParameters(playbackSpeed)
+            prepare()
+            playWhenReady = this@TTSStateHolder.playWhenReady
+        }
+    }
+
     private suspend fun synthesize(
         current: SpeechRequest,
         directory: File,
         audio: File,
     ): List<SpeechSegment> {
-        val initialized = CompletableDeferred<Int>()
-        val engine = TextToSpeech(context) { initialized.complete(it) }
+        val speech = openSpeechEngine(context, current.text, _language.value, current.detectLanguage)
         try {
-            // Neural engines can take a while to load their model the first time.
-            check(withTimeout(60_000) { initialized.await() } == TextToSpeech.SUCCESS) { "Speech engine initialization failed" }
-            // Some engines list nothing in availableLanguages but do list voices.
-            val voiceLocales = runCatching { engine.voices.orEmpty().map { it.locale } }.getOrDefault(emptyList())
-            val defaultVoiceLocale = runCatching { engine.defaultVoice?.locale }.getOrNull()
-            val available =
-                engine.availableLanguages
-                    .orEmpty()
-                    .ifEmpty { voiceLocales.toSet() }
-                    .sortedBy { it.getDisplayName(it) }
-            _availableLanguages.value = available
-            val preferredLocale =
-                when (val selected = _language.value) {
-                    is ForcedLocale -> selected.locale
-                    else ->
-                        if (selected is ForcedAuto || current.detectLanguage) {
-                            detectSpeechLocale(current.text)
-                                ?: context.getLocales().firstOrNull() ?: Locale.getDefault()
-                        } else {
-                            context.getLocales().firstOrNull() ?: Locale.getDefault()
-                        }
-                }
-            val candidates =
-                if (_language.value is ForcedLocale) {
-                    sequenceOf(preferredLocale, Locale.forLanguageTag(preferredLocale.language))
-                } else {
-                    sequenceOf(preferredLocale, Locale.forLanguageTag(preferredLocale.language))
-                        .plus(context.getLocales())
-                        .plus(listOfNotNull(defaultVoiceLocale))
-                        .plus(available)
-                }
-            val locale =
-                candidates.firstOrNull { runCatching { engine.setLanguage(it) }.getOrDefault(TextToSpeech.ERROR) >= TextToSpeech.LANG_AVAILABLE }
-                    ?: run {
-                        // A language the user picked explicitly should fail visibly rather than be read in another one.
-                        check(_language.value !is ForcedLocale) { "Speech language is not available" }
-                        // Some engines reject every language check yet speak fine with their own voice.
-                        Log.w(LOG_TAG, "Speech engine rejected all languages; using its default voice")
-                        runCatching { engine.defaultVoice?.let { engine.voice = it } }
-                        defaultVoiceLocale ?: preferredLocale
-                    }
-            val parts =
-                speechSegments(current.text, locale, minOf(TextToSpeech.getMaxSpeechInputLength(), 700), firstChunkMaxLength = 180)
-                    .startingAt(current.startOffset)
-                    .ifEmpty { error("No text to read") }
+            _availableLanguages.value = speech.available
+            val parts = speechParts(current.text, speech.locale, current.startOffset).ifEmpty { error("No text to read") }
             val readStart = parts.first().start
-            return withContext(Dispatchers.IO) {
-                SpeechWaveFile(audio).use { wave ->
-                    var buffer: SpeechAudioBuffer? = null
-                    var finished = false
-                    try {
-                        val timeline = mutableListOf<SpeechSegment>()
-                        val wordTimeline = mutableListOf<SpeechSegment>()
-                        for ((index, part) in parts.withIndex()) {
-                            val done = CompletableDeferred<Unit>()
-                            val id = UUID.randomUUID().toString()
-                            var pcm: EnginePcm? = null
-                            var receivedAudio = false
-                            var sampleRate = 0
-                            val engineWords = mutableListOf<EngineWord>()
-                            engine.setOnUtteranceProgressListener(
-                                object : UtteranceProgressListener() {
-                                    override fun onStart(utteranceId: String?) = Unit
-
-                                    override fun onDone(utteranceId: String?) {
-                                        if (utteranceId == id) done.complete(Unit)
-                                    }
-
-                                    @Deprecated("Platform compatibility")
-                                    override fun onError(utteranceId: String?) {
-                                        if (utteranceId == id) done.completeExceptionally(IllegalStateException("Speech synthesis failed"))
-                                    }
-
-                                    override fun onBeginSynthesis(
-                                        utteranceId: String?,
-                                        sampleRateInHz: Int,
-                                        audioFormat: Int,
-                                        channelCount: Int,
-                                    ) {
-                                        if (utteranceId != id || !done.isActive) return
-                                        try {
-                                            val engineFormat = EnginePcm.forAudioFormat(audioFormat)
-                                            wave.setFormat(sampleRateInHz, channelCount, engineFormat.bits, engineFormat.floatingPoint)
-                                            pcm = engineFormat
-                                            sampleRate = sampleRateInHz
-                                        } catch (e: Exception) {
-                                            done.completeExceptionally(e)
-                                        }
-                                    }
-
-                                    override fun onRangeStart(
-                                        utteranceId: String?,
-                                        start: Int,
-                                        end: Int,
-                                        frame: Int,
-                                    ) {
-                                        if (utteranceId != id || !done.isActive) return
-                                        synchronized(engineWords) { engineWords += EngineWord(part.start + start, part.start + end, frame.toLong()) }
-                                    }
-
-                                    override fun onAudioAvailable(
-                                        utteranceId: String?,
-                                        bytes: ByteArray?,
-                                    ) {
-                                        if (utteranceId != id || !done.isActive || bytes == null) return
-                                        try {
-                                            val engineFormat = pcm ?: error("Speech engine sent audio before its format")
-                                            val converted = engineFormat.convert(bytes)
-                                            if (converted.isNotEmpty()) {
-                                                wave.append(converted)
-                                                receivedAudio = true
-                                            }
-                                        } catch (e: Exception) {
-                                            done.completeExceptionally(e)
-                                        }
-                                    }
-                                },
-                            )
-                            val start = wave.durationMillis()
-                            val temporary = File(directory, "segment.wav")
-                            try {
-                                check(engine.synthesizeToFile(current.text.substring(part.start, part.end), Bundle(), temporary, id) == TextToSpeech.SUCCESS)
-                                withTimeout(120_000) { done.await() }
-                                if (!receivedAudio) appendWrittenFile(wave, temporary)
-                            } finally {
-                                done.cancel()
-                                temporary.delete()
-                            }
-                            val end = wave.durationMillis()
-                            check(end > start) { "Speech engine produced no audio" }
-                            val timed = part.copy(startMillis = start, endMillis = end)
-                            timeline += timed
-                            // Audio from a written file has no streamed format, so its word reports cannot be timed
-                            val reported = if (receivedAudio) synchronized(engineWords) { engineWords.toList() } else emptyList()
-                            wordTimeline += speechWords(current.text, timed, reported, sampleRate)
-                            val streaming = buffer ?: SpeechAudioBuffer(audio, wave.audioFormat()).also { buffer = it }
-                            streaming.publish(wave.sizeBytes(), finished = index == parts.lastIndex)
-                            withContext(Dispatchers.Main.immediate) {
-                                if (request === current) {
-                                    segments = timeline.toList()
-                                    words = wordTimeline.toList()
-                                    val fraction = (part.end - readStart).toDouble() / (current.text.length - readStart)
-                                    _progress.value =
-                                        _progress.value.copy(
-                                            durationMillis = (end / fraction).toLong().coerceAtLeast(end),
-                                            generatedMillis = end,
-                                            isDurationEstimated = index != parts.lastIndex,
-                                            synthesisProgress = fraction.toFloat(),
-                                        )
-                                    if (audioBuffer !== streaming) startProgressivePlayback(current, streaming)
-                                }
+            var buffer: SpeechAudioBuffer? = null
+            var finished = false
+            try {
+                val (timeline, _) =
+                    synthesizeSpeech(speech.engine, current.text, parts, directory, audio) { made ->
+                        val streaming = buffer ?: SpeechAudioBuffer(audio, made.wave.audioFormat()).also { buffer = it }
+                        streaming.publish(made.wave.sizeBytes(), finished = made.isLast)
+                        val end = made.timeline.last().endMillis
+                        withContext(Dispatchers.Main.immediate) {
+                            if (request === current) {
+                                segments = made.timeline
+                                words = made.words
+                                val fraction = (made.part.end - readStart).toDouble() / (current.text.length - readStart)
+                                _progress.value =
+                                    _progress.value.copy(
+                                        durationMillis = (end / fraction).toLong().coerceAtLeast(end),
+                                        generatedMillis = end,
+                                        isDurationEstimated = !made.isLast,
+                                        synthesisProgress = fraction.toFloat(),
+                                    )
+                                if (audioBuffer !== streaming) startProgressivePlayback(current, streaming)
                             }
                         }
-                        wave.finish()
-                        finished = true
-                        timeline
-                    } finally {
-                        if (!finished) buffer?.abort()
                     }
-                }
+                finished = true
+                return timeline
+            } finally {
+                if (!finished) buffer?.abort()
             }
         } finally {
-            engine.stop()
-            engine.shutdown()
+            speech.shutdown()
         }
     }
-
-    private fun appendWrittenFile(
-        wave: SpeechWaveFile,
-        file: File,
-    ) {
-        val data = readWavePcm(file) ?: return
-        val engineFormat = EnginePcm.forWave(data.floatingPoint, data.bitsPerSample)
-        wave.setFormat(data.sampleRate, data.channels, engineFormat.bits, engineFormat.floatingPoint)
-        java.io.RandomAccessFile(file, "r").use { input ->
-            input.seek(data.dataOffset)
-            val chunk = ByteArray(64 * 1024)
-            var remaining = data.dataLength
-            while (remaining > 0) {
-                val read = input.read(chunk, 0, minOf(chunk.size.toLong(), remaining).toInt())
-                if (read <= 0) break
-                wave.append(engineFormat.convert(chunk.copyOf(read)))
-                remaining -= read
-            }
-        }
-    }
-
-    private suspend fun detectSpeechLocale(text: String): Locale? =
-        try {
-            withContext(Dispatchers.Default) { context.detectLocaleFromText(text.take(4000)).firstOrNull()?.locale }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.w(LOG_TAG, "Language detection unavailable; using device languages", e)
-            null
-        }
 
     fun resumeIfPausedOn(articleId: Long): Boolean {
         if (_ttsState.value != PlaybackStatus.PAUSED || _progress.value.articleId != articleId) return false
@@ -715,6 +627,8 @@ class TTSStateHolder(
         val feedTitle: String,
         // Where in text reading started, for "read aloud from here"
         val startOffset: Int = 0,
+        // Audio made earlier for this text; nothing is synthesized when set
+        val prepared: PreparedSpeech? = null,
     )
 
     companion object {
@@ -766,6 +680,14 @@ fun Context.detectLocaleFromText(
 data class LocaleWithConfidence(
     val locale: Locale,
     val confidence: Float,
+)
+
+/** Speech audio made ahead of time, with when each sentence and word starts in it. */
+data class PreparedSpeech(
+    val audio: File,
+    val segments: List<SpeechSegment>,
+    val words: List<SpeechSegment>,
+    val durationMillis: Long,
 )
 
 enum class PlaybackStatus {
