@@ -665,8 +665,21 @@ private fun SectionHeading(
                 fontWeight = if (open || playing) FontWeight.SemiBold else FontWeight.Normal,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f, fill = section.badge == null),
             )
+            section.badge?.let { badge ->
+                Text(
+                    badge,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.onSecondaryContainer,
+                    modifier =
+                        Modifier
+                            .padding(start = 6.dp)
+                            .background(colors.secondaryContainer, MaterialTheme.shapes.extraSmall)
+                            .padding(horizontal = 6.dp, vertical = 1.dp),
+                )
+                Spacer(Modifier.weight(1f))
+            }
             if (!section.isEmpty) {
                 Icon(
                     if (open) Icons.Default.ExpandLess else Icons.Default.ExpandMore,

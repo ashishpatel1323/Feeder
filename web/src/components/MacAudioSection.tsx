@@ -1,6 +1,7 @@
 /**
  * Settings › Prepared on this Mac, Mac app only (design B): the phone's next ebook chapters spoken
- * here with the natural voice and put in Dropbox (lib/macBookAudio.ts). Nothing to press: it works
+ * here with the natural voice and put in Dropbox (lib/macBookAudio.ts), and audiobook transcripts
+ * made here ahead of where the book plays (lib/audiobooks/transcripts.ts, shared through sync). Nothing to press: it works
  * whenever the app is open and the switch is on.
  */
 import { useEffect, useState } from 'react'
@@ -85,6 +86,22 @@ export function MacAudioSection() {
           ) : (
             <div className="mac-audio-card">
               <small>Ebooks in Dropbox you open on any device show here for a week.</small>
+            </div>
+          )}
+          <div className="mac-audio-sec">Audiobook transcripts</div>
+          {status.transcripts?.books.length ? (
+            status.transcripts.books.map((b) => (
+              <div className="mac-audio-card" key={b.id}>
+                <b>{b.title || 'Untitled audiobook'}</b>
+                <small>
+                  {status.transcripts?.working?.book === b.id ? 'Transcribing now · ' : ''}
+                  {b.ready >= b.total ? `all ${b.total} chapters transcribed` : `${b.ready} of ${b.total} chapters transcribed`}
+                </small>
+              </div>
+            ))
+          ) : (
+            <div className="mac-audio-card">
+              <small>Audiobooks in Dropbox with Transcribe this book on, played on any device in the last week, show here.</small>
             </div>
           )}
           <div className="mac-audio-sec">Voice</div>

@@ -80,4 +80,28 @@ class AudiobookTranscriptRulesTest {
         assertEquals(1, t.i)
         assertEquals(0L, t.startMs)
     }
+
+    @Test
+    fun transcribesAsManyChaptersAheadAsPickedOrTheWholeBook() {
+        val chapters =
+            listOf(
+                Chapter(0, 0, 0, 10 * min, "1"),
+                Chapter(0, 10 * min, 10 * min, 10 * min, "2"),
+                Chapter(0, 20 * min, 20 * min, 30 * min, "3"),
+                Chapter(0, 50 * min, 50 * min, 40 * min, "4"),
+            )
+        assertEquals(20 * min, AudiobookTranscriptRules.aheadUntil(chapters, 2 * min, 90 * min))
+        assertEquals(50 * min, AudiobookTranscriptRules.aheadUntil(chapters, 2 * min, 90 * min, 2))
+        assertEquals(90 * min, AudiobookTranscriptRules.aheadUntil(chapters, 2 * min, 90 * min, 3))
+        assertEquals(90 * min, AudiobookTranscriptRules.aheadUntil(chapters, 2 * min, 90 * min, AudiobookTranscriptRules.WHOLE_BOOK))
+        assertEquals(80 * min, AudiobookTranscriptRules.nextTarget(listOf(90 * min), chapters, listOf(piece(0, 80 * min)), 2 * min, AudiobookTranscriptRules.WHOLE_BOOK)?.startMs)
+        assertNull(AudiobookTranscriptRules.nextTarget(listOf(90 * min), chapters, listOf(piece(0, 80 * min)), 2 * min, 1))
+    }
+
+    @Test
+    fun countsChaptersTranscribedFromStartToEnd() {
+        val chapters = listOf(Chapter(0, 0, 0, 10 * min, "1"), Chapter(0, 10 * min, 10 * min, 10 * min, "2"), Chapter(0, 20 * min, 20 * min, 30 * min, "3"))
+        val ranges = AudiobookTranscriptRules.ranges(listOf(piece(0, 15 * min), piece(15 * min, 20 * min)))
+        assertEquals(2 to 3, AudiobookTranscriptRules.chaptersReady(chapters, ranges, 50 * min))
+    }
 }
