@@ -27,6 +27,7 @@ import com.nononsenseapps.feeder.model.history.RecentNote
 import com.nononsenseapps.feeder.model.media.MediaFile
 import com.nononsenseapps.feeder.model.media.MediaLibrary
 import com.nononsenseapps.feeder.model.media.MediaRules
+import com.nononsenseapps.feeder.model.media.isPhonePath
 import com.nononsenseapps.feeder.model.playlists.PlaylistPlaybackService
 import com.nononsenseapps.feeder.model.playlists.PlaylistPlayer
 import kotlinx.coroutines.Dispatchers
@@ -290,7 +291,7 @@ class AudiobookPlayer(
                 mediaFile?.let { m ->
                     m.subs?.let { s ->
                         MediaItem.SubtitleConfiguration
-                            .Builder(if (s.startsWith("content:")) Uri.parse(s) else dropboxUri(s))
+                            .Builder(if (s.isPhonePath()) Uri.parse(s) else dropboxUri(s))
                             .setMimeType(if (MediaRules.subtitlesAreSrt(app, m)) MimeTypes.APPLICATION_SUBRIP else MimeTypes.TEXT_VTT)
                             .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
                             .setLanguage("und")
