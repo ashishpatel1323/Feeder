@@ -62,7 +62,7 @@ class MediaThumbs private constructor(
         val sideDue = m.thumb != null && MediaThumbRules.sidecarDue(sideMiss(m.id).takeIf { it.exists() }?.lastModified(), now)
         val own = ownFile(m.id).takeIf { it.exists() }
         val onPhone = library.onPhone(m)
-        val ownDue = own == null && MediaThumbRules.shouldTry(missMark(m.id).takeIf { it.exists() }?.let { it.lastModified() to it.readText() }, onPhone, now)
+        val ownDue = own == null && MediaThumbRules.shouldTry(readMiss(m.id), onPhone, now)
         if (!sideDue && !ownDue) return own
         val mine = CompletableDeferred<File?>()
         val other = running.putIfAbsent(m.id, mine)
@@ -107,16 +107,29 @@ class MediaThumbs private constructor(
         return save(picture, ownFile(m.id))
     }
 
+    /** When nothing was found before, and where the file was then; a marker that can't be read counts as none. */
+    private fun readMiss(id: String): Pair<Long, String>? =
+        runCatching {
+            val f = missMark(id)
+            if (f.exists()) f.lastModified() to f.readText() else null
+        }.getOrNull()
+
+    /** Writes the picture through a temporary file, so a failed write leaves nothing to be taken for a picture. */
     private fun save(
         picture: Bitmap,
         out: File,
-    ): File {
-        try {
-            out.outputStream().use { picture.compress(Bitmap.CompressFormat.JPEG, 85, it) }
+    ): File? {
+        val part = File(dir, "${out.name}.part")
+        return try {
+            val ok = part.outputStream().use { picture.compress(Bitmap.CompressFormat.JPEG, 85, it) }
+            if (ok && part.renameTo(out)) out else null
+        } catch (e: java.io.IOException) {
+            Log.w(LOG_TAG, "Could not keep the picture ${out.name}", e)
+            null
         } finally {
+            part.delete()
             picture.recycle()
         }
-        return out
     }
 
     /** A picture next to the file in Dropbox. */

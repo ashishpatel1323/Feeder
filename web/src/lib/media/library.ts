@@ -232,11 +232,12 @@ export async function uploadMedia(id: string, onProgress?: Progress): Promise<vo
   const path = uploadPath(m)
   const subs = m.subs?.startsWith(LOCAL) ? await localByName(m.subs.slice(LOCAL.length)) : null
   // uploadFile goes on from the last piece that got there, after a failure
-  await uploadFile(path, file, onProgress)
+  const up = await uploadFile(path, file, onProgress)
   if (subs) await uploadFile(path.replace(/\.[a-z0-9]+$/i, '') + (extOf(m.subs!) === 'srt' ? '.srt' : '.vtt'), subs).catch((e) => console.warn('Subtitles not uploaded', e))
   // A moved YouTube download's own picture goes next to it, so other devices show it too
   const thumb = m.thumb ? null : await localByName(keptThumbName(id))
-  if (thumb) await uploadFile(path.replace(/\.[a-z0-9]+$/i, '') + '.jpg', thumb).catch((e) => console.warn('Thumbnail not uploaded', e))
+  // Named after the file as Dropbox saved it ("Talk (1).mp4" when the name was taken)
+  if (thumb) await uploadFile((up?.path ?? path).replace(/\.[a-z0-9]+$/i, '') + '.jpg', thumb).catch((e) => console.warn('Thumbnail not uploaded', e))
   await db.media.update(id, { dropboxPath: path })
   await refreshMedia()
 }
@@ -247,7 +248,8 @@ export async function deleteMediaFromDropbox(id: string): Promise<void> {
   if (!m?.dropboxPath) return
   await deleteFile(m.dropboxPath)
   if (m.subs && !m.subs.startsWith(LOCAL)) await deleteFile(m.subs).catch(() => undefined)
-  if (m.thumb) await deleteFile(m.thumb).catch(() => undefined)
+  // The same picture can belong to "Talk.mp3" and "Talk.mp4": it goes with the last of them
+  if (m.thumb && !(await db.media.filter((x) => x.id !== id && x.thumb === m.thumb).count())) await deleteFile(m.thumb).catch(() => undefined)
   if (m.local) await db.media.update(id, { dropboxPath: null, subs: m.subs?.startsWith(LOCAL) ? m.subs : null, thumb: null })
   else await db.media.delete(id)
   await refreshMedia()

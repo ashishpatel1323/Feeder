@@ -95,7 +95,10 @@ class DownloadsToPlayer(
         runCatching {
             okHttp.newCall(Request.Builder().url(url).build()).execute().use { res ->
                 if (!res.isSuccessful) return@use null
-                res.body.bytes().takeIf { it.size in 1..MAX_PICTURE_BYTES }
+                // Never more than the limit in memory, even without a Content-Length
+                val source = res.body.source()
+                if (source.request(MAX_PICTURE_BYTES + 1L)) return@use null
+                source.readByteArray().takeIf { it.isNotEmpty() }
             }
         }.getOrNull()
 

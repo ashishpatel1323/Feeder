@@ -393,7 +393,14 @@ class MediaLibrary private constructor(
             file.copyTo(dest, overwrite = true)
             file.delete()
         }
-        thumbnail?.let { runCatching { keptThumb(id).writeBytes(it) } }
+        thumbnail?.let { bytes ->
+            // Through a temporary file, so a full disk leaves no broken picture behind
+            val part = File(dir, "$id.jpg.part")
+            runCatching {
+                part.writeBytes(bytes)
+                if (!part.renameTo(keptThumb(id))) throw java.io.IOException("Could not keep the picture")
+            }.onFailure { part.delete() }
+        }
         val subs =
             subtitles?.let { s ->
                 val keep = File(dir, "$id.${s.extension.ifBlank { "vtt" }}")
@@ -710,7 +717,8 @@ class MediaLibrary private constructor(
             try {
                 dropbox.delete(path)
                 m.subs?.takeIf { it.startsWith("/") }?.let { runCatching { dropbox.delete(it) } }
-                m.thumb?.let { runCatching { dropbox.delete(it) } }
+                // The same picture can belong to "Talk.mp3" and "Talk.mp4": it goes with the last of them
+                m.thumb?.takeIf { t -> _items.value.none { it.id != id && it.thumb == t } }?.let { runCatching { dropbox.delete(it) } }
                 if (onPhone(m)) {
                     patch(id) { it.copy(dropboxPath = null, subs = it.subs?.takeIf { s -> s.isPhonePath() }, thumb = null) }
                 } else {

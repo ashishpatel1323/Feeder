@@ -28,7 +28,7 @@ import { confirmDelete } from '../lib/confirmDelete'
 import { confirmDropboxDelete, DropboxButton, needsDropbox, useDropbox } from './DropboxPanel'
 import { Icon, IconButton } from './Icon'
 import { MoreMenu } from './MoreMenu'
-import { BooksTabs, GeneratedCover, Shelf, ShelfControls, useShelfPrefs, type ShelfAction, type ShelfItem, type Where } from './Shelf'
+import { BooksTabs, GeneratedCover, PictureOr, Shelf, ShelfControls, useShelfPrefs, type ShelfAction, type ShelfItem, type Where } from './Shelf'
 import { SleepMenu, SpeedMenu } from './AudiobooksPage'
 import { rememberBookCount, rememberBookTab } from './Tabs'
 
@@ -520,7 +520,15 @@ function MediaWatch({ id, onPage, onBack, toast }: { id: string; onPage: (page: 
             </div>
           ) : (
             thumbs[m.id] ? (
-              <img className="ab-art mp-art" src={thumbs[m.id]} alt="" />
+              <PictureOr
+                className="ab-art mp-art"
+                src={thumbs[m.id]}
+                fallback={
+                  <span className="ab-art mp-art">
+                    <GeneratedCover title={title} icon="musicNote" />
+                  </span>
+                }
+              />
             ) : (
               <span className="ab-art mp-art">
                 <GeneratedCover title={title} icon="musicNote" />
@@ -588,7 +596,9 @@ function MediaWatch({ id, onPage, onBack, toast }: { id: string; onPage: (page: 
                   }}
                 >
                   <span className="shelf-thumb">
-                    {thumbs[x.id] ? <img src={thumbs[x.id]} alt="" loading="lazy" /> : <GeneratedCover title={titleOf(x.name)} icon={x.kind === 'video' ? 'movie' : 'musicNote'} small />}
+                    {thumbs[x.id] ? (
+                      <PictureOr src={thumbs[x.id]} lazy fallback={<GeneratedCover title={titleOf(x.name)} icon={x.kind === 'video' ? 'movie' : 'musicNote'} small />} />
+                    ) : <GeneratedCover title={titleOf(x.name)} icon={x.kind === 'video' ? 'movie' : 'musicNote'} small />}
                   </span>
                   <span className="lib-text">
                     <span className="lib-title">{titleOf(x.name)}</span>

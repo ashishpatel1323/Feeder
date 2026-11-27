@@ -10,7 +10,7 @@ import type { Progress } from '../dropbox'
 import { saveAudioPos } from '../audiobooks/library'
 import { removeVideo, savedVideoBlob, savedSubtitleBlobs } from '../offline'
 import { addLocalMediaIds, keepThumb, uploadMedia } from './library'
-import { setThumb } from './thumbs'
+import { setThumb, setThumbFromBlob } from './thumbs'
 
 /** A file or folder name from a title: no slashes or characters Dropbox and file systems refuse. */
 export function safeName(s: string, fallback: string): string {
@@ -46,7 +46,12 @@ async function keepYouTubePicture(id: string, videoId: string): Promise<void> {
   await setThumb(id, url).catch(() => undefined)
   try {
     const res = await fetch(url)
-    if (res.ok) await keepThumb(id, await res.blob())
+    if (res.ok) {
+      const blob = await res.blob()
+      await keepThumb(id, blob)
+      // Shown from this copy, so it also shows offline
+      await setThumbFromBlob(id, blob)
+    }
   } catch {
     // The row still shows the picture from YouTube; other devices take a frame
   }

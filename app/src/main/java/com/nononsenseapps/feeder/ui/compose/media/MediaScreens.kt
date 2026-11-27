@@ -280,8 +280,9 @@ internal fun rememberMediaThumbs(
 ): Map<String, String> {
     val context = LocalContext.current
     val thumbs = remember { MediaThumbs.get(context) }
-    val ids = files.map { it.id }
-    val found by produceState(emptyMap<String, String>(), ids, version) {
+    // A picture appearing next to a file in Dropbox starts a new look
+    val keys = files.map { it.id to it.thumb }
+    val found by produceState(emptyMap<String, String>(), keys, version) {
         val start = withContext(Dispatchers.IO) { files.mapNotNull { m -> thumbs.known(m)?.let { m.id to Uri.fromFile(it).toString() } }.toMap() }
         value = start
         // Also for the ones shown already: a picture put next to a file in Dropbox replaces its frame

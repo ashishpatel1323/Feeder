@@ -178,6 +178,12 @@ async function fromFile(m: MediaFile): Promise<string | null> {
     return null;
 }
 
+/** Keeps [blob] (a moved download's own picture) as [id]'s row picture, shrunk to a data URL. */
+export async function setThumbFromBlob(id: string, blob: Blob): Promise<void> {
+    const url = await pictureOf(blob);
+    if (url) await setThumb(id, url);
+}
+
 /** Keeps [url] (an image link or data URL) as [id]'s picture, found now. */
 export async function setThumb(id: string, url: string): Promise<void> {
     await db.mediaThumbs.put({
@@ -194,29 +200,38 @@ let chain: Promise<unknown> = Promise.resolve();
 
 /** Looks for [m]'s picture unless it was found (or looked for lately), one file at a time. */
 export function requestThumb(m: MediaFile): Promise<void> {
-    const busy = running.get(m.id);
+    // A file that reached this device (or got a Dropbox picture) is looked at again
+    const key = `${m.id}:${m.local ? 1 : 0}:${m.thumb ?? ""}`;
+    const busy = running.get(key);
     if (busy) return busy;
     // A failure (a full disk, say) must not stop the files after it
     const job = chain
         .then(async () => {
             const known = await db.mediaThumbs.get(m.id);
             if (!shouldTry(known, m)) return;
+            const started = Date.now();
             const found = await find(m).catch(
                 (): Found => ({ url: null, from: null, sideFailed: false }),
             );
-            await db.mediaThumbs.put({
-                id: m.id,
-                url: found.url ?? known?.url ?? null,
-                at: Date.now(),
-                local: m.local,
-                from: found.from ?? (found.url ? null : (known?.from ?? null)),
-                sideFailedAt: found.sideFailed ? Date.now() : null,
+            await db.transaction("rw", db.mediaThumbs, async () => {
+                // A picture set meanwhile (a moved download's own) wins over what was found
+                const now = await db.mediaThumbs.get(m.id);
+                if (now?.url && now.at >= started) return;
+                await db.mediaThumbs.put({
+                    id: m.id,
+                    url: found.url ?? now?.url ?? null,
+                    at: Date.now(),
+                    local: m.local,
+                    from:
+                        found.from ?? (found.url ? null : (now?.from ?? null)),
+                    sideFailedAt: found.sideFailed ? Date.now() : null,
+                });
             });
         })
         .catch(() => undefined);
     chain = job;
-    running.set(m.id, job);
-    void job.finally(() => running.delete(m.id));
+    running.set(key, job);
+    void job.finally(() => running.delete(key));
     return job;
 }
 
