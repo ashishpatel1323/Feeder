@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import android.net.Uri
 import android.os.Build
 import android.text.format.Formatter
 import android.util.Rational
@@ -84,6 +85,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -92,6 +94,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
@@ -108,6 +111,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
+import coil3.compose.AsyncImage
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.dropbox.DropboxClient
 import com.nononsenseapps.feeder.model.audiobooks.AudioPos
@@ -117,6 +121,7 @@ import com.nononsenseapps.feeder.model.audiobooks.AudiobookRules
 import com.nononsenseapps.feeder.model.media.MediaFile
 import com.nononsenseapps.feeder.model.media.MediaLibrary
 import com.nononsenseapps.feeder.model.media.MediaRules
+import com.nononsenseapps.feeder.model.media.MediaThumbs
 import com.nononsenseapps.feeder.sync2.SyncNudge
 import com.nononsenseapps.feeder.sync2.ThisDevice
 import com.nononsenseapps.feeder.sync2.otherDeviceText
@@ -142,6 +147,8 @@ import com.nononsenseapps.feeder.ui.compose.shelf.Where
 import com.nononsenseapps.feeder.ui.compose.shelf.rememberShelfPrefs
 import com.nononsenseapps.feeder.ui.compose.shelf.shelf
 import com.nononsenseapps.feeder.ui.compose.theme.FeederTokens
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.kodein.di.compose.LocalDI
 import org.kodein.di.instance
 import kotlin.math.roundToInt
@@ -262,6 +269,29 @@ private fun rememberFileActions(
     }
 }
 
+/**
+ * Each file's picture (see [MediaThumbs]) as a file link for the row's cover: the ones found
+ * before right away, the rest as they are found, the files on screen first.
+ */
+@Composable
+internal fun rememberMediaThumbs(
+    files: List<MediaFile>,
+    version: Int,
+): Map<String, String> {
+    val context = LocalContext.current
+    val thumbs = remember { MediaThumbs.get(context) }
+    val ids = files.map { it.id }
+    val found by produceState(emptyMap<String, String>(), ids, version) {
+        val start = withContext(Dispatchers.IO) { files.mapNotNull { m -> thumbs.known(m)?.let { m.id to Uri.fromFile(it).toString() } }.toMap() }
+        value = start
+        for (m in files) {
+            if (m.id in start) continue
+            thumbs.get(m)?.let { f -> value = value + (m.id to Uri.fromFile(f).toString()) }
+        }
+    }
+    return found
+}
+
 /** The Player list: [folder] "" is the top; folders first, then the folder's files. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -350,6 +380,7 @@ fun MediaScreen(
         }
     val folders = if (query.isEmpty()) allFolders else allFolders.filter { it.name.contains(query, ignoreCase = true) }
     val under = remember(all, folder) { MediaRules.filesUnder(all, folder) }
+    val thumbs = rememberMediaThumbs(files, library.version.collectAsState().value)
     val downloadingText = stringResource(R.string.shelf_downloading)
     val uploadingText = stringResource(R.string.shelf_uploading)
     val playText = stringResource(R.string.audiobook_play)
@@ -379,6 +410,7 @@ fun MediaScreen(
                         m.duration?.let { AudiobookRules.lengthText((it * 1000).toLong()) }.orEmpty(),
                         if (m.dropboxPath == null || library.onPhone(m)) Formatter.formatShortFileSize(context, m.size) else "",
                     ).filter { it.isNotEmpty() }.joinToString(" · "),
+                coverUrl = thumbs[m.id],
                 fallback = if (m.isVideo) Icons.Outlined.Movie else Icons.Default.MusicNote,
                 where = where(library, m),
                 size = m.size,
@@ -620,6 +652,7 @@ fun MediaPlayerScreen(
                 siblings.drop(siblings.indexOfFirst { it.id == id } + 1)
             }
         }
+    val nextThumbs = rememberMediaThumbs(listOfNotNull(m) + next.take(50), library.version.collectAsState().value)
 
     // Opening the screen loads the file where it was left; a video starts, unless something else plays
     LaunchedEffect(id, m != null) {
@@ -749,7 +782,14 @@ fun MediaPlayerScreen(
                                 .fillMaxWidth(0.7f)
                                 .aspectRatio(1f)
                                 .clip(RoundedCornerShape(28.dp)),
-                        ) { GeneratedCover(m.title, Icons.Default.MusicNote, small = false, modifier = Modifier.fillMaxSize()) }
+                        ) {
+                            val pic = nextThumbs[m.id]
+                            if (pic != null) {
+                                AsyncImage(model = pic, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                            } else {
+                                GeneratedCover(m.title, Icons.Default.MusicNote, small = false, modifier = Modifier.fillMaxSize())
+                            }
+                        }
                     }
                     Column(Modifier.padding(horizontal = 16.dp), horizontalAlignment = if (video) Alignment.Start else Alignment.CenterHorizontally) {
                         Text(
@@ -810,7 +850,12 @@ fun MediaPlayerScreen(
                         supportingContent = x.duration?.let { d -> { Text(AudiobookRules.lengthText((d * 1000).toLong())) } },
                         leadingContent = {
                             Box(Modifier.size(56.dp).clip(RoundedCornerShape(FeederTokens.Radius.md))) {
-                                GeneratedCover(x.title, if (x.isVideo) Icons.Outlined.Movie else Icons.Default.MusicNote, small = true, modifier = Modifier.fillMaxSize())
+                                val pic = nextThumbs[x.id]
+                                if (pic != null) {
+                                    AsyncImage(model = pic, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                                } else {
+                                    GeneratedCover(x.title, if (x.isVideo) Icons.Outlined.Movie else Icons.Default.MusicNote, small = true, modifier = Modifier.fillMaxSize())
+                                }
                             }
                         },
                         modifier =
