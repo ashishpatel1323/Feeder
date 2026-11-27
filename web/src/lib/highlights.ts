@@ -31,7 +31,8 @@ export function applyHighlights(html: string, all: Highlight[]): string {
   const root = template.content
   const full = textOf(root)
   // Sketches go after their paragraph, once the marks are in (wrapping replaces text nodes)
-  const highlights = all.filter((h) => !h.sketch)
+  // Handwriting is drawn on the live page (lib/pageink.ts), not marked in the text
+  const highlights = all.filter((h) => !h.sketch && !h.ink)
   const sketches = all.filter((h) => h.sketch)
   const spans = highlights
     .map((h) => ({ h, at: locateRange(full, h) }))
@@ -147,7 +148,7 @@ export async function saveHighlight(h: Highlight) {
   await noteHighlightChange(before, h)
 }
 
-export async function updateHighlight(id: string, patch: Partial<Pick<Highlight, 'color' | 'note' | 'sketch'>>) {
+export async function updateHighlight(id: string, patch: Partial<Pick<Highlight, 'color' | 'note' | 'sketch' | 'ink'>>) {
   const before = await db.highlights.get(id)
   const n = await db.highlights.update(id, { ...patch, modifiedAt: Date.now() })
   if (before) await noteHighlightChange(before, { ...before, ...patch })

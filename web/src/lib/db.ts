@@ -96,6 +96,8 @@ export interface Highlight {
   cfi?: string
   /** A margin sketch tied to the text instead of a colored highlight (JSON, see lib/sketch.ts). */
   sketch?: string
+  /** Handwriting on the page (Kobo style): ink tied to the layout it was written in (JSON, see lib/pageink.ts). */
+  ink?: string
 }
 
 export type HighlightColor = 'yellow' | 'green' | 'blue' | 'pink'

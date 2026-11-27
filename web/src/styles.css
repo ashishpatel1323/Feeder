@@ -11375,3 +11375,48 @@ mark.sr-mark {
   flex: 1;
   margin: 0 16px 0 0;
 }
+
+/* ---------------------------------------------------------------- handwriting on the page (PageInk.tsx) */
+.pen-bar {
+  position: fixed;
+  left: 50%;
+  bottom: var(--sp-5);
+  transform: translateX(-50%);
+  z-index: 55;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+}
+.pen-bar .pen-done {
+  flex: none;
+  min-width: 0;
+  height: 36px;
+  padding: 0 var(--sp-3);
+}
+.ink-preview {
+  height: auto;
+  max-height: 92vh;
+}
+.ink-why {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+.ink-preview-art {
+  background: var(--sketch-paper);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--sp-3);
+  overflow: auto;
+}
+.ink-preview .ink-switch {
+  align-self: flex-start;
+  flex: none;
+}
+.feeder-ink-mark {
+  cursor: pointer;
+}

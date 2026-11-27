@@ -263,6 +263,8 @@ export interface HighlightValue {
   cfi?: string
   /** Margin sketches only: the drawing (JSON, see lib/sketch.ts). Older devices drop it and show a highlight. */
   sketch?: string
+  /** Handwriting on the page (lib/pageink.ts). Older devices drop it and show the words highlighted. */
+  ink?: string
 }
 
 const HIGHLIGHT_COLOR_IDS: HighlightColor[] = ['yellow', 'green', 'blue', 'pink']
@@ -282,6 +284,7 @@ export function highlightValue(h: Highlight): HighlightValue {
     createdAt: h.createdAt,
     ...(h.cfi ? { cfi: h.cfi } : {}),
     ...(h.sketch ? { sketch: h.sketch } : {}),
+    ...(h.ink ? { ink: h.ink } : {}),
   }
 }
 
@@ -304,6 +307,7 @@ export function highlightFromValue(id: string, v: Partial<HighlightValue>, ts: n
     modifiedAt: ts,
     ...(typeof v.cfi === 'string' && v.cfi ? { cfi: v.cfi } : {}),
     ...(typeof v.sketch === 'string' && v.sketch ? { sketch: v.sketch } : {}),
+    ...(typeof v.ink === 'string' && v.ink ? { ink: v.ink } : {}),
   }
 }
 
