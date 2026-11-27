@@ -15,7 +15,7 @@ import {
   savePosition,
 } from '../lib/ebooks/library'
 import { loadFoliate } from '../lib/ebooks/foliate'
-import { atEnd, atStart, drawFixedHighlights, markFixedPage, placeBookSketches, readableContent, redrawFixedHighlights, replaceBookSketches, nextSection, pageNumbers, prevSection, reveal, setStyles } from '../lib/ebooks/nav'
+import { atEnd, atStart, drawFixedHighlights, markFixedPage, paintBookInk, placeBookSketches, readableContent, redrawFixedHighlights, replaceBookSketches, nextSection, pageNumbers, prevSection, reveal, setStyles } from '../lib/ebooks/nav'
 import { bookCss, injectCsp, loadReaderPrefs, saveReaderPrefs, type ReaderPrefs } from '../lib/ebooks/reader'
 import { deleteHighlight, HIGHLIGHT_COLORS, quoteText, saveHighlight, updateHighlight } from '../lib/highlights'
 import { bookChip, trackOpen, type Where } from '../lib/history'
@@ -28,6 +28,8 @@ import type { FoliateView, Location, TocItem } from '../vendor/foliate-js/view.j
 import { confirmDropboxDelete, needsDropbox, useDropbox } from './DropboxPanel'
 import { HighlightBar } from './Highlights'
 import { SketchEditor } from './SketchEditor'
+import { InkPreview, PenBar, usePenState } from './PageInk'
+import { attachInkCapture, encodeInk, inkMarkAt, type InkData } from '../lib/pageink'
 import { HistoryList } from './History'
 import { Icon, IconButton } from './Icon'
 import { Player } from './Player'
@@ -267,6 +269,15 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
   const [toc, setToc] = useState<TocItem[]>([])
   const [panel, setPanel] = useState<Panel>(null)
   const [prefs, setPrefs] = useState<ReaderPrefs>(loadReaderPrefs)
+  const prefsRef = useRef(prefs)
+  prefsRef.current = prefs
+  // Handwriting on the page (Kobo style): tied to the text size, font and line spacing it was written with
+  const pen = usePenState()
+  const penRef = useRef(pen)
+  penRef.current = pen
+  const [inkOpen, setInkOpen] = useState<string | null>(null)
+  /** The notes drawn as ink in each chapter on screen (to erase from). */
+  const inkShown = useRef(new WeakMap<Document, Map<string, InkData>>())
   const [pending, setPending] = useState<Pending | null>(null)
   const [editing, setEditing] = useState<Highlight | null>(null)
   /** A margin sketch being drawn: for a selection or an existing sketch. */
@@ -339,7 +350,7 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
       })
       view.addEventListener('create-overlay', () => {
         // Sketches show as strips in reflowable books (placeBookSketches), as highlights on PDF pages
-        for (const h of highlightsRef.current) if (h.cfi && (!h.sketch || view.isFixedLayout)) void view.addAnnotation({ value: h.cfi, color: h.color })
+        for (const h of highlightsRef.current) if (h.cfi && !h.ink && (!h.sketch || view.isFixedLayout)) void view.addAnnotation({ value: h.cfi, color: h.color })
       })
       view.addEventListener('draw-annotation', async (e) => {
         const { draw, annotation } = (e as CustomEvent<{ draw: (f: unknown, o: unknown) => void; annotation: { color?: HighlightColor } }>).detail
@@ -359,6 +370,41 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
         markFixedPage(view, doc)
         drawFixedHighlights(view, doc, index, highlightsRef.current)
         placeBookSketches(view, doc, index, highlightsRef.current)
+        inkShown.current.set(doc, paintBookInk(view, doc, index, highlightsRef.current.filter((h) => h.ink)))
+        if (!view.isFixedLayout && doc.body) {
+          attachInkCapture(doc, {
+            root: doc.body,
+            mode: () => (penRef.current.drawAll ? 'all' : 'pen'),
+            color: () => penRef.current.color,
+            erasing: () => penRef.current.erasing,
+            prefs: () => ({ fontSize: prefsRef.current.fontSize, lineHeight: prefsRef.current.lineHeight, publisherFont: prefsRef.current.publisherFont }),
+            shown: () => inkShown.current.get(doc) ?? new Map(),
+            onNote: (range, data) => {
+              const text = range.toString().trim()
+              if (!text) return
+              void saveHighlight({
+                id: crypto.randomUUID(),
+                itemId: bookItemId(id),
+                itemTitle: titleRef.current,
+                itemLink: null,
+                feedTitle: '',
+                imageUrl: null,
+                text,
+                start: 0,
+                prefix: '',
+                color: penRef.current.color,
+                note: '',
+                createdAt: Date.now(),
+                cfi: view.getCFI(index, range),
+                ink: encodeInk(data),
+              })
+            },
+            onErase: (hid, data) => {
+              if (data) void updateHighlight(hid, { ink: encodeInk(data) })
+              else void deleteHighlight(hid)
+            },
+          })
+        }
         const checkSelection = () =>
           window.setTimeout(() => {
             const sel = doc.getSelection()
@@ -374,6 +420,15 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
         doc.addEventListener('keydown', onKey)
         // Taps near the edges turn pages (swipes are handled by foliate-js)
         doc.addEventListener('click', (c) => {
+          // A tap on a [✎] marker shows a note written with other settings
+          const ink = inkMarkAt(c.target)
+          if (ink) {
+            setPending(null)
+            setInkOpen(ink)
+            return
+          }
+          // A pen tap is writing, not turning the page
+          if ((c as PointerEvent).pointerType === 'pen' || penRef.current.drawAll) return
           // A tap on a sketch opens it to edit
           const strip = (c.target as Element | null)?.closest?.('.feeder-sketch') as HTMLElement | null
           const sk = strip?.dataset.sketch ? highlightsRef.current.find((x) => x.id === strip.dataset.sketch) : undefined
@@ -431,12 +486,38 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
   useEffect(() => {
     const view = viewRef.current
     if (!view || status.loading) return
-    const now = new Map(highlights.filter((h) => h.cfi && (!h.sketch || view.isFixedLayout)).map((h) => [h.cfi!, h.color]))
+    const now = new Map(highlights.filter((h) => h.cfi && !h.ink && (!h.sketch || view.isFixedLayout)).map((h) => [h.cfi!, h.color]))
     for (const [cfi, color] of now) if (drawn.current.get(cfi) !== color) void view.addAnnotation({ value: cfi, color })
     for (const cfi of drawn.current.keys()) if (!now.has(cfi)) void view.deleteAnnotation({ value: cfi })
     drawn.current = now
     redrawFixedHighlights(view, highlights)
   }, [highlights, status.loading])
+
+  // Handwriting added, erased or synced, or the text settings changed: draw the notes again
+  const inkKey = highlights.filter((h) => h.ink).map((h) => `${h.id}:${h.ink!.length}:${h.modifiedAt ?? 0}`).join('|')
+  useEffect(() => {
+    const view = viewRef.current
+    if (!view || status.loading) return
+    view.renderer.noSwipe = pen.drawAll
+    const paint = () => {
+      for (const { doc, index } of view.renderer.getContents()) if (doc && index !== undefined) inkShown.current.set(doc, paintBookInk(view, doc, index, highlightsRef.current.filter((h) => h.ink)))
+    }
+    let t = window.setTimeout(paint, 350)
+    // The page width changes with the window and the side panel: the text reflows
+    let lastW = view.getBoundingClientRect().width
+    const ro = new ResizeObserver(() => {
+      const w = view.getBoundingClientRect().width
+      if (Math.abs(w - lastW) < 1) return
+      lastW = w
+      window.clearTimeout(t)
+      t = window.setTimeout(paint, 350)
+    })
+    ro.observe(view)
+    return () => {
+      window.clearTimeout(t)
+      ro.disconnect()
+    }
+  }, [inkKey, status.loading, prefs, pen.drawAll])
 
   // Sketches added, edited or synced while reading: place the strips again when they change
   const sketchKey = highlights.filter((h) => h.sketch).map((h) => `${h.id}:${h.color}:${h.sketch!.length}:${h.modifiedAt ?? 0}`).join('|')
@@ -557,6 +638,7 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
         </span>
         <span className="book-bar-actions">
           <IconButton icon="toc" label="Contents" onClick={() => setPanel(panel === 'toc' ? null : 'toc')} />
+          <IconButton icon="draw" label="Draw on page" active={pen.drawAll} onClick={() => pen.setDrawAll(!pen.drawAll)} />
           <IconButton icon="highlight" label={`Highlights (${highlights.length})`} onClick={() => setPanel(panel === 'highlights' ? null : 'highlights')} />
           <IconButton icon="textSize" label="Text size and theme" onClick={() => setPanel(panel === 'look' ? null : 'look')} />
           <IconButton icon="history" label="History" onClick={() => setPanel(panel === 'history' ? null : 'history')} />
@@ -701,6 +783,28 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
           }
         />
       ) : null}
+      {pen.drawAll ? <PenBar pen={pen} onDone={() => pen.setDrawAll(false)} /> : null}
+      {inkOpen && highlights.find((h) => h.id === inkOpen) ? (() => {
+        const note = highlights.find((h) => h.id === inkOpen)!
+        const was = (JSON.parse(note.ink!) as { prefs?: Partial<ReaderPrefs> }).prefs
+        const differs = !!was && (['fontSize', 'lineHeight', 'publisherFont'] as const).some((k) => was[k] !== undefined && was[k] !== prefs[k])
+        return (
+          <InkPreview
+            note={note}
+            canSwitch={differs}
+            onSwitch={() => {
+              setPrefs({ ...prefs, ...(was ?? {}) })
+              setInkOpen(null)
+            }}
+            onDelete={async () => {
+              if (!(await confirmDeleteHighlight(note.text))) return
+              await deleteHighlight(note.id)
+              setInkOpen(null)
+            }}
+            onClose={() => setInkOpen(null)}
+          />
+        )
+      })() : null}
       {sketching ? (() => {
         const existing = 'id' in sketching ? highlights.find((h) => h.id === sketching.id) : undefined
         if ('id' in sketching && !existing) return null
