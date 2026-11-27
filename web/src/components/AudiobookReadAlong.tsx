@@ -7,8 +7,10 @@ import { useEffect, useMemo } from 'react'
 import type { Audiobook } from '../lib/db'
 import { audiobookPlayer, useAudiobookPlayer } from '../lib/audiobooks/player'
 import { chaptersOf, clock, locate } from '../lib/audiobooks/timeline'
-import { readyUntil } from '../lib/audiobooks/transcriptRules'
-import { setTranscriptViewing, setTranscriptWanted, useAbTranscript, type AbTranscriptState } from '../lib/audiobooks/transcripts'
+import { readyUntil, TRANSCRIBE_AHEAD_CHOICES, WHOLE_BOOK } from '../lib/audiobooks/transcriptRules'
+import { kickAhead, setTranscriptViewing, setTranscriptWanted, useAbTranscript, type AbTranscriptState } from '../lib/audiobooks/transcripts'
+import { MAC_ACTIVE_MS, seenAgo, useMacStatus } from '../lib/macBookAudio'
+import { updateSettings, useSettings } from '../lib/settings'
 import { WHISPER_MODEL_MB } from '../lib/transcripts'
 import { transcriptSections } from '../lib/transcriptSections'
 import { ChapterTranscript } from './ChapterTranscript'
@@ -38,8 +40,17 @@ export function AudiobookReadAlong({ book, onClose, extras }: { book: Audiobook;
   const chapters = mine ? s.chapters : chaptersOf(book)
   const positionMs = mine ? s.bookMs : 0
   const sections = useMemo(
-    () => transcriptSections(t.cues, chapters.map((c) => ({ startMs: c.bookMs, title: c.title }))),
-    [t.cues, chapters],
+    () =>
+      transcriptSections(
+        t.cues,
+        chapters.map((c) => ({
+          startMs: c.bookMs,
+          title: c.title,
+          // Transcribed on the Mac (design B's small badge)
+          ...(t.macRanges.some(([a, b]) => a < c.bookMs + c.lengthMs && b > c.bookMs) ? { badge: 'Mac' } : {}),
+        })),
+      ),
+    [t.cues, t.macRanges, chapters],
   )
   const chapter = mine ? chapters[s.chapter] : undefined
   const playing = mine && (s.status === 'playing' || s.status === 'loading')
@@ -103,6 +114,8 @@ export function AudiobookReadAlong({ book, onClose, extras }: { book: Audiobook;
 }
 
 function AheadStatus({ t, positionMs, bookId }: { t: AbTranscriptState; positionMs: number; bookId: string }) {
+  const mac = useMacStatus()
+  const settings = useSettings()
   if (!t.loaded) return null
   const ready = clock(readyUntil(t.ranges, positionMs))
   if (!t.cues.length && !t.wanted) {
@@ -128,13 +141,47 @@ function AheadStatus({ t, positionMs, bookId }: { t: AbTranscriptState; position
       : t.workingAtMs != null
         ? `Ready to ${ready} · transcribing ahead`
         : `Ready to ${ready}`
+  const macBook = mac?.transcripts?.books.find((b) => b.id === bookId)
+  const macOn = !!mac && Date.now() - mac.seen < MAC_ACTIVE_MS
   return (
-    <div className="ab-ra-status">
-      {t.workingAtMs != null ? <span className="ab-ra-spinner" aria-hidden /> : null}
-      <span className={t.error ? 'ab-error' : undefined}>{text}</span>
-      <button type="button" className="mf-btn ghost" onClick={() => void setTranscriptWanted(bookId, !t.wanted)}>
-        {t.wanted ? 'Stop' : 'Transcribe ahead'}
-      </button>
-    </div>
+    <>
+      {mac && macBook ? (
+        <div className="ab-ra-mac">
+          <Icon name="laptop" size={18} />
+          <span>
+            {macOn && mac.transcripts?.working?.book === bookId ? 'Your Mac is transcribing' : macOn ? 'Your Mac has transcribed' : "Your Mac is off"} ·{' '}
+            {macBook.ready} of {macBook.total} chapters ready · last seen {seenAgo(mac.seen)}
+          </span>
+        </div>
+      ) : null}
+      <div className="ab-ra-status">
+        {t.workingAtMs != null ? <span className="ab-ra-spinner" aria-hidden /> : null}
+        <span className={t.error ? 'ab-error' : undefined}>{text}</span>
+        <button type="button" className="mf-btn ghost" onClick={() => void setTranscriptWanted(bookId, !t.wanted)}>
+          {t.wanted ? 'Stop' : 'Transcribe ahead'}
+        </button>
+      </div>
+      {t.wanted ? (
+        <div className="ab-ra-ahead">
+          <span>Transcribe ahead</span>
+          <div className="book-audio-seg" role="radiogroup" aria-label="Chapters to transcribe ahead">
+            {TRANSCRIBE_AHEAD_CHOICES.map((n) => (
+              <button
+                key={n}
+                type="button"
+                role="radio"
+                aria-checked={settings.transcribeAhead === n}
+                className={[settings.transcribeAhead === n ? 'on' : '', n === WHOLE_BOOK ? 'wide' : ''].join(' ').trim()}
+                onClick={() => {
+                  void updateSettings({ transcribeAhead: n }).then(() => kickAhead())
+                }}
+              >
+                {n === WHOLE_BOOK ? 'Whole book' : n}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </>
   )
 }

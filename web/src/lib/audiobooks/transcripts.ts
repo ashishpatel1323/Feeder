@@ -7,7 +7,10 @@
  * The Mac does it fastest: with the Feeder Mac app (or the dev server), ffmpeg decodes just the
  * stretch needed (/api/ytdl/pcm) and Whisper runs on the GPU. There it also works ahead of where
  * the book was left on another device (its synced position), for books whose transcript is on,
- * so the phone gets the lines without doing the work.
+ * so the phone gets the lines without doing the work: books played on any device in the last 7
+ * days, as many chapters ahead as the phone's Transcribe ahead (phone.json, macBookAudio.ts).
+ * Pieces made in the Mac app are marked "mac" (d), shown with a Mac badge, and the Mac's progress
+ * goes into its heartbeat (mac.json) for the phone's summary line.
  *
  * Kept in their own IndexedDB database, so the app's main database schema is untouched.
  */
@@ -21,7 +24,9 @@ import type { TranscriptCue } from '../transcriptFormats'
 import { localTrackFile } from './library'
 import { audiobookPlayer } from './player'
 import { chaptersOf, trackStartMs } from './timeline'
-import { mergePieces, nextTarget, pieceRanges, toPiece, type PieceTarget, type Range, type TranscriptPiece } from './transcriptRules'
+import { getSettings } from '../settings'
+import { macBookAudio, MAC_BOOK_DAYS } from '../macBookAudio'
+import { chaptersReady, mergePieces, nextTarget, pieceRanges, toPiece, type PieceTarget, type Range, type TranscriptPiece } from './transcriptRules'
 
 interface StoredPiece extends TranscriptPiece {
   /** "<book id>:<start ms>", the sync key */
@@ -50,7 +55,7 @@ const RATE = 16_000
 /** Files this long or shorter can be decoded whole in the browser when ffmpeg isn't there. */
 const BROWSER_DECODE_MAX_MS = 45 * 60_000
 /** On the Mac, books played on another device within this long are transcribed ahead too. */
-const OTHER_DEVICE_RECENT_MS = 12 * 3600_000
+const OTHER_DEVICE_RECENT_MS = MAC_BOOK_DAYS * 86400_000
 
 export const SYNC_KIND = 'abtx'
 
@@ -58,6 +63,8 @@ export interface AbTranscriptState {
   loaded: boolean
   cues: TranscriptCue[]
   ranges: Range[]
+  /** The stretches the Mac transcribed (Mac badge on their chapters) */
+  macRanges: Range[]
   wanted: boolean
   /** Whisper is working on this book, at this book time */
   workingAtMs: number | null
@@ -66,7 +73,7 @@ export interface AbTranscriptState {
   error: string | null
 }
 
-const EMPTY: AbTranscriptState = { loaded: false, cues: [], ranges: [], wanted: false, workingAtMs: null, modelProgress: null, error: null }
+const EMPTY: AbTranscriptState = { loaded: false, cues: [], ranges: [], macRanges: [], wanted: false, workingAtMs: null, modelProgress: null, error: null }
 const states = new Map<string, AbTranscriptState>()
 const listeners = new Set<() => void>()
 
@@ -92,7 +99,13 @@ async function isWanted(bookId: string, pieces?: StoredPiece[]): Promise<boolean
 
 async function publish(bookId: string) {
   const pieces = await piecesOf(bookId)
-  set(bookId, { loaded: true, cues: mergePieces(pieces), ranges: pieceRanges(pieces), wanted: await isWanted(bookId, pieces) })
+  set(bookId, {
+    loaded: true,
+    cues: mergePieces(pieces),
+    ranges: pieceRanges(pieces),
+    macRanges: pieceRanges(pieces.filter((p) => p.d === 'mac')),
+    wanted: await isWanted(bookId, pieces),
+  })
 }
 
 /** The book's transcript, loaded on first use. */
@@ -124,9 +137,9 @@ export function setTranscriptViewing(bookId: string | null) {
 
 // --- Sync --------------------------------------------------------------------------------------
 
-export async function unsyncedPieces(): Promise<{ key: string; v: { e: number; c: TranscriptPiece['c'] } }[]> {
+export async function unsyncedPieces(): Promise<{ key: string; v: { e: number; c: TranscriptPiece['c']; d?: string } }[]> {
   const rows = await tdb.pieces.where('synced').equals(0).toArray()
-  return rows.map((p) => ({ key: p.key, v: { e: p.e, c: p.c } }))
+  return rows.map((p) => ({ key: p.key, v: { e: p.e, c: p.c, ...(p.d ? { d: p.d } : {}) } }))
 }
 
 export async function markPiecesSent(keys: string[]) {
@@ -142,13 +155,13 @@ export async function applyRemotePiece(key: string, v: unknown): Promise<boolean
   const cut = key.lastIndexOf(':')
   const bookId = key.slice(0, cut)
   const s = Number(key.slice(cut + 1))
-  const val = v as { e?: unknown; c?: unknown } | null
+  const val = v as { e?: unknown; c?: unknown; d?: unknown } | null
   if (cut <= 0 || !Number.isFinite(s) || !val || typeof val.e !== 'number' || !Array.isArray(val.c)) return false
   if (await tdb.pieces.get(key)) return false
   const c = val.c.filter(
     (r): r is [number, number, string] => Array.isArray(r) && typeof r[0] === 'number' && typeof r[1] === 'number' && typeof r[2] === 'string',
   )
-  await tdb.pieces.put({ key, bookId, s, e: val.e, c, synced: 1 })
+  await tdb.pieces.put({ key, bookId, s, e: val.e, c, ...(typeof val.d === 'string' && val.d ? { d: val.d } : {}), synced: 1 })
   if (states.has(bookId)) await publish(bookId)
   return true
 }
@@ -188,6 +201,7 @@ async function nextWork(): Promise<Work | null> {
         s.chapters,
         pieces,
         s.bookMs,
+        (await getSettings()).transcribeAhead,
       )
       if (target) return { book: here, target }
     }
@@ -195,23 +209,51 @@ async function nextWork(): Promise<Work | null> {
   }
   // Only where ffmpeg is (the Mac app), so an ordinary tab doesn't work the GPU on its own
   if (serverPcm !== true) return null
+  // As many chapters ahead as the phone wants (its Transcribe ahead, in phone.json), else this Mac's own
+  const ahead = macBookAudio.phone?.transcribeAhead || (await getSettings()).transcribeAhead
+  for (const { book, pieces, bookMs } of await macBooks()) {
+    const target = nextTarget(
+      book.tracks.map((t) => (t.duration ?? 0) * 1000),
+      chaptersOf(book),
+      pieces,
+      bookMs,
+      ahead,
+    )
+    if (target) return { book, target }
+  }
+  return null
+}
+
+/** Mac app: the audiobooks in Dropbox played on any device lately whose transcript is on, newest first. */
+async function macBooks(): Promise<{ book: Audiobook; pieces: StoredPiece[]; bookMs: number }[]> {
   const since = Date.now() - OTHER_DEVICE_RECENT_MS
   const recent = (await db.audioPos.toArray()).filter((p) => p.ts > since).sort((a, b) => b.ts - a.ts)
+  const out: { book: Audiobook; pieces: StoredPiece[]; bookMs: number }[] = []
   for (const pos of recent) {
     const book = await db.audiobooks.get(pos.id)
     if (!book || book.tracks.some((t) => t.local)) continue
     const pieces = await piecesOf(book.id)
     if (!(await isWanted(book.id, pieces))) continue
     const i = pos.h ? Math.max(0, book.tracks.findIndex((t) => t.hash === pos.h)) : pos.i
-    const target = nextTarget(
-      book.tracks.map((t) => (t.duration ?? 0) * 1000),
-      chaptersOf(book),
-      pieces,
-      trackStartMs(book, i) + pos.ms,
-    )
-    if (target) return { book, target }
+    out.push({ book, pieces, bookMs: trackStartMs(book, i) + pos.ms })
   }
-  return null
+  return out
+}
+
+/** What this Mac is transcribing, for its heartbeat (mac.json) and Settings › Prepared on this Mac. */
+export interface MacTranscriptStatus {
+  working: { book: string; title: string; atMs: number } | null
+  books: { id: string; title: string; ready: number; total: number }[]
+}
+
+let macWorking: MacTranscriptStatus['working'] = null
+
+export async function macTranscriptStatus(): Promise<MacTranscriptStatus> {
+  const books = (await macBooks()).map(({ book, pieces }) => {
+    const length = book.tracks.reduce((n, t) => n + (t.duration ?? 0) * 1000, 0)
+    return { id: book.id, title: book.title, ...chaptersReady(chaptersOf(book), pieceRanges(pieces), length) }
+  })
+  return { working: macWorking, books }
 }
 
 async function runAhead() {
@@ -277,6 +319,7 @@ async function samplesFor(t: AudioTrack, startMs: number, endMs: number): Promis
 async function transcribe(book: Audiobook, target: PieceTarget) {
   const t = book.tracks[target.i]
   set(book.id, { workingAtMs: target.bookStartMs, error: null })
+  if (macBookAudio.state.available) macWorking = { book: book.id, title: book.title, atMs: target.bookStartMs }
   try {
     const samples = await samplesFor(t, target.startMs, target.endMs)
     if (samples.length < RATE / 4) throw new Error(`no sound in ${t.name}`)
@@ -293,7 +336,9 @@ async function transcribe(book: Audiobook, target: PieceTarget) {
     }
     const piece = toPiece(target, Math.max(endMs, target.startMs + 1), cues)
     const key = `${book.id}:${piece.s}`
-    if (!(await tdb.pieces.get(key))) await tdb.pieces.put({ ...piece, key, bookId: book.id, synced: 0 })
+    // Made in the Mac app: the phone shows it with a Mac badge
+    const d = macBookAudio.state.available ? 'mac' : undefined
+    if (!(await tdb.pieces.get(key))) await tdb.pieces.put({ ...piece, ...(d ? { d } : {}), key, bookId: book.id, synced: 0 })
     await publish(book.id)
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
@@ -302,6 +347,7 @@ async function transcribe(book: Audiobook, target: PieceTarget) {
     await sleep(message === 'stopped' ? 1000 : 15_000)
   } finally {
     setModelProgressListener(null)
+    macWorking = null
     set(book.id, { workingAtMs: null, modelProgress: null })
   }
 }

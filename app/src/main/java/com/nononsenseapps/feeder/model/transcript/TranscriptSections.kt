@@ -9,6 +9,8 @@ data class TranscriptSection(
     val title: String,
     val firstCue: Int,
     val endCue: Int,
+    /** A small label after the title, e.g. "Mac" for an audiobook chapter transcribed on the Mac */
+    val badge: String? = null,
 ) {
     val isEmpty: Boolean get() = endCue <= firstCue
 
@@ -19,6 +21,7 @@ data class TranscriptSection(
 data class TranscriptChapter(
     val startMs: Long,
     val title: String,
+    val badge: String? = null,
 )
 
 const val TRANSCRIPT_BLOCK_MS = 5 * 60 * 1000L
@@ -40,7 +43,7 @@ fun transcriptSections(
             // Lines before the first chapter's start belong to it
             val first = if (i == 0) 0 else firstCueFrom(cues, chapter.startMs)
             val end = sorted.getOrNull(i + 1)?.let { firstCueFrom(cues, it.startMs) } ?: cues.size
-            TranscriptSection(chapter.startMs, chapter.title, first, end.coerceAtLeast(first))
+            TranscriptSection(chapter.startMs, chapter.title, first, end.coerceAtLeast(first), chapter.badge)
         }
     }
     if (cues.last().endMs.coerceAtLeast(cues.last().startMs) <= blockMs) return emptyList()

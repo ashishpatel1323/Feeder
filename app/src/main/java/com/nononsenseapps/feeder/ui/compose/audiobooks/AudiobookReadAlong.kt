@@ -1,5 +1,13 @@
 package com.nononsenseapps.feeder.ui.compose.audiobooks
 
+import android.text.format.DateUtils
+import androidx.compose.foundation.background
+import androidx.compose.material.icons.outlined.LaptopMac
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import com.nononsenseapps.feeder.model.ebooks.MacStatus
+import com.nononsenseapps.feeder.model.ebooks.isActive
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -101,6 +109,9 @@ internal fun AudiobookReadAlong(
     val t by remember(book.id) { transcripts.state(book.id) }.collectAsState(transcripts.current(book.id))
     val chapters = if (mine) s.chapters else remember(book) { AudiobookRules.chaptersOf(book) }
     val positionMs = if (mine) s.bookMs else 0L
+    val macLabel = stringResource(R.string.offline_audio_mac_badge)
+    val mac by transcripts.macStatus.collectAsState()
+    val ahead by transcripts.ahead.collectAsState()
 
     Scaffold(
         topBar = {
@@ -137,19 +148,101 @@ internal fun AudiobookReadAlong(
             onSeek = { ms -> if (mine) player.seekToBookMs(ms) else player.open(book.id, at = AudiobookRules.locate(book, ms)) },
             resetKey = book.id,
             copyText = { t.cues.toPlainText(book.title) },
-            chapters = remember(chapters) { chapters.map { TranscriptChapter(it.bookMs, it.title) } },
+            chapters =
+                remember(chapters, t.macRanges, macLabel) {
+                    chapters.map { c ->
+                        // Transcribed on the Mac (design B's small badge)
+                        val byMac = t.macRanges.any { it.first < c.bookMs + c.lengthMs && it.last > c.bookMs }
+                        TranscriptChapter(c.bookMs, c.title, if (byMac) macLabel else null)
+                    }
+                },
             pendingText = stringResource(if (t.wanted && transcripts.canTranscribe) R.string.audiobook_transcript_pending else R.string.audiobook_transcript_pending_off),
             modifier = Modifier.padding(padding).fillMaxSize(),
             status = {
-                TranscriptAheadStatus(
-                    t = t,
-                    positionMs = positionMs,
-                    canTranscribe = transcripts.canTranscribe,
-                    onStart = { transcripts.setWanted(book.id, true) },
-                    onStop = { transcripts.setWanted(book.id, false) },
-                )
+                Column {
+                    MacTranscriptLine(mac, book.id)
+                    TranscriptAheadStatus(
+                        t = t,
+                        positionMs = positionMs,
+                        canTranscribe = transcripts.canTranscribe,
+                        onStart = { transcripts.setWanted(book.id, true) },
+                        onStop = { transcripts.setWanted(book.id, false) },
+                    )
+                    if (t.wanted && transcripts.canTranscribe) TranscribeAhead(ahead) { transcripts.setAhead(it) }
+                }
             },
         )
+    }
+}
+
+/** Design B: "Your Mac is transcribing · 12 of 30 chapters ready · last seen 2 min ago". */
+@Composable
+private fun MacTranscriptLine(
+    mac: MacStatus?,
+    bookId: String,
+) {
+    val status = mac ?: return
+    val book = status.transcripts?.books?.firstOrNull { it.id == bookId } ?: return
+    val now = System.currentTimeMillis()
+    val active = status.isActive(now)
+    val what =
+        stringResource(
+            when {
+                active && status.transcripts.working?.book == bookId -> R.string.audiobook_transcript_mac_working
+                active -> R.string.audiobook_transcript_mac_done
+                else -> R.string.audiobook_transcript_mac_off
+            },
+        )
+    val seen = DateUtils.getRelativeTimeSpanString(status.seen, now, DateUtils.MINUTE_IN_MILLIS).toString()
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.shapes.medium)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        Icon(Icons.Outlined.LaptopMac, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+        Text(
+            stringResource(R.string.audiobook_transcript_mac_line, what, book.ready, book.total, seen),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Transcribe ahead: 1 · 2 · 3 · 5 · Whole book (used by this phone and the Mac). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TranscribeAhead(
+    ahead: Int,
+    onSet: (Int) -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 4.dp)) {
+        Text(
+            stringResource(R.string.audiobook_transcript_ahead_choice),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(end = 12.dp),
+        )
+        SingleChoiceSegmentedButtonRow(Modifier.weight(1f)) {
+            AudiobookTranscriptRules.AHEAD_CHOICES.forEachIndexed { i, n ->
+                SegmentedButton(
+                    selected = ahead == n,
+                    onClick = { onSet(n) },
+                    shape = SegmentedButtonDefaults.itemShape(i, AudiobookTranscriptRules.AHEAD_CHOICES.size),
+                    icon = {},
+                ) {
+                    Text(
+                        if (n == AudiobookTranscriptRules.WHOLE_BOOK) stringResource(R.string.offline_audio_whole_book) else n.toString(),
+                        maxLines = 1,
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                }
+            }
+        }
     }
 }
 

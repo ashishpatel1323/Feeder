@@ -30,6 +30,29 @@ data class MacStatus(
     val voice: String = "",
     val working: MacWorking? = null,
     val books: List<MacBook> = emptyList(),
+    /** Audiobook transcripts the Mac makes (web/src/lib/audiobooks/transcripts.ts) */
+    val transcripts: MacTranscripts? = null,
+)
+
+@Serializable
+data class MacTranscripts(
+    val working: MacTranscriptWorking? = null,
+    val books: List<MacTranscriptBook> = emptyList(),
+)
+
+@Serializable
+data class MacTranscriptWorking(
+    val book: String = "",
+    val title: String = "",
+    val atMs: Long = 0,
+)
+
+@Serializable
+data class MacTranscriptBook(
+    val id: String = "",
+    val title: String = "",
+    val ready: Int = 0,
+    val total: Int = 0,
 )
 
 @Serializable
@@ -53,6 +76,8 @@ data class MacBook(
 @Serializable
 private data class PhonePrefs(
     val ahead: Int,
+    /** Audiobook transcripts: chapters to transcribe ahead */
+    val transcribeAhead: Int,
     val at: Long,
 )
 
@@ -115,7 +140,23 @@ class MacBookAudio internal constructor(
     val state: StateFlow<MacAudioState> = _state.asStateFlow()
     private var checkedAt = 0L
     private var checkedBook = ""
-    private var publishedAhead = -1
+    private var published: Pair<Int, Int>? = null
+    private val _macStatus = MutableStateFlow<MacStatus?>(null)
+
+    /** The Mac's latest mac.json, for audiobook transcripts ([refreshStatus]). */
+    val macStatus: StateFlow<MacStatus?> = _macStatus.asStateFlow()
+    private var statusAt = 0L
+
+    /** Reads mac.json again (any network: it's small), at most once a minute. */
+    suspend fun refreshStatus() {
+        if (!linked) return
+        val now = System.currentTimeMillis()
+        if (now - statusAt < 60_000) return
+        statusAt = now
+        runCatching {
+            _macStatus.value = dropbox.readText("$FOLDER/mac.json")?.let { json.decodeFromString(MacStatus.serializer(), it) }
+        }.onFailure { Log.w(LOG_TAG, "Could not read mac.json", it) }
+    }
 
     private val linked get() = dropbox.link.value != null
 
@@ -137,6 +178,8 @@ class MacBookAudio internal constructor(
         checkedAt = now
         checkedBook = bookId
         val status = dropbox.readText("$FOLDER/mac.json")?.let { runCatching { json.decodeFromString(MacStatus.serializer(), it) }.getOrNull() }
+        _macStatus.value = status
+        statusAt = now
         val names = dropbox.listFolder("$FOLDER/$bookId").map { it.name }
         _state.value = MacAudioState(status, bookId, macReadyChapters(names))
         audio.refresh()
@@ -185,15 +228,30 @@ class MacBookAudio internal constructor(
         }
     }
 
-    /** Tells the Mac the phone's Prepare ahead setting, so it keeps the same chapters ready. */
+    /**
+     * Tells the Mac the phone's Prepare ahead and Transcribe ahead settings (phone.json), so it
+     * keeps the same chapters ready.
+     */
     fun publishAhead(ahead: Int) {
-        if (!linked || ahead == publishedAhead) return
+        if (!linked) return
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val wanted = ahead to prefs.getInt(PREF_TRANSCRIBE_AHEAD, 1)
+        if (wanted == published) return
         scope.launch {
             runCatching {
-                dropbox.putSmall("$FOLDER/phone.json", json.encodeToString(PhonePrefs.serializer(), PhonePrefs(ahead, System.currentTimeMillis())).toByteArray())
-                publishedAhead = ahead
+                val value = PhonePrefs(wanted.first, wanted.second, System.currentTimeMillis())
+                dropbox.putSmall("$FOLDER/phone.json", json.encodeToString(PhonePrefs.serializer(), value).toByteArray())
+                published = wanted
             }.onFailure { Log.w(LOG_TAG, "Could not tell the Mac Prepare ahead", it) }
         }
+    }
+
+    /** Audiobook transcripts: chapters to transcribe ahead (1, 2, 3, 5 or [BookAudio.WHOLE_BOOK]). */
+    fun transcribeAhead(): Int = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt(PREF_TRANSCRIBE_AHEAD, 1)
+
+    fun setTranscribeAhead(n: Int) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putInt(PREF_TRANSCRIBE_AHEAD, n).apply()
+        publishAhead(audio.ahead.value)
     }
 
     /** Checks again in a few minutes and downloads on Wi-Fi ([BookAudioMacJob]). */
@@ -226,6 +284,8 @@ class MacBookAudio internal constructor(
         private const val LOG_TAG = "FEEDER_MAC_AUDIO"
         const val FOLDER = "/Ebooks/.feeder-audio"
         const val SOURCE_MAC = "mac"
+        private const val PREFS = "mac_audio"
+        private const val PREF_TRANSCRIBE_AHEAD = "transcribe_ahead"
 
         /** Where a chapter is downloaded before it replaces the phone's own. */
         internal fun staging(

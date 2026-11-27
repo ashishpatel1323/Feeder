@@ -5,6 +5,10 @@ import android.net.Uri
 import android.util.Log
 import com.nononsenseapps.feeder.ApplicationCoroutineScope
 import com.nononsenseapps.feeder.dropbox.DropboxClient
+import com.nononsenseapps.feeder.model.ebooks.BookAudio
+import com.nononsenseapps.feeder.model.ebooks.MacBookAudio
+import com.nononsenseapps.feeder.model.ebooks.MacStatus
+import com.nononsenseapps.feeder.model.ebooks.isActive
 import com.nononsenseapps.feeder.model.transcript.AudioDecoder
 import com.nononsenseapps.feeder.model.transcript.Resampler
 import com.nononsenseapps.feeder.model.transcript.TranscriptCue
@@ -44,6 +48,8 @@ data class TranscriptPiece(
     val e: Long,
     /** [start ms, end ms, text] in book time */
     val c: List<PieceCue>,
+    /** "mac" when the Feeder Mac app made it (shown with a Mac badge) */
+    val d: String = "",
 ) {
     val key: String get() = s.toString()
 }
@@ -111,16 +117,44 @@ object AudiobookTranscriptRules {
         atMs: Long,
     ): Long = ranges.firstOrNull { atMs >= it.first - GAP_MS && atMs < it.last }?.last ?: atMs
 
-    /** How far ahead of [bookMs] to have the transcript ready. */
+    /** Transcribe ahead: every chapter to the end of the book */
+    const val WHOLE_BOOK = 1000
+    val AHEAD_CHOICES = listOf(1, 2, 3, 5, WHOLE_BOOK)
+
+    /**
+     * How far ahead of [bookMs] to have the transcript ready: the end of the chapter [ahead]
+     * chapters after the one playing, at least 15 minutes and at most an hour per chapter ahead;
+     * the end of the book for [WHOLE_BOOK].
+     */
     fun aheadUntil(
         chapters: List<Chapter>,
         bookMs: Long,
         bookLength: Long,
+        ahead: Int = 1,
     ): Long {
+        if (ahead >= WHOLE_BOOK) return if (bookLength > 0) bookLength else Long.MAX_VALUE
         val k = chapters.indexOfLast { it.bookMs <= bookMs }
-        val nextChapterEnd = chapters.getOrNull(k + 1)?.let { it.bookMs + it.lengthMs } ?: Long.MAX_VALUE
-        val end = nextChapterEnd.coerceIn(bookMs + AHEAD_MIN_MS, bookMs + AHEAD_MAX_MS)
+        val nextChapterEnd = chapters.getOrNull(k + ahead)?.let { it.bookMs + it.lengthMs } ?: Long.MAX_VALUE
+        val end = nextChapterEnd.coerceIn(bookMs + AHEAD_MIN_MS, bookMs + AHEAD_MAX_MS * ahead)
         return if (bookLength > 0) minOf(end, bookLength) else end
+    }
+
+    /** Chapters (or the whole book, as one, when it has none) transcribed from start to end, and how many there are. */
+    fun chaptersReady(
+        chapters: List<Chapter>,
+        ranges: List<LongRange>,
+        bookLength: Long,
+    ): Pair<Int, Int> {
+        val spans =
+            if (chapters.isNotEmpty()) {
+                chapters.map { it.bookMs to it.bookMs + it.lengthMs }
+            } else if (bookLength > 0) {
+                listOf(0L to bookLength)
+            } else {
+                emptyList()
+            }
+        val ready = spans.count { (s, e) -> ranges.any { it.first <= s + GAP_MS && it.last >= e - GAP_MS } }
+        return ready to spans.size
     }
 
     /**
@@ -133,11 +167,12 @@ object AudiobookTranscriptRules {
         chapters: List<Chapter>,
         pieces: Collection<TranscriptPiece>,
         bookMs: Long,
+        ahead: Int = 1,
     ): PieceTarget? {
         if (trackLengths.isEmpty() || trackLengths.any { it <= 0 }) return null
         val bookLength = trackLengths.sum()
         val ranges = ranges(pieces)
-        val until = aheadUntil(chapters, bookMs, bookLength)
+        val until = aheadUntil(chapters, bookMs, bookLength, ahead)
         val from = readyUntil(ranges, bookMs.coerceIn(0, bookLength))
         if (from >= until || from >= bookLength - 500) return null
         val nothingHere = from == bookMs
@@ -180,6 +215,8 @@ data class AudiobookTranscriptState(
     val loaded: Boolean = false,
     val cues: List<TranscriptCue> = emptyList(),
     val ranges: List<LongRange> = emptyList(),
+    /** The stretches the Mac transcribed (Mac badge on their chapters) */
+    val macRanges: List<LongRange> = emptyList(),
     /** Transcribing ahead is on for this book */
     val wanted: Boolean = false,
     /** Whisper is working on this book, at this book time */
@@ -249,6 +286,7 @@ class AudiobookTranscripts(
             loaded = true,
             cues = AudiobookTranscriptRules.merge(t.pieces),
             ranges = AudiobookTranscriptRules.ranges(t.pieces),
+            macRanges = AudiobookTranscriptRules.ranges(t.pieces.filter { it.d == MacBookAudio.SOURCE_MAC }),
             wanted = t.wanted,
         )
     }
@@ -336,6 +374,7 @@ class AudiobookTranscripts(
         if (bookId.isEmpty()) return
         val s = key.substringAfterLast(':').toLongOrNull() ?: return
         val e = (m["e"] as? Number)?.toLong() ?: return
+        val d = m["d"] as? String ?: ""
         val cues =
             (m["c"] as? List<*>).orEmpty().mapNotNull { row ->
                 val r = row as? List<*> ?: return@mapNotNull null
@@ -345,11 +384,38 @@ class AudiobookTranscripts(
                 PieceCue(cs, ce, text)
             }
         change(bookId) { t ->
-            if (t.pieces.any { it.s == s }) t else t.copy(pieces = t.pieces + TranscriptPiece(s, e, cues))
+            if (t.pieces.any { it.s == s }) t else t.copy(pieces = t.pieces + TranscriptPiece(s, e, cues, d))
         }
     }
 
-    private fun pieceValue(p: TranscriptPiece): Map<String, Any?> = mapOf("e" to p.e, "c" to p.c.map { listOf(it.s, it.e, it.t) })
+    private fun pieceValue(p: TranscriptPiece): Map<String, Any?> =
+        buildMap {
+            put("e", p.e)
+            put("c", p.c.map { listOf(it.s, it.e, it.t) })
+            if (p.d.isNotEmpty()) put("d", p.d)
+        }
+
+    /** The Feeder Mac app, which transcribes faster and puts its progress in mac.json. */
+    private val mac by lazy { BookAudio.get(app).mac }
+
+    /** What the Mac says about its transcripts (mac.json), for the summary line. */
+    val macStatus: StateFlow<MacStatus?> get() = mac.macStatus
+
+    /** Transcribe ahead: chapters ahead of where the book plays (or [AudiobookTranscriptRules.WHOLE_BOOK]). */
+    private val _ahead by lazy { MutableStateFlow(mac.transcribeAhead()) }
+    val ahead: StateFlow<Int> get() = _ahead.asStateFlow()
+
+    fun setAhead(n: Int) {
+        _ahead.value = n
+        scope.launch(Dispatchers.IO) { mac.setTranscribeAhead(n) }
+        kick()
+    }
+
+    /** True while the Mac is on and transcribing this book: the phone leaves the work to it. */
+    private fun macTranscribes(bookId: String): Boolean {
+        val s = mac.macStatus.value ?: return false
+        return s.isActive(System.currentTimeMillis()) && s.transcripts?.books?.any { it.id == bookId } == true
+    }
 
     // ---- Transcribing ahead ----
 
@@ -369,9 +435,10 @@ class AudiobookTranscripts(
                 val book = bookId?.let { library.get(it) }
                 val active = book != null && (s.isPlaying || viewing.value == bookId)
                 val t = if (book != null) fileMutex.withLock { read(book.id) } else null
+                if (active) mac.refreshStatus()
                 val target =
-                    if (active && t?.wanted == true) {
-                        AudiobookTranscriptRules.nextTarget(book!!.tracks.map { it.lengthMs }, s.chapters, t.pieces, s.bookMs)
+                    if (active && t?.wanted == true && !macTranscribes(book!!.id)) {
+                        AudiobookTranscriptRules.nextTarget(book.tracks.map { it.lengthMs }, s.chapters, t.pieces, s.bookMs, _ahead.value)
                     } else {
                         null
                     }

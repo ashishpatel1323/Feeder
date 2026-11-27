@@ -658,6 +658,11 @@
   <string name="offline_audio_waiting_wifi">Waiting for Wi-Fi</string>
   <string name="offline_audio_whole_book">Whole book</string>
   <string name="offline_audio_mac_badge">Mac</string>
+  <string name="audiobook_transcript_mac_working">Your Mac is transcribing</string>
+  <string name="audiobook_transcript_mac_done">Your Mac has transcribed</string>
+  <string name="audiobook_transcript_mac_off">Your Mac is off</string>
+  <string name="audiobook_transcript_mac_line">%1$s · %2$d of %3$d chapters ready · last seen %4$s</string>
+  <string name="audiobook_transcript_ahead_choice">Transcribe ahead</string>
   <string name="offline_audio_mac_making">Your Mac is making audio</string>
   <string name="offline_audio_mac_ready">Your Mac has audio ready</string>
   <string name="offline_audio_mac_detail">%1$s. Last seen %2$s.</string>

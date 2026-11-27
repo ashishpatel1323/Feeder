@@ -148,6 +148,7 @@ export function ChapterTranscript({
           >
             <span className="transcript-time vtp-heading-time">{formatCueTime(s.startMs)}</span>
             <span className="vtp-heading-title">{s.title}</span>
+            {s.badge ? <span className="vtp-badge">{s.badge}</span> : null}
             {empty ? null : <Icon name={isOpen ? 'collapse' : 'expand'} size={20} />}
           </button>
           {isOpen && !empty ? <ul className="transcript-lines vtp-lines">{cues.slice(s.firstCue, s.endCue).map((_, k) => line(s.firstCue + k))}</ul> : null}

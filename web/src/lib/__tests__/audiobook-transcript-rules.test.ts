@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aheadUntil, FIRST_PIECE_MS, mergePieces, nextTarget, PIECE_MS, pieceRanges, readyUntil, type TranscriptPiece } from '../audiobooks/transcriptRules'
+import { aheadUntil, chaptersReady, WHOLE_BOOK, FIRST_PIECE_MS, mergePieces, nextTarget, PIECE_MS, pieceRanges, readyUntil, type TranscriptPiece } from '../audiobooks/transcriptRules'
 import type { Chapter } from '../audiobooks/timeline'
 
 const min = 60_000
@@ -50,5 +50,24 @@ describe('audiobook transcript rules (same as Android)', () => {
 
   it('skips a sliver left at the end of a file', () => {
     expect(nextTarget([35_060, 35_000], [], [piece(0, 34_900)], 0)).toMatchObject({ i: 1, startMs: 0 })
+  })
+
+  it('transcribes as many chapters ahead as picked, or the whole book', () => {
+    const chapters = [ch(0, 10 * min, '1'), ch(10 * min, 10 * min, '2'), ch(20 * min, 30 * min, '3'), ch(50 * min, 40 * min, '4')]
+    // One chapter ahead (as before): to the end of chapter 2, at least 15 minutes ahead
+    expect(aheadUntil(chapters, 2 * min, 90 * min)).toBe(20 * min)
+    // Three ahead: to the end of chapter 4, but at most an hour per chapter ahead
+    expect(aheadUntil(chapters, 2 * min, 90 * min, 3)).toBe(90 * min)
+    expect(aheadUntil(chapters, 2 * min, 90 * min, 2)).toBe(50 * min)
+    expect(aheadUntil(chapters, 2 * min, 90 * min, WHOLE_BOOK)).toBe(90 * min)
+    // Whole book: the next piece is the first gap anywhere ahead
+    expect(nextTarget([90 * min], chapters, [piece(0, 80 * min)], 2 * min, WHOLE_BOOK)?.startMs).toBe(80 * min)
+    expect(nextTarget([90 * min], chapters, [piece(0, 80 * min)], 2 * min, 1)).toBeNull()
+  })
+
+  it('counts the chapters transcribed from start to end', () => {
+    const chapters = [ch(0, 10 * min, '1'), ch(10 * min, 10 * min, '2'), ch(20 * min, 30 * min, '3')]
+    expect(chaptersReady(chapters, pieceRanges([piece(0, 15 * min), piece(15 * min, 20 * min)]), 50 * min)).toEqual({ ready: 2, total: 3 })
+    expect(chaptersReady([], pieceRanges([piece(0, 50 * min)]), 50 * min)).toEqual({ ready: 1, total: 1 })
   })
 })

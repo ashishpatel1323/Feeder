@@ -11336,3 +11336,42 @@ mark.sr-mark {
   border-radius: 2px;
   background: var(--accent);
 }
+
+/* A small tonal label after a transcript chapter's title ("Mac") */
+.vtp-badge {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Audiobook transcript: the Mac's summary line and Transcribe ahead (AudiobookReadAlong.tsx) */
+.ab-ra-mac {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 16px;
+  padding: 8px 12px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+}
+.ab-ra-mac svg {
+  color: var(--accent);
+}
+.ab-ra-ahead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 2px 0 6px 16px;
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+}
+.ab-ra-ahead .book-audio-seg {
+  flex: 1;
+  margin: 0 16px 0 0;
+}
