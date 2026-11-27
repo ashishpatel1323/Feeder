@@ -23,6 +23,7 @@ import {
 } from "./library";
 
 export const RETRY_MS = 7 * 24 * 60 * 60 * 1000;
+export const SIDECAR_RETRY_MS = 60 * 60 * 1000;
 const SIDE = 360;
 
 /** Whether to look for a file's picture (again), given what was found before. */
@@ -33,7 +34,13 @@ export function shouldTry(
 ): boolean {
     if (!known) return true;
     // A picture put next to the file in Dropbox wins over what was found before
-    if (m.thumb && known.from !== m.thumb) return true;
+    // (one that failed to load, offline say, is tried again an hour later)
+    if (
+        m.thumb &&
+        known.from !== m.thumb &&
+        (!known.sideFailedAt || now - known.sideFailedAt > SIDECAR_RETRY_MS)
+    )
+        return true;
     if (known.url) return false;
     if (m.local && !known.local) return true;
     return now - known.at > RETRY_MS;
@@ -116,22 +123,37 @@ async function readerOf(m: MediaFile): Promise<RangeReader | null> {
     return m.dropboxPath ? dropboxReader(m.dropboxPath, m.size) : null;
 }
 
+interface Found {
+    url: string | null;
+    /** The Dropbox picture it came from (the kept one is the same picture once uploaded) */
+    from: string | null;
+    /** Whether loading the Dropbox picture failed */
+    sideFailed: boolean;
+}
+
 /** Looks for [m]'s picture in the order above. */
-async function find(m: MediaFile): Promise<string | null> {
+async function find(m: MediaFile): Promise<Found> {
     const kept = await localByName(keptThumbName(m.id));
     if (kept) {
         const url = await pictureOf(kept);
-        if (url) return url;
+        if (url) return { url, from: m.thumb ?? null, sideFailed: false };
     }
+    let sideFailed = false;
     if (m.thumb) {
         try {
             const { body } = await downloadStream(m.thumb);
             const url = await pictureOf(await new Response(body).blob());
-            if (url) return url;
+            if (url) return { url, from: m.thumb, sideFailed: false };
         } catch (e) {
             console.warn("Could not read the picture next to", m.name, e);
         }
+        sideFailed = true;
     }
+    return { url: await fromFile(m), from: null, sideFailed };
+}
+
+/** The cover art inside the file, else (a video) a frame. */
+async function fromFile(m: MediaFile): Promise<string | null> {
     try {
         const r = await readerOf(m);
         const tags = r ? await readTags(m.name, r) : null;
@@ -174,21 +196,25 @@ let chain: Promise<unknown> = Promise.resolve();
 export function requestThumb(m: MediaFile): Promise<void> {
     const busy = running.get(m.id);
     if (busy) return busy;
-    const job = (chain = chain.then(async () => {
-        const known = await db.mediaThumbs.get(m.id);
-        if (!shouldTry(known, m)) return;
-        const url = await find(m).catch(() => null);
-        await db.mediaThumbs.put({
-            id: m.id,
-            url: url ?? known?.url ?? null,
-            at: Date.now(),
-            local: m.local,
-            from: m.thumb ?? null,
-        });
-    })).then(
-        () => undefined,
-        () => undefined,
-    );
+    // A failure (a full disk, say) must not stop the files after it
+    const job = chain
+        .then(async () => {
+            const known = await db.mediaThumbs.get(m.id);
+            if (!shouldTry(known, m)) return;
+            const found = await find(m).catch(
+                (): Found => ({ url: null, from: null, sideFailed: false }),
+            );
+            await db.mediaThumbs.put({
+                id: m.id,
+                url: found.url ?? known?.url ?? null,
+                at: Date.now(),
+                local: m.local,
+                from: found.from ?? (found.url ? null : (known?.from ?? null)),
+                sideFailedAt: found.sideFailed ? Date.now() : null,
+            });
+        })
+        .catch(() => undefined);
+    chain = job;
     running.set(m.id, job);
     void job.finally(() => running.delete(m.id));
     return job;

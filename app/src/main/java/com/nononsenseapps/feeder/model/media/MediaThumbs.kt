@@ -37,26 +37,38 @@ class MediaThumbs private constructor(
     private val gate = Semaphore(2)
     private val running = ConcurrentHashMap<String, CompletableDeferred<File?>>()
 
-    /** A picture put next to the file in Dropbox is kept apart, so it replaces a frame found before. */
-    private fun cached(m: MediaFile) = File(dir, if (m.thumb != null) "${m.id}-s.jpg" else "${m.id}.jpg")
+    /** The picture from inside the file (cover art or a frame). */
+    private fun ownFile(id: String) = File(dir, "$id.jpg")
 
-    private fun missMark(m: MediaFile) = File(dir, if (m.thumb != null) "${m.id}-s.none" else "${m.id}.none")
+    /** The picture next to the file in Dropbox, kept apart so it wins over a frame found before. */
+    private fun sideFile(id: String) = File(dir, "$id-s.jpg")
+
+    private fun missMark(id: String) = File(dir, "$id.none")
+
+    /** When the Dropbox picture last failed to load (offline, say): it is tried again an hour later. */
+    private fun sideMiss(id: String) = File(dir, "$id-s.none")
 
     /** The picture already found for [m], without looking (for drawing the list right away). */
-    fun known(m: MediaFile): File? = library.keptThumb(m.id).takeIf { it.exists() } ?: cached(m).takeIf { it.exists() }
+    fun known(m: MediaFile): File? =
+        library.keptThumb(m.id).takeIf { it.exists() }
+            ?: sideFile(m.id).takeIf { m.thumb != null && it.exists() }
+            ?: ownFile(m.id).takeIf { it.exists() }
 
     /** The picture for [m]: found before, or looked for now. Null when it has none. */
     suspend fun get(m: MediaFile): File? {
-        known(m)?.let { return it }
+        library.keptThumb(m.id).takeIf { it.exists() }?.let { return it }
+        if (m.thumb != null) sideFile(m.id).takeIf { it.exists() }?.let { return it }
+        val now = System.currentTimeMillis()
+        val sideDue = m.thumb != null && MediaThumbRules.sidecarDue(sideMiss(m.id).takeIf { it.exists() }?.lastModified(), now)
+        val own = ownFile(m.id).takeIf { it.exists() }
         val onPhone = library.onPhone(m)
-        if (!MediaThumbRules.shouldTry(missMark(m).takeIf { it.exists() }?.let { it.lastModified() to it.readText() }, onPhone, System.currentTimeMillis())) {
-            return null
-        }
+        val ownDue = own == null && MediaThumbRules.shouldTry(missMark(m.id).takeIf { it.exists() }?.let { it.lastModified() to it.readText() }, onPhone, now)
+        if (!sideDue && !ownDue) return own
         val mine = CompletableDeferred<File?>()
         val other = running.putIfAbsent(m.id, mine)
         if (other != null) return other.await()
         return try {
-            val found = gate.withPermit { withContext(Dispatchers.IO) { find(m, onPhone) } }
+            val found = gate.withPermit { withContext(Dispatchers.IO) { find(m, onPhone, sideDue, ownDue) } } ?: own
             mine.complete(found)
             found
         } catch (e: CancellationException) {
@@ -64,8 +76,8 @@ class MediaThumbs private constructor(
             throw e
         } catch (e: Exception) {
             Log.w(LOG_TAG, "No picture for ${m.name}", e)
-            mine.complete(null)
-            null
+            mine.complete(own)
+            own
         } finally {
             running.remove(m.id)
         }
@@ -74,21 +86,36 @@ class MediaThumbs private constructor(
     private suspend fun find(
         m: MediaFile,
         onPhone: Boolean,
+        sideDue: Boolean,
+        ownDue: Boolean,
     ): File? {
-        val picture =
-            runCatching { m.thumb?.let { sidecar(it) } }.getOrNull()
-                ?: runCatching { fromFile(m) }.onFailure { Log.w(LOG_TAG, "No picture from ${m.name}: ${it.message}") }.getOrNull()
-        val out = cached(m)
+        if (sideDue) {
+            val side = runCatching { m.thumb?.let { sidecar(it) } }.onFailure { Log.w(LOG_TAG, "No picture next to ${m.name}: ${it.message}") }.getOrNull()
+            if (side != null) {
+                sideMiss(m.id).delete()
+                return save(side, sideFile(m.id))
+            }
+            sideMiss(m.id).writeText("")
+        }
+        if (!ownDue) return null
+        val picture = runCatching { fromFile(m) }.onFailure { Log.w(LOG_TAG, "No picture from ${m.name}: ${it.message}") }.getOrNull()
         if (picture == null) {
-            missMark(m).writeText(if (onPhone) PHONE else REMOTE)
+            missMark(m.id).writeText(if (onPhone) PHONE else REMOTE)
             return null
         }
+        missMark(m.id).delete()
+        return save(picture, ownFile(m.id))
+    }
+
+    private fun save(
+        picture: Bitmap,
+        out: File,
+    ): File {
         try {
             out.outputStream().use { picture.compress(Bitmap.CompressFormat.JPEG, 85, it) }
         } finally {
             picture.recycle()
         }
-        missMark(m).delete()
         return out
     }
 
@@ -163,6 +190,13 @@ class MediaThumbs private constructor(
 /** When to look for a picture, and where in a video to take the frame (same as the web app). */
 object MediaThumbRules {
     const val RETRY_MS = 7L * 24 * 60 * 60 * 1000
+    const val SIDECAR_RETRY_MS = 60L * 60 * 1000
+
+    /** Whether to load the picture next to the file in Dropbox: not tried, or it failed over an hour ago. */
+    fun sidecarDue(
+        failedAt: Long?,
+        now: Long,
+    ): Boolean = failedAt == null || now - failedAt > SIDECAR_RETRY_MS
 
     /**
      * Whether to look for a file's picture again: [miss] is when nothing was found before and

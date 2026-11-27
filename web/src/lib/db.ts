@@ -273,6 +273,8 @@ export interface MediaThumb {
   local: boolean
   /** The Dropbox picture next to the file it came from, if any (a new one there replaces a frame) */
   from?: string | null
+  /** When loading that Dropbox picture last failed (tried again an hour later) */
+  sideFailedAt?: number | null
 }
 
 /** Where an audiobook was left (synced as kind "audiopos"). */

@@ -284,9 +284,12 @@ internal fun rememberMediaThumbs(
     val found by produceState(emptyMap<String, String>(), ids, version) {
         val start = withContext(Dispatchers.IO) { files.mapNotNull { m -> thumbs.known(m)?.let { m.id to Uri.fromFile(it).toString() } }.toMap() }
         value = start
+        // Also for the ones shown already: a picture put next to a file in Dropbox replaces its frame
         for (m in files) {
-            if (m.id in start) continue
-            thumbs.get(m)?.let { f -> value = value + (m.id to Uri.fromFile(f).toString()) }
+            thumbs.get(m)?.let { f ->
+                val url = Uri.fromFile(f).toString()
+                if (value[m.id] != url) value = value + (m.id to url)
+            }
         }
     }
     return found

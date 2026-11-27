@@ -34,6 +34,14 @@ class MediaThumbRulesTest {
     }
 
     @Test
+    fun loadsTheDropboxPictureAgainAnHourAfterItFailed() {
+        val now = 10 * MediaThumbRules.RETRY_MS
+        assertTrue(MediaThumbRules.sidecarDue(null, now))
+        assertFalse(MediaThumbRules.sidecarDue(now - 1000, now))
+        assertTrue(MediaThumbRules.sidecarDue(now - MediaThumbRules.SIDECAR_RETRY_MS - 1, now))
+    }
+
+    @Test
     fun findsAPictureNextToTheFile() {
         val drafts =
             MediaRules.mediaInListing(

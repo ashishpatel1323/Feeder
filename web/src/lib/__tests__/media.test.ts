@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { asBook, filesUnder, folderView, kindOf, mediaInListing, mergeMedia, playsHere, srtToVtt, uploadPath } from '../media/library'
 import type { DropboxFile } from '../dropbox'
 import type { MediaFile } from '../db'
-import { frameAt, RETRY_MS, shouldTry } from '../media/thumbs'
+import { frameAt, RETRY_MS, SIDECAR_RETRY_MS, shouldTry } from '../media/thumbs'
 import { youtubePictureUrl } from '../media/fromDownloads'
 
 const file = (path: string, hash = path, size = 100): DropboxFile => ({ id: `id:${path}`, name: path.split('/').pop()!, path, size, hash, modified: '2026-11-01T10:00:00Z' })
@@ -151,6 +151,9 @@ describe('Player row pictures (same cases as the Android app\'s MediaThumbRulesT
     expect(shouldTry({ id: 'a', url: 'data:x', at: 0, local: false }, { local: false }, now)).toBe(false)
     expect(shouldTry({ id: 'a', url: 'data:x', at: now, local: false }, { local: false, thumb: '/Media/a.jpg' }, now)).toBe(true)
     expect(shouldTry({ id: 'a', url: 'data:y', at: now, local: false, from: '/Media/a.jpg' }, { local: false, thumb: '/Media/a.jpg' }, now)).toBe(false)
+    // The Dropbox picture failed to load (offline): a frame shows, and the picture is tried again an hour later
+    expect(shouldTry({ id: 'a', url: 'data:f', at: now, local: true, from: null, sideFailedAt: now - 1000 }, { local: true, thumb: '/Media/a.jpg' }, now)).toBe(false)
+    expect(shouldTry({ id: 'a', url: 'data:f', at: now, local: true, from: null, sideFailedAt: now - SIDECAR_RETRY_MS - 1 }, { local: true, thumb: '/Media/a.jpg' }, now)).toBe(true)
   })
 
   it('finds a picture next to the file in Dropbox', () => {
