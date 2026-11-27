@@ -655,6 +655,22 @@
   <string name="offline_audio_ready">Ready · %1$s</string>
   <string name="offline_audio_preparing">Preparing · %1$d%%</string>
   <string name="offline_audio_up_next">Up next</string>
+  <string name="offline_audio_waiting_wifi">Waiting for Wi-Fi</string>
+  <string name="offline_audio_whole_book">Whole book</string>
+  <string name="offline_audio_mac_badge">Mac</string>
+  <string name="offline_audio_mac_making">Your Mac is making audio</string>
+  <string name="offline_audio_mac_ready">Your Mac has audio ready</string>
+  <string name="offline_audio_mac_detail">%1$s. Last seen %2$s.</string>
+  <string name="offline_audio_mac_away_title">Your Mac is off</string>
+  <string name="offline_audio_mac_away">Your Mac hasn\'t been on since %1$s, so this phone is preparing chapters with its own voice.</string>
+  <plurals name="offline_audio_mac_ready_count">
+    <item quantity="one">%d chapter ready</item>
+    <item quantity="other">%d chapters ready</item>
+  </plurals>
+  <plurals name="offline_audio_mac_waiting_count">
+    <item quantity="one">%d waiting for Wi-Fi</item>
+    <item quantity="other">%d waiting for Wi-Fi</item>
+  </plurals>
   <string name="offline_audio_section">Section %1$d</string>
   <string name="offline_audio_prepare_ahead">Prepare ahead</string>
   <string name="offline_audio_ahead_hint">Chapters after the one you\'re on. The one you\'re on is kept too.</string>

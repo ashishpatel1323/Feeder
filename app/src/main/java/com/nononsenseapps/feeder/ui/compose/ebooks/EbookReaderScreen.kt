@@ -522,6 +522,7 @@ fun EbookReaderScreen(
     LaunchedEffect(at, opened) { if (opened && !at.isNullOrBlank()) js("feeder.goTo(${q(at)})") }
 
     val audioState by bookAudio.state.collectAsState()
+    val macAudio by bookAudio.mac.state.collectAsState()
     val audioAhead by bookAudio.ahead.collectAsState()
     val audioDeletePlayed by bookAudio.deletePlayed.collectAsState()
 
@@ -835,6 +836,7 @@ fun EbookReaderScreen(
                 "audio" ->
                     OfflineAudioSheet(
                         state = audioState,
+                        mac = macAudio,
                         spokenProgress = if (reading && ttsProgress.preparationProgress == null) ttsProgress.synthesisProgress else null,
                         ahead = audioAhead,
                         deletePlayed = audioDeletePlayed,

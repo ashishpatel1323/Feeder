@@ -14,6 +14,7 @@ enum class BackgroundJobId(
     CLEANUP_ORPHANED_FILES(7),
     BOOK_AUDIO(8),
     PLAYLIST_AUDIO(9),
+    BOOK_AUDIO_MAC(10),
 }
 
 interface BackgroundJob {

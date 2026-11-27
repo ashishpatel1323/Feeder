@@ -1,5 +1,6 @@
 package com.nononsenseapps.feeder.ui.compose.ebooks
 
+import android.text.format.DateUtils
 import android.text.format.Formatter
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,7 +18,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.LaptopMac
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -41,6 +44,8 @@ import androidx.compose.ui.unit.dp
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.model.ebooks.BookAudio
 import com.nononsenseapps.feeder.model.ebooks.BookAudioState
+import com.nononsenseapps.feeder.model.ebooks.MacAudioState
+import com.nononsenseapps.feeder.model.ebooks.isActive
 import com.nononsenseapps.feeder.model.ebooks.SectionAudio
 import com.nononsenseapps.feeder.model.ebooks.SectionAudioState
 import com.nononsenseapps.feeder.ui.compose.readaloud.PlayerStatusLine
@@ -73,6 +78,8 @@ fun offlineAudioStatusLine(
 @Composable
 fun OfflineAudioSheet(
     state: BookAudioState,
+    /** What the Mac has for this book (audio it makes with the natural voice, in Dropbox) */
+    mac: MacAudioState,
     /** How much of the chapter being read read aloud has spoken so far (0–1), or null when it isn't reading */
     spokenProgress: Float?,
     ahead: Int,
@@ -95,6 +102,7 @@ fun OfflineAudioSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 8.dp),
             )
+            MacCard(state, mac)
             for (section in state.sections) SectionRow(section, state.currentReady, spokenProgress)
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             Text(
@@ -109,7 +117,7 @@ fun OfflineAudioSheet(
                         selected = ahead == n,
                         onClick = { onSetAhead(n) },
                         shape = SegmentedButtonDefaults.itemShape(i, BookAudio.AHEAD_CHOICES.size),
-                    ) { Text(n.toString()) }
+                    ) { Text(if (n == BookAudio.WHOLE_BOOK) stringResource(R.string.offline_audio_whole_book) else n.toString(), maxLines = 1) }
                 }
             }
             Text(
@@ -130,6 +138,71 @@ fun OfflineAudioSheet(
             }
         }
     }
+}
+
+/**
+ * Design B: one card at the top says how the Mac is doing (making audio, or not seen for a while so
+ * this phone makes chapters itself). Nothing shows when the Mac has never made audio.
+ */
+@Composable
+private fun MacCard(
+    state: BookAudioState,
+    mac: MacAudioState,
+) {
+    val status = mac.status ?: return
+    if (status.seen <= 0) return
+    val context = LocalContext.current
+    val now = System.currentTimeMillis()
+    val active = status.isActive(now)
+    val title: String
+    val detail: String
+    if (active) {
+        val ready = state.sections.count { it.fromMac && (it.state == SectionAudioState.READY || it.state == SectionAudioState.PLAYING) }
+        val waiting = state.sections.count { it.waitingForWifi }
+        title = stringResource(if (status.working != null) R.string.offline_audio_mac_making else R.string.offline_audio_mac_ready)
+        val parts =
+            buildList {
+                add(pluralStringResource(R.plurals.offline_audio_mac_ready_count, ready, ready))
+                if (waiting > 0) add(pluralStringResource(R.plurals.offline_audio_mac_waiting_count, waiting, waiting))
+            }.joinToString(", ")
+        val seen = DateUtils.getRelativeTimeSpanString(status.seen, now, DateUtils.MINUTE_IN_MILLIS).toString()
+        val size = if (state.bytes > 0) " " + Formatter.formatShortFileSize(context, state.bytes) + "." else ""
+        detail = stringResource(R.string.offline_audio_mac_detail, parts, seen) + size
+    } else {
+        title = stringResource(R.string.offline_audio_mac_away_title)
+        val since = DateUtils.formatDateTime(context, status.seen, DateUtils.FORMAT_SHOW_TIME or (if (now - status.seen > DateUtils.DAY_IN_MILLIS) DateUtils.FORMAT_SHOW_DATE else 0))
+        detail = stringResource(R.string.offline_audio_mac_away, since)
+    }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.shapes.medium)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+    ) {
+        Icon(Icons.Outlined.LaptopMac, null, tint = MaterialTheme.colorScheme.primary)
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+            Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+/** The small "Mac" badge on chapters made by the Mac with the natural voice. */
+@Composable
+private fun MacBadge() {
+    Text(
+        stringResource(R.string.offline_audio_mac_badge),
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSecondaryContainer,
+        modifier =
+            Modifier
+                .background(MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.shapes.extraSmall)
+                .padding(horizontal = 6.dp, vertical = 1.dp),
+    )
 }
 
 @Composable
@@ -162,7 +235,11 @@ private fun SectionRow(
                         strokeWidth = 3.dp,
                     )
                 SectionAudioState.WAITING ->
-                    Box(Modifier.size(18.dp).border(2.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape))
+                    if (section.waitingForWifi) {
+                        Icon(Icons.Outlined.CloudDownload, null, tint = MaterialTheme.colorScheme.outline)
+                    } else {
+                        Box(Modifier.size(18.dp).border(2.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape))
+                    }
             }
         }
         Column(Modifier.weight(1f)) {
@@ -173,6 +250,7 @@ private fun SectionRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
                 when (section.state) {
                     SectionAudioState.PLAYED -> stringResource(R.string.offline_audio_played)
@@ -186,11 +264,14 @@ private fun SectionRow(
                     SectionAudioState.READY ->
                         stringResource(R.string.offline_audio_ready, stringResource(R.string.offline_audio_minutes, maxOf(1, (section.durationMillis / 60_000).toInt())))
                     SectionAudioState.PREPARING -> stringResource(R.string.offline_audio_preparing, (section.progress * 100).toInt())
-                    SectionAudioState.WAITING -> stringResource(R.string.offline_audio_up_next)
+                    SectionAudioState.WAITING ->
+                        if (section.waitingForWifi) stringResource(R.string.offline_audio_waiting_wifi) else stringResource(R.string.offline_audio_up_next)
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (section.fromMac && !section.waitingForWifi) MacBadge()
+            }
         }
     }
 }

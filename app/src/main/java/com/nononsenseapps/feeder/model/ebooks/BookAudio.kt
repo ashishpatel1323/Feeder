@@ -68,6 +68,9 @@ private data class AudioMeta(
     val words: List<Span>,
     /** Where in the text the audio starts: 0, or later for the chapter being read (spoken from where reading began) */
     val from: Int = 0,
+    /** "mac" when the Feeder Mac app made it with the natural voice ([MacBookAudio]), else "" (this phone) */
+    val source: String = "",
+    val voice: String = "",
 )
 
 /** Which text a chapter's saved chunks belong to. */
@@ -109,6 +112,10 @@ data class SectionAudio(
     val state: SectionAudioState,
     val progress: Float = 0f,
     val durationMillis: Long = 0,
+    /** Made by the Mac with the natural voice */
+    val fromMac: Boolean = false,
+    /** Made by the Mac, in Dropbox, downloaded on Wi-Fi */
+    val waitingForWifi: Boolean = false,
 )
 
 /** Offline audio of one book, for the player's status line and the Offline audio sheet. */
@@ -167,7 +174,8 @@ class BookAudio private constructor(
     }
 
     fun setAhead(count: Int) {
-        val value = count.coerceIn(1, 10)
+        val value = count.coerceIn(1, WHOLE_BOOK)
+        mac.publishAhead(value)
         _ahead.value = value
         prefs.edit { putInt(PREF_AHEAD, value) }
         activeBook()?.let { trim(it) }
@@ -212,6 +220,56 @@ class BookAudio private constructor(
     ): AudioMeta? = runCatching { json.decodeFromString(AudioMeta.serializer(), metaFile(bookId, index).readText()) }.getOrNull()
 
     private fun activeBook(): String? = prefs.getString(PREF_BOOK, null)
+
+    /** Audio the Feeder Mac app made and put in Dropbox. */
+    val mac: MacBookAudio by lazy { MacBookAudio(context, this) }
+
+    internal fun activeBookId(): String? = activeBook()
+
+    /** The chapter being read and the chapters ahead of it. */
+    internal fun windowWithCurrent(bookId: String): List<Int> {
+        val current = currentOf(bookId)
+        return (if (current >= 0) listOf(current) else emptyList()) + window(bookId, current)
+    }
+
+    /** Who made chapter [index]'s audio: [MacBookAudio.SOURCE_MAC], "" (this phone), or null when there is none. */
+    internal fun sourceOf(
+        bookId: String,
+        index: Int,
+    ): String? = readMeta(bookId, index)?.takeIf { audioFile(bookId, index).isFile }?.source
+
+    internal fun stagingFile(
+        bookId: String,
+        index: Int,
+    ): File = MacBookAudio.staging(bookDir(bookId).apply { mkdirs() }, index)
+
+    /**
+     * Keeps chapter [index] made by the Mac ([audio], with its meta [metaJson]) in place of this
+     * phone's own, unless it was made for another text than the one saved here.
+     */
+    internal fun installFromMac(
+        bookId: String,
+        index: Int,
+        audio: File,
+        metaJson: String,
+    ) {
+        val meta = runCatching { json.decodeFromString(AudioMeta.serializer(), metaJson) }.getOrNull() ?: return
+        val saved = text(bookId, index)
+        if (saved != null && (saved.text.hashCode() != meta.textHash || saved.text.length != meta.textLength)) {
+            Log.w(LOG_TAG, "Mac audio for chapter $index is for other text; keeping this phone's")
+            return
+        }
+        val current = currentOf(bookId)
+        if (activeBook() != bookId || (index != current && index !in window(bookId, current))) return
+        val dir = bookDir(bookId)
+        metaFile(bookId, index).delete()
+        File(dir, "s$index.m4a").delete()
+        File(dir, "s$index.wav").delete()
+        chunkDir(bookId, index).deleteRecursively()
+        if (!audio.renameTo(File(dir, "s$index.m4a"))) return
+        metaFile(bookId, index).writeText(json.encodeToString(AudioMeta.serializer(), meta.copy(source = MacBookAudio.SOURCE_MAC)))
+        refresh()
+    }
 
     private fun currentOf(bookId: String): Int = if (activeBook() == bookId) prefs.getInt(PREF_CURRENT, -1) else -1
 
@@ -287,6 +345,9 @@ class BookAudio private constructor(
         trim(bookId)
         refresh()
         schedule()
+        mac.publishAhead(_ahead.value)
+        mac.refresh(bookId)
+        mac.schedule()
     }
 
     private fun trim(bookId: String) {
@@ -360,7 +421,9 @@ class BookAudio private constructor(
     ): PreparedSpeech? {
         val audio = audioFile(bookId, index)
         val meta = readMeta(bookId, index) ?: return null
-        if (!audio.isFile || meta.textHash != text.hashCode() || meta.textLength != text.length || meta.lang != langSetting()) return null
+        // The Mac's audio is in its own voice, whatever language is set here
+        val langOk = meta.source == MacBookAudio.SOURCE_MAC || meta.lang == langSetting()
+        if (!audio.isFile || meta.textHash != text.hashCode() || meta.textLength != text.length || !langOk) return null
         // Saved from where reading began: of no use for reading from before that
         if (offset < meta.from) return null
         return PreparedSpeech(
@@ -388,18 +451,23 @@ class BookAudio private constructor(
         val rows = mutableListOf<SectionAudio>()
         // The last chapter played and deleted, then the one being read, then the ones ahead
         deleted.filter { it < current }.maxOrNull()?.let { rows += SectionAudio(it, label(it), SectionAudioState.PLAYED) }
-        if (current >= 0) rows += SectionAudio(current, label(current), SectionAudioState.PLAYING)
+        if (current >= 0) rows += SectionAudio(current, label(current), SectionAudioState.PLAYING, fromMac = sourceOf(bookId, current) == MacBookAudio.SOURCE_MAC)
         var ready = 0
+        val macState = mac.state.value
         for (i in ahead) {
-            val meta = metaFile(bookId, i)
+            val meta = readMeta(bookId, i)?.takeIf { metaFile(bookId, i).exists() }
+            val inDropbox = macState.bookId == bookId && i in macState.inDropbox
             rows +=
                 when {
-                    meta.exists() -> {
+                    meta != null -> {
                         ready++
-                        val d = runCatching { json.decodeFromString(AudioMeta.serializer(), meta.readText()).durationMillis }.getOrDefault(0)
-                        SectionAudio(i, label(i), SectionAudioState.READY, 1f, d)
+                        SectionAudio(i, label(i), SectionAudioState.READY, 1f, meta.durationMillis, fromMac = meta.source == MacBookAudio.SOURCE_MAC)
                     }
+                    inDropbox -> SectionAudio(i, label(i), SectionAudioState.WAITING, waitingForWifi = true, fromMac = true)
                     now == bookId to i -> SectionAudio(i, label(i), SectionAudioState.PREPARING, makingProgress)
+                    macState.status?.working?.let { it.book == bookId && it.section == i } == true &&
+                        macState.status.isActive(System.currentTimeMillis()) ->
+                        SectionAudio(i, label(i), SectionAudioState.PREPARING, macState.status.working!!.progress, fromMac = true)
                     else -> SectionAudio(i, label(i), SectionAudioState.WAITING)
                 }
         }
@@ -473,7 +541,7 @@ class BookAudio private constructor(
         if (jobRunning) return
         val book = activeBook() ?: return
         val current = currentOf(book)
-        if (window(book, current).none { !metaFile(book, it).exists() }) return
+        if (window(book, current).none { !metaFile(book, it).exists() && !mac.covers(book, it) }) return
         val scheduler: JobScheduler = context.getSystemService() ?: return
         val job =
             JobInfo
@@ -487,7 +555,8 @@ class BookAudio private constructor(
     private fun nextToMake(): Pair<String, SectionText>? {
         val book = activeBook() ?: return null
         val current = currentOf(book)
-        val index = window(book, current).firstOrNull { !metaFile(book, it).exists() } ?: return null
+        // Chapters the Mac makes (or made, waiting for Wi-Fi) are left to it
+        val index = window(book, current).firstOrNull { !metaFile(book, it).exists() && !mac.covers(book, it) } ?: return null
         return text(book, index)?.let { book to it }
     }
 
@@ -647,10 +716,13 @@ class BookAudio private constructor(
         private const val PREF_LANG = "lang"
         const val DEFAULT_AHEAD = 3
 
+        /** Prepare ahead: every chapter to the end of the book */
+        const val WHOLE_BOOK = 1000
+
         /** Sentences per saved chunk: the most that is made again after the job is stopped. */
         const val CHUNK_PARTS = 12
         const val STALE_DAYS = 7L
-        val AHEAD_CHOICES = listOf(1, 2, 3, 5)
+        val AHEAD_CHOICES = listOf(1, 2, 3, 5, WHOLE_BOOK)
 
         @Volatile
         private var instance: BookAudio? = null

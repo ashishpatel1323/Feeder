@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Feed } from '../lib/db'
 import { addFeed, deleteFeed, exportOpml, importOpml, refreshFeeds } from '../lib/refresh'
 import { autoDeviceName, deviceName, setDeviceName } from '../lib/device'
+import { MacAudioSection } from './MacAudioSection'
 import { McpSection } from './McpSection'
 import { addDeviceLink, createSync, forceSync, getSyncState, joinSync, leaveSync, syncNow } from '../lib/sync2'
 import { parseJoinLink } from '../lib/crypto'
@@ -409,6 +410,8 @@ export function SettingsDialog({
 
       <McpSection toast={toast} />
 
+      <MacAudioSection />
+
       <OfflineSection toast={toast} />
 
       <section className="settings-section">
@@ -466,6 +469,7 @@ export function SettingsDialog({
         <label className="row-label">
           Voice
           <select
+            id="read-aloud-voice"
             value={s.readAloudVoice}
             onChange={(e) => {
               updateSettings({ readAloudVoice: e.target.value })

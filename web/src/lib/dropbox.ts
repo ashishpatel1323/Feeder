@@ -535,6 +535,53 @@ export async function uploadFile(path: string, blob: Blob, onProgress?: Progress
   }
 }
 
+/** Writes a small file at [path], replacing what is there (status files, chapter audio). */
+export async function putFile(path: string, blob: Blob, signal?: AbortSignal): Promise<DropboxFile> {
+  const arg = { path, mode: 'overwrite', autorename: false, mute: true }
+  const res = await retrying(
+    () =>
+      call(
+        'https://content.dropboxapi.com/2/files/upload',
+        (t) => ({ method: 'POST', headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/octet-stream', 'Dropbox-API-Arg': headerArg(arg) }, body: blob }),
+        signal,
+      ),
+    signal,
+  )
+  return toFile((await res.json()) as RawEntry)
+}
+
+/** A small text file's contents, or null when it isn't there. */
+export async function readTextFile(path: string, signal?: AbortSignal): Promise<string | null> {
+  try {
+    const res = await call(
+      'https://content.dropboxapi.com/2/files/download',
+      (t) => ({ method: 'POST', headers: { Authorization: `Bearer ${t}`, 'Dropbox-API-Arg': headerArg({ path }) } }),
+      signal,
+    )
+    return await res.text()
+  } catch (e) {
+    if (e instanceof DropboxError && e.status === 409 && e.summary.includes('not_found')) return null
+    throw e
+  }
+}
+
+/** Folders (not files) in one folder of the app folder. A missing folder has none. */
+export async function listSubfolders(path: string, signal?: AbortSignal): Promise<string[]> {
+  const out: string[] = []
+  try {
+    let res = await rpc<{ entries: { '.tag': string; name: string }[]; has_more: boolean; cursor: string }>('files/list_folder', { path, recursive: false }, signal)
+    for (;;) {
+      for (const e of res.entries) if (e['.tag'] === 'folder') out.push(e.name)
+      if (!res.has_more) break
+      res = await rpc('files/list_folder/continue', { cursor: res.cursor }, signal)
+    }
+  } catch (e) {
+    if (e instanceof DropboxError && e.status === 409 && e.summary.includes('not_found')) return []
+    throw e
+  }
+  return out
+}
+
 export async function deleteFile(path: string): Promise<void> {
   try {
     await rpc('files/delete_v2', { path })

@@ -16,13 +16,15 @@
 import Dexie, { type Table } from 'dexie'
 import type { FoliateView } from '../vendor/foliate-js/view.js'
 import { kokoro, KOKORO_PREFIX, type KokoroAudio } from './kokoro'
+import { WHOLE_BOOK } from './macBookAudio'
 import { indexSpeechText, kokoroPieces } from './readaloud'
 import { decodeSpeech, encodeSpeech, type StoredSpeech } from './speechCodec'
 
 const STALE_DAYS = 7
 /** Pieces after the one being read that read aloud makes itself (about its own read-ahead) */
 export const LIVE_AHEAD = 8
-export const AHEAD_CHOICES = [1, 2, 3, 5]
+/** Prepare ahead: 1, 2, 3 or 5 chapters, or the whole book (WHOLE_BOOK) */
+export const AHEAD_CHOICES = [1, 2, 3, 5, WHOLE_BOOK]
 
 interface Piece {
   key: string

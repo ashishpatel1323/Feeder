@@ -529,6 +529,48 @@ class DropboxClient private constructor(
         id: String,
     ) = "$path|$size|$id"
 
+    /** Writes a small file at [path], replacing what is there (status files). */
+    suspend fun putSmall(
+        path: String,
+        bytes: ByteArray,
+    ) = withContext(Dispatchers.IO) {
+        call { token ->
+            Request
+                .Builder()
+                .url("https://content.dropboxapi.com/2/files/upload")
+                .header("Authorization", "Bearer $token")
+                .header(
+                    "Dropbox-API-Arg",
+                    headerArg(
+                        buildJsonObject {
+                            put("path", path)
+                            put("mode", "overwrite")
+                            put("mute", true)
+                        },
+                    ),
+                ).post(bytes.toRequestBody(OCTET))
+                .build()
+        }.close()
+    }
+
+    /** A small text file's contents, or null when it isn't there. */
+    suspend fun readText(path: String): String? =
+        withContext(Dispatchers.IO) {
+            try {
+                call { token ->
+                    Request
+                        .Builder()
+                        .url("https://content.dropboxapi.com/2/files/download")
+                        .header("Authorization", "Bearer $token")
+                        .header("Dropbox-API-Arg", headerArg(buildJsonObject { put("path", path) }))
+                        .post(ByteArray(0).toRequestBody(null))
+                        .build()
+                }.use { it.body.string() }
+            } catch (e: DropboxException) {
+                if (e.status == 409 && "not_found" in e.summary) null else throw e
+            }
+        }
+
     suspend fun delete(path: String) =
         withContext(Dispatchers.IO) {
             try {

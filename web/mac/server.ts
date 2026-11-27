@@ -3,8 +3,10 @@
  * proxy (server/handler.ts) and yt-dlp video saving (server/ytdl.ts), on 127.0.0.1 only.
  * Bundled into mac/dist/server.cjs by vite.server.config.ts.
  */
+import { execFile } from 'node:child_process'
 import { createReadStream } from 'node:fs'
-import { stat } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { extname, join, normalize, sep } from 'node:path'
 import { Readable } from 'node:stream'
@@ -105,6 +107,48 @@ async function mcpApi(req: IncomingMessage, res: ServerResponse, origin: string)
   }
 }
 
+/**
+ * /api/bookaudio/status|aac: chapter audio this Mac makes for the phone (lib/macBookAudio.ts).
+ * aac turns a WAV into AAC (.m4a) with macOS's own afconvert, which every phone plays. Only this
+ * app's own page may call it.
+ */
+async function bookAudioApi(req: IncomingMessage, res: ServerResponse, origin: string) {
+  const sameOrigin = req.headers.origin === origin || (!req.headers.origin && req.headers['sec-fetch-site'] === 'same-origin')
+  if (!sameOrigin || req.headers['x-feeder-app'] !== '1') {
+    res.writeHead(403, { 'content-type': 'application/json' })
+    return void res.end('{"error":"Forbidden"}')
+  }
+  const path = new URL(req.url ?? '/', 'http://x').pathname
+  if (path === '/api/bookaudio/status') {
+    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+    return void res.end(JSON.stringify({ available: process.platform === 'darwin' }))
+  }
+  if (path !== '/api/bookaudio/aac' || req.method !== 'POST') {
+    res.writeHead(404, { 'content-type': 'application/json' })
+    return void res.end('{"error":"Not found"}')
+  }
+  const chunks: Buffer[] = []
+  for await (const c of req) chunks.push(c as Buffer)
+  const dir = await mkdtemp(join(tmpdir(), 'feeder-bookaudio-'))
+  try {
+    const wav = join(dir, 'in.wav')
+    const m4a = join(dir, 'out.m4a')
+    await writeFile(wav, Buffer.concat(chunks))
+    // 48 kbps mono AAC: about 0.37 MB a minute, the same as the phone's own (SpeechEncoding.kt)
+    await new Promise<void>((resolve, reject) =>
+      execFile('/usr/bin/afconvert', ['-f', 'm4af', '-d', 'aac', '-b', '48000', wav, m4a], (e) => (e ? reject(e) : resolve())),
+    )
+    const out = await readFile(m4a)
+    res.writeHead(200, { 'content-type': 'audio/mp4', 'content-length': String(out.length) })
+    res.end(out)
+  } catch (e) {
+    res.writeHead(500, { 'content-type': 'application/json' })
+    res.end(JSON.stringify({ error: (e as Error).message ?? String(e) }))
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+}
+
 export function startServer(root: string, port: number, opts: { mcpDir?: string; nodeBin?: string } = {}): Promise<number> {
   const origin = `http://127.0.0.1:${port}`
   if (opts.mcpDir) {
@@ -114,6 +158,7 @@ export function startServer(root: string, port: number, opts: { mcpDir?: string;
   const server = createServer((req, res) => {
     const run = async () => {
       if (req.url?.startsWith('/api/mcp/')) return mcpApi(req, res, origin)
+      if (req.url?.startsWith('/api/bookaudio/')) return bookAudioApi(req, res, origin)
       if (req.url?.startsWith('/api/ytdl/')) return ytdlMiddleware(req, res, () => undefined)
       if (req.url?.startsWith('/api/')) return api(req, res)
       return file(root, req, res)
