@@ -21,4 +21,11 @@ class MoveRulesTest {
         assertEquals("1.subs.fr.vtt", MoveRules.pickSubtitle(listOf("1.subs.fr.vtt")))
         assertNull(MoveRules.pickSubtitle(emptyList()))
     }
+
+    @Test
+    fun keepsTheVideosOwnPicture() {
+        assertEquals("https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg", MoveRules.pictureUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ", "https://x/y.jpg"))
+        assertEquals("https://cdn/ep.jpg", MoveRules.pictureUrl("https://pod.example/ep1", "https://cdn/ep.jpg"))
+        assertNull(MoveRules.pictureUrl("https://pod.example/ep1", null))
+    }
 }

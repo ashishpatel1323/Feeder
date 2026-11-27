@@ -54,6 +54,8 @@ data class MediaFile(
     val lastOpenedAt: Long = 0,
     /** The picked folder or files it came from */
     val source: String? = null,
+    /** A picture in Dropbox next to it with the same name (.jpg, .png, .webp): its row's thumbnail */
+    val thumb: String? = null,
 ) {
     val isVideo: Boolean get() = kind == MediaRules.VIDEO
     val title: String get() = AudiobookRules.nameWithoutExt(name)
@@ -82,6 +84,7 @@ object MediaRules {
     val VIDEO_EXTENSIONS = setOf("mp4", "m4v", "mkv", "webm", "mov", "avi", "3gp", "ts")
     val AUDIO_EXTENSIONS = setOf("mp3", "m4a", "m4b", "aac", "opus", "ogg", "oga", "flac", "wav", "wma")
     private val SUB_EXTENSIONS = setOf("vtt", "srt")
+    private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp")
 
     fun kindOf(name: String): String? =
         when (AudiobookRules.extOf(name)) {
@@ -91,6 +94,8 @@ object MediaRules {
         }
 
     fun isSubtitle(name: String) = AudiobookRules.extOf(name) in SUB_EXTENSIONS
+
+    fun isImage(name: String) = AudiobookRules.extOf(name) in IMAGE_EXTENSIONS
 
     private fun dirOf(rel: String) = rel.substringBeforeLast('/', "")
 
@@ -109,6 +114,7 @@ object MediaRules {
     ): List<MediaFile> {
         val prefix = root.lowercase(Locale.ROOT) + "/"
         val subs = mutableMapOf<String, String>()
+        val images = mutableMapOf<String, String>()
         val media = mutableListOf<Triple<String, DropboxFile, String>>()
         for (f in files) {
             if (!f.path.lowercase(Locale.ROOT).startsWith(prefix)) continue
@@ -116,6 +122,10 @@ object MediaRules {
             if (isSubtitle(f.name)) {
                 val key = "${dirOf(rel).lowercase(Locale.ROOT)}/${subStem(f.name).lowercase(Locale.ROOT)}"
                 if (key !in subs || AudiobookRules.extOf(f.name) == "vtt") subs[key] = f.path
+                continue
+            }
+            if (isImage(f.name)) {
+                images.putIfAbsent("${dirOf(rel).lowercase(Locale.ROOT)}/${mediaStem(f.name).lowercase(Locale.ROOT)}", f.path)
                 continue
             }
             val kind = kindOf(f.name) ?: continue
@@ -126,6 +136,7 @@ object MediaRules {
         return media.mapNotNull { (rel, f, kind) ->
             if (!seen.add(f.hash)) return@mapNotNull null
             val folder = dirOf(rel)
+            val key = "${folder.lowercase(Locale.ROOT)}/${mediaStem(f.name).lowercase(Locale.ROOT)}"
             MediaFile(
                 id = f.hash,
                 name = f.name,
@@ -133,7 +144,8 @@ object MediaRules {
                 dropboxPath = f.path,
                 size = f.size,
                 kind = kind,
-                subs = subs["${folder.lowercase(Locale.ROOT)}/${mediaStem(f.name).lowercase(Locale.ROOT)}"],
+                subs = subs[key],
+                thumb = images[key],
                 addedAt = runCatching { Instant.parse(f.modified).toEpochMilli() }.getOrDefault(now),
             )
         }
@@ -160,6 +172,7 @@ object MediaRules {
                     folder = if (old.uri != null && old.dropboxPath == null) old.folder else d.folder,
                     name = d.name,
                     subs = d.subs ?: old.subs?.takeIf { it.isPhonePath() },
+                    thumb = d.thumb,
                 ) ?: d
         }
         for (m in have) {
@@ -167,7 +180,7 @@ object MediaRules {
             if (m.dropboxPath == null) {
                 out += m
             } else if (onPhone(m)) {
-                out += m.copy(dropboxPath = null, subs = m.subs?.takeIf { it.isPhonePath() })
+                out += m.copy(dropboxPath = null, subs = m.subs?.takeIf { it.isPhonePath() }, thumb = null)
             }
         }
         return out
@@ -350,6 +363,12 @@ class MediaLibrary private constructor(
     /** The same, for the player's track (its hash is the file's id). */
     fun localFile(t: AudioTrack): File? = File(dir, "${t.hash}.${AudiobookRules.extOf(t.name).ifBlank { "media" }}").takeIf { it.exists() && it.length() == t.size }
 
+    /**
+     * A thumbnail the app keeps with the file (a moved YouTube download's own picture). It goes to
+     * Dropbox next to the file on upload, so other devices show it too.
+     */
+    fun keptThumb(id: String) = File(dir, "$id.jpg")
+
     /** Plays without Dropbox: picked on the phone, or downloaded. */
     fun onPhone(m: MediaFile) = m.uri != null || localFile(m) != null
 
@@ -366,12 +385,21 @@ class MediaLibrary private constructor(
         folder: String,
         kind: String,
         subtitles: File?,
+        thumbnail: ByteArray? = null,
     ): String {
         val id = DropboxClient.contentHash(file)
         val dest = File(dir, "$id.${AudiobookRules.extOf(name).ifBlank { "media" }}")
         if (!file.renameTo(dest)) {
             file.copyTo(dest, overwrite = true)
             file.delete()
+        }
+        thumbnail?.let { bytes ->
+            // Through a temporary file, so a full disk leaves no broken picture behind
+            val part = File(dir, "$id.jpg.part")
+            runCatching {
+                part.writeBytes(bytes)
+                if (!part.renameTo(keptThumb(id))) throw java.io.IOException("Could not keep the picture")
+            }.onFailure { part.delete() }
         }
         val subs =
             subtitles?.let { s ->
@@ -397,6 +425,7 @@ class MediaLibrary private constructor(
     fun deleteFromPhone(id: String) {
         val m = get(id) ?: return
         localFile(m)?.delete()
+        keptThumb(id).delete()
         m.subs?.takeIf { it.startsWith("file:") }?.let {
             File(
                 android.net.Uri
@@ -575,6 +604,7 @@ class MediaLibrary private constructor(
             patch(id) { it.copy(uri = null, source = null) }
         } else {
             localFile(m)?.delete()
+            keptThumb(id).delete()
             change { list -> list.filterNot { it.id == id } }
         }
         _version.update { it + 1 }
@@ -639,6 +669,10 @@ class MediaLibrary private constructor(
                         dropbox.upload(up.path.replace(Regex("\\.[a-zA-Z0-9]+$"), "") + ".$ext", bytes.size.toLong(), { bytes.inputStream().also { st -> st.skip(it) } })
                     }.onFailure { Log.w(LOG_TAG, "Subtitles not uploaded", it) }
                 }
+                keptThumb(id).takeIf { it.exists() && m.thumb == null }?.let { t ->
+                    runCatching { dropbox.upload(up.path.replace(Regex("\\.[a-zA-Z0-9]+$"), "") + ".jpg", t) }
+                        .onFailure { Log.w(LOG_TAG, "Thumbnail not uploaded", it) }
+                }
                 patch(id) { it.copy(dropboxPath = up.path) }
                 _messages.value = "${m.title} is in Dropbox"
             } catch (e: Exception) {
@@ -683,8 +717,10 @@ class MediaLibrary private constructor(
             try {
                 dropbox.delete(path)
                 m.subs?.takeIf { it.startsWith("/") }?.let { runCatching { dropbox.delete(it) } }
+                // The same picture can belong to "Talk.mp3" and "Talk.mp4": it goes with the last of them
+                m.thumb?.takeIf { t -> _items.value.none { it.id != id && it.thumb == t } }?.let { runCatching { dropbox.delete(it) } }
                 if (onPhone(m)) {
-                    patch(id) { it.copy(dropboxPath = null, subs = it.subs?.takeIf { s -> s.isPhonePath() }) }
+                    patch(id) { it.copy(dropboxPath = null, subs = it.subs?.takeIf { s -> s.isPhonePath() }, thumb = null) }
                 } else {
                     change { list -> list.filterNot { it.id == id } }
                 }
