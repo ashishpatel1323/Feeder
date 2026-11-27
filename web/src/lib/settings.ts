@@ -36,6 +36,8 @@ export interface Settings {
   bookAudioDeletePlayed: boolean
   /** Mac app: speak the phone's next ebook chapters with the natural voice into Dropbox (macBookAudio.ts). */
   macBookAudio: boolean
+  /** Audiobook transcripts: chapters to transcribe ahead of where the book plays (WHOLE_BOOK = 1000: all) */
+  transcribeAhead: number
   summaryProvider: 'none' | 'openai'
   /** OpenAI-compatible base URL, e.g. https://api.openai.com/v1 or http://localhost:11434/v1 for Ollama. */
   summaryBaseUrl: string
@@ -74,6 +76,7 @@ export const DEFAULT_SETTINGS: Settings = {
   bookAudioAhead: 3,
   bookAudioDeletePlayed: true,
   macBookAudio: true,
+  transcribeAhead: 1,
   summaryProvider: 'none',
   summaryBaseUrl: 'http://localhost:11434/v1',
   summaryApiKey: '',

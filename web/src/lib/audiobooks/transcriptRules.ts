@@ -11,6 +11,8 @@ export interface TranscriptPiece {
   s: number
   e: number
   c: [number, number, string][]
+  /** "mac" when the Feeder Mac app made it */
+  d?: string
 }
 
 /** A stretch to transcribe: file i from startMs to endMs (file time), starting bookStartMs into the book. */
@@ -60,16 +62,32 @@ export function readyUntil(ranges: Range[], atMs: number): number {
   return ranges.find(([s, e]) => atMs >= s - GAP_MS && atMs < e)?.[1] ?? atMs
 }
 
-/** How far ahead of bookMs to have the transcript ready: the end of the next chapter, 15 to 60 minutes ahead. */
-export function aheadUntil(chapters: Chapter[], bookMs: number, bookLength: number): number {
+/** Transcribe ahead: every chapter to the end of the book */
+export const WHOLE_BOOK = 1000
+export const TRANSCRIBE_AHEAD_CHOICES = [1, 2, 3, 5, WHOLE_BOOK]
+
+/**
+ * How far ahead of bookMs to have the transcript ready: the end of the chapter [ahead] chapters
+ * after the one playing, at least 15 minutes and at most an hour per chapter ahead; the end of the
+ * book for WHOLE_BOOK.
+ */
+export function aheadUntil(chapters: Chapter[], bookMs: number, bookLength: number, ahead = 1): number {
+  if (ahead >= WHOLE_BOOK) return bookLength > 0 ? bookLength : Infinity
   let k = -1
   chapters.forEach((c, i) => {
     if (c.bookMs <= bookMs) k = i
   })
-  const next = chapters[k + 1]
+  const next = chapters[k + ahead]
   const nextEnd = next ? next.bookMs + next.lengthMs : Infinity
-  const end = Math.min(Math.max(nextEnd, bookMs + AHEAD_MIN_MS), bookMs + AHEAD_MAX_MS)
+  const end = Math.min(Math.max(nextEnd, bookMs + AHEAD_MIN_MS), bookMs + AHEAD_MAX_MS * ahead)
   return bookLength > 0 ? Math.min(end, bookLength) : end
+}
+
+/** Chapters (or the whole book, as one, when it has none) transcribed from start to end. */
+export function chaptersReady(chapters: Chapter[], ranges: Range[], bookLength: number): { ready: number; total: number } {
+  const spans = chapters.length ? chapters.map((c) => [c.bookMs, c.bookMs + c.lengthMs] as const) : bookLength > 0 ? [[0, bookLength] as const] : []
+  const ready = spans.filter(([s, e]) => ranges.some(([a, b]) => a <= s + GAP_MS && b >= e - GAP_MS)).length
+  return { ready, total: spans.length }
 }
 
 /**
@@ -77,12 +95,12 @@ export function aheadUntil(chapters: Chapter[], bookMs: number, bookLength: numb
  * aheadUntil, inside one file, stopping where the next piece starts. Null when ready far enough
  * ahead, or while the files' lengths aren't known.
  */
-export function nextTarget(trackLengths: number[], chapters: Chapter[], pieces: TranscriptPiece[], bookMs: number): PieceTarget | null {
+export function nextTarget(trackLengths: number[], chapters: Chapter[], pieces: TranscriptPiece[], bookMs: number, ahead = 1): PieceTarget | null {
   if (!trackLengths.length || trackLengths.some((l) => !(l > 0))) return null
   const bookLength = trackLengths.reduce((a, b) => a + b, 0)
   const ranges = pieceRanges(pieces)
   const at = Math.min(Math.max(0, bookMs), bookLength)
-  const until = aheadUntil(chapters, bookMs, bookLength)
+  const until = aheadUntil(chapters, bookMs, bookLength, ahead)
   const from = readyUntil(ranges, at)
   if (from >= until || from >= bookLength - 500) return null
   const nothingHere = from === bookMs

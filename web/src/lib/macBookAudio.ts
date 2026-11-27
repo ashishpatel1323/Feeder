@@ -16,6 +16,7 @@
  * Chapter text is made exactly as the phone's reader makes it (ebook-android/textindex.ts), so the
  * phone can check the audio is for its text (Java String.hashCode, textLength).
  */
+import { useEffect, useState } from 'react'
 import { indexText } from '../ebook-android/textindex'
 import { db } from './db'
 import { getDropbox, listFolder, listSubfolders, putFile, readTextFile, deleteFile, EBOOKS_FOLDER } from './dropbox'
@@ -78,11 +79,15 @@ export interface MacStatus {
   voice: string
   working: { book: string; title: string; section: number; label: string; progress: number } | null
   books: MacBookStatus[]
+  /** Audiobook transcripts made here (audiobooks/transcripts.ts) */
+  transcripts?: import('./audiobooks/transcripts').MacTranscriptStatus
 }
 
 /** phone.json: the phone's Prepare ahead setting, so the Mac keeps the same window. */
 export interface PhonePrefs {
   ahead: number
+  /** Audiobook transcripts: chapters to transcribe ahead (WHOLE_BOOK: all) */
+  transcribeAhead?: number
   at: number
 }
 
@@ -213,6 +218,8 @@ type Listener = (s: MacRunState) => void
 
 class MacBookAudio {
   state: MacRunState = { available: false, enabled: false, status: null, error: '' }
+  /** The phone's settings (phone.json), read every round */
+  phone: PhonePrefs | null = null
   private listeners = new Set<Listener>()
   private running = false
   private started = false
@@ -283,6 +290,7 @@ class MacBookAudio {
     const phone = await readTextFile(`${MAC_AUDIO_FOLDER}/phone.json`)
       .then((t) => (t ? (JSON.parse(t) as PhonePrefs) : null))
       .catch(() => null)
+    this.phone = phone
     const ahead = phone?.ahead && phone.ahead > 0 ? phone.ahead : settings.bookAudioAhead
     const positions = await db.bookPos.toArray()
     const library = await db.books.toArray()
@@ -326,7 +334,8 @@ class MacBookAudio {
   }
 
   private async beat(voice: string, books: MacBookStatus[], force: boolean) {
-    const status: MacStatus = { seen: Date.now(), voice, working: this.working, books }
+    const transcripts = await import('./audiobooks/transcripts').then((m) => m.macTranscriptStatus()).catch(() => undefined)
+    const status: MacStatus = { seen: Date.now(), voice, working: this.working, books, ...(transcripts ? { transcripts } : {}) }
     this.emit({ status })
     if (!force && status.seen - this.lastBeat < HEARTBEAT_MS) return
     this.lastBeat = status.seen
@@ -436,3 +445,38 @@ class MacBookAudio {
 }
 
 export const macBookAudio = new MacBookAudio()
+
+/** The Mac counts as on when it was seen this recently */
+export const MAC_ACTIVE_MS = 15 * 60_000
+
+/**
+ * What the Mac is doing (its mac.json in Dropbox), for other browsers' summary lines; null in the
+ * Mac app itself, without Dropbox, or before the Mac ever wrote one. Checked every two minutes.
+ */
+export function useMacStatus(): MacStatus | null {
+  const [status, setStatus] = useState<MacStatus | null>(null)
+  useEffect(() => {
+    let stop = false
+    const load = async () => {
+      if (macBookAudio.state.available || !(await getDropbox())) return
+      const text = await readTextFile(`${MAC_AUDIO_FOLDER}/mac.json`).catch(() => null)
+      if (!stop && text) setStatus(JSON.parse(text) as MacStatus)
+    }
+    void load()
+    const t = window.setInterval(() => void load(), 2 * 60_000)
+    return () => {
+      stop = true
+      window.clearInterval(t)
+    }
+  }, [])
+  return status
+}
+
+/** "2 min ago" */
+export function seenAgo(ts: number, now = Date.now()): string {
+  const min = Math.max(0, Math.round((now - ts) / 60_000))
+  if (min < 1) return 'just now'
+  if (min < 60) return `${min} min ago`
+  const h = Math.round(min / 60)
+  return h < 24 ? `${h} h ago` : `${Math.round(h / 24)} days ago`
+}

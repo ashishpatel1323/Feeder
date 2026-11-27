@@ -11,11 +11,14 @@ export interface TranscriptSection {
   /** Cues firstCue up to (not including) endCue */
   firstCue: number
   endCue: number
+  /** A small label after the title, e.g. "Mac" for an audiobook chapter transcribed on the Mac */
+  badge?: string
 }
 
 export interface TranscriptChapter {
   startMs: number
   title: string
+  badge?: string
 }
 
 export const TRANSCRIPT_BLOCK_MS = 5 * 60 * 1000
@@ -32,7 +35,7 @@ export function transcriptSections(cues: TranscriptCue[], chapters: TranscriptCh
       // Lines before the first chapter's start belong to it
       const first = i === 0 ? 0 : firstFrom(ch.startMs)
       const end = i + 1 < sorted.length ? firstFrom(sorted[i + 1].startMs) : cues.length
-      return { startMs: ch.startMs, title: ch.title, firstCue: first, endCue: Math.max(first, end) }
+      return { startMs: ch.startMs, title: ch.title, firstCue: first, endCue: Math.max(first, end), ...(ch.badge ? { badge: ch.badge } : {}) }
     })
   }
   const last = cues[cues.length - 1]
