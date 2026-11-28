@@ -111,6 +111,7 @@ import com.nononsenseapps.feeder.ui.compose.highlights.SketchEditorDialog
 import com.nononsenseapps.feeder.ui.compose.highlights.rememberPenState
 import com.nononsenseapps.feeder.ui.compose.highlights.PenBar
 import com.nononsenseapps.feeder.ui.compose.highlights.InkPreviewDialog
+import com.nononsenseapps.feeder.ui.compose.highlights.VolumeKeysTurnPages
 import com.nononsenseapps.feeder.ui.compose.history.HistoryGraphCard
 import com.nononsenseapps.feeder.ui.compose.history.historyItems
 import com.nononsenseapps.feeder.ui.compose.history.rememberHistory
@@ -838,6 +839,8 @@ fun EbookReaderScreen(
     }
 
     LaunchedEffect(pen.drawAll, pen.color, pen.erasing, opened) { if (opened) js("feeder.setPen&&feeder.setPen(${q(pen.json())})") }
+    // Draw on page: fingers write, so the volume keys turn the pages (next / previous in reading order)
+    VolumeKeysTurnPages(enabled = pen.drawAll && opened) { forward -> js(if (forward) "feeder.pageNext&&feeder.pageNext()" else "feeder.pagePrev&&feeder.pagePrev()") }
     inkOpen?.let { id ->
         val h = highlights.firstOrNull { it.id == id }
         if (h == null) {

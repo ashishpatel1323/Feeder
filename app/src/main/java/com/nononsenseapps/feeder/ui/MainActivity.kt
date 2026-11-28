@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.KeyEvent
+import android.view.MotionEvent
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -30,6 +31,8 @@ import com.nononsenseapps.feeder.base.DIAwareComponentActivity
 import com.nononsenseapps.feeder.model.PlaybackStatus
 import com.nononsenseapps.feeder.model.TTSStateHolder
 import com.nononsenseapps.feeder.notifications.NotificationsWorker
+import com.nononsenseapps.feeder.ui.compose.highlights.DrawingVolumeKeys
+import com.nononsenseapps.feeder.ui.compose.highlights.StylusButton
 import com.nononsenseapps.feeder.ui.compose.navigation.AddFeedDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.ArticleDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.DiscoverDestination
@@ -97,6 +100,8 @@ class MainActivity : DIAwareComponentActivity() {
         keyCode: Int,
         event: KeyEvent?,
     ): Boolean {
+        // Draw on page is on (fingers write): the volume keys move the page instead
+        if (DrawingVolumeKeys.onKeyDown(keyCode)) return true
         if (mainActivityViewModel.isPagingMode.value && repository.isArticleOpen.value) {
             when (keyCode) {
                 KeyEvent.KEYCODE_VOLUME_UP -> {
@@ -110,6 +115,20 @@ class MainActivity : DIAwareComponentActivity() {
             }
         }
         return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onKeyUp(
+        keyCode: Int,
+        event: KeyEvent?,
+    ): Boolean {
+        if (DrawingVolumeKeys.onKeyUp(keyCode)) return true
+        return super.onKeyUp(keyCode, event)
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        // The stylus side button erases while writing on a page
+        StylusButton.update(ev)
+        return super.dispatchTouchEvent(ev)
     }
 
     private fun maybeRequestSync() =

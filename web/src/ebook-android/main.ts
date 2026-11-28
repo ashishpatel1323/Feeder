@@ -357,6 +357,9 @@ function ttsClear() {
   goToFraction: (f: number) => void view?.goToFraction(f),
   next: () => void view?.goRight(),
   prev: () => void view?.goLeft(),
+  /** Next / previous page in reading order (right-to-left books too): the volume keys while drawing. */
+  pageNext: () => void view?.next(),
+  pagePrev: () => void view?.prev(),
   nextSection: () => void nextSection(view),
   prevSection: () => void prevSection(view),
   clearSelection: () => view?.deselect(),

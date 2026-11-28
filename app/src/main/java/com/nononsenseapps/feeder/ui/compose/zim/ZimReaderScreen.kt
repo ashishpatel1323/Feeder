@@ -104,6 +104,7 @@ import com.nononsenseapps.feeder.ui.compose.highlights.SketchEditorDialog
 import com.nononsenseapps.feeder.ui.compose.highlights.rememberPenState
 import com.nononsenseapps.feeder.ui.compose.highlights.PenBar
 import com.nononsenseapps.feeder.ui.compose.highlights.InkPreviewDialog
+import com.nononsenseapps.feeder.ui.compose.highlights.VolumeKeysTurnPages
 import com.nononsenseapps.feeder.ui.compose.history.HistorySheet
 import com.nononsenseapps.feeder.ui.compose.history.rememberOpenTracker
 import com.nononsenseapps.feeder.ui.compose.navigation.HideMainBar
@@ -655,6 +656,11 @@ fun ZimReaderScreen(
 
     // The page script needs the pen settings, and the current ones after each page load
     LaunchedEffect(pen.drawAll, pen.color, pen.erasing, pageLoads) { js("window.feederZim&&feederZim.setPen&&feederZim.setPen(${q(pen.json())})") }
+    // Draw on page: fingers write, so the volume keys scroll the page by a screen
+    VolumeKeysTurnPages(enabled = pen.drawAll) { forward ->
+        val sign = if (forward) "" else "-"
+        js("(document.scrollingElement||document.documentElement).scrollBy({top:${sign}innerHeight*0.9,behavior:'smooth'})")
+    }
     inkOpen?.let { id ->
         val h = bookHighlights.firstOrNull { it.id == id }
         if (h == null) {

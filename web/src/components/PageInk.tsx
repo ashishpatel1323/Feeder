@@ -157,3 +157,31 @@ export function InkPreview(p: { note: Highlight; canSwitch: boolean; onSwitch: (
     </div>
   )
 }
+
+/**
+ * While Draw on page is on, a finger or the mouse writes instead of scrolling, so keys move the
+ * page (the web's stand-in for the phone's volume keys): Page Down, Space and ↓ go about a screen
+ * down, Page Up, Shift+Space and ↑ a screen up. `doc` is a page frame's document (ZIM), whose
+ * keys don't reach the window.
+ */
+export function usePageKeysWhileDrawing(on: boolean, scrollBy: (dir: 1 | -1) => void, doc?: Document | null) {
+  const latest = useRef(scrollBy)
+  latest.current = scrollBy
+  useEffect(() => {
+    if (!on) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return
+      const t = e.target as HTMLElement | null
+      if (t && (/INPUT|TEXTAREA|SELECT/.test(t.tagName) || t.isContentEditable)) return
+      if (document.querySelector('.modal-backdrop')) return
+      const dir = e.key === 'PageDown' || e.key === 'ArrowDown' || (e.key === ' ' && !e.shiftKey) ? 1 : e.key === 'PageUp' || e.key === 'ArrowUp' || (e.key === ' ' && e.shiftKey) ? -1 : 0
+      if (!dir) return
+      e.preventDefault()
+      latest.current(dir)
+    }
+    const targets: (Window | Document)[] = [window]
+    if (doc) targets.push(doc)
+    targets.forEach((t) => t.addEventListener('keydown', onKey as EventListener, true))
+    return () => targets.forEach((t) => t.removeEventListener('keydown', onKey as EventListener, true))
+  }, [on, doc])
+}

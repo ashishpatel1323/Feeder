@@ -89,6 +89,7 @@ import com.nononsenseapps.feeder.ui.compose.components.TranslationProgressConten
 import com.nononsenseapps.feeder.ui.compose.components.rememberDeleteConfirmer
 import com.nononsenseapps.feeder.ui.compose.highlights.ArticleHighlightsHost
 import com.nononsenseapps.feeder.ui.compose.highlights.ArticleHighlightsState
+import com.nononsenseapps.feeder.ui.compose.highlights.VolumeKeysTurnPages
 import com.nononsenseapps.feeder.ui.compose.html.ColumnArticleContent
 import com.nononsenseapps.feeder.ui.compose.item.ItemHeader
 import com.nononsenseapps.feeder.ui.compose.item.PodcastMediaBlock
@@ -203,6 +204,10 @@ fun ArticleScreen(
         feedTitle = viewState.feedDisplayTitle,
         imageUrl = viewState.image?.url,
     ) { highlights ->
+        // Draw on page: fingers write, so the volume keys scroll the article
+        VolumeKeysTurnPages(enabled = highlights?.drawOnPage == true) { forward ->
+            mavm.emitScrollCommand(if (forward) ScrollDirection.DOWN else ScrollDirection.UP)
+        }
         ArticleScreen(
             highlights = highlights,
             viewState = viewState,

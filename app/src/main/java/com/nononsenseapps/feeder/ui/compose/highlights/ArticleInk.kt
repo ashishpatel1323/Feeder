@@ -134,8 +134,8 @@ internal fun DrawScope.drawInkStrokes(
 
 /**
  * Lets a stylus write on the article (any pointer while Draw on page is on), drawing the strokes
- * live and finishing a note a moment after the pen lifts. The pen's eraser end, or the eraser in
- * the pen bar, removes strokes from notes on the page.
+ * live and finishing a note a moment after the pen lifts. The pen's eraser end, its side button
+ * held down (S Pen), or the eraser in the pen bar, removes strokes from notes on the page.
  */
 fun Modifier.articleInkCapture(ink: ArticleInk?): Modifier =
     if (ink == null) {
@@ -255,7 +255,7 @@ fun Modifier.articleInkCapture(ink: ArticleInk?): Modifier =
                         }
                         down.consume()
                         job[0]?.cancel()
-                        val erase = ink.pen.erasing || down.type == PointerType.Eraser
+                        val erase = ink.pen.erasing || down.type == PointerType.Eraser || (stylus && StylusButton.pressed)
                         fun width(pressure: Float) = if (stylus && pressure > 0f) 2.2f * density * (0.5f + pressure) else 2.2f * density
                         if (erase) {
                             eraseAt(down.position, density)
