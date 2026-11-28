@@ -27,6 +27,7 @@ import {
 import { updateSettings, type Settings } from '../lib/settings'
 import { syncNow } from '../lib/sync2'
 import { Icon, type IconName } from './Icon'
+import { MoreMenu } from './MoreMenu'
 
 interface Props {
   feeds: Feed[]
@@ -71,21 +72,6 @@ const SIZES: [HomeSize, string][] = [
   ['m', 'M'],
   ['l', 'L'],
 ]
-
-function Segmented<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: [T, string][]; onChange: (v: T) => void }) {
-  return (
-    <span className="home-seg-wrap">
-      <span className="home-seg-label">{label}</span>
-      <span className="home-seg" role="radiogroup" aria-label={label}>
-        {options.map(([v, l]) => (
-          <button key={v} type="button" role="radio" aria-checked={value === v} className={value === v ? 'on' : ''} onClick={() => onChange(v)}>
-            {l}
-          </button>
-        ))}
-      </span>
-    </span>
-  )
-}
 
 /** Feed artwork, or a generated tile with the feed's initials when it has none (or it fails to load). */
 function Art({ h, mini = false }: { h: HomeFeed; mini?: boolean }) {
@@ -428,22 +414,21 @@ export function HomePage(p: Props) {
               ) : null}
             </>
           ) : null}
-          <button type="button" className="mf-btn" onClick={p.onRefresh} disabled={!!p.refreshing}>
-            <Icon name="refresh" size={18} />
-            <span>{p.refreshing ? `Refreshing ${p.refreshing}` : 'Refresh all'}</span>
-          </button>
-          <button type="button" className="mf-btn" onClick={p.onSearch} title="Search everything (⌘K or /)">
-            <Icon name="search" size={18} />
-            <span>Search</span>
-          </button>
-          <button type="button" className="mf-btn" onClick={p.onArrange} title="Manage feeds: folders, order and settings">
-            <Icon name="tune" size={18} />
-            <span>Manage</span>
-          </button>
           <button type="button" className="mf-btn primary" onClick={p.onAddFeed}>
             <Icon name="add" size={18} />
             <span>Add feed</span>
           </button>
+          <MoreMenu
+            label="Feeds"
+            entries={[
+              { icon: 'refresh', label: p.refreshing ? `Refreshing ${p.refreshing}` : 'Refresh all', onClick: p.onRefresh, disabled: !!p.refreshing },
+              { icon: 'tune', label: 'Manage feeds', onClick: p.onArrange },
+              { icon: 'newFolder', label: 'New folder', onClick: () => void newFolder(), hidden: openFolder !== null },
+              { icon: 'dragHandle', label: 'Arrange', onClick: p.onArrange },
+              'separator',
+              { icon: 'search', label: 'Search everything', kbd: '⌘K', onClick: p.onSearch },
+            ]}
+          />
         </header>
 
         <div className="home-chips" aria-label="Filter by type">
@@ -458,26 +443,29 @@ export function HomePage(p: Props) {
             {openFolder !== null ? `In ${openFolder}` : filter.folder !== null ? filter.folder || 'No folder' : filter.kind ? KIND_LABELS[filter.kind] : 'All feeds'}
             <span>{summary}</span>
           </span>
-          {openFolder === null ? <Segmented label="Group" value={group} options={GROUPS} onChange={(v) => setSetting({ homeGroup: v })} /> : null}
-          <Segmented label="Sort" value={sort} options={SORTS} onChange={(v) => setSetting({ homeSort: v })} />
-          <Segmented label="View" value={layout} options={LAYOUTS} onChange={(v) => setSetting({ homeLayout: v })} />
-          {!list && !asFolders ? <Segmented label="Size" value={size} options={SIZES} onChange={(v) => setSetting({ homeSize: v })} /> : null}
-          {list && asFolders ? (
-            <button type="button" className="mf-btn" onClick={() => setSetting({ homeFolded: allFolded ? [] : folderTags })}>
-              <Icon name={allFolded ? 'unfoldMore' : 'unfoldLess'} size={18} />
-              <span>{allFolded ? 'Unfold all' : 'Fold all'}</span>
-            </button>
-          ) : null}
-          {openFolder === null ? (
-            <button type="button" className="mf-btn" onClick={() => void newFolder()}>
-              <Icon name="newFolder" size={18} />
-              <span>New folder</span>
-            </button>
-          ) : null}
-          <button type="button" className="mf-btn" title="Drag feeds and folders into your own order" onClick={p.onArrange}>
-            <Icon name="dragHandle" size={18} />
-            <span>Arrange</span>
-          </button>
+          <span className="mf-sp" />
+          {/* One pill per choice made once in a while: Sort (with Group) and View */}
+          <MoreMenu
+            label="Sort and group"
+            pill={`Sort: ${SORTS.find(([v]) => v === sort)?.[1] ?? ''}`}
+            entries={[
+              ...SORTS.map(([v, l]) => ({ icon: 'sort' as IconName, label: l, checked: sort === v, onClick: () => setSetting({ homeSort: v }) })),
+              ...(openFolder === null
+                ? ['separator' as const, ...GROUPS.map(([v, l]) => ({ icon: 'newFolder' as IconName, label: `Group: ${l}`, checked: group === v, onClick: () => setSetting({ homeGroup: v }) }))]
+                : []),
+            ]}
+          />
+          <MoreMenu
+            label="View"
+            pill={LAYOUTS.find(([v]) => v === layout)?.[1] ?? 'View'}
+            entries={[
+              ...LAYOUTS.map(([v, l]) => ({ icon: (v === 'tiles' ? 'gridView' : 'viewAgenda') as IconName, label: l, checked: layout === v, onClick: () => setSetting({ homeLayout: v }) })),
+              ...(!list && !asFolders
+                ? ['separator' as const, ...SIZES.map(([v, l]) => ({ icon: 'gridView' as IconName, label: `Size ${l}`, checked: size === v, onClick: () => setSetting({ homeSize: v }) }))]
+                : []),
+              ...(list && asFolders ? ['separator' as const, { icon: (allFolded ? 'unfoldMore' : 'unfoldLess') as IconName, label: allFolded ? 'Unfold all' : 'Fold all', onClick: () => setSetting({ homeFolded: allFolded ? [] : folderTags }) }] : []),
+            ]}
+          />
         </div>
 
         {body}

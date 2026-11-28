@@ -263,15 +263,43 @@ fun PlaylistTile(
     color: Long,
     size: Int,
     modifier: Modifier = Modifier,
+    /** Art of the playlist's first items: one fills the tile, four make a 2×2 collage (redesign). */
+    images: List<String> = emptyList(),
 ) {
+    val shape = RoundedCornerShape((size / 4).dp)
     Box(
         contentAlignment = Alignment.Center,
         modifier =
             modifier
                 .size(size.dp)
-                .background(Color(color), RoundedCornerShape((size / 4).dp)),
+                .clip(shape)
+                .background(Color(color), shape),
     ) {
-        Text(icon, fontSize = (size * 0.42).sp, color = Color.White)
+        when {
+            images.size >= 4 ->
+                androidx.compose.foundation.layout.Column {
+                    images.take(4).chunked(2).forEach { rowImages ->
+                        androidx.compose.foundation.layout.Row {
+                            rowImages.forEach { url ->
+                                coil3.compose.AsyncImage(
+                                    model = url,
+                                    contentDescription = null,
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                    modifier = Modifier.size((size / 2).dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            images.isNotEmpty() ->
+                coil3.compose.AsyncImage(
+                    model = images.first(),
+                    contentDescription = null,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    modifier = Modifier.size(size.dp),
+                )
+            else -> Text(icon, fontSize = (size * 0.42).sp, color = Color.White)
+        }
     }
 }
 

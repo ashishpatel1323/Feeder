@@ -25,6 +25,7 @@ import { fold } from '../lib/search'
 import { TypeBadge, useItemFacts } from './ItemRow'
 import { LocalVideo, VideoOfflineControls } from './Offline'
 import { preferSavedImages, useOnline } from '../lib/offline'
+import { fullTextErrorText } from '../lib/fetchError'
 
 interface Props {
   item: Item
@@ -107,7 +108,7 @@ export function Reader(p: Props) {
       .catch((e) => {
         if (cancelled) return
         setFullState('error')
-        setFullError(e instanceof Error ? e.message : String(e))
+        setFullError(fullTextErrorText(e instanceof Error ? e.message : String(e)))
       })
     return () => {
       cancelled = true
@@ -561,7 +562,7 @@ export function Reader(p: Props) {
             {fullMode && fullState === 'loading' ? <p className="notice">Loading full text…</p> : null}
             {fullMode && fullState === 'error' ? (
               <p className="notice error">
-                Couldn't load the full text: {fullError}. Showing the feed's text instead.
+                {fullError} Showing the feed's text instead.
                 {item.link ? (
                   <>
                     {' '}
