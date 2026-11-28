@@ -265,6 +265,19 @@ export function attachInkCapture(doc: Document, o: InkCapture): () => void {
         range.setEnd(t, Math.min(t.length, s + 24))
       }
     }
+    // Whole words: the note is about words, not the letters the pen started on
+    if (range.startContainer.nodeType === Node.TEXT_NODE) {
+      const t = range.startContainer as Text
+      let i = range.startOffset
+      while (i > 0 && !/\s/.test(t.data[i - 1])) i--
+      range.setStart(t, i)
+    }
+    if (range.endContainer.nodeType === Node.TEXT_NODE) {
+      const t = range.endContainer as Text
+      let i = range.endOffset
+      while (i < t.length && !/\s/.test(t.data[i])) i++
+      range.setEnd(t, i)
+    }
     const block = blockOf(range.startContainer, o.root)
     const first = block.getClientRects()[0] ?? block.getBoundingClientRect()
     const bx = first.left - rr.left

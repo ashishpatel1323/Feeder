@@ -279,7 +279,12 @@ fun ColumnArticleContent(
         LocalReadAloudTapHandler provides tapHandler,
         LocalFastReading provides fastReading,
     ) {
-        Column(Modifier.fillMaxWidth().articleInkCapture(articleInk)) {
+        // Same spacing and alignment as the reader column it sits in (ReaderView)
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.fillMaxWidth().articleInkCapture(articleInk),
+        ) {
         articleContent.elements.forEachIndexed { index, element ->
             ProvideTextStyle(
                 MaterialTheme.typography.bodyLarge.merge(

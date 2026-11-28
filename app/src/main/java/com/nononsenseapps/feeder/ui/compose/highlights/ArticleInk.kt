@@ -203,6 +203,9 @@ fun Modifier.articleInkCapture(ink: ArticleInk?): Modifier =
                 val len = layout.layoutInput.text.length
                 if (e <= s || layout.layoutInput.text.substring(s, e).isBlank()) e = minOf(len, s + 24)
                 if (e <= s) return
+                // Whole words: the note is about words, not the letters the pen started on
+                s = layout.getWordBoundary(s.coerceIn(0, maxOf(0, len - 1))).start.coerceAtMost(s)
+                e = layout.getWordBoundary((e - 1).coerceIn(0, maxOf(0, len - 1))).end.coerceAtLeast(e)
                 val paragraphs = LocalParagraphIndex.of(ink, text)
                 val data =
                     InkData(
@@ -366,5 +369,5 @@ internal fun markerRect(
     density: Float,
 ): Rect {
     val h = 14f * density
-    return Rect(box.left - 2 * density, box.top - h * 0.55f, box.left - 2 * density + h * 1.3f, box.top - h * 0.55f + h)
+    return Rect(box.left - 2 * density, box.top - h * 0.15f, box.left - 2 * density + h * 1.3f, box.top - h * 0.15f + h)
 }
