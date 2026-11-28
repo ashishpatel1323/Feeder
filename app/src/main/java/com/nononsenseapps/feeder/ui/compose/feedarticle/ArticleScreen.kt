@@ -205,7 +205,7 @@ fun ArticleScreen(
         imageUrl = viewState.image?.url,
     ) { highlights ->
         // Draw on page: fingers write, so the volume keys scroll the article
-        VolumeKeysTurnPages(enabled = highlights?.drawOnPage == true) { forward ->
+        VolumeKeysTurnPages(enabled = highlights?.drawOnPage == true && !showOriginalPage) { forward ->
             mavm.emitScrollCommand(if (forward) ScrollDirection.DOWN else ScrollDirection.UP)
         }
         ArticleScreen(
