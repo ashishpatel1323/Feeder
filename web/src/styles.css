@@ -5904,8 +5904,7 @@ label.check.inline {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.car-article .car-kind,
-.car-article .car-extra {
+.car-article .car-kind {
   display: none;
 }
 .car-article .qp-controls.big .qp-btn {
@@ -5944,7 +5943,8 @@ label.check.inline {
 }
 /* A phone on its side: buttons on the left, the text on the right */
 @media (max-height: 500px) and (orientation: landscape) {
-  .queue-player.car-article {
+  .queue-player.car-article,
+  .app .queue-player.car-article {
     flex-direction: row;
   }
   .car-article .car-head {

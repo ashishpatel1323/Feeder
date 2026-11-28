@@ -75,7 +75,7 @@ fun SpokenArticleText(
     var currentLayout by remember(text) { mutableStateOf<Pair<Int, TextLayoutResult>?>(null) }
     val paper = LocalPaperMode.current
     val stopFollowing =
-        remember {
+        remember(articleId) {
             object : NestedScrollConnection {
                 override fun onPreScroll(
                     available: Offset,

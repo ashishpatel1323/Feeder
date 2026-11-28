@@ -743,11 +743,14 @@ private fun CarMode(
                     }
                 }
                 Row(horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    BigButton(Icons.Default.SkipPrevious, stringResource(R.string.queue_previous), 64) { viewModel.previous() }
-                    BigButton(Icons.Default.Replay10, if (isArticle) stringResource(R.string.queue_back) else "10 s", 64) { viewModel.seekBy(-10_000) }
-                    BigButton(if (queue.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, null, 96, primary = true) { viewModel.toggle() }
-                    BigButton(Icons.Default.Forward10, if (isArticle) stringResource(R.string.queue_ahead) else "10 s", 64) { viewModel.seekBy(10_000) }
-                    BigButton(Icons.Default.SkipNext, stringResource(R.string.queue_next), 64, enabled = queue.hasNext) { viewModel.next() }
+                    // Side by side the controls get half the width, so the buttons are smaller
+                    val small = if (sideBySide) 48 else 64
+                    val big = if (sideBySide) 68 else 96
+                    BigButton(Icons.Default.SkipPrevious, stringResource(R.string.queue_previous), small) { viewModel.previous() }
+                    BigButton(Icons.Default.Replay10, if (isArticle) stringResource(R.string.queue_back) else "10 s", small) { viewModel.seekBy(-10_000) }
+                    BigButton(if (queue.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, null, big, primary = true) { viewModel.toggle() }
+                    BigButton(Icons.Default.Forward10, if (isArticle) stringResource(R.string.queue_ahead) else "10 s", small) { viewModel.seekBy(10_000) }
+                    BigButton(Icons.Default.SkipNext, stringResource(R.string.queue_next), small, enabled = queue.hasNext) { viewModel.next() }
                 }
                 val nextTitle = queue.ids.getOrNull(queue.index + 1)?.let { state.byId[it]?.title }
                 Text(

@@ -420,7 +420,11 @@ fun CompactTTSPlayer(
                 )
             } else {
                 // Landscape on a phone: one row, so the article keeps most of the screen
-                val oneRow = LocalConfiguration.current.screenHeightDp < ONE_ROW_MAX_HEIGHT_DP && !wordMode.showWord
+                val config = LocalConfiguration.current
+                val oneRow =
+                    config.screenHeightDp < ONE_ROW_MAX_HEIGHT_DP &&
+                        config.screenWidthDp >= ONE_ROW_MIN_WIDTH_DP &&
+                        !wordMode.showWord
                 val seekArea: @Composable () -> Unit = {
                     if (muted) {
                         var scrubIndex by remember { mutableStateOf<Int?>(null) }
@@ -1237,6 +1241,9 @@ private const val SEEK_STEP_MILLIS = 10_000L
 
 // Below this screen height (a phone on its side) the player is one row
 private const val ONE_ROW_MAX_HEIGHT_DP = 500
+
+// One row needs room for 5 controls (~270dp), speed/mute/menu/close (~200dp) and a usable seek bar
+private const val ONE_ROW_MIN_WIDTH_DP = 600
 
 private const val MINIMIZE_DRAG_PX = 40f
 

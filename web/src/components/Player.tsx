@@ -115,7 +115,9 @@ export function Player({ state, settings, currentTitle, hasPrev, hasNext, nextTi
   )
   const swipe = {
     onTouchStart: (e: TouchEvent) => {
-      swipeY.current = e.touches[0]?.clientY ?? null
+      // A drag that starts in a popup menu scrolls the menu, not the panel
+      const inMenu = (e.target as HTMLElement).closest('.player-menu')
+      swipeY.current = inMenu ? null : (e.touches[0]?.clientY ?? null)
     },
     onTouchEnd: (e: TouchEvent) => {
       const start = swipeY.current
