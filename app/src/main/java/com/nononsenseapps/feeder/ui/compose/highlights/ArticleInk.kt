@@ -1,8 +1,7 @@
 package com.nononsenseapps.feeder.ui.compose.highlights
 
 import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.runtime.Composable
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -13,6 +12,7 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -21,14 +21,16 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerId
+import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.TextLayoutResult
-import com.nononsenseapps.feeder.model.highlights.Highlight
 import com.nononsenseapps.feeder.model.highlights.HighlightColor
 import com.nononsenseapps.feeder.model.highlights.InkData
 import com.nononsenseapps.feeder.model.highlights.SketchStroke
@@ -134,7 +136,8 @@ internal fun DrawScope.drawInkStrokes(
 
 /**
  * Lets a stylus write on the article (any pointer while Draw on page is on), drawing the strokes
- * live and finishing a note a moment after the pen lifts. The pen's eraser end, its side button
+ * live and finishing a note a moment after the pen lifts. The pen writes even when a palm or
+ * finger touched first, and never scrolls the page. The pen's eraser end, its side button
  * held down (S Pen), or the eraser in the pen bar, removes strokes from notes on the page.
  */
 fun Modifier.articleInkCapture(ink: ArticleInk?): Modifier =
@@ -157,7 +160,12 @@ fun Modifier.articleInkCapture(ink: ArticleInk?): Modifier =
                     val c = p.coords ?: continue
                     if (!c.isAttached) continue
                     val topLeft = box.localPositionOf(c, Offset.Zero)
-                    val r = Rect(topLeft, androidx.compose.ui.geometry.Size(c.size.width.toFloat(), c.size.height.toFloat()))
+                    val r =
+                        Rect(
+                            topLeft,
+                            androidx.compose.ui.geometry
+                                .Size(c.size.width.toFloat(), c.size.height.toFloat()),
+                        )
                     val d =
                         when {
                             point.y < r.top -> r.top - point.y
@@ -201,7 +209,13 @@ fun Modifier.articleInkCapture(ink: ArticleInk?): Modifier =
                 var e = layout.getOffsetForPosition(localEnd)
                 if (e < s) s = e.also { e = s }
                 val len = layout.layoutInput.text.length
-                if (e <= s || layout.layoutInput.text.substring(s, e).isBlank()) e = minOf(len, s + 24)
+                if (e <= s ||
+                    layout.layoutInput.text
+                        .substring(s, e)
+                        .isBlank()
+                ) {
+                    e = minOf(len, s + 24)
+                }
                 if (e <= s) return
                 // Whole words: the note is about words, not the letters the pen started on
                 s = layout.getWordBoundary(s.coerceIn(0, maxOf(0, len - 1))).start.coerceAtMost(s)
@@ -219,7 +233,10 @@ fun Modifier.articleInkCapture(ink: ArticleInk?): Modifier =
                 ink.onNote(paragraphs, s, e, data)
             }
 
-            fun eraseAt(point: Offset, density: Float) {
+            fun eraseAt(
+                point: Offset,
+                density: Float,
+            ) {
                 pending.removeAll { st -> near(st.p, point.x, point.y, 10f * density + st.w) }
                 val box = container[0] ?: return
                 for ((id, pair) in ink.shown.toList()) {
@@ -245,18 +262,33 @@ fun Modifier.articleInkCapture(ink: ArticleInk?): Modifier =
                     val all = live.value?.let { pending + it } ?: pending
                     if (all.isNotEmpty()) drawInkStrokes(all, dark, 1f)
                 }.pointerInput(ink) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                        val stylus = down.type == PointerType.Stylus || down.type == PointerType.Eraser
-                        if (!stylus && !ink.pen.drawAll) {
-                            // A finger while writing: the note is done (the page may scroll)
-                            if (pending.isNotEmpty()) finish(density)
-                            return@awaitEachGesture
-                        }
-                        down.consume()
+                    // Where and when a pen last hovered: some pens report their touch as a finger
+                    // on some devices, but a hover is always reported as a stylus.
+                    var hoverAt = Offset.Unspecified
+                    var hoverTime = 0L
+                    val hoverReach = 48f * density
+
+                    fun isPen(c: PointerInputChange) =
+                        c.type == PointerType.Stylus ||
+                            c.type == PointerType.Eraser ||
+                            (
+                                hoverAt.isSpecified &&
+                                    c.uptimeMillis - hoverTime < 400 &&
+                                    (c.position - hoverAt).getDistance() < hoverReach
+                            )
+
+                    // Draws (or erases) with one pointer until it lifts. Everything else on the
+                    // page meanwhile (a palm, other fingers) is held, so the page can't scroll,
+                    // turn or open a link under the pen.
+                    suspend fun AwaitPointerEventScope.penStroke(
+                        down: PointerInputChange,
+                        stylus: Boolean,
+                    ) {
                         job[0]?.cancel()
+
                         fun erasingNow() = ink.pen.erasing || down.type == PointerType.Eraser || (stylus && StylusButton.pressed)
                         var erase = erasingNow()
+
                         fun width(pressure: Float) = if (stylus && pressure > 0f) 2.2f * density * (0.5f + pressure) else 2.2f * density
                         if (erase) {
                             eraseAt(down.position, density)
@@ -265,7 +297,9 @@ fun Modifier.articleInkCapture(ink: ArticleInk?): Modifier =
                         }
                         while (true) {
                             val event = awaitPointerEvent(PointerEventPass.Initial)
-                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            val change = event.changes.firstOrNull { it.id == down.id }
+                            event.changes.forEach { it.consume() }
+                            if (change == null) break
                             val points = change.historical.map { it.position } + change.position
                             // The side button pressed or let go mid-stroke: switch between writing and erasing
                             val nowErase = erasingNow()
@@ -293,7 +327,6 @@ fun Modifier.articleInkCapture(ink: ArticleInk?): Modifier =
                                     live.value = st.copy(p = list.toFloatArray(), w = w)
                                 }
                             }
-                            change.consume()
                             if (!change.pressed) break
                         }
                         live.value?.let { pending += it }
@@ -305,6 +338,46 @@ fun Modifier.articleInkCapture(ink: ArticleInk?): Modifier =
                                     delay(1100)
                                     finish(d)
                                 }
+                        }
+                    }
+
+                    awaitEachGesture {
+                        // Fingers and palms on the page, by pointer: where each went down
+                        val fingers = HashMap<PointerId, Offset>()
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            for (c in event.changes) {
+                                if (!c.pressed && (c.type == PointerType.Stylus || c.type == PointerType.Eraser)) {
+                                    hoverAt = c.position
+                                    hoverTime = c.uptimeMillis
+                                }
+                            }
+                            // Any pointer can be the pen, not only the first: a palm resting on
+                            // the screen is often down before the pen touches.
+                            val down =
+                                event.changes.firstOrNull { c ->
+                                    c.changedToDownIgnoreConsumed() && (isPen(c) || ink.pen.drawAll)
+                                }
+                            if (down != null) {
+                                fingers.remove(down.id)
+                                event.changes.forEach { it.consume() }
+                                penStroke(down, isPen(down))
+                                continue
+                            }
+                            for (c in event.changes) {
+                                if (c.changedToDownIgnoreConsumed()) fingers[c.id] = c.position
+                                if (!c.pressed) fingers.remove(c.id)
+                            }
+                            // A finger scrolling the page while writing: the note is done. A
+                            // resting palm (not moving) leaves it open.
+                            if (pending.isNotEmpty() &&
+                                event.changes.any { c ->
+                                    c.pressed && fingers[c.id]?.let { (c.position - it).getDistance() > viewConfiguration.touchSlop } == true
+                                }
+                            ) {
+                                finish(density)
+                            }
+                            if (event.changes.none { it.pressed }) break
                         }
                     }
                 }
@@ -364,7 +437,15 @@ internal fun DrawScope.drawParagraphInks(
             val at = k.range.first.coerceIn(0, maxOf(0, l.layoutInput.text.length - 1))
             val box = l.getBoundingBox(at)
             markerRect(box, density).let { r ->
-                drawRoundRect(markerColor, topLeft = r.topLeft, size = r.size, cornerRadius = androidx.compose.ui.geometry.CornerRadius(3 * density), style = Stroke(1.5f * density))
+                drawRoundRect(
+                    markerColor,
+                    topLeft = r.topLeft,
+                    size = r.size,
+                    cornerRadius =
+                        androidx.compose.ui.geometry
+                            .CornerRadius(3 * density),
+                    style = Stroke(1.5f * density),
+                )
                 // A small pen: a slanted line with a tip
                 val p = Path()
                 p.moveTo(r.left + r.width * 0.3f, r.bottom - r.height * 0.25f)
