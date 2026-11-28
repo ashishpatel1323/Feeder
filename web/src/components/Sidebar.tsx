@@ -214,10 +214,8 @@ export function Sidebar(p: Props) {
       </div>
       <div className="sidebar-top">
         <span className="brand">Feeder</span>
-        <IconButton icon="refresh" label={p.refreshing ? `Refreshing ${p.refreshing}` : 'Refresh'} text="Refresh" onClick={p.onRefresh} disabled={!!p.refreshing} />
-        <IconButton icon="add" label="Add feed" text="Add feed" onClick={p.onAddFeed} />
-        <IconButton icon="tune" label="Manage feeds" text="Manage" onClick={p.onManageFeeds} active={p.managing} />
-        <IconButton icon="settings" label="Settings" text="Settings" onClick={p.onSettings} />
+        {/* Refresh, Add feed and Manage live on the Feeds page, Settings on Home and Library */}
+        <span className="mf-sp" />
         <span className="only-wide">
           <IconButton icon="panelClose" label="Hide feeds" title="Hide feeds ( [ )" onClick={p.onToggleCollapsed} />
         </span>

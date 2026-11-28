@@ -363,7 +363,7 @@ private fun PlaylistRow(
                 .clickable { onOpen(pl.id) }
                 .padding(horizontal = 16.dp, vertical = 10.dp),
     ) {
-        PlaylistTile(pl.icon, pl.color, 48)
+        PlaylistTile(pl.icon, pl.color, 48, images = remember(items) { items.playlistArt() })
         Column(Modifier.weight(1f)) {
             Text(pl.name, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val meta =
@@ -415,7 +415,7 @@ private fun PlaylistDetail(
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             ) {
-                PlaylistTile(pl.icon, pl.color, 56)
+                PlaylistTile(pl.icon, pl.color, 56, images = remember(items) { items.playlistArt() })
                 Column {
                     Text(
                         stringResource(if (pl.smart) R.string.playlist_smart else R.string.playlist_manual),
@@ -1013,3 +1013,11 @@ private fun OfflineArticlesCard(
         }
     }
 }
+
+/** The first items' pictures (or their feed's), for a playlist's collage tile. */
+internal fun List<com.nononsenseapps.feeder.db.room.PlaylistCandidate>.playlistArt(): List<String> =
+    asSequence()
+        .mapNotNull { it.image?.url?.takeIf { u -> u.isNotBlank() } ?: it.feedImage?.takeIf { u -> u.isNotBlank() } }
+        .distinct()
+        .take(4)
+        .toList()
