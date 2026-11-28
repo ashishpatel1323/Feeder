@@ -9,18 +9,20 @@ import { Icon, IconButton, type IconName } from './Icon'
  * Which tabs the bottom bar (and the sidebar) shows is picked in Settings > Bottom bar tabs;
  * the others open from rows on Library.
  */
-export type Tab = 'feeds' | 'discover' | 'youtube' | 'playlists' | 'library' | 'books' | BookTab | 'history'
+export type Tab = 'home' | 'feeds' | 'discover' | 'youtube' | 'playlists' | 'library' | 'books' | BookTab | 'history' | 'search'
 export type BarTab = Exclude<Tab, 'discover' | BookTab>
 /** The subtabs of Books. */
 export type BookTab = 'ebooks' | 'audiobooks' | 'zim' | 'player'
 
 export const TABS: { tab: BarTab; label: string; icon: IconName; key: string; hint: string }[] = [
+  { tab: 'home', label: 'Home', icon: 'home', key: 'o', hint: 'Jump back in, and your playlists as shelves' },
   { tab: 'feeds', label: 'Feeds', icon: 'dynamicFeed', key: 'f', hint: 'Latest, By feed and Discover' },
   { tab: 'youtube', label: 'YouTube', icon: 'subscriptions', key: 'y', hint: 'Your YouTube subscriptions' },
   { tab: 'playlists', label: 'Playlists', icon: 'queue', key: 'p', hint: 'Smart and hand-made playlists' },
   { tab: 'library', label: 'Library', icon: 'library', key: 'l', hint: 'Saved, Highlights and Downloads' },
   { tab: 'books', label: 'Books', icon: 'book', key: 'b', hint: 'Ebooks, audiobooks, offline websites and Player' },
   { tab: 'history', label: 'History', icon: 'history', key: 'h', hint: 'Everything you opened, on all your devices' },
+  { tab: 'search', label: 'Search', icon: 'search', key: 's', hint: 'Search everything, or add a link' },
 ]
 
 /** Shortcuts to places that are not tabs of their own. */
@@ -101,10 +103,11 @@ export function rememberFeedsView(latest: boolean) {
   }
 }
 
-const BAR_KEY = 'feeder.barTabs'
+// v2: the redesign starts everyone on Home, Feeds, Library, Search once
+const BAR_KEY = 'feeder.barTabs.v2'
 /** At most this many tabs in the bottom bar. */
 export const MAX_BAR_TABS = 5
-export const DEFAULT_BAR_TABS: BarTab[] = ['feeds', 'youtube', 'playlists', 'books', 'library']
+export const DEFAULT_BAR_TABS: BarTab[] = ['home', 'feeds', 'library', 'search']
 /** Always in the bar, so every screen stays reachable: left-out tabs open from rows on Library. */
 export const ALWAYS_TABS: BarTab[] = ['feeds', 'library']
 

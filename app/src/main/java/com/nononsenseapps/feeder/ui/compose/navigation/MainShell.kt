@@ -76,11 +76,13 @@ fun MainShell(
 
     // The Feeds tab opens on the view used last; Home is the start screen, so switch once to Latest
     LaunchedEffect(navController) {
-        if (FeedsViewPreference.isLatest(context) &&
+        val atStart =
             navController.currentBackStack.value.count { it.destination.route != null } == 1 &&
-            navController.currentDestination?.route == HomeDestination.route
-        ) {
-            navController.showFeedsView(context, FeedsView.LATEST)
+                navController.currentDestination?.route == HomeDestination.route
+        when {
+            // Redesign: the app opens on the bar's first tab, Home's shelves
+            atStart && bar.firstOrNull() == MainTab.HOME -> navController.openTab(context, MainTab.HOME, null)
+            atStart && FeedsViewPreference.isLatest(context) -> navController.showFeedsView(context, FeedsView.LATEST)
         }
     }
 
