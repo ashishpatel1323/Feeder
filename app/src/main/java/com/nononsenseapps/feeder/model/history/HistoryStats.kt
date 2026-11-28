@@ -98,6 +98,57 @@ object HistoryStats {
         return ms.map { (it / 60_000.0).roundToInt() }
     }
 
+    /** Start of each hour of today (local time), midnight first; 23 or 25 on clock-change days. */
+    fun hoursOfToday(now: Long): List<Long> {
+        val end = dayStart(now, -1)
+        return generateSequence(dayStart(now)) { it + 3_600_000L }.takeWhile { it < end }.toList()
+    }
+
+    /** Minutes in each hour of today, a session over the hour split between both. */
+    fun minutesByHour(
+        spans: List<Pair<Long, Long>>,
+        now: Long,
+    ): List<Int> {
+        val hours = hoursOfToday(now)
+        val ms = LongArray(hours.size)
+        for ((a, b) in spans) {
+            for (k in hours.indices) {
+                val overlap = min(b, hours[k] + 3_600_000L) - max(a, hours[k])
+                if (overlap > 0) ms[k] += overlap
+            }
+        }
+        return ms.map { (it / 60_000.0).roundToInt() }
+    }
+
+    /** How many of [times] fall in each hour of today (ZIM pages visited). */
+    fun countByHour(
+        times: List<Long>,
+        now: Long,
+    ): List<Int> {
+        val hours = hoursOfToday(now)
+        val out = IntArray(hours.size)
+        for (t in times) {
+            val k = Math.floorDiv(t - hours.first(), 3_600_000L).toInt()
+            if (k in out.indices) out[k]++
+        }
+        return out.toList()
+    }
+
+    /** The hour of today [now] is in, as an index into [hoursOfToday]. */
+    fun hourIndex(now: Long): Int = max(0, ((now - dayStart(now)) / 3_600_000L).toInt())
+
+    /** How far through it was from [from] on: the last known point before it, then each one after. */
+    fun progressFrom(
+        events: List<HistoryEvent>,
+        from: Long,
+    ): List<ProgressPoint> {
+        val known = events.sortedBy { it.at }.filter { it.f >= 0 }
+        val out = mutableListOf<ProgressPoint>()
+        known.lastOrNull { it.at < from }?.let { out += ProgressPoint(from, it.f) }
+        known.filter { it.at >= from }.forEach { out += ProgressPoint(it.at, it.f) }
+        return out
+    }
+
     /** Days in a row with some minutes, ending today (or yesterday when nothing yet today). */
     fun streakOf(minutes: List<Int>): Int {
         var k = minutes.size - 1
@@ -119,9 +170,7 @@ object HistoryStats {
         val from = days.first()
         val sorted = events.sortedBy { it.at }
         val known = sorted.filter { it.f >= 0 }
-        val progress = mutableListOf<ProgressPoint>()
-        known.lastOrNull { it.at < from }?.let { progress += ProgressPoint(from, it.f) }
-        known.filter { it.at >= from }.forEach { progress += ProgressPoint(it.at, it.f) }
+        val progress = progressFrom(events, from)
         val f = known.lastOrNull()?.f
         val gain = if (progress.size > 1) progress.last().f - progress.first().f else 0.0
         val fPerDay = if (gain > 0.001) gain / DAYS else null

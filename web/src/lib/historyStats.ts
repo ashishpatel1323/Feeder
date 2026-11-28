@@ -75,6 +75,57 @@ export function minutesByDay(spans: [number, number][], now = Date.now()): { day
   return { days, minutes: ms.map((m) => Math.round(m / 60_000)) }
 }
 
+/** Start of each hour of today (local time), midnight first; 23 or 25 on clock-change days. */
+export function hoursOfToday(now = Date.now()): number[] {
+  const out: number[] = []
+  const end = dayStart(now, -1)
+  const d = new Date(dayStart(now))
+  while (d.getTime() < end) {
+    out.push(d.getTime())
+    d.setTime(d.getTime() + 3600_000)
+  }
+  return out
+}
+
+/** Minutes in each hour of today, a session over the hour split between both. */
+export function minutesByHour(spans: [number, number][], now = Date.now()): { hours: number[]; minutes: number[] } {
+  const hours = hoursOfToday(now)
+  const ms = hours.map(() => 0)
+  for (const [a, b] of spans) {
+    hours.forEach((h, k) => {
+      const overlap = Math.min(b, h + 3600_000) - Math.max(a, h)
+      if (overlap > 0) ms[k] += overlap
+    })
+  }
+  return { hours, minutes: ms.map((m) => Math.round(m / 60_000)) }
+}
+
+/** How many of [times] fall in each hour of today (ZIM pages visited). */
+export function countByHour(times: number[], now = Date.now()): number[] {
+  const hours = hoursOfToday(now)
+  const out = hours.map(() => 0)
+  for (const t of times) {
+    const k = Math.floor((t - hours[0]) / 3600_000)
+    if (k >= 0 && k < out.length) out[k]++
+  }
+  return out
+}
+
+/** The hour of today [now] is in, as an index into [hoursOfToday]. */
+export function hourIndex(now = Date.now()): number {
+  return Math.max(0, Math.floor((now - dayStart(now)) / 3600_000))
+}
+
+/** How far through it was from [from] on: the last known point before it, then each one after. */
+export function progressFrom(events: HistoryEvent[], from: number): ProgressPoint[] {
+  const known = [...events].sort((a, b) => a.at - b.at).filter((e) => typeof e.f === 'number' && Number.isFinite(e.f))
+  const before = known.filter((e) => e.at < from).pop()
+  const out: ProgressPoint[] = []
+  if (before) out.push({ at: from, f: before.f! })
+  for (const e of known) if (e.at >= from) out.push({ at: e.at, f: e.f! })
+  return out
+}
+
 /** Days in a row with some minutes, ending today (or yesterday when nothing yet today). */
 export function streakOf(minutes: number[]): number {
   let k = minutes.length - 1
@@ -92,10 +143,7 @@ export function graphOf(events: HistoryEvent[], now = Date.now()): HistoryGraph 
   const from = days[0]
   const sorted = [...events].sort((a, b) => a.at - b.at)
   const known = sorted.filter((e) => typeof e.f === 'number' && Number.isFinite(e.f))
-  const before = known.filter((e) => e.at < from).pop()
-  const progress: ProgressPoint[] = []
-  if (before) progress.push({ at: from, f: before.f! })
-  for (const e of known) if (e.at >= from) progress.push({ at: e.at, f: e.f! })
+  const progress = progressFrom(events, from)
   const f = known.length ? known[known.length - 1].f! : null
   const gain = progress.length > 1 ? progress[progress.length - 1].f - progress[0].f : 0
   const fPerDay = gain > 0.001 ? gain / DAYS : null

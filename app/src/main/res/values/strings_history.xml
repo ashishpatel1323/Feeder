@@ -31,6 +31,13 @@
     <string name="history_graph_streak">%d-day streak</string>
     <string name="history_graph_minutes_label">Minutes a day · last 14 days</string>
     <string name="history_graph_progress">Progress</string>
+    <string name="history_graph_minutes_hour_label">Minutes an hour · today</string>
+    <string name="history_graph_progress_today">Progress · today</string>
+    <string name="history_graph_gain_today">+ %d%% today</string>
+    <string name="history_graph_pages_today">Pages visited · today</string>
+    <string name="history_graph_range">Graph covers</string>
+    <string name="history_graph_range_14d">14d</string>
+    <string name="history_graph_now">Now</string>
     <string name="history_graph_progress_later">Progress shows up here after the next pause or close.</string>
     <string name="history_graph_today">Today</string>
     <string name="history_graph_chapter">Ch. %1$d of %2$d</string>
