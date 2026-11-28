@@ -3,6 +3,7 @@
  * styles, chapters and scrolling to a range; fixed-layout ones (PDF, comics) only turn pages.
  */
 import type { FoliateView, Location } from '../../vendor/foliate-js/view.js'
+import { paintInk, parseInk, type InkData, type PageInk } from '../pageink'
 import { injectSketchStyles, parseSketch, placeStrip, removeStrips, sketchStrip, type SketchColor } from '../sketch'
 
 export const isFixed = (v: FoliateView | null | undefined) => !!v?.isFixedLayout
@@ -140,4 +141,32 @@ export function placeBookSketches(v: FoliateView | null | undefined, doc: Docume
 export function replaceBookSketches(v: FoliateView | null | undefined, highlights: { id: string; cfi?: string; color: string; sketch?: string }[]) {
   if (!v || isFixed(v)) return
   for (const { doc, index } of v.renderer.getContents()) if (doc && index !== undefined) placeBookSketches(v, doc, index, highlights)
+}
+
+/**
+ * Handwriting in a reflowable book (Kobo style): notes are anchored by CFI and drawn back as ink
+ * while the chapter is laid out the same way, as [✎] markers when it isn't (lib/pageink.ts).
+ * Returns the notes shown as ink in this chapter.
+ */
+export function paintBookInk(v: FoliateView | null | undefined, doc: Document, index: number, notes: { id: string; cfi?: string; ink?: string }[]): Map<string, InkData> {
+  const shownNow = new Map<string, InkData>()
+  if (!v || isFixed(v) || !doc.body) return shownNow
+  const inks: PageInk[] = []
+  for (const h of notes) {
+    const data = parseInk(h.ink)
+    if (!data || !h.cfi) continue
+    let range: Range | null = null
+    try {
+      const r = v.resolveNavigation(h.cfi)
+      if (r?.index !== index || !r.anchor) continue
+      const a = r.anchor(doc)
+      range = a && 'startContainer' in a ? a : null
+    } catch {
+      continue
+    }
+    inks.push({ id: h.id, data, range })
+  }
+  const shown = paintInk(doc, doc.body, inks)
+  for (const k of inks) if (shown.has(k.id)) shownNow.set(k.id, k.data)
+  return shownNow
 }

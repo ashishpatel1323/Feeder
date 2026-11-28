@@ -16,6 +16,8 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material.icons.outlined.Draw
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.background
@@ -99,6 +101,9 @@ import com.nononsenseapps.feeder.ui.compose.components.rememberDeleteConfirmer
 import com.nononsenseapps.feeder.ui.compose.ebooks.HighlightBar
 import com.nononsenseapps.feeder.ui.compose.ebooks.ttsIdOf
 import com.nononsenseapps.feeder.ui.compose.highlights.SketchEditorDialog
+import com.nononsenseapps.feeder.ui.compose.highlights.rememberPenState
+import com.nononsenseapps.feeder.ui.compose.highlights.PenBar
+import com.nononsenseapps.feeder.ui.compose.highlights.InkPreviewDialog
 import com.nononsenseapps.feeder.ui.compose.history.HistorySheet
 import com.nononsenseapps.feeder.ui.compose.history.rememberOpenTracker
 import com.nononsenseapps.feeder.ui.compose.navigation.HideMainBar
@@ -172,6 +177,9 @@ fun ZimReaderScreen(
     // A margin sketch being drawn: for a selection, or an existing sketch (by id)
     var sketchingNew by remember { mutableStateOf<ZimSelection?>(null) }
     var sketchingId by remember { mutableStateOf<String?>(null) }
+    // Handwriting on the page (Kobo style): a stylus writes; Draw on page lets fingers write too
+    val pen = rememberPenState()
+    var inkOpen by remember { mutableStateOf<String?>(null) }
     var highlightsSheet by remember { mutableStateOf(false) }
     var historySheet by remember { mutableStateOf(false) }
     val allHighlights by highlightStore.highlights.collectAsState()
@@ -202,7 +210,8 @@ fun ZimReaderScreen(
                         "start" to JsonPrimitive(it.start),
                         "prefix" to JsonPrimitive(it.prefix),
                         "color" to JsonPrimitive(it.color),
-                    ) + (it.sketch?.let { sk -> mapOf("sketch" to JsonPrimitive(sk)) } ?: emptyMap()),
+                    ) + (it.sketch?.let { sk -> mapOf("sketch" to JsonPrimitive(sk)) } ?: emptyMap()) +
+                        (it.ink?.let { ink -> mapOf("ink" to JsonPrimitive(ink)) } ?: emptyMap()),
                 )
             },
         ).toString()
@@ -212,6 +221,8 @@ fun ZimReaderScreen(
     val currentPageTitle by rememberUpdatedState(pageTitle)
     val currentBookTitle by rememberUpdatedState(bookTitle)
     val currentTtsId by rememberUpdatedState(ttsId)
+    val currentItemKey by rememberUpdatedState(itemKey)
+    val currentPenColor by rememberUpdatedState(pen.color)
     val bridge =
         remember(bookId) {
             val main = Handler(Looper.getMainLooper())
@@ -240,6 +251,40 @@ fun ZimReaderScreen(
                             if (it.sketch.isNullOrBlank()) editing = it else sketchingId = it.id
                         }
                     }
+
+                @JavascriptInterface
+                fun onInkNote(json: String) =
+                    main.post {
+                        val o = runCatching { bridgeJson.parseToJsonElement(json) as? JsonObject }.getOrNull() ?: return@post
+                        val key = currentItemKey ?: return@post
+                        val text = o["text"]?.jsonPrimitive?.contentOrNull ?: return@post
+                        val ink = o["ink"]?.jsonPrimitive?.contentOrNull ?: return@post
+                        highlightStore.add(
+                            Highlight(
+                                id = UUID.randomUUID().toString(),
+                                itemKey = key,
+                                itemTitle = currentPageTitle.ifBlank { currentBookTitle },
+                                itemLink = null,
+                                feedTitle = currentBookTitle,
+                                imageUrl = null,
+                                text = text,
+                                start = o["start"]?.jsonPrimitive?.intOrNull ?: 0,
+                                prefix = o["prefix"]?.jsonPrimitive?.contentOrNull ?: "",
+                                color = currentPenColor.id,
+                                createdAt = System.currentTimeMillis(),
+                                ink = ink,
+                            ),
+                        )
+                    }
+
+                @JavascriptInterface
+                fun onInkErase(
+                    id: String,
+                    ink: String,
+                ) = main.post { if (ink.isBlank()) highlightStore.delete(id) else highlightStore.updateInk(id, ink) }
+
+                @JavascriptInterface
+                fun onInkMark(id: String) = main.post { inkOpen = id }
 
                 @JavascriptInterface
                 fun onTtsText(
@@ -403,6 +448,13 @@ fun ZimReaderScreen(
                         IconButton(onClick = { searching = true }) {
                             Icon(Icons.Outlined.Search, contentDescription = stringResource(R.string.zim_search_in, bookTitle))
                         }
+                        IconButton(onClick = { pen.drawAll = !pen.drawAll }) {
+                            Icon(
+                                Icons.Outlined.Draw,
+                                contentDescription = stringResource(R.string.draw_on_page),
+                                tint = if (pen.drawAll) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                            )
+                        }
                         IconButton(onClick = { highlightsSheet = true }) {
                             Icon(Icons.Outlined.Highlight, contentDescription = stringResource(R.string.ebook_highlights))
                         }
@@ -481,6 +533,11 @@ fun ZimReaderScreen(
                                 }
                             },
                     )
+                }
+                if (pen.drawAll) {
+                    Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
+                        PenBar(pen = pen, onDone = { pen.drawAll = false })
+                    }
                 }
                 HideableCompactTTSPlayer(
                     visibleState = playerVisible,
@@ -596,6 +653,27 @@ fun ZimReaderScreen(
         }
     }
 
+    // The page script needs the pen settings, and the current ones after each page load
+    LaunchedEffect(pen.drawAll, pen.color, pen.erasing, pageLoads) { js("window.feederZim&&feederZim.setPen&&feederZim.setPen(${q(pen.json())})") }
+    inkOpen?.let { id ->
+        val h = bookHighlights.firstOrNull { it.id == id }
+        if (h == null) {
+            inkOpen = null
+        } else {
+            InkPreviewDialog(
+                note = h,
+                canSwitch = false,
+                onSwitch = {},
+                onDelete = {
+                    deleteConfirmer.askHighlight(h.text) {
+                        highlightStore.delete(h.id)
+                        inkOpen = null
+                    }
+                },
+                onDismiss = { inkOpen = null },
+            )
+        }
+    }
     sketchingNew?.let { sel ->
         SketchEditorDialog(
             quote = sel.text,

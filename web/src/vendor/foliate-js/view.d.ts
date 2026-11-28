@@ -31,6 +31,8 @@ export interface Location {
 }
 
 export interface Renderer extends HTMLElement {
+  /** Feeder: touches write (Draw on page) instead of turning pages. */
+  noSwipe?: boolean
   getContents(): { doc: Document; index: number; overlayer?: unknown }[]
   next(): Promise<void>
   prev(): Promise<void>

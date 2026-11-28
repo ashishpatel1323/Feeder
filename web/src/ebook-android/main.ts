@@ -16,7 +16,9 @@ import type { FoliateView, Location, TocItem } from '../vendor/foliate-js/view.j
 import { Overlayer } from '../vendor/foliate-js/overlayer.js'
 import { authorString, bookCss, injectCsp, langString, type ReaderPrefs } from '../lib/ebooks/reader'
 import { indexText, rangeFor, type TextIndex } from './textindex'
-import { atEnd, atStart, drawFixedHighlights, markFixedPage, placeBookSketches, readableContent, redrawFixedHighlights, replaceBookSketches, nextSection, pageNumbers, prevSection, reveal, setStyles } from '../lib/ebooks/nav'
+import { attachInkCapture, encodeInk, inkMarkAt, type InkData } from '../lib/pageink'
+import type { SketchColor } from '../lib/sketch'
+import { atEnd, atStart, drawFixedHighlights, markFixedPage, paintBookInk, placeBookSketches, readableContent, redrawFixedHighlights, replaceBookSketches, nextSection, pageNumbers, prevSection, reveal, setStyles } from '../lib/ebooks/nav'
 
 interface Bridge {
   onOpened(json: string): void
@@ -26,6 +28,12 @@ interface Bridge {
   onTtsText(text: string, offset: number, section: number): void
   onSectionTexts(json: string): void
   onSectionLoaded(): void
+  /** A handwritten note was finished: {cfi, text, ink}. */
+  onInkNote(json: string): void
+  /** Strokes were erased from a note (by its CFI): what's left (ink JSON), or "" to delete it. */
+  onInkErase(cfi: string, ink: string): void
+  /** A [✎] marker was tapped (a note written with other settings), by its CFI. */
+  onInkMark(cfi: string): void
   onTap(zone: string): void
   onError(message: string): void
 }
@@ -45,13 +53,24 @@ let highlights = new Map<string, string>()
 type SketchMark = { id: string; cfi: string; color: string; sketch: string }
 let sketches: SketchMark[] = []
 
-type HighlightJson = { id?: string; cfi: string; color: string; sketch?: string }
-/** Splits the app's list: plain highlights by CFI, and sketches. */
+/** Handwriting on the page (lib/pageink.ts), by CFI. */
+let inkNotes: { id: string; cfi: string; ink: string }[] = []
+let pen: { drawAll: boolean; color: SketchColor; erasing: boolean } = { drawAll: false, color: 'pink', erasing: false }
+const inkShown = new WeakMap<Document, Map<string, InkData>>()
+window.addEventListener('resize', () => window.setTimeout(paintAllInk, 400))
+function paintAllInk() {
+  if (!view) return
+  for (const { doc, index } of view.renderer.getContents()) if (doc && index !== undefined) inkShown.set(doc, paintBookInk(view, doc, index, inkNotes))
+}
+
+type HighlightJson = { id?: string; cfi: string; color: string; sketch?: string; ink?: string }
+/** Splits the app's list: plain highlights by CFI, sketches and handwriting. */
 function readHighlights(json: string) {
   const all = JSON.parse(json) as HighlightJson[]
   const fixed = !!view?.isFixedLayout
   sketches = all.filter((h) => h.sketch).map((h) => ({ id: h.id ?? h.cfi, cfi: h.cfi, color: h.color, sketch: h.sketch! }))
-  return new Map(all.filter((h) => !h.sketch || fixed).map((h) => [h.cfi, h.color]))
+  inkNotes = all.filter((h) => h.ink).map((h) => ({ id: h.id ?? h.cfi, cfi: h.cfi, ink: h.ink! }))
+  return new Map(all.filter((h) => !h.ink && (!h.sketch || fixed)).map((h) => [h.cfi, h.color]))
 }
 let tts: { index: TextIndex; doc: Document } | null = null
 
@@ -169,6 +188,25 @@ function listen(v: FoliateView) {
     markFixedPage(v, doc)
     drawFixedHighlights(v, doc, index, [...highlights].map(([cfi, color]) => ({ cfi, color })))
     placeBookSketches(v, doc, index, sketches)
+    inkShown.set(doc, paintBookInk(v, doc, index, inkNotes))
+    if (!v.isFixedLayout && doc.body) {
+      attachInkCapture(doc, {
+        root: doc.body,
+        mode: () => (pen.drawAll ? 'all' : 'pen'),
+        color: () => pen.color,
+        erasing: () => pen.erasing,
+        prefs: () => ({ fontSize: prefs.fontSize, lineHeight: prefs.lineHeight, publisherFont: prefs.publisherFont }),
+        shown: () => inkShown.get(doc) ?? new Map(),
+        onNote: (range, data) => {
+          const text = range.toString().trim()
+          if (text) bridge.onInkNote(JSON.stringify({ cfi: v.getCFI(index, range), text, ink: encodeInk(data) }))
+        },
+        onErase: (id, data) => {
+          const n = inkNotes.find((x) => x.id === id)
+          if (n) bridge.onInkErase(n.cfi, data ? encodeInk(data) : '')
+        },
+      })
+    }
     let selTimer = 0
     doc.addEventListener('selectionchange', () => {
       window.clearTimeout(selTimer)
@@ -186,6 +224,14 @@ function listen(v: FoliateView) {
       const strip = (c.target as Element | null)?.closest?.('.feeder-sketch') as HTMLElement | null
       const sk = strip?.dataset.sketch ? sketches.find((x) => x.id === strip.dataset.sketch) : undefined
       if (sk) return bridge.onHighlightTap(sk.cfi)
+      const mark = inkMarkAt(c.target)
+      if (mark) {
+        const n = inkNotes.find((x) => x.id === mark)
+        if (n) bridge.onInkMark(n.cfi)
+        return
+      }
+      // A pen tap is writing, not turning the page
+      if ((c as PointerEvent).pointerType === 'pen' || pen.drawAll) return
       if (doc.getSelection()?.isCollapsed === false) return
       if ((c.target as Element | null)?.closest?.('a[href]')) return
 // The page's iframe is as wide as the whole chapter: measure the tap on the screen instead
@@ -288,11 +334,18 @@ function ttsClear() {
     prefs = { ...prefs, ...(JSON.parse(json) as Partial<ReaderPrefs>) }
     appDark = dark
     applyPrefs()
+    // The text reflows: ink only shows where the layout still matches
+    window.setTimeout(paintAllInk, 400)
+  },
+  setPen(json: string) {
+    pen = { ...pen, ...(JSON.parse(json) as Partial<typeof pen>) }
+    if (view) view.renderer.noSwipe = pen.drawAll
   },
   setHighlights(json: string) {
     const before = JSON.stringify(sketches)
     const next = readHighlights(json)
     if (JSON.stringify(sketches) !== before) replaceBookSketches(view, sketches)
+    paintAllInk()
     if (view) {
       for (const [cfi, color] of next) if (highlights.get(cfi) !== color) void view.addAnnotation({ value: cfi, color })
       for (const cfi of highlights.keys()) if (!next.has(cfi)) void view.deleteAnnotation({ value: cfi })

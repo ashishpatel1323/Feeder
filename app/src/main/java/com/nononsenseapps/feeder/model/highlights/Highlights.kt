@@ -56,6 +56,8 @@ data class Highlight(
     val cfi: String? = null,
     /** A margin sketch tied to the text instead of a colored highlight (JSON, see Sketch.kt). */
     val sketch: String? = null,
+    /** Handwriting on the page (Kobo style), tied to the layout it was written in (JSON, see InkCodec). */
+    val ink: String? = null,
 ) {
     val highlightColor: HighlightColor get() = HighlightColor.of(color)
 }
@@ -157,6 +159,19 @@ class HighlightStore(
                 if (it.id == id) it.copy(sketch = sketch, color = color.id, modifiedAt = maxOf(now, it.modifiedAt + 1)) else it
             },
         )
+        onChanged?.invoke()
+        if (before != null) onEdit?.invoke(before, get(id))
+    }
+
+    /** Changes a handwritten note's strokes (after erasing part of it). */
+    @Synchronized
+    fun updateInk(
+        id: String,
+        ink: String,
+    ) {
+        val now = System.currentTimeMillis()
+        val before = get(id)
+        write(_highlights.value.map { if (it.id == id) it.copy(ink = ink, modifiedAt = maxOf(now, it.modifiedAt + 1)) else it })
         onChanged?.invoke()
         if (before != null) onEdit?.invoke(before, get(id))
     }
@@ -280,6 +295,22 @@ class HighlightLocator(
 
     /** Where a highlight starts in this text, for reading order; null when it isn't in it. */
     fun positionOf(h: Highlight): Int? = find(h.text, h.prefix, h.start)?.let { fullIndex[it.first] }
+
+    /** The passage [start, end) of paragraph [paragraph], to save handwriting with its words. */
+    fun anchorIn(
+        paragraph: Int,
+        start: Int,
+        end: Int,
+    ): HighlightAnchor? {
+        val text = paragraphs.getOrNull(paragraph) ?: return null
+        val s = start.coerceIn(0, text.length)
+        val e = end.coerceIn(s, text.length)
+        if (e <= s) return null
+        var offset = 0
+        for (i in 0 until paragraph) offset += paragraphs[i].length + 1
+        val at = offset + s
+        return HighlightAnchor(text = text.substring(s, e), start = at, prefix = full.substring(maxOf(0, at - PREFIX_LEN), at))
+    }
 
     /** Where a selected passage is, to save it as a highlight. Null when it isn't in the article text. */
     fun anchorOf(selected: String): HighlightAnchor? {

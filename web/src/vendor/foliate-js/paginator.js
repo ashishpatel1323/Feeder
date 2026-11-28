@@ -820,7 +820,13 @@ export class Paginator extends HTMLElement {
             })
         })
     }
+    // Feeder: a stylus writes on the page instead of turning it, and so does any touch while
+    // "Draw on page" is on (lib/pageink.ts)
+    #inking(e) {
+        return this.noSwipe || e?.changedTouches?.[0]?.touchType === 'stylus'
+    }
     #onTouchStart(e) {
+        if (this.#inking(e)) { this.#touchState = { pinched: true }; return }
         const touch = e.changedTouches[0]
         this.#touchState = {
             x: touch?.screenX, y: touch?.screenY,
@@ -829,6 +835,7 @@ export class Paginator extends HTMLElement {
         }
     }
     #onTouchMove(e) {
+        if (this.#inking(e)) return
         const state = this.#touchState
         if (state.pinched) return
         state.pinched = globalThis.visualViewport.scale > 1
@@ -850,7 +857,8 @@ export class Paginator extends HTMLElement {
         this.#touchScrolled = true
         this.scrollBy(dx, dy)
     }
-    #onTouchEnd() {
+    #onTouchEnd(e) {
+        if (this.#inking(e)) return
         this.#touchScrolled = false
         if (this.scrolled) return
 

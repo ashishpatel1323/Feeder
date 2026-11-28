@@ -440,6 +440,8 @@ fun ArticleScreen(
             onSpeedRead = if (isArticle) onSpeedRead else null,
             highlightCount = highlights?.count ?: 0,
             onHighlights = highlights?.onShowList,
+            drawOnPage = highlights?.drawOnPage ?: false,
+            onToggleDraw = if (isArticle) highlights?.onToggleDraw else null,
             onDelete = onDelete,
         )
     // Listen is a full label at the top and while scrolling back up, an icon while reading down

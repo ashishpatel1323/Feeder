@@ -8,6 +8,10 @@ import { syncNow } from '../lib/sync2'
 import type { Toast } from '../lib/toast'
 import { copyText, HighlightBar, HighlightsRail } from './Highlights'
 import { SketchEditor } from './SketchEditor'
+import { InkPreview, PenBar, usePageInk, usePenState } from './PageInk'
+import { encodeInk, inkMarkAt } from '../lib/pageink'
+import { locateRange, textOf } from '../lib/textanchor'
+import { rangeAt } from '../lib/zim/marks'
 import { combinedSubject, ShareDialog, type ShareSubject } from './ShareDialog'
 import { loadFullText, sanitize, summarize } from '../lib/extras'
 import { htmlToText } from '../lib/feedparse'
@@ -136,6 +140,37 @@ export function Reader(p: Props) {
   const [sketching, setSketching] = useState<BarTarget | null>(null)
   const sketchEditing = sketching?.kind === 'edit' ? (highlights?.find((h) => h.id === sketching.id) ?? null) : null
 
+  // Handwriting on the page (Kobo style): a stylus writes; Draw on page lets fingers and the mouse write
+  const pen = usePenState()
+  const [bodyEl, setBodyEl] = useState<HTMLElement | null>(null)
+  useEffect(() => setBodyEl(bodyRef.current))
+  const inkNotes = useMemo(() => (highlights ?? []).filter((h) => h.ink), [highlights])
+  const [inkOpen, setInkOpen] = useState<string | null>(null)
+  const inkOpenNote = inkOpen ? (highlights?.find((h) => h.id === inkOpen) ?? null) : null
+  usePageInk({
+    doc: bodyEl ? document : null,
+    root: bodyEl,
+    pen,
+    notes: inkNotes,
+    version: html,
+    prefs: () => ({ textSize: p.settings.textSize }),
+    rangeOf: (h) => {
+      if (!bodyEl) return null
+      const at = locateRange(textOf(bodyEl), h)
+      return at ? rangeAt(bodyEl, at[0], at[1]) : null
+    },
+    onNote: (range, data) => {
+      if (!bodyEl) return
+      const anchor = anchorOf(bodyEl, range)
+      if (!anchor) return
+      void saveHighlight({ ...newHighlight(item, feed, anchor, pen.color, '', picture), ink: encodeInk(data) })
+    },
+    onErase: (id, data) => {
+      if (data) void updateHighlight(id, { ink: encodeInk(data) })
+      else void deleteHighlight(id)
+    },
+  })
+
   const clearPending = () => {
     if (pendingHighlightsSupported) CSS.highlights.delete('hl-pending')
   }
@@ -174,7 +209,7 @@ export function Reader(p: Props) {
   }, [])
 
   const flash = (id: string) => {
-    const marks = bodyRef.current?.querySelectorAll<HTMLElement>(`mark[data-hl="${CSS.escape(id)}"], .feeder-sketch[data-sketch="${CSS.escape(id)}"]`)
+    const marks = bodyRef.current?.querySelectorAll<HTMLElement>(`mark[data-hl="${CSS.escape(id)}"], .feeder-sketch[data-sketch="${CSS.escape(id)}"], [data-ink="${CSS.escape(id)}"]`)
     if (!marks?.length) return false
     marks[0].scrollIntoView({ behavior: 'smooth', block: 'center' })
     marks.forEach((m) => {
@@ -297,6 +332,14 @@ export function Reader(p: Props) {
     const target = e.target as HTMLElement
     if (target.closest('a')) return
     if (window.getSelection()?.toString()) return
+    // Tapping a [✎] marker shows a note written with other reading settings
+    const inkMark = inkMarkAt(target)
+    if (inkMark) {
+      setPill(null)
+      readAloud.showTapWord(null)
+      setInkOpen(inkMark)
+      return
+    }
     // Tapping a sketch opens it to edit or delete
     const strip = target.closest<HTMLElement>('.feeder-sketch')
     if (strip?.dataset.sketch) {
@@ -484,6 +527,7 @@ export function Reader(p: Props) {
             'separator',
             { icon: 'summarize', label: summaryState === 'loading' ? 'Summarizing…' : 'Summarize', onClick: doSummary, disabled: summaryState === 'loading' },
             { icon: 'speed', label: 'Speed read', kbd: 'V', onClick: showWord, disabled: !readAloud.supported, hidden: !isArticle || playing },
+            { icon: 'draw', label: 'Draw on page', checked: pen.drawAll, onClick: () => pen.setDrawAll(!pen.drawAll), hidden: !isArticle },
             { icon: 'formatBold', label: 'Bold word starts', kbd: 'B', checked: fastReading, onClick: () => updateSettings({ fastReading: !fastReading }), hidden: !isArticle },
             { icon: 'autoScroll', label: 'Auto scroll', kbd: 'A', checked: auto.active, onClick: auto.toggle, disabled: playing, hidden: !isArticle },
             'separator',
@@ -639,6 +683,27 @@ export function Reader(p: Props) {
                 }
               : undefined
           }
+        />
+      ) : null}
+      {pen.drawAll ? <PenBar pen={pen} onDone={() => pen.setDrawAll(false)} /> : null}
+      {inkOpenNote ? (
+        <InkPreview
+          note={inkOpenNote}
+          canSwitch={(() => {
+            const t = (JSON.parse(inkOpenNote.ink!) as { prefs?: { textSize?: number } }).prefs?.textSize
+            return typeof t === 'number' && t !== p.settings.textSize
+          })()}
+          onSwitch={() => {
+            const t = (JSON.parse(inkOpenNote.ink!) as { prefs?: { textSize?: number } }).prefs?.textSize
+            if (typeof t === 'number') void updateSettings({ textSize: t })
+            setInkOpen(null)
+          }}
+          onDelete={async () => {
+            if (!(await confirmDeleteHighlight(inkOpenNote.text))) return
+            await deleteHighlight(inkOpenNote.id)
+            setInkOpen(null)
+          }}
+          onClose={() => setInkOpen(null)}
         />
       ) : null}
       {sketching && (sketching.kind === 'new' || sketchEditing) ? (

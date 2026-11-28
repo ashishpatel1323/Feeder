@@ -37,6 +37,10 @@ import { LibraryListing, ListingUnavailable, useShelfPrefs, type ShelfItem } fro
 import { autoStatus, effectiveStatus, markKey, setStatus } from '../lib/shelfMarks'
 import { HighlightBar } from './Highlights'
 import { SketchEditor } from './SketchEditor'
+import { InkPreview, PenBar, usePageInk, usePenState } from './PageInk'
+import { encodeInk, inkMarkAt } from '../lib/pageink'
+import { anchorOf, locateRange, textOf } from '../lib/textanchor'
+import { rangeAt } from '../lib/zim/marks'
 import { HistoryList } from './History'
 import { Icon, IconButton } from './Icon'
 import { Player } from './Player'
@@ -422,6 +426,9 @@ function ZimReader({ id, jump, settings, onBack, toast }: { id: string; jump: Zi
   const highlightsRef = useRef<Highlight[]>([])
   highlightsRef.current = highlights
   const painted = useRef(new Map<string, Range>())
+  // Handwriting on the page (Kobo style): a stylus writes; Draw on page lets fingers and the mouse write
+  const pen = usePenState()
+  const [inkOpen, setInkOpen] = useState<string | null>(null)
   /** A highlight to scroll to once its page shows (from the Highlights page, search or the panel). */
   const scrollTo = useRef<string | null>(jump?.highlight ?? null)
   const listening = !!itemId && ra.itemId === itemId && (ra.status !== 'idle' || ra.muted)
@@ -433,6 +440,46 @@ function ZimReader({ id, jump, settings, onBack, toast }: { id: string; jump: Zi
       return null
     }
   }
+
+  const inkDoc = path !== null && loads > 0 ? doc() : null
+  const inkNotes = useMemo(() => highlights.filter((h) => h.ink), [highlights])
+  usePageInk({
+    doc: inkDoc,
+    root: inkDoc?.body ?? null,
+    pen,
+    notes: inkNotes,
+    version: loads,
+    rangeOf: (h) => {
+      const body = inkDoc?.body
+      if (!body) return null
+      const at = locateRange(textOf(body), h)
+      return at ? rangeAt(body, at[0], at[1]) : null
+    },
+    onNote: (range, data) => {
+      const body = inkDoc?.body
+      const a = body ? anchorOf(body, range) : null
+      if (!a || !itemId) return
+      void saveHighlight({
+        id: crypto.randomUUID(),
+        itemId,
+        itemTitle: pageTitle || title,
+        itemLink: null,
+        feedTitle: title,
+        imageUrl: null,
+        text: a.text,
+        start: a.start,
+        prefix: a.prefix,
+        color: pen.color,
+        note: '',
+        createdAt: Date.now(),
+        ink: encodeInk(data),
+      })
+    },
+    onErase: (id, data) => {
+      if (data) void updateHighlight(id, { ink: encodeInk(data) })
+      else void deleteHighlight(id)
+    },
+  })
 
   useEffect(() => {
     let live = true
@@ -503,7 +550,7 @@ function ZimReader({ id, jump, settings, onBack, toast }: { id: string; jump: Zi
   useEffect(() => {
     const d = doc()
     if (!d || path === null) return
-    painted.current = paintHighlights(d, highlights)
+    painted.current = paintHighlights(d, highlights.filter((h) => !h.ink))
     const want = scrollTo.current
     if (want && painted.current.has(want)) {
       scrollTo.current = null
@@ -535,6 +582,14 @@ function ZimReader({ id, jump, settings, onBack, toast }: { id: string; jump: Zi
       d.addEventListener('click', (e) => {
         const a = (e.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null
         if (!a) {
+          // A tap on a [✎] marker shows a note written with other settings
+          const ink = inkMarkAt(e.target)
+          if (ink) {
+            setPending(null)
+            setEditing(null)
+            setInkOpen(ink)
+            return
+          }
           // A tap on a sketch opens it to edit
           const sk = sketchAt(e.target)
           if (sk) {
@@ -664,6 +719,7 @@ function ZimReader({ id, jump, settings, onBack, toast }: { id: string; jump: Zi
           ) : null}
         </div>
         <IconButton icon="home" label="Main page" onClick={() => go('')} />
+        <IconButton icon="draw" label="Draw on page" active={pen.drawAll} onClick={() => pen.setDrawAll(!pen.drawAll)} />
         <IconButton icon="highlight" label={`Highlights in this book (${bookHighlights.length})`} onClick={() => setPanel((x) => (x === 'highlights' ? false : 'highlights'))} />
         <IconButton icon="history" label="History" onClick={() => setPanel((x) => (x === 'history' ? false : 'history'))} />
         <IconButton icon="headphones" label="Listen: read aloud" text="Listen" onClick={() => (listening ? readAloud.toggle() : startListening())} disabled={!itemId} className="bar-primary" />
@@ -771,6 +827,21 @@ function ZimReader({ id, jump, settings, onBack, toast }: { id: string; jump: Zi
                 }
               : undefined
           }
+        />
+      ) : null}
+      {pen.drawAll ? <PenBar pen={pen} onDone={() => pen.setDrawAll(false)} /> : null}
+      {inkOpen && highlights.find((h) => h.id === inkOpen) ? (
+        <InkPreview
+          note={highlights.find((h) => h.id === inkOpen)!}
+          canSwitch={false}
+          onSwitch={() => undefined}
+          onDelete={async () => {
+            const h = highlights.find((x) => x.id === inkOpen)!
+            if (!(await confirmDeleteHighlight(h.text))) return
+            await deleteHighlight(h.id)
+            setInkOpen(null)
+          }}
+          onClose={() => setInkOpen(null)}
         />
       ) : null}
       {sketching ? (() => {

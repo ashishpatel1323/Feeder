@@ -42,6 +42,9 @@ import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Draw
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.booleanOrNull
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material.icons.outlined.FormatSize
 import androidx.compose.material.icons.outlined.Headphones
 import androidx.compose.material.icons.outlined.Highlight
@@ -105,6 +108,9 @@ import com.nononsenseapps.feeder.model.history.ItemHistory
 import com.nononsenseapps.feeder.ui.compose.components.askHighlight
 import com.nononsenseapps.feeder.ui.compose.components.rememberDeleteConfirmer
 import com.nononsenseapps.feeder.ui.compose.highlights.SketchEditorDialog
+import com.nononsenseapps.feeder.ui.compose.highlights.rememberPenState
+import com.nononsenseapps.feeder.ui.compose.highlights.PenBar
+import com.nononsenseapps.feeder.ui.compose.highlights.InkPreviewDialog
 import com.nononsenseapps.feeder.ui.compose.history.HistoryGraphCard
 import com.nononsenseapps.feeder.ui.compose.history.historyItems
 import com.nononsenseapps.feeder.ui.compose.history.rememberHistory
@@ -233,6 +239,9 @@ fun EbookReaderScreen(
     // A margin sketch being drawn: for a selection, or an existing sketch (by id)
     var sketchingNew by remember { mutableStateOf<Selection?>(null) }
     var sketchingId by remember { mutableStateOf<String?>(null) }
+    // Handwriting on the page (Kobo style), tied to the text size, font and line spacing it was written with
+    val pen = rememberPenState()
+    var inkOpen by remember { mutableStateOf<String?>(null) }
     var sheet by remember { mutableStateOf<String?>(null) }
     var prefs by remember { mutableStateOf(loadPrefs(context)) }
     var webView by remember { mutableStateOf<WebView?>(null) }
@@ -257,7 +266,8 @@ fun EbookReaderScreen(
             highlights.map {
                 JsonObject(
                     mapOf("id" to JsonPrimitive(it.id), "cfi" to JsonPrimitive(it.cfi), "color" to JsonPrimitive(it.color)) +
-                        (it.sketch?.let { sk -> mapOf("sketch" to JsonPrimitive(sk)) } ?: emptyMap()),
+                        (it.sketch?.let { sk -> mapOf("sketch" to JsonPrimitive(sk)) } ?: emptyMap()) +
+                        (it.ink?.let { ink -> mapOf("ink" to JsonPrimitive(ink)) } ?: emptyMap()),
                 )
             },
         ).toString()
@@ -273,6 +283,7 @@ fun EbookReaderScreen(
     // The latest values for the bridge, which outlives recompositions
     val currentBook by rememberUpdatedState(book)
     val currentHighlights by rememberUpdatedState(highlights)
+    val currentPenColor by rememberUpdatedState(pen.color)
     val currentPrefs by rememberUpdatedState(prefs)
     val currentDark by rememberUpdatedState(dark)
 
@@ -379,6 +390,42 @@ fun EbookReaderScreen(
                             }
                         if (selection != null) editing = null
                     }
+
+                @JavascriptInterface
+                fun onInkNote(json: String) =
+                    main.post {
+                        val o = runCatching { prefsJson.parseToJsonElement(json) as? JsonObject }.getOrNull() ?: return@post
+                        val cfi = o["cfi"]?.jsonPrimitive?.contentOrNull ?: return@post
+                        val text = o["text"]?.jsonPrimitive?.contentOrNull ?: return@post
+                        val ink = o["ink"]?.jsonPrimitive?.contentOrNull ?: return@post
+                        highlightStore.add(
+                            Highlight(
+                                id = UUID.randomUUID().toString(),
+                                itemKey = itemKey,
+                                itemTitle = currentBook?.title ?: "",
+                                itemLink = null,
+                                feedTitle = currentBook?.author ?: "",
+                                imageUrl = null,
+                                text = text,
+                                color = currentPenColor.id,
+                                createdAt = System.currentTimeMillis(),
+                                cfi = cfi,
+                                ink = ink,
+                            ),
+                        )
+                    }
+
+                @JavascriptInterface
+                fun onInkErase(
+                    cfi: String,
+                    ink: String,
+                ) = main.post {
+                    val h = currentHighlights.firstOrNull { it.cfi == cfi && it.ink != null } ?: return@post
+                    if (ink.isBlank()) highlightStore.delete(h.id) else highlightStore.updateInk(h.id, ink)
+                }
+
+                @JavascriptInterface
+                fun onInkMark(cfi: String) = main.post { inkOpen = currentHighlights.firstOrNull { it.cfi == cfi && it.ink != null }?.id }
 
                 @JavascriptInterface
                 fun onHighlightTap(cfi: String) =
@@ -549,6 +596,13 @@ fun EbookReaderScreen(
                     IconButton(onClick = { sheet = "toc" }, enabled = opened) {
                         Icon(Icons.AutoMirrored.Outlined.List, contentDescription = stringResource(R.string.ebook_contents))
                     }
+                    IconButton(onClick = { pen.drawAll = !pen.drawAll }, enabled = opened) {
+                        Icon(
+                            Icons.Outlined.Draw,
+                            contentDescription = stringResource(R.string.draw_on_page),
+                            tint = if (pen.drawAll) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                        )
+                    }
                     IconButton(onClick = { sheet = "highlights" }, enabled = opened) {
                         Icon(Icons.Outlined.Highlight, contentDescription = stringResource(R.string.ebook_highlights))
                     }
@@ -563,6 +617,11 @@ fun EbookReaderScreen(
         },
         bottomBar = {
             Column(Modifier.windowInsetsPadding(WindowInsets.navigationBars)) {
+                if (pen.drawAll) {
+                    Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
+                        PenBar(pen = pen, onDone = { pen.drawAll = false })
+                    }
+                }
                 when {
                     selection != null || editing != null ->
                         HighlightBar(
@@ -778,6 +837,34 @@ fun EbookReaderScreen(
         }
     }
 
+    LaunchedEffect(pen.drawAll, pen.color, pen.erasing, opened) { if (opened) js("feeder.setPen&&feeder.setPen(${q(pen.json())})") }
+    inkOpen?.let { id ->
+        val h = highlights.firstOrNull { it.id == id }
+        if (h == null) {
+            inkOpen = null
+        } else {
+            val was = remember(h.ink) { com.nononsenseapps.feeder.model.highlights.InkCodec.parse(h.ink)?.prefs.orEmpty() }
+            val wasSize = was["fontSize"]?.jsonPrimitive?.intOrNull
+            val wasLine = was["lineHeight"]?.jsonPrimitive?.doubleOrNull
+            val wasFont = was["publisherFont"]?.jsonPrimitive?.booleanOrNull
+            val differs = (wasSize != null && wasSize != prefs.fontSize) || (wasLine != null && wasLine != prefs.lineHeight) || (wasFont != null && wasFont != prefs.publisherFont)
+            InkPreviewDialog(
+                note = h,
+                canSwitch = differs,
+                onSwitch = {
+                    prefs = prefs.copy(fontSize = wasSize ?: prefs.fontSize, lineHeight = wasLine ?: prefs.lineHeight, publisherFont = wasFont ?: prefs.publisherFont)
+                    inkOpen = null
+                },
+                onDelete = {
+                    deleteConfirmer.askHighlight(h.text) {
+                        highlightStore.delete(h.id)
+                        inkOpen = null
+                    }
+                },
+                onDismiss = { inkOpen = null },
+            )
+        }
+    }
     sketchingNew?.let { sel ->
         SketchEditorDialog(
             quote = sel.text,

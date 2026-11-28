@@ -21,7 +21,10 @@ class UserHighlights(
 ) {
     /** Margin sketches (shown as strips after their paragraph); the rest are marked in the text. */
     val sketches: List<Highlight> = list.filter { !it.sketch.isNullOrBlank() }
-    val marked: List<Highlight> = list.filter { it.sketch.isNullOrBlank() }
+
+    /** Handwriting on the page (ArticleInk), drawn where the layout matches. */
+    val inks: List<Highlight> = list.filter { !it.ink.isNullOrBlank() }
+    val marked: List<Highlight> = list.filter { it.sketch.isNullOrBlank() && it.ink.isNullOrBlank() }
 
     @Volatile
     var locator: HighlightLocator? = null
@@ -59,6 +62,24 @@ internal fun highlightMarks(
             val element = texts.getOrNull(p) ?: continue
             out.getOrPut(element) { mutableListOf() } += HighlightMark(range, h.highlightColor, h.id)
         }
+    }
+    return out
+}
+
+/** Each paragraph's handwritten notes: the one their words start in. */
+internal fun paragraphInks(
+    article: LinearArticle,
+    locator: HighlightLocator,
+    inks: List<Highlight>,
+): Map<LinearText, List<ParagraphInk>> {
+    if (inks.isEmpty()) return emptyMap()
+    val texts = article.highlightTexts()
+    val out = IdentityHashMap<LinearText, MutableList<ParagraphInk>>()
+    for (h in inks) {
+        val data = com.nononsenseapps.feeder.model.highlights.InkCodec.parse(h.ink) ?: continue
+        val first = locator.ranges(h.text, h.prefix, h.start).entries.minByOrNull { it.key } ?: continue
+        val element = texts.getOrNull(first.key) ?: continue
+        out.getOrPut(element) { mutableListOf() } += ParagraphInk(h.id, data, first.value)
     }
     return out
 }

@@ -2,6 +2,8 @@ package com.nononsenseapps.feeder.ui.compose.highlights
 
 import android.content.Context
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.contextmenu.builder.item
 import androidx.compose.foundation.text.contextmenu.data.ProcessTextKey
 import androidx.compose.foundation.text.contextmenu.data.TextContextMenuItem
@@ -45,6 +47,9 @@ import org.kodein.di.instance
 data class ArticleHighlightsState(
     val count: Int,
     val onShowList: () -> Unit,
+    /** Handwriting on the page: Draw on page lets fingers write too (a stylus always does). */
+    val drawOnPage: Boolean = false,
+    val onToggleDraw: (() -> Unit)? = null,
 )
 
 /**
@@ -63,6 +68,7 @@ fun ArticleHighlightsHost(
 ) {
     val di = LocalDI.current
     val store: HighlightStore by di.instance()
+    val repository: com.nononsenseapps.feeder.archmodel.Repository by di.instance()
     val dao: Sync2Dao by di.instance()
     val context = LocalContext.current
     val deleteConfirmer = rememberDeleteConfirmer()
@@ -80,13 +86,22 @@ fun ArticleHighlightsHost(
     var showList by remember { mutableStateOf(false) }
     var share by remember { mutableStateOf<ShareSubject?>(null) }
 
+    // Handwriting on the page (Kobo style), tied to the text size and screen it was written with
+    val pen = rememberPenState()
+    var inkOpen by remember { mutableStateOf<String?>(null) }
+    val textScale by repository.textScale.collectAsStateWithLifecycle()
     val userHighlights =
         remember(mine) {
             UserHighlights(mine) {
-                if (it.sketch.isNullOrBlank()) editing = it.id else sketchingId = it.id
+                when {
+                    !it.ink.isNullOrBlank() -> inkOpen = it.id
+                    it.sketch.isNullOrBlank() -> editing = it.id
+                    else -> sketchingId = it.id
+                }
             }
         }
     val currentUser by rememberUpdatedState(userHighlights)
+    val currentTextScale = rememberUpdatedState(textScale)
 
     // Highlight in the text selection menu, for this article only. Compose doesn't hand out the
     // selected text, so Highlight runs the menu's own Copy into a clipboard that catches it
@@ -136,12 +151,66 @@ fun ArticleHighlightsHost(
 
     val article =
         itemKey?.let { HighlightArticle(itemKey = it, title = title, link = link, feedTitle = feedTitle, imageUrl = imageUrl) }
+    val currentArticle by rememberUpdatedState(article)
+    val articleInk =
+        remember(pen) {
+            ArticleInk(
+                pen = pen,
+                onNote = { paragraph, start, end, data ->
+                    val a = currentArticle
+                    val anchor = currentUser.locator?.anchorIn(paragraph, start, end)
+                    if (a != null && anchor != null) {
+                        val prefs = mapOf("textScale" to kotlinx.serialization.json.JsonPrimitive(currentTextScale.value))
+                        store.add(newHighlight(a, anchor, pen.color, "").copy(ink = com.nononsenseapps.feeder.model.highlights.InkCodec.encode(data.copy(prefs = prefs))))
+                    }
+                },
+                onErase = { id, data -> if (data == null) store.delete(id) else store.updateInk(id, com.nononsenseapps.feeder.model.highlights.InkCodec.encode(data)) },
+                onMark = { inkOpen = it },
+            )
+        }
 
-    CompositionLocalProvider(LocalUserHighlights provides userHighlights) {
+    CompositionLocalProvider(LocalUserHighlights provides userHighlights, LocalArticleInk provides (if (itemKey != null) articleInk else null)) {
         Box(modifier.then(menuModifier)) {
             CompositionLocalProvider(LocalClipboard provides clipboard) {
-                content(if (itemKey != null) ArticleHighlightsState(mine.size) { showList = true } else null)
+                content(
+                    if (itemKey != null) {
+                        ArticleHighlightsState(mine.size, { showList = true }, pen.drawAll, { pen.drawAll = !pen.drawAll })
+                    } else {
+                        null
+                    },
+                )
             }
+            if (pen.drawAll) {
+                PenBar(
+                    pen = pen,
+                    onDone = { pen.drawAll = false },
+                    modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter).padding(bottom = 96.dp),
+                )
+            }
+        }
+    }
+
+    inkOpen?.let { id ->
+        val h = mine.firstOrNull { it.id == id }
+        if (h == null) {
+            inkOpen = null
+        } else {
+            val was = remember(h.ink) { com.nononsenseapps.feeder.model.highlights.InkCodec.parse(h.ink)?.prefs?.get("textScale")?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content?.toFloatOrNull() } }
+            InkPreviewDialog(
+                note = h,
+                canSwitch = was != null && was != textScale,
+                onSwitch = {
+                    was?.let { repository.setTextScale(it) }
+                    inkOpen = null
+                },
+                onDelete = {
+                    deleteConfirmer.askHighlight(h.text) {
+                        store.delete(h.id)
+                        inkOpen = null
+                    }
+                },
+                onDismiss = { inkOpen = null },
+            )
         }
     }
 

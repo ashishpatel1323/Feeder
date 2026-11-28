@@ -349,3 +349,95 @@ fun SketchEditorDialog(
         }
     }
 }
+
+/** Pen color, eraser and Draw on page, for writing on a page (Kobo style). */
+class PenState(
+    initialColor: HighlightColor,
+) {
+    var color by mutableStateOf(initialColor)
+    var erasing by mutableStateOf(false)
+    var drawAll by mutableStateOf(false)
+
+    /** For the page scripts (web/src/lib/pageink.ts). */
+    fun json(): String = """{"drawAll":$drawAll,"color":"${color.id}","erasing":$erasing}"""
+}
+
+@Composable
+fun rememberPenState(): PenState = remember { PenState(HighlightColor.PINK) }
+
+/** The floating pen bar shown while Draw on page is on. */
+@Composable
+fun PenBar(
+    pen: PenState,
+    onDone: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val dark = isDarkSurface()
+    Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(28.dp), shadowElevation = 4.dp, modifier = modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = FeederTokens.Space.sm, vertical = FeederTokens.Space.xs)) {
+            FilledTonalIconToggleButton(checked = !pen.erasing, onCheckedChange = { pen.erasing = false }) {
+                Icon(Icons.Outlined.Draw, contentDescription = stringResource(R.string.sketch_pen))
+            }
+            FilledTonalIconToggleButton(checked = pen.erasing, onCheckedChange = { pen.erasing = true }) {
+                Icon(EraserIcon, contentDescription = stringResource(R.string.sketch_eraser))
+            }
+            for (c in HighlightColor.entries) {
+                val selected = c == pen.color && !pen.erasing
+                Box(
+                    Modifier
+                        .padding(horizontal = 5.dp)
+                        .size(28.dp)
+                        .then(if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape).padding(4.dp) else Modifier)
+                        .clip(CircleShape)
+                        .background(Color(c.sketchInk(dark)))
+                        .clickable(onClickLabel = c.id) {
+                            pen.color = c
+                            pen.erasing = false
+                        },
+                )
+            }
+            Spacer(Modifier.width(FeederTokens.Space.xs))
+            Button(onClick = onDone) { Text(stringResource(R.string.pen_done)) }
+        }
+    }
+}
+
+/** A handwritten note written with other reading settings: as it was written, with its words. */
+@Composable
+fun InkPreviewDialog(
+    note: Highlight,
+    canSwitch: Boolean,
+    onSwitch: () -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val data = remember(note.ink) { com.nononsenseapps.feeder.model.highlights.InkCodec.parse(note.ink) }
+    val dark = isDarkSurface()
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.ink_note)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(FeederTokens.Space.sm)) {
+                Text(stringResource(R.string.ink_why), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("“${note.text}”", style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                if (data != null) {
+                    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(sketchPaper()).padding(FeederTokens.Space.sm)) {
+                        Canvas(Modifier.fillMaxWidth().aspectRatio((data.w + 8f) / (data.h + 8f))) {
+                            val k = size.width / (data.w + 8f)
+                            for (st in data.strokes) {
+                                val shifted = FloatArray(st.p.size) { i -> st.p[i] + 4f }
+                                drawPath(strokePath(shifted, k), Color(st.color.sketchInk(dark)), style = Stroke(width = st.w * k, cap = StrokeCap.Round, join = StrokeJoin.Round))
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (canSwitch) TextButton(onClick = onSwitch) { Text(stringResource(R.string.ink_switch)) } else TextButton(onClick = onDismiss) { Text(stringResource(android.R.string.ok)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDelete, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text(stringResource(R.string.sketch_delete)) }
+        },
+    )
+}

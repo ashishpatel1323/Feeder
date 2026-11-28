@@ -919,6 +919,7 @@ class Sync2Client(
             ).apply {
                 h.cfi?.takeIf { it.isNotBlank() }?.let { put("cfi", it) }
                 h.sketch?.takeIf { it.isNotBlank() }?.let { put("sketch", it) }
+                h.ink?.takeIf { it.isNotBlank() }?.let { put("ink", it) }
             }
 
         const val DROPBOX_KEY = "main"
@@ -958,6 +959,7 @@ class Sync2Client(
                 modifiedAt = ts,
                 cfi = (v["cfi"] as? String)?.takeIf { it.isNotBlank() },
                 sketch = (v["sketch"] as? String)?.takeIf { it.isNotBlank() },
+                ink = (v["ink"] as? String)?.takeIf { it.isNotBlank() },
             )
         }
 

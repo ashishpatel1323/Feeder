@@ -3,6 +3,7 @@ import type { Highlight, HighlightColor } from '../lib/db'
 import { allQuotesText, HIGHLIGHT_COLORS, quoteText } from '../lib/highlights'
 import { Icon, IconButton } from './Icon'
 import { parseSketch, sketchSvg } from '../lib/sketch'
+import { inkSvg, parseInk } from '../lib/pageink'
 
 /** Docked bar under the article: shown for a fresh selection or when an existing highlight is tapped. */
 export function HighlightBar(p: {
@@ -122,6 +123,7 @@ export function HighlightCard(p: {
         {h.text}
       </button>
       {h.sketch ? <SketchPreview sketch={h.sketch} color={h.color} onClick={p.onEdit ?? p.onOpen} /> : null}
+      {h.ink ? <InkThumb ink={h.ink} onClick={p.onOpen} /> : null}
       {h.note ? <div className="hl-card-note">{h.note}</div> : null}
       <div className="hl-card-foot">
         {p.showDate ? <span className="hl-card-date">{new Date(h.createdAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}</span> : null}
@@ -351,4 +353,12 @@ export function SketchPreview(p: { sketch: string; color: string; onClick?: () =
       dangerouslySetInnerHTML={{ __html: sketchSvg(sk) }}
     />
   )
+}
+
+/** A handwritten note as it was written (on cards and lists). */
+export function InkThumb(p: { ink: string; onClick?: () => void }) {
+  const d = parseInk(p.ink)
+  if (!d) return null
+  const dark = document.documentElement.dataset.theme === 'dark' || (document.documentElement.dataset.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)
+  return <span className="feeder-sketch" role={p.onClick ? 'button' : undefined} aria-label="Handwritten note" onClick={p.onClick} dangerouslySetInnerHTML={{ __html: inkSvg(d, dark) }} />
 }
