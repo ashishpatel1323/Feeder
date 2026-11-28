@@ -94,6 +94,19 @@ export function safeContentType(original: string | null): string {
   return 'text/plain; charset=x-user-defined'
 }
 
+/**
+ * How long the browser keeps a proxied response. Pictures (feed icons, favicons, thumbnails)
+ * hardly ever change at the same address, so an <img> keeps one a week, and a missing one (a
+ * site without a favicon) a day, instead of every list asking again after 5 minutes. Feeds and
+ * pages the app reads itself: 5 minutes.
+ */
+export function proxyCacheControl(status: number, contentType: string, fetchDest: string | null): string {
+  if (fetchDest !== 'image') return 'private, max-age=300'
+  if (status === 200 && contentType.startsWith('image/')) return 'private, max-age=604800'
+  if (status >= 400 && status < 500) return 'private, max-age=86400'
+  return 'private, max-age=300'
+}
+
 async function proxyFetch(request: Request): Promise<Response> {
   const target = checkTarget(new URL(request.url).searchParams.get('url'))
   if (typeof target === 'string') return json(400, { error: target })
@@ -126,12 +139,13 @@ async function proxyFetch(request: Request): Promise<Response> {
   if (length > MAX_FETCH_BYTES) return json(413, { error: 'Too large' })
   const body = upstream.body ? upstream.body.pipeThrough(byteLimit(MAX_FETCH_BYTES)) : null
 
+  const contentType = safeContentType(upstream.headers.get('content-type'))
   const headers = new Headers({
-    'content-type': safeContentType(upstream.headers.get('content-type')),
+    'content-type': contentType,
     // The real type, for the app to read (it decodes the body itself)
     'x-original-content-type': upstream.headers.get('content-type') ?? '',
     'x-final-url': current.toString(),
-    'cache-control': 'private, max-age=300',
+    'cache-control': proxyCacheControl(upstream.status, contentType, request.headers.get('sec-fetch-dest')),
     // Fetched content must never run as this site, even if someone opens the URL directly
     'x-content-type-options': 'nosniff',
     'content-security-policy': "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'",

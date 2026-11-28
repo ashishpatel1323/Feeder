@@ -1,6 +1,7 @@
 package com.nononsenseapps.feeder.ui.compose.home
 
 import android.content.Context
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,11 +34,13 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -48,11 +51,14 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.db.room.PlaylistCandidate
+import com.nononsenseapps.feeder.model.audiobooks.AudiobookLibrary
+import com.nononsenseapps.feeder.model.ebooks.EbookLibrary
 import com.nononsenseapps.feeder.model.history.CentralHistory
 import com.nononsenseapps.feeder.model.history.CentralHistoryRecorder
 import com.nononsenseapps.feeder.model.history.RecentEntry
 import com.nononsenseapps.feeder.model.playlists.Playlist
 import com.nononsenseapps.feeder.model.playlists.items
+import com.nononsenseapps.feeder.model.shelf.CoverBitmaps
 import com.nononsenseapps.feeder.model.zim.ZimLibrary
 import com.nononsenseapps.feeder.ui.compose.history.CentralHistoryNav
 import com.nononsenseapps.feeder.ui.compose.playlists.PlaylistsViewModel
@@ -226,8 +232,11 @@ private fun RecentTile(
                 .clickable(onClick = onClick),
     ) {
         Box(Modifier.size(56.dp).background(MaterialTheme.colorScheme.surfaceVariant)) {
+            val bookCover = rememberLocalBookCover(e)
             if (e.img.isNotEmpty()) {
                 AsyncImage(model = e.img, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            } else if (bookCover != null) {
+                Image(bookCover, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             }
         }
         Column(Modifier.weight(1f).padding(horizontal = FeederTokens.Space.sm)) {
@@ -251,6 +260,25 @@ private fun RecentTile(
             }
         }
     }
+}
+
+/** The cover of a book on this phone, for an ebook or audiobook entry (they have no picture link). */
+@Composable
+private fun rememberLocalBookCover(e: RecentEntry): ImageBitmap? {
+    val context = LocalContext.current
+    val file =
+        remember(e.t, e.i, e.img) {
+            when {
+                e.img.isNotEmpty() || e.i.isEmpty() -> null
+                e.t == CentralHistory.EBOOK -> EbookLibrary.get(context).coverFile(e.i)
+                e.t == CentralHistory.AUDIOBOOK -> AudiobookLibrary.get(context).coverFile(e.i)
+                else -> null
+            }
+        } ?: return null
+    val cover by produceState(remember(file) { CoverBitmaps.peek(file) }, file) {
+        value = withContext(Dispatchers.IO) { CoverBitmaps.load(file) }
+    }
+    return cover
 }
 
 /** A shelf tile: square art (16:9 for videos), two-line title, feed name. */
