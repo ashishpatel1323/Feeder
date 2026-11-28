@@ -254,6 +254,8 @@ export default function App() {
     // Mac app with Claude Code: playlist briefs asked for on any device
     void import('./lib/macBrief').then((m) => m.macBrief.start())
   }, [])
+  // Opened with no page in the address (read before the effect below gives Feeds one)
+  const startedBare = useRef(!window.location.hash)
   // Start on Home: give it its own address, so Back from the article list returns to it
   useEffect(() => {
     if (!window.location.hash && !feedsViewIsLatest()) history.replaceState(null, '', window.location.pathname + window.location.search + HOME_HASH)
@@ -1497,7 +1499,7 @@ export default function App() {
   // Opens on the bar's first tab (Home by default) when no page is in the address
   useEffect(() => {
     const first = loadBarTabs()[0]
-    if (!window.location.hash && first !== 'feeds' && first !== 'search') openTab(first)
+    if (startedBare.current && first !== 'feeds' && first !== 'search') openTab(first)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const openTabRef = useRef(openTab)

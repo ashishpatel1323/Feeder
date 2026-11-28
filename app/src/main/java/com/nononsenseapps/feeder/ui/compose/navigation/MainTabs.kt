@@ -276,8 +276,8 @@ fun NavController.openTab(
                 MainTab.BOOKS -> BooksDestination.route
                 else -> root
             }
-        popBackStack(rootRoute, inclusive = false)
-        return
+        // A left-out tab's screens belong to More: its root may have left the stack (Feeds pops to Home)
+        if (popBackStack(rootRoute, inclusive = false)) return
     }
     navigate(root) {
         popUpTo(HomeDestination.route) { saveState = true }
