@@ -72,9 +72,14 @@ object StylusButton {
 
     fun update(ev: MotionEvent) {
         if (ev.pointerCount == 0) return
-        val tool = ev.getToolType(0)
+        // The pen isn't always pointer 0: a palm resting on the screen often touched first
+        val pen =
+            (0 until ev.pointerCount).any {
+                val tool = ev.getToolType(it)
+                tool == MotionEvent.TOOL_TYPE_STYLUS || tool == MotionEvent.TOOL_TYPE_ERASER
+            }
         pressed =
-            (tool == MotionEvent.TOOL_TYPE_STYLUS || tool == MotionEvent.TOOL_TYPE_ERASER) &&
+            pen &&
             ev.buttonState and (MotionEvent.BUTTON_STYLUS_PRIMARY or MotionEvent.BUTTON_STYLUS_SECONDARY or MotionEvent.BUTTON_SECONDARY) != 0
     }
 }

@@ -376,21 +376,44 @@ export function attachInkCapture(doc: Document, o: InkCapture): () => void {
     view.clearTimeout(timer)
     timer = view.setTimeout(finish, 1100)
   }
-  // Fingers on the page while writing: the note is done (and the page may scroll)
-  const touchOther = (e: PointerEvent) => {
-    if (o.mode() === 'pen' && e.pointerType !== 'pen' && pending.length && !current) finish()
+  // A finger scrolling the page while writing: the note is done. A palm resting on the page
+  // (often down before the pen) leaves it open.
+  const fingers = new Map<number, [number, number]>()
+  const fingerDown = (e: PointerEvent) => {
+    if (e.pointerType !== 'pen') fingers.set(e.pointerId, [e.clientX, e.clientY])
+  }
+  const fingerMove = (e: PointerEvent) => {
+    const at = fingers.get(e.pointerId)
+    if (!at || current || !pending.length || o.mode() !== 'pen') return
+    if (Math.hypot(e.clientX - at[0], e.clientY - at[1]) > 10) finish()
+  }
+  const fingerUp = (e: PointerEvent) => {
+    // A cancelled touch is one the browser took to scroll
+    if (e.type === 'pointercancel' && fingers.has(e.pointerId) && !current && pending.length && o.mode() === 'pen') finish()
+    fingers.delete(e.pointerId)
   }
   const opts = { capture: true, passive: false } as AddEventListenerOptions
-  doc.addEventListener('pointerdown', touchOther, true)
+  doc.addEventListener('pointerdown', fingerDown, true)
+  doc.addEventListener('pointermove', fingerMove, true)
+  doc.addEventListener('pointerup', fingerUp, true)
+  doc.addEventListener('pointercancel', fingerUp, true)
   doc.addEventListener('pointerdown', down, opts)
   doc.addEventListener('pointermove', move, opts)
   doc.addEventListener('pointerup', up, opts)
   doc.addEventListener('pointercancel', up, opts)
-  // Stops the browser from scrolling or selecting under a pen
+  // Stops the browser from scrolling, selecting or following a link under a pen, also when a
+  // palm or finger touched first (Chrome tells a stylus touch apart by touchType).
+  const stylusTouch = (e: TouchEvent) =>
+    o.mode() !== 'off' &&
+    Array.from(e.changedTouches).some((t) => (t as Touch & { touchType?: string }).touchType === 'stylus')
   const touchStart = (e: TouchEvent) => {
-    if (current) e.preventDefault()
+    if (stylusTouch(e) && e.cancelable) e.preventDefault()
   }
-  doc.addEventListener('touchmove', touchStart, { capture: true, passive: false })
+  const touchMove = (e: TouchEvent) => {
+    if ((current || stylusTouch(e)) && e.cancelable) e.preventDefault()
+  }
+  doc.addEventListener('touchstart', touchStart, { capture: true, passive: false })
+  doc.addEventListener('touchmove', touchMove, { capture: true, passive: false })
   // Save a note still being written before the page moves (keys that scroll or turn pages)
   const flush = () => {
     if (!current) finish()
@@ -399,12 +422,16 @@ export function attachInkCapture(doc: Document, o: InkCapture): () => void {
   return () => {
     finish()
     doc.removeEventListener(INK_FLUSH, flush)
-    doc.removeEventListener('pointerdown', touchOther, true)
+    doc.removeEventListener('pointerdown', fingerDown, true)
+    doc.removeEventListener('pointermove', fingerMove, true)
+    doc.removeEventListener('pointerup', fingerUp, true)
+    doc.removeEventListener('pointercancel', fingerUp, true)
     doc.removeEventListener('pointerdown', down, opts)
     doc.removeEventListener('pointermove', move, opts)
     doc.removeEventListener('pointerup', up, opts)
     doc.removeEventListener('pointercancel', up, opts)
-    doc.removeEventListener('touchmove', touchStart, { capture: true } as EventListenerOptions)
+    doc.removeEventListener('touchstart', touchStart, { capture: true } as EventListenerOptions)
+    doc.removeEventListener('touchmove', touchMove, { capture: true } as EventListenerOptions)
   }
 }
 
