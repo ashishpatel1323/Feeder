@@ -686,8 +686,16 @@ export default function App() {
   // Theme
   useEffect(() => {
     const root = document.documentElement
-    if (settings.theme === 'system') root.removeAttribute('data-theme')
-    else root.setAttribute('data-theme', settings.theme)
+    // "System" picks Paper on e-ink screens (they report a slow update rate or no colour)
+    const eInk = typeof matchMedia !== 'undefined' ? matchMedia('(update: slow), (monochrome)') : null
+    const apply = () => {
+      if (settings.theme === 'system' && eInk?.matches) root.setAttribute('data-theme', 'paper')
+      else if (settings.theme === 'system') root.removeAttribute('data-theme')
+      else root.setAttribute('data-theme', settings.theme)
+    }
+    apply()
+    eInk?.addEventListener?.('change', apply)
+    return () => eInk?.removeEventListener?.('change', apply)
   }, [settings.theme])
 
   useEffect(() => {

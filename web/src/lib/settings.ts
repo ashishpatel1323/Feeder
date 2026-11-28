@@ -18,7 +18,7 @@ export interface Settings {
   showThumbnails: boolean
   markReadOnOpen: boolean
   refreshMinutes: number
-  theme: 'system' | 'light' | 'dark'
+  theme: 'system' | 'light' | 'dark' | 'paper'
   textSize: number
   /** Bold the start of every word in the reader ("fast reading"). */
   fastReading: boolean
