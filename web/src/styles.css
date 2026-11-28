@@ -5898,7 +5898,7 @@ label.check.inline {
   gap: 12px;
 }
 .car-article .car-title {
-  font-size: clamp(18px, 2.4vw, 26px);
+  font-size: var(--fs-xl);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;

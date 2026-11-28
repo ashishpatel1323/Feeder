@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -71,6 +72,7 @@ fun SpokenArticleText(
     val current = spokenAt?.let { at -> paragraphs.indexOfLast { it.first <= at }.coerceAtLeast(0) } ?: -1
     var follow by remember(articleId) { mutableStateOf(true) }
     val listState = rememberLazyListState()
+    var currentLayout by remember(text) { mutableStateOf<Pair<Int, TextLayoutResult>?>(null) }
     val paper = LocalPaperMode.current
     val stopFollowing =
         remember {
@@ -89,12 +91,22 @@ fun SpokenArticleText(
     BoxWithConstraints(modifier.fillMaxWidth()) {
         // Keep the spoken paragraph about a quarter of the way down
         val lead = with(LocalDensity.current) { (maxHeight * 0.25f).roundToPx() }
-        LaunchedEffect(current, follow, lead) {
+        // Where the spoken sentence starts inside its paragraph, so long paragraphs keep following
+        val sentenceTop =
+            currentLayout
+                ?.takeIf { it.first == current }
+                ?.let { (_, layout) ->
+                    spokenAt?.let { start ->
+                        val at = (start - paragraphs[current].first).coerceIn(0, layout.layoutInput.text.length)
+                        layout.getLineTop(layout.getLineForOffset(at)).toInt()
+                    }
+                } ?: 0
+        LaunchedEffect(current, sentenceTop, follow, lead) {
             if (follow && current >= 0) {
                 if (paper) {
-                    listState.scrollToItem(current, -lead)
+                    listState.scrollToItem(current, sentenceTop - lead)
                 } else {
-                    listState.animateScrollToItem(current, -lead)
+                    listState.animateScrollToItem(current, sentenceTop - lead)
                 }
             }
         }
@@ -114,6 +126,7 @@ fun SpokenArticleText(
                     shown,
                     style = MaterialTheme.typography.bodyLarge.copy(fontSize = 19.sp, lineHeight = 29.sp),
                     color = if (i == current || current < 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                    onTextLayout = { if (i == current) currentLayout = i to it },
                     modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
                 )
             }
