@@ -51,6 +51,9 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.ui.semantics.selected
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderState
 import androidx.compose.material3.Surface
@@ -274,7 +277,9 @@ private fun NowPlayingSheet(
     onSleep: () -> Unit,
     onStop: () -> Unit,
 ) {
-    var showTranscript by rememberSaveable { mutableStateOf(false) }
+    // P2: Transcript and Chapters are tabs at the foot of the sheet; the open one replaces the artwork
+    var tab by rememberSaveable { mutableStateOf(NowPlayingTab.NONE) }
+    val showTranscript = tab != NowPlayingTab.NONE
     var menuOpen by remember { mutableStateOf(false) }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -328,6 +333,8 @@ private fun NowPlayingSheet(
                     itemId = itemId,
                     positionMs = viewState.positionMillis.toLong(),
                     onSeek = { onSeekTo(it.toInt()) },
+                    // Chapters: the feed's chapters, or 5-minute blocks named by their first words
+                    chapters = if (tab == NowPlayingTab.CHAPTERS) emptyList() else null,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 200.dp, max = 320.dp).padding(vertical = FeederTokens.Space.sm),
                 )
             } else {
@@ -404,16 +411,14 @@ private fun NowPlayingSheet(
                     selected = sleepLeft != null,
                     modifier = Modifier.weight(1f),
                 )
-                if (itemId != null) {
-                    PlayerChip(
-                        icon = if (showTranscript) Icons.Default.ClosedCaption else Icons.Outlined.ClosedCaption,
-                        label = stringResource(R.string.transcript),
-                        description = stringResource(if (showTranscript) R.string.transcript_hide else R.string.transcript_show),
-                        onClick = { showTranscript = !showTranscript },
-                        selected = showTranscript,
-                        modifier = Modifier.weight(1.3f),
-                    )
-                }
+            }
+
+            if (itemId != null) {
+                NowPlayingTabs(
+                    current = tab,
+                    onSelect = { tab = if (tab == it) NowPlayingTab.NONE else it },
+                    modifier = Modifier.padding(top = FeederTokens.Space.md),
+                )
             }
         }
     }
@@ -618,4 +623,34 @@ private fun clock(totalMillis: Int): String {
     val minutes = (totalSeconds % 3600) / 60
     val seconds = totalSeconds % 60
     return if (hours > 0) "%d:%02d:%02d".format(hours, minutes, seconds) else "%d:%02d".format(minutes, seconds)
+}
+
+private enum class NowPlayingTab { NONE, TRANSCRIPT, CHAPTERS }
+
+/** The tab strip at the foot of Now playing (YouTube Music style): tap to open, tap again to close. */
+@Composable
+private fun NowPlayingTabs(
+    current: NowPlayingTab,
+    onSelect: (NowPlayingTab) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth().padding(top = FeederTokens.Space.xs)) {
+            listOf(NowPlayingTab.TRANSCRIPT to R.string.transcript, NowPlayingTab.CHAPTERS to R.string.player_chapters).forEach { (t, label) ->
+                val selected = current == t
+                TextButton(
+                    onClick = { onSelect(t) },
+                    modifier = Modifier.semantics { this.selected = selected },
+                ) {
+                    Text(
+                        stringResource(label),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                        textDecoration = if (selected) androidx.compose.ui.text.style.TextDecoration.Underline else null,
+                    )
+                }
+            }
+        }
+    }
 }

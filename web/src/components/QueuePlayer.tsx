@@ -7,7 +7,8 @@ import { articleText, playlistAudio } from '../lib/playlistAudio'
 import { formatClock } from '../lib/videopos'
 import { ITEM_KIND_LABELS, itemKind, readAloudSeconds } from '../lib/playlists'
 import { wordsOf } from '../lib/listquery'
-import { Icon } from './Icon'
+import { Icon, IconButton } from './Icon'
+import { MoreMenu } from './MoreMenu'
 import { formatSpeed } from './Player'
 
 const AUDIO_RATES = [0.8, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3]
@@ -202,23 +203,19 @@ export function QueuePlayer(p: Props) {
             </div>
           </div>
           <div className="qp-right">
-            <button className="btn" onClick={nextRate} title="Speed">
+            <button className="player-pill" onClick={nextRate} title="Speed" aria-label={`Speed ${formatSpeed(rate)}`}>
               {formatSpeed(rate)}
             </button>
-            <button className={`btn${open ? ' on' : ''}`} onClick={() => setOpen((o) => !o)}>
-              <Icon name="queue" size={18} /> Up next ({Math.max(0, q.ids.length - q.index - 1)})
-            </button>
-            <button className="btn" onClick={() => setCar(true)}>
-              <Icon name="car" size={18} /> Car mode
-            </button>
-            {item && isArticle ? (
-              <button className="btn" onClick={() => p.onOpenArticle(item.id)}>
-                <Icon name="open" size={18} /> Open
-              </button>
-            ) : null}
-            <button className="btn" onClick={() => playQueue.stop()} title="Stop and close the player">
-              <Icon name="close" size={18} /> Stop
-            </button>
+            <IconButton icon="queue" label={`Up next (${Math.max(0, q.ids.length - q.index - 1)})`} title={open ? 'Close Up next' : 'Up next'} onClick={() => setOpen((o) => !o)} active={open} />
+            <MoreMenu
+              label="Player"
+              entries={[
+                { icon: 'car', label: 'Car mode', onClick: () => setCar(true) },
+                { icon: 'open', label: 'Open article', onClick: () => item && p.onOpenArticle(item.id), hidden: !(item && isArticle) },
+                'separator',
+                { icon: 'close', label: 'Stop and close', onClick: () => playQueue.stop() },
+              ]}
+            />
           </div>
         </div>
       </div>
