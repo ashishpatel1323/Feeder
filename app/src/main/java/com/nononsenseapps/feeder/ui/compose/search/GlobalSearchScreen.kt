@@ -138,6 +138,8 @@ fun GlobalSearchScreen(
     viewModel: GlobalSearchViewModel,
     nav: GlobalSearchNav,
     modifier: Modifier = Modifier,
+    /** The Search tab: no Back arrow and no keyboard until the field is tapped. */
+    asTab: Boolean = false,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
@@ -147,7 +149,7 @@ fun GlobalSearchScreen(
     val hasQuery = queryTerms(query).isNotEmpty()
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
-    LaunchedEffect(Unit) { focus.requestFocus() }
+    LaunchedEffect(Unit) { if (!asTab) focus.requestFocus() }
 
     val shortcuts =
         listOf(
@@ -224,7 +226,7 @@ fun GlobalSearchScreen(
                 SearchField(
                     query = query,
                     onQuery = viewModel::setQuery,
-                    onBack = nav.onBack,
+                    onBack = if (asTab) null else nav.onBack,
                     onSearch = {
                         keyboard?.hide()
                         viewModel.remember()
@@ -432,7 +434,7 @@ private fun LazyListScope.group(
 private fun SearchField(
     query: String,
     onQuery: (String) -> Unit,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)?,
     onSearch: () -> Unit,
     focus: FocusRequester,
 ) {
@@ -443,8 +445,17 @@ private fun SearchField(
         modifier = Modifier.fillMaxWidth().height(56.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.go_back))
+            if (onBack != null) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.go_back))
+                }
+            } else {
+                Icon(
+                    Icons.Default.Search,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = FeederTokens.Space.lg),
+                )
             }
             Box(Modifier.weight(1f)) {
                 if (query.isEmpty()) {

@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.DynamicFeed
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Subscriptions
 import androidx.compose.material.icons.filled.VideoLibrary
@@ -31,6 +32,8 @@ import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.DynamicFeed
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Subscriptions
 import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.Icon
@@ -71,6 +74,8 @@ import kotlinx.coroutines.flow.asStateFlow
  * that opens global search.
  */
 enum class MainTab {
+    /** Home shelves (redesign): the first tab */
+    HOME,
     FEEDS,
     YOUTUBE,
     PLAYLISTS,
@@ -79,6 +84,9 @@ enum class MainTab {
     /** Ebooks, Audiobooks and ZIM, as subtabs of one destination */
     BOOKS,
     HISTORY,
+
+    /** Search everything (and browse), as a tab */
+    SEARCH,
 }
 
 /** Bar tab names saved before Books existed: each of them is Books now. */
@@ -90,9 +98,10 @@ private val OLD_BOOK_TABS = setOf("EBOOKS", "AUDIOBOOKS", "ZIM")
  */
 object BottomBarTabs {
     private const val PREFS = "main_tabs"
-    private const val KEY = "bar_tabs"
+    // v2: the redesign starts everyone on Home, Feeds, Library, Search once (Settings > Bottom bar tabs changes it)
+    private const val KEY = "bar_tabs_v2"
     const val MAX = 5
-    val DEFAULT = listOf(MainTab.FEEDS, MainTab.YOUTUBE, MainTab.PLAYLISTS, MainTab.BOOKS, MainTab.LIBRARY)
+    val DEFAULT = listOf(MainTab.HOME, MainTab.FEEDS, MainTab.LIBRARY, MainTab.SEARCH)
     val ALWAYS = setOf(MainTab.FEEDS, MainTab.LIBRARY)
 
     private val _tabs = MutableStateFlow<List<MainTab>?>(null)
@@ -165,6 +174,9 @@ fun mainTabOf(
         YouTubeDestination.route -> own(MainTab.YOUTUBE)
         BooksDestination.route, MediaDestination.route -> own(MainTab.BOOKS)
         HistoryDestination.route -> own(MainTab.HISTORY)
+        ShelvesDestination.route -> own(MainTab.HOME)
+        // Search is a full screen of its own unless it's a tab
+        GlobalSearchDestination.route -> if (MainTab.SEARCH in bar) MainTab.SEARCH else null
         else -> null
     }
 }
@@ -181,6 +193,7 @@ fun NavBackStackEntry.wantsSharedMiniPlayer(): Boolean =
         YouTubeDestination.route,
         BooksDestination.route,
         HistoryDestination.route,
+        ShelvesDestination.route,
         -> true
         else -> false
     }
@@ -248,6 +261,8 @@ fun NavController.openTab(
             MainTab.BOOKS -> BooksDestination.ROOT
             MainTab.HISTORY -> HistoryDestination.route
             MainTab.FEEDS -> HomeDestination.route
+            MainTab.HOME -> ShelvesDestination.route
+            MainTab.SEARCH -> GlobalSearchDestination.route
         }
     if (tab == current) {
         val rootRoute =
@@ -297,6 +312,8 @@ fun MainBottomBar(
 
 internal fun MainTab.look(): Triple<ImageVector, ImageVector, Int> =
     when (this) {
+        MainTab.HOME -> Triple(Icons.Filled.Home, Icons.Outlined.Home, R.string.tab_home)
+        MainTab.SEARCH -> Triple(Icons.Filled.Search, Icons.Outlined.Search, R.string.tab_search)
         MainTab.FEEDS -> Triple(Icons.Filled.DynamicFeed, Icons.Outlined.DynamicFeed, R.string.tab_feeds)
         MainTab.PLAYLISTS -> Triple(Icons.AutoMirrored.Filled.QueueMusic, Icons.AutoMirrored.Outlined.QueueMusic, R.string.playlists)
         MainTab.YOUTUBE -> Triple(Icons.Filled.Subscriptions, Icons.Outlined.Subscriptions, R.string.tab_youtube)

@@ -309,7 +309,10 @@ data object GlobalSearchDestination : NavigationDestination(
         mainActivityViewModel: MainActivityViewModel,
     ) {
         val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+        val context = LocalContext.current
+        val bar = BottomBarTabs.tabs(context).collectAsState().value ?: BottomBarTabs.DEFAULT
         com.nononsenseapps.feeder.ui.compose.search.GlobalSearchScreen(
+            asTab = MainTab.SEARCH in bar,
             viewModel = backStackEntry.diAwareViewModel(),
             nav =
                 com.nononsenseapps.feeder.ui.compose.search.GlobalSearchNav(
@@ -1244,4 +1247,42 @@ class QueryParamsBuilder {
     }
 
     override fun toString(): String = sb.toString()
+}
+
+/** Home (redesign): Jump back in, then a shelf per playlist. The bar's first tab. */
+data object ShelvesDestination : NavigationDestination(
+    path = "shelves",
+    navArguments = emptyList(),
+    deepLinks = emptyList(),
+) {
+    fun navigate(navController: NavController) {
+        navController.navigate(path) { launchSingleTop = true }
+    }
+
+    @Composable
+    override fun RegisterScreen(
+        navController: NavController,
+        backStackEntry: NavBackStackEntry,
+        navDrawerListState: LazyListState,
+        mainActivityViewModel: MainActivityViewModel,
+    ) {
+        com.nononsenseapps.feeder.ui.compose.home.HomeShelvesScreen(
+            playlists = backStackEntry.diAwareViewModel(),
+            nav =
+                com.nononsenseapps.feeder.ui.compose.home.HomeShelvesNav(
+                    recent =
+                        com.nononsenseapps.feeder.ui.compose.history.CentralHistoryNav(
+                            openArticle = { id -> ArticleDestination.navigate(navController, itemId = id) },
+                            openVideo = { id, video -> YouTubeVideoDestination.navigate(navController, id, video) },
+                            openBook = { book, cfi -> EbookReaderDestination.navigate(navController, book, cfi) },
+                            openAudiobook = { book -> AudiobookPlayerDestination.navigate(navController, book) },
+                            openZim = { book -> ZimReaderDestination.navigate(navController, book) },
+                            openFeed = { id -> FeedDestination.navigate(navController, feedId = id, keepBackStack = true) },
+                            openMedia = { id -> MediaPlayerDestination.navigate(navController, id) },
+                        ),
+                    openPlaylist = { id -> PlaylistsDestination.navigate(navController, open = id) },
+                    openSettings = { SettingsDestination.navigate(navController) },
+                ),
+        )
+    }
 }

@@ -43,7 +43,7 @@ import { PlayerPage } from './components/PlayerPage'
 import { useAudiobookPlayer } from './lib/audiobooks/player'
 import { bookIdOfItem } from './lib/ebooks/library'
 import { DROPBOX_TS_KEY } from './lib/dropbox'
-import { feedsViewIsLatest, FeedsSwitch, type FeedsView, lastBookTab, LibraryPage, rememberFeedsView, TabBar, useTabShortcuts, type Tab } from './components/Tabs'
+import { feedsViewIsLatest, FeedsSwitch, type FeedsView, lastBookTab, LibraryPage, loadBarTabs, rememberFeedsView, TabBar, useTabShortcuts, type Tab } from './components/Tabs'
 import { OPEN_SEARCH_EVENT } from './components/Shelf'
 import { useVideoJobs, useVideoSavingAvailable } from './lib/offline'
 import { createItemReuser } from './lib/itemreuse'
@@ -52,6 +52,7 @@ import { YouTubeWatch, type WatchTarget } from './components/YouTubeWatch'
 import type { VideoRow } from './lib/youtubeTab'
 import { noteItemOpened } from './lib/recent'
 import { HistoryPage } from './components/HistoryPage'
+import { HomeShelves } from './components/HomeShelves'
 import type { RecentEntry } from './lib/db'
 
 const NAV_COLLAPSED_KEY = 'feeder.navCollapsed'
@@ -71,6 +72,9 @@ const LIBRARY_HASH = '#/library'
 const isLibraryHash = () => window.location.hash === LIBRARY_HASH
 /** History: everything opened, and highlights, notes and feeds changed (recent.ts). */
 const HISTORY_HASH = '#/history'
+/** Home's shelves (redesign). #/home is the By feed tiles, so Home lives at #/start. */
+const START_HASH = '#/start'
+const isStartHash = () => window.location.hash === START_HASH
 const isHistoryHash = () => window.location.hash === HISTORY_HASH
 const isDiscoverHash = () => window.location.hash === DISCOVER_HASH
 /** ZIM books: #/zim for the library, #/zim/<book> to read one. */
@@ -234,6 +238,7 @@ export default function App() {
   const [discoverPage, setDiscoverPage] = useState(isDiscoverHash)
   const [libraryPage, setLibraryPage] = useState(isLibraryHash)
   const [historyPage, setHistoryPage] = useState(isHistoryHash)
+  const [startPage, setStartPage] = useState(isStartHash)
   /** null = not on the ZIM tab; '' = the ZIM library; else the book being read. */
   const [zimPage, setZimPage] = useState<string | null>(zimFromHash)
   const [zimJump, setZimJump] = useState<ZimJump | null>(null)
@@ -284,6 +289,7 @@ export default function App() {
       setDiscoverPage(isDiscoverHash())
       setLibraryPage(isLibraryHash())
       setHistoryPage(isHistoryHash())
+      setStartPage(isStartHash())
       setZimPage(zimFromHash())
       setBookPage(bookFromHash())
       setAudiobookPage(audiobookFromHash())
@@ -324,6 +330,7 @@ export default function App() {
     if (on) setDiscoverPage(false)
     if (on) setLibraryPage(false)
     if (on) setHistoryPage(false)
+    if (on) setStartPage(false)
     if (on) setZimPage(null)
     if (on) setBookPage(null)
     if (on) setAudiobookPage(null)
@@ -346,6 +353,7 @@ export default function App() {
     if (on) setDiscoverPage(false)
     if (on) setLibraryPage(false)
     if (on) setHistoryPage(false)
+    if (on) setStartPage(false)
     if (on) setZimPage(null)
     if (on) setBookPage(null)
     if (on) setAudiobookPage(null)
@@ -368,6 +376,7 @@ export default function App() {
     if (on) setDiscoverPage(false)
     if (on) setLibraryPage(false)
     if (on) setHistoryPage(false)
+    if (on) setStartPage(false)
     if (on) setZimPage(null)
     if (on) setBookPage(null)
     if (on) setAudiobookPage(null)
@@ -390,6 +399,7 @@ export default function App() {
     if (on) setDiscoverPage(false)
     if (on) setLibraryPage(false)
     if (on) setHistoryPage(false)
+    if (on) setStartPage(false)
     if (on) setZimPage(null)
     if (on) setBookPage(null)
     if (on) setAudiobookPage(null)
@@ -411,6 +421,7 @@ export default function App() {
       setPlaylistPage(null)
       setLibraryPage(false)
       setHistoryPage(false)
+      setStartPage(false)
       setZimPage(null)
       setBookPage(null)
       setAudiobookPage(null)
@@ -425,6 +436,7 @@ export default function App() {
     setLibraryPage(on)
     if (on) {
       setHistoryPage(false)
+      setStartPage(false)
       setZimPage(null)
       setBookPage(null)
       setAudiobookPage(null)
@@ -446,6 +458,31 @@ export default function App() {
     }
     setHistoryPage(on)
     if (on) {
+      setStartPage(false)
+      setLibraryPage(false)
+      setZimPage(null)
+      setBookPage(null)
+      setAudiobookPage(null)
+      setPlayerPage(null)
+      setHomePage(false)
+      setManaging(false)
+      setHighlightsPage(false)
+      setDownloadsPage(false)
+      setDiscoverPage(false)
+      setFeedPage(null)
+      feedPageFromApp.current = false
+      setPlaylistPage(null)
+    }
+  }, [])
+  /** Home's shelves: the first tab after the redesign. */
+  const showStart = useCallback((on: boolean) => {
+    if (on !== isStartHash()) {
+      if (on) window.location.hash = START_HASH
+      else if (isStartHash()) history.pushState(null, '', window.location.pathname + window.location.search)
+    }
+    setStartPage(on)
+    if (on) {
+      setHistoryPage(false)
       setLibraryPage(false)
       setZimPage(null)
       setBookPage(null)
@@ -478,6 +515,7 @@ export default function App() {
       setDownloadsPage(false)
       setLibraryPage(false)
       setHistoryPage(false)
+      setStartPage(false)
       setPlaylistPage(null)
       setFeedPage(null)
       feedPageFromApp.current = false
@@ -500,6 +538,7 @@ export default function App() {
       setDownloadsPage(false)
       setLibraryPage(false)
       setHistoryPage(false)
+      setStartPage(false)
       setPlaylistPage(null)
       setFeedPage(null)
       feedPageFromApp.current = false
@@ -522,6 +561,7 @@ export default function App() {
       setDownloadsPage(false)
       setLibraryPage(false)
       setHistoryPage(false)
+      setStartPage(false)
       setPlaylistPage(null)
       setFeedPage(null)
       feedPageFromApp.current = false
@@ -546,6 +586,7 @@ export default function App() {
       setDownloadsPage(false)
       setLibraryPage(false)
       setHistoryPage(false)
+      setStartPage(false)
       setPlaylistPage(null)
       setFeedPage(null)
       feedPageFromApp.current = false
@@ -565,6 +606,7 @@ export default function App() {
       setDownloadsPage(false)
       setLibraryPage(false)
       setHistoryPage(false)
+      setStartPage(false)
       setZimPage(null)
       setBookPage(null)
       setAudiobookPage(null)
@@ -589,6 +631,7 @@ export default function App() {
       setDownloadsPage(false)
       setLibraryPage(false)
       setHistoryPage(false)
+      setStartPage(false)
       setZimPage(null)
       setBookPage(null)
       setAudiobookPage(null)
@@ -641,6 +684,7 @@ export default function App() {
     setPlaylistPage(null)
     setLibraryPage(false)
     setHistoryPage(false)
+    setStartPage(false)
     setZimPage(null)
     setBookPage(null)
     setAudiobookPage(null)
@@ -1161,6 +1205,7 @@ export default function App() {
     showDiscover(false)
     showLibrary(false)
     showHistory(false)
+    showStart(false)
     showZim(null)
     showBooks(null)
     showAudiobooks(null)
@@ -1193,7 +1238,7 @@ export default function App() {
   const searchData = useSearchData(items, feeds, allHighlights, settings.readAloudRate, searchActive)
 
   // Opening another page closes the results view
-  const anyPage = managing || highlightsPage || !!feedPage || downloadsPage || homePage || discoverPage || libraryPage || historyPage || zimPage !== null || bookPage !== null || audiobookPage !== null || playerPage !== null || playlistPage !== null || youtubePage !== null
+  const anyPage = managing || highlightsPage || !!feedPage || downloadsPage || homePage || discoverPage || libraryPage || historyPage || startPage || zimPage !== null || bookPage !== null || audiobookPage !== null || playerPage !== null || playlistPage !== null || youtubePage !== null
   useEffect(() => {
     if (anyPage) setSearchView(null)
   }, [anyPage])
@@ -1392,7 +1437,9 @@ export default function App() {
   const onPlaylists = playlistPage !== null
 
   // The tab the screen belongs to, for the sidebar and the bottom bar
-  const currentTab: Tab | null = youtubePage !== null || watchOpen
+  const currentTab: Tab | null = startPage
+    ? 'home'
+    : youtubePage !== null || watchOpen
     ? 'youtube'
     : onPlaylists
     ? 'playlists'
@@ -1429,7 +1476,10 @@ export default function App() {
     setDrawer(false)
     setSearchView(null)
     if (t === 'feeds') return showFeedsView(feedsViewIsLatest() ? 'latest' : 'byFeed')
+    // Search everything is the ⌘K palette on web
+    if (t === 'search') return setPaletteOpen(true)
     leavePages()
+    if (t === 'home') return showStart(true)
     if (t === 'discover') showDiscover(true)
     else if (t === 'playlists') showPlaylists('')
     else if (t === 'youtube') showYouTube('subs')
@@ -1441,6 +1491,11 @@ export default function App() {
     else if (t === 'history') showHistory(true)
     else showLibrary(true)
   }
+  // The redesign opens on the bar's first tab, Home, when no page is in the address
+  useEffect(() => {
+    if (!window.location.hash && loadBarTabs()[0] === 'home') showStart(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const openTabRef = useRef(openTab)
   openTabRef.current = openTab
   const onTabKey = useCallback((t: Tab) => openTabRef.current(t), [])
@@ -1460,7 +1515,7 @@ export default function App() {
     : 'Not syncing'
 
   return (
-    <div className={`app pane-${pane}${drawer ? ' drawer-open' : ''}${navCollapsed ? ' nav-collapsed' : ''}${managing || highlightsPage || feedPage || downloadsPage || homePage || discoverPage || libraryPage || historyPage || zimPage !== null || bookPage !== null || audiobookPage !== null || playerPage !== null || onPlaylists || youtubePage !== null ? ' page-feeds' : ''}${queue.kind || (audiobook.bookId && audiobookPage !== audiobook.bookId && playerPage !== `p:${audiobook.bookId}`) ? ' has-queue' : ''}${watch && !watchOpen ? ' has-ytmini' : ''}${watch && watchOpen ? ' watching' : ''}`}>
+    <div className={`app pane-${pane}${drawer ? ' drawer-open' : ''}${navCollapsed ? ' nav-collapsed' : ''}${managing || highlightsPage || feedPage || downloadsPage || homePage || discoverPage || libraryPage || historyPage || startPage || zimPage !== null || bookPage !== null || audiobookPage !== null || playerPage !== null || onPlaylists || youtubePage !== null ? ' page-feeds' : ''}${queue.kind || (audiobook.bookId && audiobookPage !== audiobook.bookId && playerPage !== `p:${audiobook.bookId}`) ? ' has-queue' : ''}${watch && !watchOpen ? ' has-ytmini' : ''}${watch && watchOpen ? ' watching' : ''}`}>
       <div className="drawer-scrim" onClick={() => setDrawer(false)} />
       <Sidebar
         feeds={feedList}
@@ -1605,6 +1660,20 @@ export default function App() {
         <PlayerPage page={playerPage} onPage={(page, replace) => showPlayer(page, replace)} onBack={() => (playerPage ? history.back() : showPlayer(''))} onMenu={() => setDrawer(true)} toast={toast} />
       ) : zimPage !== null ? (
         <ZimPage book={zimPage || null} jump={zimJump} settings={settings} onOpen={(id) => showZim(id ?? '')} onMenu={() => setDrawer(true)} toast={toast} />
+      ) : startPage ? (
+        <HomeShelves
+          items={items}
+          feeds={feeds}
+          readRate={settings.readAloudRate}
+          onOpenRecent={openHistoryEntry}
+          onOpenItem={(id) => {
+            showStart(false)
+            open(id)
+          }}
+          onOpenPlaylist={(id) => showPlaylists(id)}
+          onSettings={() => setDialog({ kind: 'settings' })}
+          onMenu={() => setDrawer(true)}
+        />
       ) : historyPage ? (
         <HistoryPage onOpen={openHistoryEntry} onResubscribe={resubscribe} onMenu={() => setDrawer(true)} toast={toast} />
       ) : libraryPage ? (
@@ -1666,7 +1735,7 @@ export default function App() {
         feedsSwitch={feedsLatest ? <FeedsSwitch view="latest" onChange={showFeedsView} /> : null}
         />
       )}
-      {managing || highlightsPage || feedPage || downloadsPage || homePage || discoverPage || libraryPage || historyPage || zimPage !== null || bookPage !== null || audiobookPage !== null || playerPage !== null || onPlaylists || youtubePage !== null || flip ? null : openItem ? (
+      {managing || highlightsPage || feedPage || downloadsPage || homePage || discoverPage || libraryPage || historyPage || startPage || zimPage !== null || bookPage !== null || audiobookPage !== null || playerPage !== null || onPlaylists || youtubePage !== null || flip ? null : openItem ? (
         <Reader
           item={openItem}
           feed={feeds.get(openItem.feedUrl)}
