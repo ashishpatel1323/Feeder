@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type TouchEvent } from 'react'
 import { isKokoroVoice, kokoro, KOKORO_PREFIX, KOKORO_VOICES, type KokoroStatus } from '../lib/kokoro'
 import { CHARS_PER_SECOND, readAloud, RSVP_WPM_STEP, type ReadAloudState } from '../lib/readaloud'
 import { focusIndex, focusLength, RSVP_MAX_WPM, RSVP_MIN_WPM } from '../lib/rsvp'
@@ -10,6 +10,9 @@ import { Icon, type IconName } from './Icon'
 const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4]
 // Muted, the ±10 buttons move ten words
 const SKIP_WORDS = 10
+const MINI_KEY = 'feeder.readAloudMini'
+// A downward swipe this long on the panel shrinks it; upward grows it again
+const SWIPE_PX = 40
 
 interface Props {
   state: ReadAloudState
@@ -42,6 +45,23 @@ export function Player({ state, settings, currentTitle, hasPrev, hasNext, nextTi
   const [voice, setVoice] = useState<KokoroStatus>(kokoro.status)
   useEffect(() => kokoro.subscribe(setVoice), [])
   const [scrub, setScrub] = useState<number | null>(null)
+  // Shrunk to one line (handle, or swipe down on a phone) so more of the article shows
+  const [mini, setMini] = useState(() => {
+    try {
+      return localStorage.getItem(MINI_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+  const setMiniSaved = (on: boolean) => {
+    setMini(on)
+    try {
+      localStorage.setItem(MINI_KEY, on ? '1' : '0')
+    } catch {
+      // Private window: only this page remembers
+    }
+  }
+  const swipeY = useRef<number | null>(null)
 
   const muted = state.muted
   const playing = state.status === 'playing'
@@ -81,8 +101,69 @@ export function Player({ state, settings, currentTitle, hasPrev, hasNext, nextTi
   const setShowWord = (on: boolean) => updateSettings({ readAloudShowWord: on })
   const skipBy = (sign: number) => (muted ? readAloud.seekBy(sign * SKIP_WORDS) : readAloud.seekBy(sign * 10))
 
+  const handle = (
+    <button
+      type="button"
+      className="player-handle"
+      onClick={() => setMiniSaved(!mini)}
+      title={mini ? 'Show full player' : 'Shrink player'}
+      aria-label={mini ? 'Show full player' : 'Shrink player'}
+      aria-expanded={!mini}
+    >
+      <i aria-hidden />
+    </button>
+  )
+  const swipe = {
+    onTouchStart: (e: TouchEvent) => {
+      // A drag that starts in a popup menu scrolls the menu, not the panel
+      const inMenu = (e.target as HTMLElement).closest('.player-menu')
+      swipeY.current = inMenu ? null : (e.touches[0]?.clientY ?? null)
+    },
+    onTouchEnd: (e: TouchEvent) => {
+      const start = swipeY.current
+      swipeY.current = null
+      const end = e.changedTouches[0]?.clientY
+      if (start == null || end == null) return
+      if (end - start > SWIPE_PX) setMiniSaved(true)
+      else if (start - end > SWIPE_PX) setMiniSaved(false)
+    },
+  }
+
+  if (mini) {
+    return (
+      <div className="player mini" role="region" aria-label="Read aloud" {...swipe}>
+        {handle}
+        <div className="player-inner player-mini-row">
+          <button
+            type="button"
+            className={`player-play small${playing ? ' playing' : ''}`}
+            onClick={() => readAloud.toggle()}
+            title={playing ? 'Pause' : 'Play'}
+            aria-label={playing ? 'Pause' : 'Play'}
+          >
+            {downloading ? <span className="player-spinner" aria-hidden /> : null}
+            <Icon name={playing ? 'pause' : 'play'} size={24} />
+          </button>
+          <div className="player-mini-main">
+            <span className="player-title" title={currentTitle}>
+              {currentTitle || 'Reading'}
+            </span>
+            <div className="player-mini-progress" aria-hidden>
+              <i style={{ width: `${Math.round(Math.min(1, Math.max(0, fraction)) * 100)}%` }} />
+            </div>
+          </div>
+          <button type="button" className="player-skip" onClick={onNext} disabled={!hasNext} title="Next article" aria-label="Next article">
+            <Icon name="skipNext" />
+          </button>
+          <RoundButton icon="close" label="Close" onClick={() => readAloud.stop()} />
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="player" role="region" aria-label="Read aloud">
+    <div className="player" role="region" aria-label="Read aloud" {...swipe}>
+      {handle}
       <div className="player-inner">
         <div className="player-top">
           {label ? <span className="player-label">{label}</span> : null}
