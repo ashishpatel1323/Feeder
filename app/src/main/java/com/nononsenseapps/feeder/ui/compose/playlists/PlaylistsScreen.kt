@@ -416,6 +416,7 @@ private fun PlaylistDetail(
     val addToPlaylist = rememberAddToPlaylist()
     val offline by viewModel.offlineAudio.collectAsStateWithLifecycle()
     val briefs by viewModel.briefs.collectAsStateWithLifecycle()
+    val briefSpeech by viewModel.briefSpeech.collectAsStateWithLifecycle()
     // Brief articles are keyed "feedUrl\nguid", as in sync
     val idsByKey = remember(state.candidates) { state.candidates.associate { "${it.feedUrl}\n${it.guid}" to it.id } }
     // Swiping in the reader goes through the playlist as shown here
@@ -496,6 +497,8 @@ private fun PlaylistDetail(
                     onOpen = openArticle,
                     onAgain = { viewModel.askBrief(pl) },
                     onSync = viewModel::syncForBrief,
+                    speaking = briefSpeech == viewModel.briefSpeechId(pl.id),
+                    onListen = { viewModel.listenBrief(pl.id, b.v) },
                 )
             }
             if (offline.playlistId == pl.id && offline.ids.isNotEmpty()) {

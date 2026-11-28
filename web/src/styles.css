@@ -11359,7 +11359,7 @@ mark.sr-mark {
   line-height: 1.5;
   white-space: pre-wrap;
 }
-.pl-brief-title {
+.pl-brief .pl-brief-title {
   display: inline;
   padding: 0;
   border: 0;
@@ -11374,6 +11374,35 @@ mark.sr-mark {
 .pl-brief-title:hover {
   color: var(--accent);
   text-decoration: underline;
+}
+.pl-brief-hello {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-base);
+  line-height: 1.55;
+}
+.pl-brief-picks {
+  list-style: none;
+  padding-left: 0;
+}
+.pl-brief-picks li {
+  padding-left: var(--sp-3);
+  border-left: 3px solid var(--accent);
+}
+.pl-brief-listen {
+  gap: var(--sp-1);
+}
+.pl-brief-source {
+  white-space: nowrap;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+/* Phone: the buttons start their own row, from the left */
+@media (max-width: 600px) {
+  .pl-brief .mf-sp {
+    flex-basis: 100%;
+    height: 0;
+  }
 }
 span.pl-brief-title {
   cursor: default;

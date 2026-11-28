@@ -30,7 +30,7 @@ language). Pick the track from IINA's subtitle menu if it does not show on its o
 
 ## Playlist briefs (Claude Code)
 
-On any device, a playlist's ⋮ menu has **Brief with Claude**. While this app is open, it picks the
+On any device, a playlist's ⋮ menu has **Morning brief**. While this app is open, it picks the
 request up through sync, fetches each article's full text, and runs Claude Code (`claude -p`) to write
 the big picture plus a summary of every article. The brief syncs back and shows at the top of the
 playlist on every device. Nothing is marked read.

@@ -1,15 +1,18 @@
 /**
  * A playlist's brief (lib/briefs.ts) at the top of the playlist: waiting for the Mac, being written,
- * failed with Try again, or the big picture and one summary per article (tap a title to read it).
+ * failed with Try again, or the Morning brief (opener, the rundown, picks for you, sign-off) with
+ * Listen, which reads it aloud with the read-aloud voice (tap a title to open the article).
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { briefAsText, isPending, STALE_ASK_MS, type StoredBrief } from '../lib/briefs'
 import { agoText } from '../lib/device'
+import { readAloud } from '../lib/readaloud'
 import { Icon, IconButton } from './Icon'
 
 const POLL_MS = 20_000
 
 export function BriefCard(p: {
+  playlistId: string
   brief: StoredBrief
   /** Articles that are on this device (the rest can't be opened from the brief) */
   canOpen: (id: string) => boolean
@@ -20,6 +23,20 @@ export function BriefCard(p: {
   const v = p.brief.v
   const pending = isPending(v)
   const [open, setOpen] = useState(true)
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const speechId = `brief:${p.playlistId}:${p.brief.ts}`
+  const [ra, setRa] = useState(readAloud.state)
+  useEffect(() => readAloud.subscribe(setRa), [])
+  const speaking = ra.itemId === speechId && ra.status === 'playing'
+  // Leaving the playlist stops the brief (it isn't in any queue to come back to)
+  useEffect(() => () => void (readAloud.state.itemId === speechId && readAloud.stop()), [speechId])
+  const listen = () => {
+    if (ra.itemId === speechId && ra.status !== 'idle') return readAloud.toggle()
+    if (!bodyRef.current) return
+    setOpen(true)
+    readAloud.attach(bodyRef.current, speechId)
+    readAloud.play(0)
+  }
 
   // While the Mac works on it, look for its answer more often than the usual sync
   useEffect(() => {
@@ -47,10 +64,10 @@ export function BriefCard(p: {
             {stale
               ? "Your Mac didn't pick up this brief"
               : v.s === 'asked'
-                ? `Brief of ${total} article${total === 1 ? '' : 's'} · waiting for your Mac`
+                ? `Morning brief of ${total} article${total === 1 ? '' : 's'} · waiting for your Mac`
                 : reading
                   ? `Claude is reading the articles · ${v.n ?? 0} of ${total}`
-                  : 'Claude is writing the brief'}
+                  : 'Claude is writing your morning brief'}
           </b>
           <span className="mf-sp" />
           {stale ? (
@@ -61,7 +78,11 @@ export function BriefCard(p: {
         </div>
         {v.s === 'working' ? (
           <div className="pl-offline-bar" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={v.n ?? 0}>
-            <div style={{ width: `${reading ? Math.round(((v.n ?? 0) / Math.max(1, total)) * 70) : 85}%` }} />
+            <div
+              style={{
+                width: `${reading ? Math.round(((v.n ?? 0) / Math.max(1, total)) * 70) : 85}%`,
+              }}
+            />
           </div>
         ) : null}
         <small>
@@ -89,60 +110,88 @@ export function BriefCard(p: {
     )
   }
 
-  const meta = `${total} article${total === 1 ? '' : 's'} · by Claude${v.at ? ` · ${agoText(v.at)}` : ''}`
+  const meta = `${total} article${total === 1 ? '' : 's'} · by Claude${v.via === 'claude' ? ' in the Claude app' : v.via === 'mac' ? ' on your Mac' : ''}${v.at ? ` · ${agoText(v.at)}` : ''}`
+  const title = (i: number) => {
+    const it = v.items[i]
+    if (!it) return null
+    const link = p.canOpen(it.id) ? (
+      // A link, not a button: a button can't wrap inline, so on a phone the title broke away from its number
+      <a
+        className="pl-brief-title"
+        href={it.u ?? '#'}
+        onClick={(e) => {
+          e.preventDefault()
+          p.onOpen(it.id)
+        }}
+      >
+        {it.t}
+      </a>
+    ) : it.u ? (
+      <a className="pl-brief-title" href={it.u} target="_blank" rel="noopener noreferrer">
+        {it.t}
+      </a>
+    ) : (
+      <span className="pl-brief-title">{it.t}</span>
+    )
+    return (
+      <>
+        {link}
+        {it.f ? <span className="pl-brief-source"> · {it.f}</span> : null}
+      </>
+    )
+  }
   return (
     <section className="pl-offline-card pl-brief">
       <div className="pl-offline-row">
-        <Icon name="summarize" size={18} />
-        <b>Brief</b>
+        <Icon name="voice" size={18} />
+        <b>Morning brief</b>
         <span className="pl-brief-meta">{meta}</span>
         <span className="mf-sp" />
+        <button type="button" className="mf-btn pl-brief-listen" onClick={listen} aria-pressed={speaking}>
+          <Icon name={speaking ? 'pause' : 'play'} size={18} />
+          {speaking ? 'Pause' : 'Listen'}
+        </button>
         <IconButton icon="copy" label="Copy brief" onClick={copy} />
-        <IconButton icon="refresh" label="New brief" onClick={p.onAgain} />
+        <IconButton icon="refresh" label="New morning brief" onClick={p.onAgain} />
         <IconButton icon={open ? 'expandLess' : 'expandMore'} label={open ? 'Hide brief' : 'Show brief'} onClick={() => setOpen(!open)} />
       </div>
-      {open ? (
-        <div className="pl-brief-body">
-          {v.text ? (
-            <p className="pl-brief-text">{v.text}</p>
-          ) : (
-            <>
-              {v.ov?.length ? (
-                <>
-                  <h3 className="pl-brief-label">The big picture</h3>
-                  <ul className="pl-brief-ov">
-                    {v.ov.map((s, i) => (
-                      <li key={i}>{s}</li>
-                    ))}
-                  </ul>
-                </>
-              ) : null}
-              <h3 className="pl-brief-label">Article by article</h3>
-              <ol className="pl-brief-items">
-                {v.items.map((it, i) =>
-                  v.sums?.[i] ? (
-                    <li key={it.id}>
-                      {p.canOpen(it.id) ? (
-                        <button type="button" className="pl-brief-title" onClick={() => p.onOpen(it.id)}>
-                          {it.t}
-                        </button>
-                      ) : it.u ? (
-                        <a className="pl-brief-title" href={it.u} target="_blank" rel="noopener noreferrer">
-                          {it.t}
-                        </a>
-                      ) : (
-                        <span className="pl-brief-title">{it.t}</span>
-                      )}
-                      <p>{v.sums[i]}</p>
+      <div className="pl-brief-body" ref={bodyRef} hidden={!open}>
+        {v.text ? (
+          <p className="pl-brief-text">{v.text}</p>
+        ) : (
+          <>
+            {v.hello ? <p className="pl-brief-hello">{v.hello}</p> : null}
+            {v.segs?.length ? (
+              <>
+                <h3 className="pl-brief-label">The rundown</h3>
+                <ol className="pl-brief-items">
+                  {v.segs.map((g) => (
+                    <li key={g.i}>
+                      {title(g.i)}
+                      {g.say ? <p>{g.say}</p> : null}
                     </li>
-                  ) : null,
-                )}
-              </ol>
-            </>
-          )}
-          {Date.now() - (v.at ?? v.asked) > STALE_ASK_MS ? <small>The playlist may have changed since. Make a new brief to catch up.</small> : null}
-        </div>
-      ) : null}
+                  ))}
+                </ol>
+              </>
+            ) : null}
+            {v.picks?.length ? (
+              <>
+                <h3 className="pl-brief-label">{v.picks.length === 1 ? 'My pick for you' : 'My picks for you'}</h3>
+                <ul className="pl-brief-items pl-brief-picks">
+                  {v.picks.map((g) => (
+                    <li key={g.i}>
+                      {title(g.i)}
+                      <p>{g.why}</p>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+            {v.bye ? <p className="pl-brief-hello">{v.bye}</p> : null}
+          </>
+        )}
+        {Date.now() - (v.at ?? v.asked) > STALE_ASK_MS ? <small>The playlist may have changed since. Make a new brief to catch up.</small> : null}
+      </div>
     </section>
   )
 }

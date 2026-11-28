@@ -18,7 +18,7 @@ import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.AutoStories
-import androidx.compose.material.icons.outlined.Summarize
+import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -109,7 +109,7 @@ internal fun PlaylistTopBarActions(
     prepareCount: Int = 0,
     prepareSize: String = "",
     onPrepare: () -> Unit = {},
-    /** "Brief with Claude" / "New brief with Claude", or null to leave it out */
+    /** "Morning brief" / "New morning brief", or null to leave it out */
     briefLabel: String? = null,
     onBrief: () -> Unit = {},
 ) {
@@ -170,7 +170,7 @@ internal fun PlaylistTopBarActions(
             if (briefLabel != null) {
                 DropdownMenuItem(
                     text = { Text(briefLabel) },
-                    leadingIcon = { Icon(Icons.Outlined.Summarize, contentDescription = null) },
+                    leadingIcon = { Icon(Icons.Outlined.RecordVoiceOver, contentDescription = null) },
                     onClick = {
                         expanded = false
                         onBrief()

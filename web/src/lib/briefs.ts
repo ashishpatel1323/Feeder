@@ -33,24 +33,49 @@ export interface BriefItem {
   t: string
   /** Link to the article, for its full text */
   u: string | null
+  /** Source: the feed's (site's) name, which the brief names */
+  f?: string
 }
 
-/** The synced record (shared with Android's PlaylistBriefs.kt). */
+/** One story in the rundown: item index (0-based, into items) and what the host says about it. */
+export interface BriefSeg {
+  i: number
+  say: string
+}
+
+/** A pick to read in full: item index and why it suits the reader. */
+export interface BriefPick {
+  i: number
+  why: string
+}
+
+/**
+ * The synced record (shared with Android's PlaylistBriefs.kt and feeder-mcp's save_morning_brief).
+ * The Morning brief template is a morning radio show, fun but serious: a warm opener, the rundown
+ * (each article in a few friendly sentences, never the article itself), 1 to 3 picks worth reading in
+ * full chosen from the reader's taste, and a sign-off. Written to sound good read aloud.
+ */
 export interface BriefValue {
   s: BriefState
-  /** When it was asked for */
+  /** When it was asked for (or written, for a brief made in the Claude app) */
   asked: number
   /** Playlist name when asked */
   name: string
   items: BriefItem[]
   /** Device that asked */
   by?: string
+  /** Who wrote it: "mac" (Claude Code in Feeder for Mac) or "claude" (the Claude app, through feeder-mcp) */
+  via?: 'mac' | 'claude'
   /** Articles read so far, while working */
   n?: number
-  /** The big picture: a few bullets across all the articles */
-  ov?: string[]
-  /** One summary per item, in the same order ('' when its text couldn't be read) */
-  sums?: string[]
+  /** The opener: a warm greeting and what's on today */
+  hello?: string
+  /** The rundown, in the playlist's order */
+  segs?: BriefSeg[]
+  /** Worth reading in full, for this reader: best first */
+  picks?: BriefPick[]
+  /** The sign-off */
+  bye?: string
   /** Claude's answer as plain text, when it couldn't be read as JSON */
   text?: string
   err?: string
@@ -65,8 +90,6 @@ export interface StoredBrief {
 
 export const isBriefState = (s: unknown): s is BriefState => s === 'asked' || s === 'working' || s === 'done' || s === 'failed'
 
-const strings = (v: unknown): string[] => (Array.isArray(v) ? v.map((x) => (typeof x === 'string' ? x : '')) : [])
-
 /** A record from sync, checked; null when it isn't a brief this version understands. */
 export function briefFromValue(v: unknown): BriefValue | null {
   if (!v || typeof v !== 'object') return null
@@ -75,13 +98,35 @@ export function briefFromValue(v: unknown): BriefValue | null {
   const items = Array.isArray(r.items)
     ? r.items
         .filter((x): x is Record<string, unknown> => !!x && typeof x === 'object' && typeof (x as { id?: unknown }).id === 'string')
-        .map((x) => ({ id: x.id as string, t: typeof x.t === 'string' ? x.t : '', u: typeof x.u === 'string' ? x.u : null }))
+        .map((x) => ({
+          id: x.id as string,
+          t: typeof x.t === 'string' ? x.t : '',
+          u: typeof x.u === 'string' ? x.u : null,
+          ...(typeof x.f === 'string' && x.f ? { f: x.f } : {}),
+        }))
     : []
-  const out: BriefValue = { s: r.s, asked: typeof r.asked === 'number' ? r.asked : 0, name: typeof r.name === 'string' ? r.name : '', items }
+  const out: BriefValue = {
+    s: r.s,
+    asked: typeof r.asked === 'number' ? r.asked : 0,
+    name: typeof r.name === 'string' ? r.name : '',
+    items,
+  }
   if (typeof r.by === 'string') out.by = r.by
+  if (r.via === 'mac' || r.via === 'claude') out.via = r.via
   if (typeof r.n === 'number') out.n = r.n
-  if (Array.isArray(r.ov)) out.ov = strings(r.ov)
-  if (Array.isArray(r.sums)) out.sums = strings(r.sums)
+  const idx = (x: unknown) => (typeof x === 'number' && Number.isInteger(x) && x >= 0 && x < items.length ? x : -1)
+  const pairs = (v: unknown, field: string) =>
+    (Array.isArray(v) ? v : [])
+      .filter((x): x is Record<string, unknown> => !!x && typeof x === 'object')
+      .map((x) => ({
+        i: idx(x.i),
+        t: typeof x[field] === 'string' ? (x[field] as string) : '',
+      }))
+      .filter((x) => x.i >= 0)
+  if (typeof r.hello === 'string') out.hello = r.hello
+  if (Array.isArray(r.segs)) out.segs = pairs(r.segs, 'say').map((x) => ({ i: x.i, say: x.t }))
+  if (Array.isArray(r.picks)) out.picks = pairs(r.picks, 'why').map((x) => ({ i: x.i, why: x.t }))
+  if (typeof r.bye === 'string') out.bye = r.bye
   if (typeof r.text === 'string') out.text = r.text
   if (typeof r.err === 'string') out.err = r.err
   if (typeof r.at === 'number') out.at = r.at
@@ -128,8 +173,16 @@ export async function applyRemoteBrief(id: string, v: unknown, ts: number): Prom
 }
 
 /** The articles a brief covers: text articles only, in the playlist's order, at most MAX_BRIEF_ITEMS. */
-export function briefItems<T extends { id: string; title: string; link: string | null }>(articles: T[]): BriefItem[] {
-  return articles.slice(0, MAX_BRIEF_ITEMS).map((a) => ({ id: a.id, t: a.title || 'Untitled', u: a.link }))
+export function briefItems<T extends { id: string; title: string; link: string | null }>(articles: T[], source: (a: T) => string = () => ''): BriefItem[] {
+  return articles.slice(0, MAX_BRIEF_ITEMS).map((a) => {
+    const f = source(a)
+    return {
+      id: a.id,
+      t: a.title || 'Untitled',
+      u: a.link,
+      ...(f ? { f } : {}),
+    }
+  })
 }
 
 /** Asks the Mac for a brief of [items]. */
@@ -150,6 +203,8 @@ export function isPending(v: BriefValue | undefined, now = Date.now()): boolean 
 export interface ArticleText {
   title: string
   link: string | null
+  /** Source (feed or site name) */
+  source?: string
   /** Plain text, '' when it couldn't be fetched */
   text: string
 }
@@ -175,7 +230,7 @@ export function batches(articles: ArticleText[], max = MAX_BATCH_CHARS): number[
 
 function articleBlock(a: ArticleText, n: number): string {
   const text = a.text ? a.text.slice(0, MAX_ARTICLE_CHARS) : '(The text could not be fetched. Summarise from the title only, and say so.)'
-  return `<article n="${n}">\n<title>${a.title}</title>\n${a.link ? `<link>${a.link}</link>\n` : ''}<text>\n${text}\n</text>\n</article>`
+  return `<article n="${n}">\n<title>${a.title}</title>\n${a.source ? `<source>${a.source}</source>\n` : ''}${a.link ? `<link>${a.link}</link>\n` : ''}<text>\n${text}\n</text>\n</article>`
 }
 
 const RULES = `Rules:
@@ -183,78 +238,158 @@ const RULES = `Rules:
 - Plain sentences. No Markdown, no bold, no links.
 - Answer with JSON only, no other text.`
 
+/** The Morning brief template, as Claude is asked to fill it (n = article number). */
+export const TEMPLATE_JSON =
+  '{"hello": "the opener: a warm good morning and what is on today, 1 to 2 sentences", ' +
+  '"rundown": [{"n": 1, "say": "2 to 3 friendly sentences on what this article says, as the host would say it"}], ' +
+  '"picks": [{"n": 3, "why": "one sentence on why this one suits the listener"}], ' +
+  '"signoff": "a short, warm sign-off"}'
+
+export const HOST_STYLE = `Style: you are the host of the listener's own morning radio show. Warm pleasantries, light humour, but serious about the news and never silly about hard stories. Spoken English: short sentences, natural links between stories ("Next up…", "Meanwhile…"). Never read an article out in full; tell the listener what it says. Name each article's source as you introduce it (its <source>, e.g. "over at The Verge…"), so the listener knows where it comes from.`
+
+export const TEMPLATE_RULES = `Cover every article once in the rundown, in the order given. Then pick 1 to 3 articles worth reading in full for this listener, based on their taste below (none if nothing fits), best first.`
+
 /**
- * The prompt for one request. [overview] asks for the big picture as well as each article's
- * summary (left out for batches of a long playlist, whose overview comes from the summaries).
- * Articles are numbered from [first] + 1, as they are in the whole playlist.
+ * What the reader likes, for the picks: feeds they read most, titles they saved, and what they
+ * highlighted lately. Empty strings are left out.
  */
-export function briefPrompt(name: string, articles: ArticleText[], first: number, overview: boolean): string {
-  const shape = overview
-    ? '{"overview": ["3 to 6 short bullets: the main themes and what matters most across all the articles"], "articles": [{"n": 1, "summary": "2 to 4 sentences"}]}'
-    : '{"articles": [{"n": 1, "summary": "2 to 4 sentences"}]}'
+export interface Taste {
+  topFeeds: string[]
+  saved: string[]
+  highlights: string[]
+}
+
+export function tasteBlock(t: Taste): string {
+  const parts: string[] = []
+  if (t.topFeeds.length) parts.push(`Feeds they read most: ${t.topFeeds.join('; ')}`)
+  if (t.saved.length) parts.push(`Articles they saved lately: ${t.saved.join('; ')}`)
+  if (t.highlights.length) parts.push(`Passages they highlighted lately:\n${t.highlights.map((h) => `- ${h}`).join('\n')}`)
+  return `<taste>\n${parts.length ? parts.join('\n') : 'Not known yet: pick what is most substantial and useful.'}\n</taste>`
+}
+
+const today = (now: Date) =>
+  now.toLocaleDateString('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  })
+
+/** The prompt for a playlist whose text fits one request: the whole Morning brief. */
+export function briefPrompt(name: string, articles: ArticleText[], taste: Taste, now = new Date()): string {
   return [
-    `You are writing a brief of the articles in the reading playlist "${name}", so the reader knows what each one says without opening it.`,
-    `Summarise every article below, keeping its number n. Answer in this JSON shape:\n${shape}`,
+    `You are writing today's Morning brief (${today(now)}) for the reading playlist "${name}".`,
+    HOST_STYLE,
+    `${TEMPLATE_RULES} Answer in this JSON shape:\n${TEMPLATE_JSON}`,
+    RULES,
+    tasteBlock(taste),
+    articles.map((a, i) => articleBlock(a, i + 1)).join('\n\n'),
+  ].join('\n\n')
+}
+
+/** One batch of a long playlist: a short factual summary of each article, numbered from [first] + 1. */
+export function batchPrompt(name: string, articles: ArticleText[], first: number): string {
+  return [
+    `These are some of the articles in the reading playlist "${name}". Summarise each one in two or three factual sentences, keeping its number n.`,
+    'Answer in this JSON shape:\n{"articles": [{"n": 1, "summary": "…"}]}',
     RULES,
     articles.map((a, i) => articleBlock(a, first + i + 1)).join('\n\n'),
   ].join('\n\n')
 }
 
-/** The overview of a long playlist, from its article summaries. */
-export function overviewPrompt(name: string, titles: string[], sums: string[]): string {
-  const list = titles.map((t, i) => `${i + 1}. ${t}: ${sums[i] || '(no summary)'}`).join('\n')
+/** The Morning brief of a long playlist, from its batches' summaries. */
+export function finalPrompt(name: string, titles: string[], sums: string[], taste: Taste, now = new Date(), sources: string[] = []): string {
+  const list = titles
+    .map(
+      (t, i) => `<article n="${i + 1}">\n<title>${t}</title>\n${sources[i] ? `<source>${sources[i]}</source>\n` : ''}<summary>${sums[i] || '(no summary)'}</summary>\n</article>`,
+    )
+    .join('\n')
   return [
-    `These are summaries of the articles in the reading playlist "${name}".`,
-    'Write the big picture: 3 to 6 short bullets on the main themes and what matters most across all of them. Answer in this JSON shape:\n{"overview": ["…"]}',
+    `You are writing today's Morning brief (${today(now)}) for the reading playlist "${name}", from these summaries of its articles.`,
+    HOST_STYLE,
+    `${TEMPLATE_RULES} Answer in this JSON shape:\n${TEMPLATE_JSON}`,
     RULES,
+    tasteBlock(taste),
     list,
   ].join('\n\n')
 }
 
 export interface ParsedBrief {
-  overview: string[]
-  /** By article number n (1-based, across the whole playlist) */
-  summaries: Map<number, string>
+  hello: string
+  segs: BriefSeg[]
+  picks: BriefPick[]
+  bye: string
 }
 
-/** The JSON in Claude's answer (it sometimes wraps it in a code fence or a sentence); null when there's none. */
-export function parseClaude(answer: string): ParsedBrief | null {
+function jsonIn(answer: string): Record<string, unknown> | null {
   const start = answer.indexOf('{')
   const end = answer.lastIndexOf('}')
   if (start < 0 || end <= start) return null
-  let j: unknown
   try {
-    j = JSON.parse(answer.slice(start, end + 1))
+    const j = JSON.parse(answer.slice(start, end + 1)) as unknown
+    return j && typeof j === 'object' ? (j as Record<string, unknown>) : null
   } catch {
     return null
   }
-  if (!j || typeof j !== 'object') return null
-  const r = j as { overview?: unknown; articles?: unknown }
-  const overview = strings(r.overview)
-    .map((s) => s.trim())
-    .filter(Boolean)
-  const summaries = new Map<number, string>()
-  if (Array.isArray(r.articles)) {
-    for (const a of r.articles) {
-      if (!a || typeof a !== 'object') continue
-      const n = Number((a as { n?: unknown }).n)
-      const s = (a as { summary?: unknown }).summary
-      if (Number.isInteger(n) && typeof s === 'string' && s.trim()) summaries.set(n, s.trim())
-    }
-  }
-  if (!overview.length && !summaries.size) return null
-  return { overview, summaries }
 }
 
-/** Brief text for sharing or copying: the big picture, then each article. */
+/**
+ * Claude's Morning brief (it sometimes wraps the JSON in a code fence or a sentence), with article
+ * numbers n (1-based) turned into item indexes; null when there's no brief in it.
+ */
+export function parseClaude(answer: string, count: number): ParsedBrief | null {
+  const r = jsonIn(answer)
+  if (!r) return null
+  const list = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is Record<string, unknown> => !!x && typeof x === 'object') : [])
+  const pairs = (v: unknown, field: string) => {
+    const seen = new Set<number>()
+    return list(v)
+      .map((x) => ({
+        i: Number(x.n) - 1,
+        t: typeof x[field] === 'string' ? (x[field] as string).trim() : '',
+      }))
+      .filter((x) => Number.isInteger(x.i) && x.i >= 0 && x.i < count && !seen.has(x.i) && !!seen.add(x.i))
+  }
+  const segs = pairs(r.rundown, 'say')
+    .filter((x) => x.t)
+    .map((x) => ({ i: x.i, say: x.t }))
+  const picks = pairs(r.picks, 'why')
+    .slice(0, 3)
+    .map((x) => ({ i: x.i, why: x.t }))
+  const hello = typeof r.hello === 'string' ? r.hello.trim() : ''
+  const bye = typeof r.signoff === 'string' ? r.signoff.trim() : ''
+  if (!hello && !segs.length && !picks.length) return null
+  // Every article is in the rundown: one Claude skipped still gets its title read out
+  const covered = new Set(segs.map((x) => x.i))
+  for (let i = 0; i < count; i++) if (!covered.has(i)) segs.push({ i, say: '' })
+  segs.sort((a, b) => a.i - b.i)
+  return { hello, segs, picks, bye }
+}
+
+/** A batch's summaries by article number n (1-based, across the whole playlist). */
+export function parseBatch(answer: string): Map<number, string> {
+  const out = new Map<number, string>()
+  const r = jsonIn(answer)
+  if (!r || !Array.isArray(r.articles)) return out
+  for (const a of r.articles) {
+    if (!a || typeof a !== 'object') continue
+    const x = a as { n?: unknown; summary?: unknown }
+    const n = Number(x.n)
+    if (Number.isInteger(n) && typeof x.summary === 'string') out.set(n, x.summary.trim())
+  }
+  return out
+}
+
+/** The brief as one script: for copying, sharing and reading aloud. */
 export function briefAsText(v: BriefValue): string {
   if (v.text) return v.text
-  const lines: string[] = [`${v.name}: brief`, '']
-  if (v.ov?.length) lines.push(...v.ov.map((s) => `• ${s}`), '')
-  v.items.forEach((it, i) => {
-    const s = v.sums?.[i]
-    if (!s) return
-    lines.push(it.t, s, '')
-  })
-  return lines.join('\n').trim()
+  const title = (i: number) => v.items[i]?.t ?? ''
+  const parts: string[] = []
+  if (v.hello) parts.push(v.hello)
+  for (const s of v.segs ?? []) parts.push(`${title(s.i)}${v.items[s.i]?.f ? `, from ${v.items[s.i].f}` : ''}.${s.say ? ` ${s.say}` : ''}`)
+  if (v.picks?.length) {
+    parts.push(v.picks.length === 1 ? 'My pick for you today:' : 'My picks for you today:')
+    v.picks.forEach((p) => parts.push(`${title(p.i)}. ${p.why}`))
+  }
+  if (v.bye) parts.push(v.bye)
+  return parts.join('\n\n').trim()
 }

@@ -6,6 +6,7 @@
 import { b64encode, decodeKey, decryptString, encryptString, type SecretKeys } from './vendor/crypto.js'
 import { SYNC_SERVER, type SyncSecret } from './config.js'
 import { getKv, setKv, type Db } from './db.js'
+import { applyBrief } from './brief.js'
 
 const enc = new TextEncoder()
 const b64url = (b: Uint8Array) => b64encode(b).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
@@ -187,6 +188,10 @@ export function applyRecord(db: Db, p: Payload, ts: number, result?: PullResult)
       return
     case 'layout':
       if (isObj(v)) setKv(db, 'layout', v)
+      return
+    case 'brief':
+      // A playlist's Morning brief (brief.ts), from any device or from save_morning_brief
+      applyBrief(db, p.key, v, ts)
       return
     default:
     // Kinds this version doesn't know (readlater, …) are skipped

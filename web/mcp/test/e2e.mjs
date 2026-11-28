@@ -47,12 +47,14 @@ const vtt = () =>
   }).join('\n')
 
 let records = []
+const pushed = []
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, base)
   if (url.pathname === '/api/v2/sync') {
     let body = ''
     for await (const c of req) body += c
-    const { since } = JSON.parse(body)
+    const { since, push } = JSON.parse(body)
+    if (Array.isArray(push)) pushed.push(...push)
     const changes = records.filter((r) => r.seq > since)
     res.setHeader('content-type', 'application/json')
     res.end(JSON.stringify({ cursor: records.length, more: false, changes }))
@@ -148,7 +150,7 @@ const check = (cond, msg) => {
 const tools = (await client.listTools()).tools.map((t) => t.name)
 check(tools.length >= 15, `tools listed: ${tools.join(', ')}`)
 const prompts = (await client.listPrompts()).prompts.map((p) => p.name)
-check(prompts.includes('summarize_playlist') && prompts.includes('summarize_book_chapters'), `prompts: ${prompts.join(', ')}`)
+check(prompts.includes('summarize_playlist') && prompts.includes('morning_brief') && prompts.includes('summarize_book_chapters'), `prompts: ${prompts.join(', ')}`)
 
 const ref = await call('refresh', { what: ['sync', 'feeds'] })
 check(ref.sync?.records === payloads.length, `sync pulled ${ref.sync?.records} records`)
@@ -184,6 +186,34 @@ const ep = sections.find((s) => s.item.kind === 'podcast')
 check(ep?.text_from === 'transcript:feed' && /tomatoes/.test(ep.chunks[0].text) && /, \d+:\d\d$/.test(ep.chunks[0].cite), `podcast section uses transcript (${ep?.text_from}), cite "${ep?.chunks[0]?.cite}"`)
 const teaser = sections.find((s) => s.item.title === 'Short teaser post')
 check(teaser?.text_from === 'full_text' && /CRDTs/.test(teaser.chunks[0].text), `teaser got full text (${teaser?.text_from})`)
+
+// Morning brief: read the playlist's articles, then save the brief back through sync
+let mb = await call('morning_brief', { playlist: 'Weekend reading', per_item_tokens: 400, max_tokens: 1200 })
+check(/morning radio/.test(mb.instructions ?? '') && /save_morning_brief/.test(mb.instructions ?? ''), 'morning_brief gives the template on the first page')
+const mbArticles = [...(mb.articles ?? [])]
+while (mb.next_cursor) {
+  mb = await call('morning_brief', { playlist: 'Weekend reading', per_item_tokens: 400, max_tokens: 1200, cursor: mb.next_cursor })
+  check(!mb.instructions, 'later pages leave the instructions out')
+  mbArticles.push(...mb.articles)
+}
+check(
+  mbArticles.length >= 2 && mbArticles.every((a) => a.text && a.source && a.item.startsWith('it_')) && !mbArticles.some((a) => /Episode/.test(a.title)),
+  `morning_brief articles only, with sources: ${mbArticles.map((a) => `${a.title} (${a.source})`).join(' | ')}`,
+)
+const unreadBefore = (await call('list_items', { read: false })).items.length
+const saved = await call('save_morning_brief', {
+  playlist: 'Weekend reading',
+  hello: 'Good morning!',
+  rundown: [{ item: mbArticles[0].item, say: 'It says things.' }, { item: 'it_bogus', say: 'Nope' }],
+  picks: [{ item: mbArticles[0].item, why: 'Your kind of read.' }],
+  signoff: 'Bye!',
+})
+check(
+  saved.saved === true && saved.rundown === mbArticles.length && saved.unknown_items?.length === 1 && saved.left_out_of_rundown?.length === mbArticles.length - 1,
+  `save_morning_brief keeps every article in the rundown: ${JSON.stringify(saved)}`,
+)
+check(pushed.length === 1, `brief pushed to sync (${pushed.length} record)`)
+check((await call('list_items', { read: false })).items.length === unreadBefore, 'nothing marked read by the brief')
 
 const books = await call('list_books')
 check(books.books[0]?.progress_pct === 40 && books.books[0].highlights === 1, `list_books: ${JSON.stringify(books.books[0])}`)

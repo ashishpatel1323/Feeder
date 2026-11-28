@@ -1,5 +1,6 @@
 package com.nononsenseapps.feeder.ui.compose.playlists
 
+import androidx.compose.ui.text.AnnotatedString
 import androidx.lifecycle.viewModelScope
 import com.nononsenseapps.feeder.archmodel.FeedItemStore
 import com.nononsenseapps.feeder.archmodel.Repository
@@ -79,7 +80,15 @@ class PlaylistsViewModel(
     /** Asks the Mac for a brief of the playlist's articles; nothing is marked read. Returns how many. */
     fun askBrief(playlist: Playlist): Int {
         val articles = briefArticles(playlist)
-        val items = articles.map { com.nononsenseapps.feeder.model.briefs.BriefItem("${it.feedUrl}\n${it.guid}", it.title.ifBlank { "Untitled" }, it.link) }
+        val items =
+            articles.map {
+                com.nononsenseapps.feeder.model.briefs.BriefItem(
+                    id = "${it.feedUrl}\n${it.guid}",
+                    t = it.title.ifBlank { "Untitled" },
+                    u = it.link,
+                    f = it.feedTitle.ifBlank { null },
+                )
+            }
         briefStore.request(
             playlist.id,
             playlist.name,
@@ -89,6 +98,33 @@ class PlaylistsViewModel(
                 .name.value,
         )
         return items.size
+    }
+
+    /** Read-aloud id for a playlist's brief: negative, so it never matches an article. */
+    fun briefSpeechId(playlistId: String): Long = -1_000_000L - (playlistId.hashCode().toLong() and 0x7fffffff)
+
+    /** True while this playlist's brief is being read aloud. */
+    val briefSpeech: StateFlow<Long?> =
+        combine(tts.ttsState, tts.progress) { state, progress ->
+            progress.articleId.takeIf { state == com.nononsenseapps.feeder.model.PlaybackStatus.PLAYING }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Listen / Pause on the brief: reads it aloud with the read-aloud voice. */
+    fun listenBrief(
+        playlistId: String,
+        brief: com.nononsenseapps.feeder.model.briefs.Brief,
+    ) {
+        val id = briefSpeechId(playlistId)
+        val state = tts.ttsState.value
+        if (tts.progress.value.articleId == id && state == com.nononsenseapps.feeder.model.PlaybackStatus.PLAYING) return tts.pause()
+        if (tts.resumeIfPausedOn(id)) return
+        tts.tts(
+            textArray = listOf(AnnotatedString(brief.asText())),
+            useDetectLanguage = repository.useDetectLanguage.value,
+            articleId = id,
+            title = "Morning brief",
+            feedTitle = brief.name,
+        )
     }
 
     /** Looks for the Mac's answer now (while a brief is being made). */

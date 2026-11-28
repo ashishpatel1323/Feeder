@@ -9,7 +9,9 @@ import {
   isPending,
   loadBriefs,
   MAX_BRIEF_ITEMS,
-  overviewPrompt,
+  batchPrompt,
+  finalPrompt,
+  parseBatch,
   parseClaude,
   putBrief,
   STALE_ASK_MS,
@@ -34,13 +36,35 @@ describe('Playlist briefs (briefs.ts)', () => {
     expect(briefFromValue(asked)).toEqual(asked)
     expect(briefFromValue({ s: 'nope' })).toBeNull()
     expect(briefFromValue(null)).toBeNull()
-    const done = briefFromValue({ ...asked, s: 'done', ov: ['a', 3], sums: ['x', ''], items: [{ id: 'k', t: 5 }, { nope: 1 }] })!
-    expect(done.items).toEqual([{ id: 'k', t: '', u: null }])
-    expect(done.ov).toEqual(['a', ''])
+    const done = briefFromValue({
+      ...asked,
+      s: 'done',
+      via: 'mac',
+      hello: 'Hi',
+      segs: [
+        { i: 0, say: 'x' },
+        { i: 7, say: 'gone' },
+      ],
+      picks: [{ i: 1, why: 'y' }],
+      bye: 'Bye',
+    })!
+    expect(done.segs).toEqual([{ i: 0, say: 'x' }])
+    expect(done.picks).toEqual([{ i: 1, why: 'y' }])
+    expect(done.via).toBe('mac')
+    expect(
+      briefFromValue({
+        ...asked,
+        items: [{ id: 'k', t: 5 }, { nope: 1 }],
+      })!.items,
+    ).toEqual([{ id: 'k', t: '', u: null }])
   })
 
   it('takes at most MAX_BRIEF_ITEMS articles in playlist order', () => {
-    const many = Array.from({ length: 60 }, (_, i) => ({ id: `f\n${i}`, title: i === 0 ? '' : `T${i}`, link: null }))
+    const many = Array.from({ length: 60 }, (_, i) => ({
+      id: `f\n${i}`,
+      title: i === 0 ? '' : `T${i}`,
+      link: null,
+    }))
     const items = briefItems(many)
     expect(items).toHaveLength(MAX_BRIEF_ITEMS)
     expect(items[0]).toEqual({ id: 'f\n0', t: 'Untitled', u: null })
@@ -55,34 +79,67 @@ describe('Playlist briefs (briefs.ts)', () => {
   })
 
   it('splits long playlists into batches and keeps order', () => {
-    const a = (n: number) => ({ title: 't', link: null, text: 'x'.repeat(n) })
+    const a = (n: number) => ({
+      title: 't',
+      link: null,
+      text: 'x'.repeat(n),
+    })
     expect(batches([a(10), a(10)], 1000)).toEqual([[0, 1]])
     expect(batches([a(700), a(700), a(10)], 1200)).toEqual([[0], [1, 2]])
     // One very long article still makes its own batch
     expect(batches([a(1_000_000)], 1000)).toEqual([[0]])
   })
 
-  it('asks for JSON, numbers articles across batches and fences off the article text', () => {
-    const p = briefPrompt('Morning', [{ title: 'Two', link: null, text: '' }], 1, false)
-    expect(p).toContain('<article n="2">')
+  const taste = {
+    topFeeds: ['Stratechery'],
+    saved: ['On batteries'],
+    highlights: ['"Small models win" (Chips)'],
+  }
+
+  it("asks for the morning radio template with the reader's taste, and fences off the article text", () => {
+    const p = briefPrompt('Morning', [{ title: 'One', link: 'https://x', source: 'The Verge', text: '' }], taste, new Date(2026, 10, 28))
+    expect(p).toContain('morning radio')
+    expect(p).toContain('Saturday 28 November')
+    expect(p).toContain('"picks"')
+    expect(p).toContain('Feeds they read most: Stratechery')
+    expect(p).toContain('<article n="1">')
+    expect(p).toContain('<source>The Verge</source>')
     expect(p).toContain('could not be fetched')
-    expect(p).not.toContain('"overview"')
-    expect(briefPrompt('Morning', [{ title: 'One', link: 'https://x', text: 'Body' }], 0, true)).toContain('"overview"')
-    expect(overviewPrompt('Morning', ['One'], ['Sum'])).toContain('1. One: Sum')
+    expect(briefPrompt('M', [], { topFeeds: [], saved: [], highlights: [] })).toContain('Not known yet')
+    expect(batchPrompt('Morning', [{ title: 'Two', link: null, text: 'Body' }], 1)).toContain('<article n="2">')
+    expect(finalPrompt('Morning', ['One'], ['Sum'], taste)).toContain('<summary>Sum</summary>')
   })
 
   it("reads Claude's answer, with or without a code fence", () => {
-    const parsed = parseClaude('Here it is:\n```json\n{"overview": ["Big"], "articles": [{"n": 2, "summary": " Two says "}, {"n": "x", "summary": "bad"}]}\n```')!
-    expect(parsed.overview).toEqual(['Big'])
-    expect([...parsed.summaries]).toEqual([[2, 'Two says']])
-    expect(parseClaude('No JSON at all')).toBeNull()
-    expect(parseClaude('{"other": 1}')).toBeNull()
+    const parsed = parseClaude(
+      'Here it is:\n```json\n{"hello": "Good morning!", "rundown": [{"n": 2, "say": " Two says "}, {"n": 2, "say": "dup"}, {"n": 9, "say": "out"}], "picks": [{"n": 1, "why": "Your kind of thing"}], "signoff": "Bye"}\n```',
+      2,
+    )!
+    expect(parsed).toEqual({
+      hello: 'Good morning!',
+      segs: [{ i: 0, say: '' }, { i: 1, say: 'Two says' }],
+      picks: [{ i: 0, why: 'Your kind of thing' }],
+      bye: 'Bye',
+    })
+    expect(parseClaude('No JSON at all', 2)).toBeNull()
+    expect(parseClaude('{"other": 1}', 2)).toBeNull()
+    expect([...parseBatch('{"articles": [{"n": 3, "summary": " S "}, {"n": "x"}]}')]).toEqual([[3, 'S']])
   })
 
-  it('turns a brief into plain text for copying', () => {
-    const text = briefAsText({ ...asked, s: 'done', ov: ['Big'], sums: ['One says', ''] })
-    expect(text).toBe('Morning: brief\n\n• Big\n\nOne\nOne says')
+  it('turns a brief into one script for copying and reading aloud', () => {
+    const text = briefAsText({
+      ...asked,
+      s: 'done',
+      hello: 'Morning!',
+      segs: [{ i: 0, say: 'One says.' }],
+      picks: [{ i: 1, why: 'Worth it.' }],
+      bye: 'Bye.',
+    })
+    expect(text).toBe('Morning!\n\nOne. One says.\n\nMy pick for you today:\n\nTwo. Worth it.\n\nBye.')
     expect(briefAsText({ ...asked, s: 'done', text: 'raw' })).toBe('raw')
+    const sourced = { ...asked, s: 'done' as const, items: [{ ...asked.items[0], f: 'The Verge' }], segs: [{ i: 0, say: '' }] }
+    expect(briefAsText(sourced)).toBe('One, from The Verge.')
+    expect(briefFromValue(sourced)!.items[0].f).toBe('The Verge')
   })
 
   it('syncs: sends briefs made here and applies newer ones from other devices', async () => {
@@ -94,7 +151,13 @@ describe('Playlist briefs (briefs.ts)', () => {
     expect((await collectChanges(6000)).filter((c) => c.k === 'brief')).toEqual([])
 
     const result = { applied: 0, addedFeeds: [] as string[] }
-    const done = { ...asked, s: 'done', ov: ['Big'], sums: ['One says', 'Two says'], at: 7000 }
+    const done = {
+      ...asked,
+      s: 'done',
+      hello: 'Hi',
+      segs: [{ i: 0, say: 'One says' }],
+      at: 7000,
+    }
     await applyRemote({ k: 'brief', key: 'pl1', v: done }, 7000, result)
     expect((await loadBriefs()).pl1).toEqual({ v: done, ts: 7000 })
     // An older record doesn't win

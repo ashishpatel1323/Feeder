@@ -272,9 +272,12 @@ function PlaylistDetail(p: {
   // A brief covers the text articles (podcasts and videos have no text to read)
   const articles = its.filter((i) => kindOf(i, p.ctx) === 'article')
   const askBrief = () => {
-    const items = briefItems(articles)
+    const items = briefItems(articles, (a) => {
+      const f = p.feeds.get(a.feedUrl)
+      return f ? feedDisplayTitle(f) : ''
+    })
     void requestBrief(pl.id, pl.name, items, deviceName())
-    p.toast(`Asked your Mac for a brief of ${items.length} article${items.length === 1 ? '' : 's'}. It shows here when Claude is done.`)
+    p.toast(`Asked your Mac for a morning brief of ${items.length} article${items.length === 1 ? '' : 's'}. It shows here when Claude is done.`)
   }
   // The next text articles: after the one playing when this playlist plays, else from the top
   const toPrepare = (() => {
@@ -336,8 +339,8 @@ function PlaylistDetail(p: {
                 hidden: !(canSave && toDownload.length),
               },
               {
-                icon: 'summarize',
-                label: brief?.v.s === 'done' ? 'New brief with Claude' : 'Brief with Claude',
+                icon: 'voice',
+                label: brief?.v.s === 'done' ? 'New morning brief' : 'Morning brief',
                 onClick: askBrief,
                 hidden: !articles.length || isPending(brief?.v),
               },
@@ -376,6 +379,7 @@ function PlaylistDetail(p: {
       )}
       {brief ? (
         <BriefCard
+          playlistId={pl.id}
           brief={brief}
           canOpen={(id) => p.byId.has(id)}
           onOpen={(id) => p.onOpenArticle(id, brief.v.items.map((x) => x.id).filter((x) => p.byId.has(x)))}
