@@ -1229,6 +1229,7 @@ export default function App() {
     showDiscover(false)
     showLibrary(false)
     showHistory(false)
+    showStart(false)
     showPlaylists(null)
     showYouTube(null)
     if (feedPage) leaveFeedPage()
@@ -1805,6 +1806,7 @@ export default function App() {
           showDiscover(false)
           showLibrary(false)
           showHistory(false)
+          showStart(false)
           if (feedPage) leaveFeedPage()
           open(id, queue.ids)
         }}
