@@ -11467,6 +11467,7 @@ mark.sr-mark {
 }
 .feeder-ink-mark {
   cursor: pointer;
+}
 
 /* ---- Paper (e-ink) overrides: every frame costs a refresh on e-ink, and tints read as dirt ---- */
 :root[data-theme='paper'] *,
@@ -11703,4 +11704,53 @@ mark.sr-mark {
 }
 .pl-tile:has(img) {
   overflow: hidden;
+}
+
+/* Ebook pictures full screen with zoom (ImageZoom.tsx), like the Android image viewer */
+.image-zoom {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+}
+.image-zoom-bar,
+.image-zoom-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+}
+.image-zoom-tools {
+  justify-content: center;
+  padding-bottom: max(var(--sp-2), env(safe-area-inset-bottom));
+}
+.image-zoom-title {
+  font-size: var(--fs-lg);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.image-zoom-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  touch-action: none;
+  cursor: zoom-in;
+}
+.image-zoom-stage img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  transform-origin: center;
+  will-change: transform;
+}
+:root[data-theme='paper'] .image-zoom-stage img {
+  filter: grayscale(1);
 }

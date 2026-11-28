@@ -16,6 +16,7 @@ import type { FoliateView, Location, TocItem } from '../vendor/foliate-js/view.j
 import { Overlayer } from '../vendor/foliate-js/overlayer.js'
 import { authorString, bookCss, injectCsp, langString, type ReaderPrefs } from '../lib/ebooks/reader'
 import { indexText, rangeFor, type TextIndex } from './textindex'
+import { attachImageLongPress, bookImageAt, bookImageBlob, bookImageLabel, IMAGE_EDGE } from '../lib/ebooks/images'
 import { attachInkCapture, encodeInk, inkMarkAt, type InkData } from '../lib/pageink'
 import type { SketchColor } from '../lib/sketch'
 import { atEnd, atStart, drawFixedHighlights, markFixedPage, paintBookInk, placeBookSketches, readableContent, redrawFixedHighlights, replaceBookSketches, nextSection, pageNumbers, prevSection, reveal, setStyles } from '../lib/ebooks/nav'
@@ -35,6 +36,8 @@ interface Bridge {
   /** A [✎] marker was tapped (a note written with other settings), by its CFI. */
   onInkMark(cfi: string): void
   onTap(zone: string): void
+  /** A picture was opened to zoom: its file as a data: URL, and its caption (may be ""). */
+  onImage(dataUrl: string, label: string): void
   onError(message: string): void
 }
 
@@ -207,6 +210,7 @@ function listen(v: FoliateView) {
         },
       })
     }
+    if (!v.isFixedLayout) attachImageLongPress(doc, (el) => void (pen.drawAll || openImage(el)))
     let selTimer = 0
     doc.addEventListener('selectionchange', () => {
       window.clearTimeout(selTimer)
@@ -239,13 +243,33 @@ function listen(v: FoliateView) {
       const x = (frame?.left ?? 0) + c.clientX
       const box = v.getBoundingClientRect()
       const frac = box.width ? (x - box.left) / box.width : 0.5
-      if (frac < 0.25) void v.goLeft()
+      // A tap on a picture opens it to zoom, except right at the edges, which turn pages
+      const pic = v.isFixedLayout || frac < IMAGE_EDGE || frac > 1 - IMAGE_EDGE ? null : bookImageAt(c.target)
+      if (pic) void openImage(pic)
+      else if (frac < 0.25) void v.goLeft()
       else if (frac > 0.75) void v.goRight()
       else bridge.onTap('center')
     })
     tts = null
     bridge.onSectionLoaded()
   })
+}
+
+/** Hands a picture to the app, which shows it full screen with pinch zoom. */
+async function openImage(el: Element) {
+  try {
+    const blob = await bookImageBlob(el)
+    if (!blob) return
+    const data = await new Promise<string>((ok, fail) => {
+      const fr = new FileReader()
+      fr.onload = () => ok(String(fr.result))
+      fr.onerror = () => fail(fr.error)
+      fr.readAsDataURL(blob)
+    })
+    bridge.onImage(data, bookImageLabel(el))
+  } catch (e) {
+    console.warn('Opening the picture failed', e)
+  }
 }
 
 /** Text of the shown chapter for read aloud, and where the page on screen starts in it. */

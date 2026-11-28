@@ -31,6 +31,8 @@ import { SketchEditor } from './SketchEditor'
 import { InkPreview, PenBar, usePenState } from './PageInk'
 import { attachInkCapture, encodeInk, inkMarkAt, type InkData } from '../lib/pageink'
 import { HistoryList } from './History'
+import { ImageZoom } from './ImageZoom'
+import { attachImageLongPress, bookImageAt, bookImageBlob, bookImageLabel, IMAGE_EDGE } from '../lib/ebooks/images'
 import { Icon, IconButton } from './Icon'
 import { Player } from './Player'
 import { otherDeviceText } from '../lib/device'
@@ -276,6 +278,17 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
   const penRef = useRef(pen)
   penRef.current = pen
   const [inkOpen, setInkOpen] = useState<string | null>(null)
+  /** A picture from the book open full screen to zoom (an object URL) and its caption. */
+  const [zoom, setZoom] = useState<{ src: string; label: string } | null>(null)
+  const openImage = async (el: Element) => {
+    const blob = await bookImageBlob(el).catch(() => null)
+    if (blob) setZoom({ src: URL.createObjectURL(blob), label: bookImageLabel(el) })
+  }
+  const closeZoom = () =>
+    setZoom((z) => {
+      if (z) URL.revokeObjectURL(z.src)
+      return null
+    })
   /** The notes drawn as ink in each chapter on screen (to erase from). */
   const inkShown = useRef(new WeakMap<Document, Map<string, InkData>>())
   const [pending, setPending] = useState<Pending | null>(null)
@@ -418,6 +431,7 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
         doc.addEventListener('pointerup', checkSelection)
         doc.addEventListener('keyup', (k) => k.shiftKey && checkSelection())
         doc.addEventListener('keydown', onKey)
+        if (!view.isFixedLayout) attachImageLongPress(doc, (el) => void (penRef.current.drawAll || openImage(el)))
         // Taps near the edges turn pages (swipes are handled by foliate-js)
         doc.addEventListener('click', (c) => {
           // A tap on a [✎] marker shows a note written with other settings
@@ -444,7 +458,10 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
           const x = (frame?.left ?? 0) + c.clientX
           const box = view.getBoundingClientRect()
           const frac = box.width ? (x - box.left) / box.width : 0.5
-          if (frac < 0.22) void view.goLeft()
+          // A tap (or click) on a picture opens it to zoom, except right at the edges, which turn pages
+          const pic = view.isFixedLayout || frac < IMAGE_EDGE || frac > 1 - IMAGE_EDGE ? null : bookImageAt(c.target)
+          if (pic) void openImage(pic)
+          else if (frac < 0.22) void view.goLeft()
           else if (frac > 0.78) void view.goRight()
         })
         if (continueNext.current) {
@@ -784,6 +801,7 @@ function BookReader({ id, at, settings, onBack, toast }: { id: string; at: strin
         />
       ) : null}
       {pen.drawAll ? <PenBar pen={pen} onDone={() => pen.setDrawAll(false)} /> : null}
+      {zoom ? <ImageZoom src={zoom.src} label={zoom.label} onClose={closeZoom} /> : null}
       {inkOpen && highlights.find((h) => h.id === inkOpen) ? (() => {
         const note = highlights.find((h) => h.id === inkOpen)!
         const was = (JSON.parse(note.ink!) as { prefs?: Partial<ReaderPrefs> }).prefs
