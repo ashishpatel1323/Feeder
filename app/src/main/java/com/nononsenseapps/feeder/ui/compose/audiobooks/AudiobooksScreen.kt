@@ -1,6 +1,5 @@
 package com.nononsenseapps.feeder.ui.compose.audiobooks
 
-import android.graphics.BitmapFactory
 import android.text.format.Formatter
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -81,7 +80,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -102,8 +100,10 @@ import com.nononsenseapps.feeder.model.audiobooks.AudiobookRules
 import com.nononsenseapps.feeder.model.audiobooks.AudiobookState
 import com.nononsenseapps.feeder.model.history.ItemHistory
 import com.nononsenseapps.feeder.model.shelf.BookStatus
+import com.nononsenseapps.feeder.model.shelf.CoverBitmaps
 import com.nononsenseapps.feeder.model.shelf.ShelfMarks
 import com.nononsenseapps.feeder.model.shelf.ShelfStatusRules
+import com.nononsenseapps.feeder.model.shelf.loadCovers
 import com.nononsenseapps.feeder.sync2.SyncNudge
 import com.nononsenseapps.feeder.sync2.ThisDevice
 import com.nononsenseapps.feeder.sync2.otherDeviceText
@@ -130,9 +130,7 @@ import com.nononsenseapps.feeder.ui.compose.shelf.Where
 import com.nononsenseapps.feeder.ui.compose.shelf.rememberShelfPrefs
 import com.nononsenseapps.feeder.ui.compose.theme.FeederTokens
 import com.nononsenseapps.feeder.ui.compose.theme.LocalPaperMode
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
 import org.kodein.di.compose.LocalDI
 import org.kodein.di.instance
 import kotlin.math.roundToInt
@@ -166,11 +164,11 @@ private fun rememberCovers(
     books: List<Audiobook>,
     version: Int,
 ): Map<String, ImageBitmap> {
-    val covers by produceState(emptyMap<String, ImageBitmap>(), books.map { it.id }, version) {
-        value =
-            withContext(Dispatchers.IO) {
-                books.mapNotNull { b -> library.coverFile(b.id).takeIf { it.exists() }?.let { f -> BitmapFactory.decodeFile(f.absolutePath)?.asImageBitmap()?.let { b.id to it } } }.toMap()
-            }
+    val ids = books.map { it.id }
+    // Covers already decoded show at once; the rest arrive a few at a time
+    val known = remember(ids) { ids.mapNotNull { id -> CoverBitmaps.peek(library.coverFile(id))?.let { id to it } }.toMap() }
+    val covers by produceState(known, ids, version) {
+        loadCovers(ids, library::coverFile) { value = it }
     }
     return covers
 }

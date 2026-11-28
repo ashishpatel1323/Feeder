@@ -1,6 +1,5 @@
 package com.nononsenseapps.feeder.ui.compose.ebooks
 
-import android.graphics.BitmapFactory
 import android.text.format.Formatter
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -22,19 +21,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.nononsenseapps.feeder.R
-import com.nononsenseapps.feeder.model.shelf.BookStatus
-import com.nononsenseapps.feeder.model.shelf.ShelfMarks
-import com.nononsenseapps.feeder.model.shelf.ShelfStatusRules
-import com.nononsenseapps.feeder.ui.compose.shelf.CoverPickerDialog
 import com.nononsenseapps.feeder.dropbox.DropboxClient
 import com.nononsenseapps.feeder.model.ebooks.Book
 import com.nononsenseapps.feeder.model.ebooks.BookPositions
 import com.nononsenseapps.feeder.model.ebooks.EbookLibrary
+import com.nononsenseapps.feeder.model.shelf.BookStatus
+import com.nononsenseapps.feeder.model.shelf.CoverBitmaps
+import com.nononsenseapps.feeder.model.shelf.ShelfMarks
+import com.nononsenseapps.feeder.model.shelf.ShelfStatusRules
+import com.nononsenseapps.feeder.model.shelf.loadCovers
 import com.nononsenseapps.feeder.sync2.SyncNudge
 import com.nononsenseapps.feeder.sync2.ThisDevice
 import com.nononsenseapps.feeder.sync2.otherDeviceText
@@ -43,6 +42,7 @@ import com.nononsenseapps.feeder.ui.compose.components.DeleteScope
 import com.nononsenseapps.feeder.ui.compose.components.DeleteVerb
 import com.nononsenseapps.feeder.ui.compose.components.rememberDeleteConfirmer
 import com.nononsenseapps.feeder.ui.compose.shelf.CoverFit
+import com.nononsenseapps.feeder.ui.compose.shelf.CoverPickerDialog
 import com.nononsenseapps.feeder.ui.compose.shelf.LibraryListingScreen
 import com.nononsenseapps.feeder.ui.compose.shelf.ShelfAction
 import com.nononsenseapps.feeder.ui.compose.shelf.ShelfAdd
@@ -124,11 +124,11 @@ fun EbooksScreen(
     val picked by marks.statuses.collectAsState()
     var coverFor by remember { mutableStateOf<Book?>(null) }
     val coverLabel = stringResource(R.string.cover_from_internet)
-    val covers by produceState(emptyMap<String, ImageBitmap>(), books, coverVersion) {
-        value =
-            withContext(Dispatchers.IO) {
-                books.mapNotNull { b -> library.coverFile(b.id).takeIf { it.exists() }?.let { f -> BitmapFactory.decodeFile(f.absolutePath)?.asImageBitmap()?.let { b.id to it } } }.toMap()
-            }
+    val bookIds = books.map { it.id }
+    // Covers already decoded show at once; the rest arrive a few at a time
+    val knownCovers = remember(bookIds) { bookIds.mapNotNull { id -> CoverBitmaps.peek(library.coverFile(id))?.let { id to it } }.toMap() }
+    val covers by produceState(knownCovers, bookIds, coverVersion) {
+        loadCovers(bookIds, library::coverFile) { value = it }
     }
     val sorted = remember(books) { books.sortedWith(compareByDescending<Book> { it.lastOpenedAt }.thenByDescending { it.addedAt }.thenBy { it.title.lowercase() }) }
 
@@ -287,12 +287,8 @@ fun rememberCover(
     id: String,
     version: Int,
 ): ImageBitmap? {
-    val cover by produceState<ImageBitmap?>(null, id, version) {
-        value =
-            withContext(Dispatchers.IO) {
-                val f = library.coverFile(id)
-                if (f.exists()) BitmapFactory.decodeFile(f.absolutePath)?.asImageBitmap() else null
-            }
+    val cover by produceState(remember(id) { CoverBitmaps.peek(library.coverFile(id)) }, id, version) {
+        value = withContext(Dispatchers.IO) { CoverBitmaps.load(library.coverFile(id)) }
     }
     return cover
 }

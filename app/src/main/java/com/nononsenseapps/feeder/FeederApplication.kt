@@ -35,7 +35,7 @@ import com.nononsenseapps.feeder.di.archModelModule
 import com.nononsenseapps.feeder.di.networkModule
 import com.nononsenseapps.feeder.model.AlwaysUseCacheIfPossibleRequestsInterceptor
 import com.nononsenseapps.feeder.model.ForceCacheOnSomeFailuresInterceptor
-import com.nononsenseapps.feeder.model.OneImageRequestPerHostInterceptor
+import com.nononsenseapps.feeder.model.OneRequestPerImageInterceptor
 import com.nononsenseapps.feeder.model.PodcastPlayerStateHolder
 import com.nononsenseapps.feeder.model.RateLimitedInterceptor
 import com.nononsenseapps.feeder.model.ReadAloudQueue
@@ -192,7 +192,9 @@ class FeederApplication :
                 ImageLoader
                     .Builder(instance())
                     .crossfade(true)
-                    .coroutineContext(applicationCoroutineScope.coroutineContext)
+                    // Coil's own threads: lookups start on the caller, so an image already in
+                    // memory shows in the first frame instead of fading in again; disk and
+                    // network work runs on IO, not on the few CPU threads
                     .maxBitmapSize(Size(2500, 2500))
                     .memoryCacheMaxSizePercentWhileInBackground(0.05)
                     .diskCache(
@@ -208,7 +210,7 @@ class FeederApplication :
                             .build()
                     }.components {
                         add(OfflineImageInterceptor(instance()))
-                        add(OneImageRequestPerHostInterceptor)
+                        add(OneRequestPerImageInterceptor)
                         add(IcoDecoder.Factory(this@FeederApplication))
                         add(
                             OkHttpNetworkFetcherFactory(

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { byteLimit, checkTarget, handle, isBlockedHost, safeContentType } from '../../../server/handler'
+import { byteLimit, checkTarget, handle, isBlockedHost, proxyCacheControl, safeContentType } from '../../../server/handler'
 
 describe('backend fetch guard', () => {
   it('never serves fetched HTML, SVG or scripts as themselves', () => {
@@ -37,5 +37,17 @@ describe('byteLimit', () => {
     await expect(new Response(big).arrayBuffer()).rejects.toThrow()
     const ok = new Response(new Uint8Array(5)).body!.pipeThrough(byteLimit(10))
     expect((await new Response(ok).arrayBuffer()).byteLength).toBe(5)
+  })
+})
+
+describe('proxyCacheControl', () => {
+  it('keeps pictures for <img> a week, and a missing one a day', () => {
+    expect(proxyCacheControl(200, 'image/png', 'image')).toBe('private, max-age=604800')
+    expect(proxyCacheControl(404, 'text/plain; charset=x-user-defined', 'image')).toBe('private, max-age=86400')
+  })
+  it('keeps feeds and pages the app fetches itself 5 minutes', () => {
+    expect(proxyCacheControl(200, 'text/plain; charset=x-user-defined', 'empty')).toBe('private, max-age=300')
+    expect(proxyCacheControl(404, 'text/plain; charset=x-user-defined', null)).toBe('private, max-age=300')
+    expect(proxyCacheControl(200, 'image/png', null)).toBe('private, max-age=300')
   })
 })

@@ -58,7 +58,7 @@ export function HomeShelves(p: {
           <div className="jump-grid">
             {recent.map((e) => (
               <button key={e.key} type="button" className="jump-tile" onClick={() => p.onOpenRecent(e)}>
-                <Art src={img(e.img)} />
+                <Art src={img(e.img)} eager />
                 <span className="jump-title">{e.n || e.s}</span>
                 {e.f && e.f > 0 ? (
                   <span className="jump-prog" aria-hidden="true">
@@ -98,7 +98,13 @@ export function HomeShelves(p: {
   )
 }
 
-function Art({ src }: { src: string | null }) {
-  const [broken, setBroken] = useState(false)
-  return <span className="shelf-art">{src && !broken ? <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(true)} /> : null}</span>
+/** [eager]: "Jump back in" is at the top of the page, so its pictures start loading right away. */
+function Art({ src, eager = false }: { src: string | null; eager?: boolean }) {
+  // A new picture gets a fresh try
+  const [broken, setBroken] = useState<string | null>(null)
+  return (
+    <span className="shelf-art">
+      {src && broken !== src ? <img src={src} alt="" loading={eager ? 'eager' : 'lazy'} decoding="async" referrerPolicy="no-referrer" onError={() => setBroken(src)} /> : null}
+    </span>
+  )
 }
