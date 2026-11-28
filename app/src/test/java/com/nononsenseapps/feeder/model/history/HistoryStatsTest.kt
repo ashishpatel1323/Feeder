@@ -58,4 +58,20 @@ class HistoryStatsTest {
         assertEquals(listOf(1, 0, 2), HistoryStats.countByDay(listOf(at(0, 9), at(0, 10), at(2, 9), at(30, 9)), now).takeLast(3))
         assertEquals(1 to 0.5, HistoryStats.chapterAt(listOf(0L to 100L, 100L to 100L), 200, 0.75))
     }
+
+    @Test
+    fun splitsTodayIntoHours() {
+        val spans = HistoryStats.sessions(listOf(ev("play", at(1, 23, 40)), ev("pause", at(0, 0, 30)), ev("play", at(0, 15, 50)), ev("pause", at(0, 16, 20))), now)
+        val m = HistoryStats.minutesByHour(spans, now)
+        assertEquals(24, m.size)
+        assertEquals(30, m[0])
+        assertEquals(10, m[15])
+        assertEquals(20, m[16])
+        assertEquals(0, m[22])
+        assertEquals(21, HistoryStats.hourIndex(now))
+        assertEquals(2, HistoryStats.countByHour(listOf(at(0, 9, 5), at(0, 9, 50), at(1, 9)), now)[9])
+        val p = HistoryStats.progressFrom(listOf(ev("pause", at(2, 9), f = 0.5), ev("pause", at(0, 10), f = 0.6)), HistoryStats.dayStart(now))
+        assertEquals(listOf(0.5, 0.6), p.map { it.f })
+        assertEquals(HistoryStats.dayStart(now), p.first().at)
+    }
 }

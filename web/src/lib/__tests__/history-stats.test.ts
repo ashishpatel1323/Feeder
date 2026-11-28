@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { HistoryEvent } from '../db'
-import { chapterAt, countByDay, dayStart, graphOf, MAX_SESSION_MS, minutesText, sessions, streakOf } from '../historyStats'
+import { chapterAt, countByDay, countByHour, dayStart, graphOf, hourIndex, MAX_SESSION_MS, minutesByHour, minutesText, progressFrom, sessions, streakOf } from '../historyStats'
 
 const NOW = new Date(2026, 10, 27, 21, 0).getTime()
 const at = (back: number, h: number, m = 0) => {
@@ -50,5 +50,25 @@ describe('history graphs', () => {
     expect(countByDay([at(0, 9), at(0, 10), at(2, 9), at(30, 9)], NOW).slice(-3)).toEqual([1, 0, 2])
     expect(chapterAt([{ bookMs: 0, lengthMs: 100 }, { bookMs: 100, lengthMs: 100 }], 200, 0.75)).toEqual({ k: 1, into: 0.5 })
     expect(minutesText(130)).toBe('2 h 10 min')
+  })
+})
+
+describe('today by hour', () => {
+  it('splits minutes into today’s hours and leaves later hours empty', () => {
+    const spans = sessions([ev('play', at(1, 23, 40)), ev('pause', at(0, 0, 30)), ev('play', at(0, 15, 50)), ev('pause', at(0, 16, 20))], NOW)
+    const { hours, minutes } = minutesByHour(spans, NOW)
+    expect(hours.length).toBe(24)
+    expect(minutes[0]).toBe(30)
+    expect(minutes[15]).toBe(10)
+    expect(minutes[16]).toBe(20)
+    expect(minutes[22]).toBe(0)
+    expect(hourIndex(NOW)).toBe(21)
+  })
+
+  it('counts pages per hour and follows progress from midnight', () => {
+    expect(countByHour([at(0, 9, 5), at(0, 9, 50), at(1, 9)], NOW)[9]).toBe(2)
+    const p = progressFrom([ev('pause', at(2, 9), { f: 0.5 }), ev('pause', at(0, 10), { f: 0.6 })], dayStart(NOW))
+    expect(p.map((x) => x.f)).toEqual([0.5, 0.6])
+    expect(p[0].at).toBe(dayStart(NOW))
   })
 })

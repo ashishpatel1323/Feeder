@@ -8784,6 +8784,31 @@ mark.sr-mark {
 .hgraph-bars.small {
   height: 56px;
 }
+/* Today hour by hour: 24 thin bars, labels only under 00/06/12/18 and Now, later hours faded */
+.hgraph-bars.hours {
+  gap: 2px;
+}
+.hgraph-bars.hours .hgraph-wd {
+  overflow: visible;
+  min-height: 1.3em;
+}
+.hgraph-day.future .hgraph-bar.none {
+  opacity: 0.4;
+}
+.hgraph-head {
+  align-items: center;
+  margin-top: var(--sp-1);
+}
+/* The Today | 14d switch sits in the label row, so it adds no height */
+.hgraph-range {
+  flex: none;
+  background: transparent;
+}
+.hgraph-range .seg {
+  height: 22px;
+  padding: 0 10px;
+  font-size: var(--fs-2xs);
+}
 .hgraph-day {
   display: flex;
   flex: 1;

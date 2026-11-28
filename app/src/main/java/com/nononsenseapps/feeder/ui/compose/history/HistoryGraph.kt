@@ -1,7 +1,9 @@
 package com.nononsenseapps.feeder.ui.compose.history
 
+import android.content.Context
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -15,19 +17,25 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -35,6 +43,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -49,14 +58,18 @@ import com.nononsenseapps.feeder.model.history.HistoryStats
 import com.nononsenseapps.feeder.model.history.ItemHistory
 import com.nononsenseapps.feeder.model.history.ProgressPoint
 import com.nononsenseapps.feeder.ui.compose.theme.FeederTokens
+import com.nononsenseapps.feeder.ui.compose.theme.LocalPaperMode
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
 
 /**
- * The card at the top of an item's History: minutes a day over the last 14 days with this week's
+ * The card at the top of an item's History: minutes a day over the last 14 days (or, with the
+ * Today | 14d switch, minutes an hour today, which the progress line follows too) with this week's
  * total and the streak, then how far through it is over time (a ZIM site has no end, so it shows
  * pages visited a day instead). Everything comes from the history already recorded. The same as
  * the web app's components/HistoryGraph.tsx.
@@ -74,7 +87,10 @@ fun HistoryGraphCard(
     val history = remember { ItemHistory.get(context) }
     val all by history.events.collectAsState()
     val events = remember(all, c, i) { all.filter { it.c == c && it.i == i } }
+    val prefs = remember { context.getSharedPreferences(RANGE_PREFS, Context.MODE_PRIVATE) }
+    var today by remember { mutableStateOf(prefs.getBoolean(RANGE_TODAY, false)) }
     if (events.isEmpty()) return
+    val now = remember(events, today) { System.currentTimeMillis() }
     val g = remember(events) { HistoryStats.graphOf(events) }
     Column(
         modifier
@@ -107,12 +123,123 @@ fun HistoryGraphCard(
                 )
             }
         }
-        Label(stringResource(R.string.history_graph_minutes_label))
-        Bars(g, g.minutes, height = 76) { minutesText(it) }
-        if (c == ItemHistory.ZIM) {
-            ZimPages(g, i)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(top = FeederTokens.Space.sm, bottom = FeederTokens.Space.xs),
+        ) {
+            Text(
+                stringResource(if (today) R.string.history_graph_minutes_hour_label else R.string.history_graph_minutes_label),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            RangeSwitch(today) {
+                today = it
+                prefs.edit().putBoolean(RANGE_TODAY, it).apply()
+            }
+        }
+        if (today) {
+            val minutes = remember(events, now) { HistoryStats.minutesByHour(HistoryStats.sessions(events, now), now) }
+            Bars(hourSlots(now), minutes, height = 76, suffix = "m") { minutesText(it) }
         } else {
-            Progress(c, g, events, chapters, bookLengthMs)
+            Bars(daySlots(g), g.minutes, height = 76, suffix = "m") { minutesText(it) }
+        }
+        if (c == ItemHistory.ZIM) {
+            ZimPages(g, i, today, now)
+        } else {
+            Progress(c, g, events, chapters, bookLengthMs, today, now)
+        }
+    }
+}
+
+private const val RANGE_PREFS = "history_graph"
+private const val RANGE_TODAY = "today"
+
+/** One bar's place on the strip: its axis label (often none), name for TalkBack, and whether it is now or still to come */
+private data class Slot(
+    val label: String,
+    val title: String,
+    val current: Boolean,
+    val future: Boolean = false,
+)
+
+@Composable
+private fun daySlots(g: HistoryGraph): List<Slot> {
+    val weekday = remember { SimpleDateFormat("EEEEE", Locale.getDefault()) }
+    val dayName = remember { SimpleDateFormat("EEE d MMM", Locale.getDefault()) }
+    return g.days.mapIndexed { k, d -> Slot(weekday.format(Date(d)), dayName.format(Date(d)), k == g.days.size - 1) }
+}
+
+/** Today's hours: 00, 06, 12, 18 and Now under the bars, later hours greyed out */
+@Composable
+private fun hourSlots(now: Long): List<Slot> {
+    val nowText = stringResource(R.string.history_graph_now)
+    val hourName = remember { SimpleDateFormat("HH:00", Locale.getDefault()) }
+    val at = HistoryStats.hourIndex(now)
+    return HistoryStats.hoursOfToday(now).mapIndexed { k, h ->
+        val hour =
+            Calendar
+                .getInstance()
+                .apply { timeInMillis = h }
+                .get(Calendar.HOUR_OF_DAY)
+        val label =
+            when {
+                k == at -> nowText
+                hour % 6 == 0 && abs(k - at) > 1 -> "%02d".format(hour)
+                else -> ""
+            }
+        Slot(label, hourName.format(Date(h)), current = k == at, future = k > at)
+    }
+}
+
+/**
+ * The small Today | 14d switch in the label row (so it adds no height). Selected is
+ * secondaryContainer like a SegmentedButton; Paper inverts it instead.
+ */
+@Composable
+private fun RangeSwitch(
+    today: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    val paper = LocalPaperMode.current
+    val outline = if (paper) Color.Black else MaterialTheme.colorScheme.outline
+    val description = stringResource(R.string.history_graph_range)
+    Row(
+        Modifier
+            .padding(start = FeederTokens.Space.sm)
+            .clip(RoundedCornerShape(50))
+            .border(1.dp, outline, RoundedCornerShape(50))
+            .semantics { contentDescription = description }
+            .selectableGroup(),
+    ) {
+        listOf(true to stringResource(R.string.history_graph_today), false to stringResource(R.string.history_graph_range_14d)).forEach { (value, text) ->
+            val on = value == today
+            val bg =
+                when {
+                    !on -> Color.Transparent
+                    paper -> Color.Black
+                    else -> MaterialTheme.colorScheme.secondaryContainer
+                }
+            val fg =
+                when {
+                    on && paper -> Color.White
+                    on -> MaterialTheme.colorScheme.onSecondaryContainer
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                }
+            Text(
+                text,
+                style = MaterialTheme.typography.labelMedium,
+                color = fg,
+                fontWeight = if (on) FontWeight.SemiBold else null,
+                maxLines = 1,
+                modifier =
+                    Modifier
+                        .selectable(selected = on, role = Role.RadioButton) { onChange(value) }
+                        .background(bg)
+                        .padding(horizontal = 10.dp, vertical = 3.dp),
+            )
         }
     }
 }
@@ -152,36 +279,40 @@ private fun Foot(text: String) {
 
 @Composable
 private fun Bars(
-    g: HistoryGraph,
+    slots: List<Slot>,
     values: List<Int>,
     height: Int,
+    suffix: String = "",
     what: @Composable (Int) -> String,
 ) {
     val max = max(1, values.maxOrNull() ?: 0)
     val top = values.indexOf(max)
-    val last = values.size - 1
-    val weekday = remember { SimpleDateFormat("EEEEE", Locale.getDefault()) }
-    val dayName = remember { SimpleDateFormat("EEE d MMM", Locale.getDefault()) }
     val texts = values.map { what(it) }
-    val summary = values.indices.joinToString { "${dayName.format(Date(g.days[it]))}: ${texts[it]}" }
+    val summary = slots.indices.filter { !slots[it].future }.joinToString { "${slots[it].title}: ${texts.getOrElse(it) { "" }}" }
     val bar = MaterialTheme.colorScheme.primary
     val empty = MaterialTheme.colorScheme.surfaceContainerHighest
+    val hours = slots.size > 14
     Row(
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (hours) 2.dp else 4.dp),
         modifier = Modifier.fillMaxWidth().height(height.dp).semantics { contentDescription = summary },
     ) {
-        values.forEachIndexed { k, v ->
-            val today = k == last
+        slots.forEachIndexed { k, slot ->
+            val v = values.getOrElse(k) { 0 }
+            val current = slot.current
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f).fillMaxHeight()) {
                 Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.BottomCenter) {
                     if (v > 0 && k == top) {
+                        // May be wider than a thin hour bar, so it isn't held to the bar's width
                         Text(
-                            if (values === g.minutes) "${v}m" else "$v",
+                            "$v$suffix",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             softWrap = false,
-                            modifier = Modifier.align(if (today) Alignment.TopEnd else Alignment.TopCenter),
+                            modifier =
+                                Modifier
+                                    .align(Alignment.TopCenter)
+                                    .wrapContentWidth(align = if (k == slots.size - 1) Alignment.End else Alignment.CenterHorizontally, unbounded = true),
                         )
                     }
                     Canvas(
@@ -194,7 +325,12 @@ private fun Bars(
                         val h = if (v > 0) max(6.dp.toPx(), size.height * v / max) else 3.dp.toPx()
                         val r = minOf(FeederTokens.Radius.sm.toPx(), size.width / 2, h / 2)
                         drawRoundRect(
-                            color = if (v > 0) bar.copy(alpha = if (today) 1f else 0.55f) else empty,
+                            color =
+                                when {
+                                    v > 0 -> bar.copy(alpha = if (current) 1f else 0.55f)
+                                    slot.future -> empty.copy(alpha = 0.4f)
+                                    else -> empty
+                                },
                             topLeft = Offset(0f, size.height - h),
                             size = Size(size.width, h),
                             cornerRadius = CornerRadius(r, r),
@@ -202,11 +338,13 @@ private fun Bars(
                     }
                 }
                 Text(
-                    weekday.format(Date(g.days[k])),
+                    slot.label,
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (today) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = if (today) FontWeight.Bold else null,
+                    color = if (current) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = if (current) FontWeight.Bold else null,
                     maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.wrapContentWidth(align = if (k == slots.size - 1) Alignment.End else Alignment.CenterHorizontally, unbounded = true),
                 )
             }
         }
@@ -220,23 +358,26 @@ private fun Progress(
     events: List<HistoryEvent>,
     chapters: List<Chapter>,
     bookLengthMs: Long,
+    today: Boolean,
+    now: Long,
 ) {
     Column(Modifier.fillMaxWidth()) {
         val f = g.f
-        if (f == null || g.progress.isEmpty()) {
+        val from = if (today) HistoryStats.dayStart(now) else g.days.first()
+        val points = remember(events, today, now) { if (today) HistoryStats.progressFrom(events, from) else g.progress }
+        if (f == null || points.isEmpty()) {
             Label(stringResource(R.string.history_graph_progress_later))
             return@Column
         }
-        val now = remember(events) { System.currentTimeMillis() }
-        val from = g.days.first()
-        val to = max(now, g.progress.last().at)
-        var lo = g.progress.minOf { it.f }
-        var hi = g.progress.maxOf { it.f }
+        val to = max(now, points.last().at)
+        val gain = ((f - points.first().f) * 100).roundToInt()
+        var lo = points.minOf { it.f }
+        var hi = points.maxOf { it.f }
         if (hi - lo < 0.02) {
             lo = (lo - 0.01).coerceAtLeast(0.0)
             hi = (hi + 0.01).coerceAtMost(1.0)
         }
-        val pts = g.progress + ProgressPoint(to, f)
+        val pts = points + ProgressPoint(to, f)
         val step = c == ItemHistory.EBOOK
         val end = if (c == ItemHistory.EBOOK && g.page != null) "p. ${g.page.first}" else "${(f * 100).roundToInt()}%"
         val line = MaterialTheme.colorScheme.primary
@@ -245,7 +386,11 @@ private fun Progress(
         val span = (to - from).coerceAtLeast(1).toFloat()
         val range = (hi - lo).takeIf { it > 0 } ?: 1.0
 
-        Label(stringResource(R.string.history_graph_progress))
+        if (today) {
+            Label(stringResource(R.string.history_graph_progress_today), if (gain > 0) stringResource(R.string.history_graph_gain_today, gain) else null)
+        } else {
+            Label(stringResource(R.string.history_graph_progress))
+        }
         BoxWithConstraints(Modifier.fillMaxWidth().height(56.dp)) {
             val endWidth = 52.dp
             val plotWidth = maxWidth - endWidth
@@ -290,9 +435,14 @@ private fun Progress(
         }
         val short = remember { SimpleDateFormat("d MMM", Locale.getDefault()) }
         Row(Modifier.fillMaxWidth().padding(end = 52.dp, top = 2.dp)) {
-            Text(short.format(Date(from)), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(if (today) "00:00" else short.format(Date(from)), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.weight(1f))
-            Text(stringResource(R.string.history_graph_today), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            Text(
+                stringResource(if (today) R.string.history_graph_now else R.string.history_graph_today),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+            )
         }
 
         if (c == ItemHistory.AUDIOBOOK && chapters.size > 1 && bookLengthMs > 0) {
@@ -374,16 +524,24 @@ private fun Track(f: Double) {
 private fun ZimPages(
     g: HistoryGraph,
     bookId: String,
+    today: Boolean,
+    now: Long,
 ) {
     Column(Modifier.fillMaxWidth()) {
         val context = LocalContext.current
         val central = remember { CentralHistory.get(context) }
         val entries by central.entries.collectAsState()
         val pages = remember(entries, bookId) { entries.filter { it.t == CentralHistory.ZIM && it.a == CentralHistory.OPEN && it.i.startsWith("$bookId\n") } }
-        val counts = remember(pages) { HistoryStats.countByDay(pages.map { it.at }) }
+        val counts =
+            remember(pages, today, now) {
+                if (today) HistoryStats.countByHour(pages.map { it.at }, now) else HistoryStats.countByDay(pages.map { it.at }, now)
+            }
         val total = counts.sum()
-        Label(stringResource(R.string.history_graph_pages_label), pluralStringResource(R.plurals.history_graph_pages, total, total))
-        Bars(g, counts, height = 60) { pluralStringResource(R.plurals.history_graph_pages, it, it) }
+        Label(
+            stringResource(if (today) R.string.history_graph_pages_today else R.string.history_graph_pages_label),
+            pluralStringResource(R.plurals.history_graph_pages, total, total),
+        )
+        Bars(if (today) hourSlots(now) else daySlots(g), counts, height = 60) { pluralStringResource(R.plurals.history_graph_pages, it, it) }
         pages.maxByOrNull { it.at }?.let { Foot(stringResource(R.string.history_graph_last_page, it.n)) }
         Text(
             stringResource(R.string.history_graph_zim_note),
