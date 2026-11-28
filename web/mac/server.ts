@@ -3,12 +3,12 @@
  * proxy (server/handler.ts) and yt-dlp video saving (server/ytdl.ts), on 127.0.0.1 only.
  * Bundled into mac/dist/server.cjs by vite.server.config.ts.
  */
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { createReadStream } from 'node:fs'
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { access, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { homedir, tmpdir } from 'node:os'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { extname, join, normalize, sep } from 'node:path'
+import { dirname, extname, join, normalize, sep } from 'node:path'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { handle } from '../server/handler'
@@ -149,6 +149,90 @@ async function bookAudioApi(req: IncomingMessage, res: ServerResponse, origin: s
   }
 }
 
+/**
+ * Claude Code on this Mac, for playlist briefs (lib/macBrief.ts). The app is started from Finder
+ * with a bare PATH, so the usual install places are checked, then the login shell is asked.
+ */
+let claudeBin: Promise<string | null> | null = null
+function findClaude(): Promise<string | null> {
+  claudeBin ??= (async () => {
+    const home = homedir()
+    for (const p of [join(home, '.local/bin/claude'), join(home, '.claude/local/claude'), '/opt/homebrew/bin/claude', '/usr/local/bin/claude', join(home, '.npm-global/bin/claude')]) {
+      if (await access(p).then(() => true, () => false)) return p
+    }
+    const shell = process.env.SHELL || '/bin/zsh'
+    const found = await new Promise<string>((resolve) =>
+      execFile(shell, ['-lc', 'command -v claude'], { timeout: 10_000 }, (e, out) => resolve(e ? '' : String(out).trim().split('\n').pop() ?? '')),
+    )
+    return found.startsWith('/') ? found : null
+  })()
+  const p = claudeBin
+  // Not found: look again next time (it may get installed while the app is open)
+  void p.then((bin) => {
+    if (!bin && claudeBin === p) claudeBin = null
+  })
+  return p
+}
+
+/** Longest a brief request may take */
+const CLAUDE_TIMEOUT_MS = 10 * 60_000
+
+/** Runs `claude -p` with [prompt] on stdin, in an empty folder, and gives back what it printed. */
+async function runClaude(bin: string, prompt: string): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), 'feeder-brief-'))
+  try {
+    return await new Promise<string>((resolve, reject) => {
+      const env = { ...process.env, PATH: [dirname(bin), '/opt/homebrew/bin', '/usr/local/bin', process.env.PATH ?? '/usr/bin:/bin'].join(':') }
+      // Print mode: one answer, no tools needed (the articles are in the prompt)
+      const child = spawn(bin, ['-p', '--output-format', 'text'], { cwd: dir, env, stdio: ['pipe', 'pipe', 'pipe'] })
+      let out = ''
+      let err = ''
+      const timer = setTimeout(() => child.kill('SIGTERM'), CLAUDE_TIMEOUT_MS)
+      child.stdout.on('data', (d: Buffer) => (out += d.toString('utf8')))
+      child.stderr.on('data', (d: Buffer) => (err += d.toString('utf8')))
+      child.on('error', (e) => {
+        clearTimeout(timer)
+        reject(e)
+      })
+      child.on('close', (code) => {
+        clearTimeout(timer)
+        if (code === 0 && out.trim()) resolve(out)
+        else reject(new Error((err || out).trim().split('\n').slice(-3).join(' ') || `Claude Code stopped (${code ?? 'timed out'})`))
+      })
+      child.stdin.end(prompt, 'utf8')
+    })
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+}
+
+/**
+ * /api/brief/status|claude: playlist briefs written by Claude Code on this Mac (lib/macBrief.ts),
+ * with the user's own Claude sign-in, so no API key. Only this app's own page may call it.
+ */
+async function briefApi(req: IncomingMessage, res: ServerResponse, origin: string) {
+  const send = (status: number, body: unknown) => {
+    res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+    res.end(JSON.stringify(body))
+  }
+  const sameOrigin = req.headers.origin === origin || (!req.headers.origin && req.headers['sec-fetch-site'] === 'same-origin')
+  if (!sameOrigin || req.headers['x-feeder-app'] !== '1') return send(403, { error: 'Forbidden' })
+  const path = new URL(req.url ?? '/', 'http://x').pathname
+  const bin = await findClaude()
+  if (path === '/api/brief/status') return send(200, { available: !!bin })
+  if (path !== '/api/brief/claude' || req.method !== 'POST' || !String(req.headers['content-type']).startsWith('application/json')) return send(404, { error: 'Not found' })
+  if (!bin) return send(503, { error: 'Claude Code is not installed on this Mac' })
+  const chunks: Buffer[] = []
+  for await (const c of req) chunks.push(c as Buffer)
+  try {
+    const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { prompt?: unknown }
+    if (typeof body.prompt !== 'string' || !body.prompt) return send(400, { error: 'No prompt' })
+    return send(200, { text: await runClaude(bin, body.prompt) })
+  } catch (e) {
+    return send(500, { error: (e as Error).message ?? String(e) })
+  }
+}
+
 export function startServer(root: string, port: number, opts: { mcpDir?: string; nodeBin?: string } = {}): Promise<number> {
   const origin = `http://127.0.0.1:${port}`
   if (opts.mcpDir) {
@@ -159,6 +243,7 @@ export function startServer(root: string, port: number, opts: { mcpDir?: string;
     const run = async () => {
       if (req.url?.startsWith('/api/mcp/')) return mcpApi(req, res, origin)
       if (req.url?.startsWith('/api/bookaudio/')) return bookAudioApi(req, res, origin)
+      if (req.url?.startsWith('/api/brief/')) return briefApi(req, res, origin)
       if (req.url?.startsWith('/api/ytdl/')) return ytdlMiddleware(req, res, () => undefined)
       if (req.url?.startsWith('/api/')) return api(req, res)
       return file(root, req, res)

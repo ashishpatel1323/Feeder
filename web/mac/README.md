@@ -28,6 +28,18 @@ plugin: Settings → Plugins → Online Media → turn on *Include auto-generate
 set *Raw options* to `--sub-langs en.*,hi` (otherwise yt-dlp lists every auto-translated
 language). Pick the track from IINA's subtitle menu if it does not show on its own.
 
+## Playlist briefs (Claude Code)
+
+On any device, a playlist's ⋮ menu has **Brief with Claude**. While this app is open, it picks the
+request up through sync, fetches each article's full text, and runs Claude Code (`claude -p`) to write
+the big picture plus a summary of every article. The brief syncs back and shows at the top of the
+playlist on every device. Nothing is marked read.
+
+It uses your own Claude sign-in, so there's no API key: install Claude Code and sign in once
+(`claude` in Terminal). Each brief counts toward your Claude plan's usage. The app finds `claude` in
+`~/.local/bin`, `~/.claude/local`, `/opt/homebrew/bin`, `/usr/local/bin` or your login shell's PATH.
+Code: `src/lib/briefs.ts`, `src/lib/macBrief.ts`, `/api/brief/*` in `server.ts`.
+
 ## AI agents (MCP)
 
 Settings › **AI agents (MCP)** has one switch: "Let AI agents read my Feeder library". It runs Feeder's

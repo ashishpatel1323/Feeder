@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.Summarize
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -108,6 +109,9 @@ internal fun PlaylistTopBarActions(
     prepareCount: Int = 0,
     prepareSize: String = "",
     onPrepare: () -> Unit = {},
+    /** "Brief with Claude" / "New brief with Claude", or null to leave it out */
+    briefLabel: String? = null,
+    onBrief: () -> Unit = {},
 ) {
     val flipLabel = stringResource(R.string.show_as_flip_pages)
     PlainTooltipBox(tooltip = { Text(flipLabel) }) {
@@ -160,6 +164,16 @@ internal fun PlaylistTopBarActions(
                     onClick = {
                         expanded = false
                         onPrepare()
+                    },
+                )
+            }
+            if (briefLabel != null) {
+                DropdownMenuItem(
+                    text = { Text(briefLabel) },
+                    leadingIcon = { Icon(Icons.Outlined.Summarize, contentDescription = null) },
+                    onClick = {
+                        expanded = false
+                        onBrief()
                     },
                 )
             }

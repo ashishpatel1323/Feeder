@@ -60,6 +60,41 @@ class PlaylistsViewModel(
     private val feedItemStore: FeedItemStore by instance()
     private val repository: Repository by instance()
     private val playlistAudio: com.nononsenseapps.feeder.model.playlists.PlaylistAudio by instance()
+    private val briefStore: com.nononsenseapps.feeder.model.briefs.PlaylistBriefs by instance()
+    private val sync2: com.nononsenseapps.feeder.sync2.Sync2Client by instance()
+    private val app: android.app.Application by instance()
+
+    /** Playlist briefs by playlist id, written by Claude Code in Feeder for Mac. */
+    val briefs: StateFlow<Map<String, com.nononsenseapps.feeder.model.briefs.StoredBrief>> = briefStore.all
+
+    /** The articles a brief covers: text articles only, in the playlist's order. */
+    fun briefArticles(playlist: Playlist): List<PlaylistCandidate> {
+        val s = viewState.value
+        return playlist
+            .items(s.candidates, s.ctx, s.byId)
+            .filter { it.kind == ItemKind.ARTICLE }
+            .take(com.nononsenseapps.feeder.model.briefs.Brief.MAX_ITEMS)
+    }
+
+    /** Asks the Mac for a brief of the playlist's articles; nothing is marked read. Returns how many. */
+    fun askBrief(playlist: Playlist): Int {
+        val articles = briefArticles(playlist)
+        val items = articles.map { com.nononsenseapps.feeder.model.briefs.BriefItem("${it.feedUrl}\n${it.guid}", it.title.ifBlank { "Untitled" }, it.link) }
+        briefStore.request(
+            playlist.id,
+            playlist.name,
+            items,
+            com.nononsenseapps.feeder.sync2.ThisDevice
+                .get(app)
+                .name.value,
+        )
+        return items.size
+    }
+
+    /** Looks for the Mac's answer now (while a brief is being made). */
+    fun syncForBrief() {
+        viewModelScope.launch(Dispatchers.IO) { runCatching { sync2.sync() } }
+    }
 
     val queue: StateFlow<QueueState> = player.state
 

@@ -689,6 +689,25 @@
     <item quantity="other">Next %1$d chapters ready offline</item>
   </plurals>
   <string name="offline_audio_ready_row">Ready offline</string>
+  <string name="playlist_brief">Brief with Claude</string>
+  <string name="playlist_brief_new">New brief with Claude</string>
+  <string name="playlist_brief_asked">Asked your Mac for a brief of %1$d articles. It shows here when Claude is done.</string>
+  <string name="playlist_brief_title">Brief</string>
+  <string name="playlist_brief_meta">%1$d articles · by Claude</string>
+  <string name="playlist_brief_waiting">Brief of %1$d articles · waiting for your Mac</string>
+  <string name="playlist_brief_reading">Claude is reading the articles · %1$d of %2$d</string>
+  <string name="playlist_brief_writing">Claude is writing the brief</string>
+  <string name="playlist_brief_working_hint">Made by Claude Code in Feeder for Mac, from each article’s full text. Nothing is marked read.</string>
+  <string name="playlist_brief_stale">Your Mac didn’t pick up this brief</string>
+  <string name="playlist_brief_stale_hint">Open Feeder on your Mac with Claude Code signed in, then try again.</string>
+  <string name="playlist_brief_failed">The brief couldn’t be made</string>
+  <string name="playlist_brief_failed_default">Claude Code stopped without an answer.</string>
+  <string name="playlist_brief_try_again">Try again</string>
+  <string name="playlist_brief_big_picture">The big picture</string>
+  <string name="playlist_brief_by_article">Article by article</string>
+  <string name="playlist_brief_share">Share brief</string>
+  <string name="playlist_brief_show">Show brief</string>
+  <string name="playlist_brief_hide">Hide brief</string>
   <string name="playlist_prepare_articles">Get next %1$d articles ready offline</string>
   <string name="playlist_prepare_articles_size">About %1$s · fetches the text once</string>
   <string name="playlist_preparing">Getting %1$d articles ready · %2$d of %1$d</string>
