@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { feedDisplayTitle, sortFolders, type Feed, type Item } from '../lib/db'
+import { proxiedUrl } from '../lib/api'
 import {
   deletePlaylist,
   describeRules,
@@ -65,12 +66,23 @@ export function usePlaylists(): Playlist[] {
   return useLiveQuery(() => loadPlaylists(), []) ?? []
 }
 
-function Tile({ pl, size = 44 }: { pl: Pick<Playlist, 'icon' | 'color'>; size?: number }) {
+function Tile({ pl, size = 44, art = [] }: { pl: Pick<Playlist, 'icon' | 'color'>; size?: number; /** First items' pictures: one fills the tile, four make a collage */ art?: string[] }) {
   return (
-    <span className="pl-tile" style={{ background: pl.color, width: size, height: size, fontSize: size * 0.45 }} aria-hidden="true">
-      {pl.icon}
+    <span className={`pl-tile${art.length >= 4 ? ' collage' : ''}`} style={{ background: pl.color, width: size, height: size, fontSize: size * 0.45 }} aria-hidden="true">
+      {art.length >= 4 ? art.slice(0, 4).map((u, i) => <img key={i} src={u} alt="" loading="lazy" referrerPolicy="no-referrer" />) : art.length ? <img src={art[0]} alt="" loading="lazy" referrerPolicy="no-referrer" /> : pl.icon}
     </span>
   )
+}
+
+/** The first items' pictures (or their feed's), for a playlist's tile. */
+function playlistArt(items: Item[], feeds: Map<string, Feed>): string[] {
+  const out: string[] = []
+  for (const it of items) {
+    const u = it.imageUrl || feeds.get(it.feedUrl)?.imageUrl
+    if (u && !out.includes(u)) out.push(u.startsWith('http://') ? proxiedUrl(u) : u)
+    if (out.length === 4) break
+  }
+  return out
 }
 
 export function PlaylistsPage(p: Props) {
@@ -177,7 +189,7 @@ function PlaylistIndex(p: {
     return (
       <li key={pl.id} className="pl-row">
         <button className="pl-row-main" onClick={() => p.onOpen(pl.id)}>
-          <Tile pl={pl} />
+          <Tile pl={pl} art={playlistArt(its, p.ctx.feeds)} />
           <span className="pl-row-text">
             <span className="pl-row-name">{pl.name}</span>
             <span className="pl-row-meta">

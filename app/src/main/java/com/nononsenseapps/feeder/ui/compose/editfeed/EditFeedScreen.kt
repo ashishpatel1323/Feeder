@@ -253,6 +253,12 @@ fun EditFeedScreen(
                         )
                     }
                 },
+                // Save where M3 puts it, not only at the end of a long form
+                actions = {
+                    androidx.compose.material3.TextButton(onClick = onOk, enabled = screenState.isOkToSave) {
+                        androidx.compose.material3.Text(stringResource(R.string.save))
+                    }
+                },
             )
         },
     ) { padding ->
