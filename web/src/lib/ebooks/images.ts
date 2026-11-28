@@ -75,6 +75,7 @@ export async function bookImageBlob(el: Element): Promise<Blob | null> {
 /** An inline drawing as an SVG file, with its images inlined (an SVG image can't load other files). */
 async function svgUrl(svg: SVGSVGElement): Promise<string> {
   const copy = svg.cloneNode(true) as SVGSVGElement
+  inlineStyles(svg, copy)
   const r = svg.getBoundingClientRect()
   copy.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
   copy.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink')
@@ -102,6 +103,24 @@ async function svgUrl(svg: SVGSVGElement): Promise<string> {
   }
   const text = new XMLSerializer().serializeToString(copy)
   return URL.createObjectURL(new Blob([text], { type: 'image/svg+xml' }))
+}
+
+/** Drawing properties a chapter's stylesheet may set; the standalone copy has no stylesheet. */
+const SVG_PROPS = ['fill', 'fill-opacity', 'fill-rule', 'stroke', 'stroke-width', 'stroke-opacity', 'stroke-dasharray', 'stroke-linecap', 'stroke-linejoin', 'opacity', 'visibility', 'display', 'font-family', 'font-size', 'font-weight', 'font-style', 'text-anchor', 'dominant-baseline', 'marker-start', 'marker-mid', 'marker-end']
+
+/** Copies the computed drawing styles of every element onto the copy, so the figure looks the same on its own. */
+function inlineStyles(from: Element, to: Element) {
+  const cs = from.ownerDocument.defaultView?.getComputedStyle(from)
+  // The page is another frame: its elements fail instanceof checks against this window's classes
+  if (cs && (to as SVGElement).style) {
+    for (const p of SVG_PROPS) {
+      const v = cs.getPropertyValue(p)
+      if (v) (to as SVGElement).style.setProperty(p, v)
+    }
+  }
+  const a = from.children
+  const b = to.children
+  for (let i = 0; i < a.length && i < b.length; i++) inlineStyles(a[i], b[i])
 }
 
 /** Draws an image into a PNG, vector images scaled up to VECTOR_SIDE on their longest side. */

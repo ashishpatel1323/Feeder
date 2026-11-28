@@ -11715,6 +11715,7 @@ mark.sr-mark {
   flex-direction: column;
   background: var(--bg);
   color: var(--text);
+  outline: none;
 }
 .image-zoom-bar,
 .image-zoom-tools {

@@ -43,6 +43,14 @@ export function ImageZoom({ src, label, onClose }: { src: string; label: string;
     setTf(clamp({ s, x: t.x * r + px * (1 - r), y: t.y * r + py * (1 - r) }))
   }
 
+  // Take keyboard focus from the book page (keys in its frame never reach this page), give it back on close
+  const dialog = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const before = document.activeElement as HTMLElement | null
+    dialog.current?.focus()
+    return () => before?.focus?.()
+  }, [])
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -125,7 +133,24 @@ export function ImageZoom({ src, label, onClose }: { src: string; label: string;
 
   // On the page itself, so no reader layout (transforms, overflow) can clip it
   return createPortal(
-    <div className="image-zoom" role="dialog" aria-modal="true" aria-label={label || 'Image'}>
+    <div
+      ref={dialog}
+      tabIndex={-1}
+      className="image-zoom"
+      role="dialog"
+      aria-modal="true"
+      aria-label={label || 'Image'}
+      onKeyDown={(e) => {
+        // Keep Tab inside the viewer
+        if (e.key !== 'Tab') return
+        const items = [...e.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled)')]
+        if (!items.length) return
+        const i = items.indexOf(document.activeElement as HTMLElement)
+        const next = e.shiftKey ? (i <= 0 ? items.length - 1 : i - 1) : i === items.length - 1 ? 0 : i + 1
+        e.preventDefault()
+        items[next].focus()
+      }}
+    >
       <header className="image-zoom-bar">
         <IconButton icon="close" label="Close image" onClick={onClose} />
         <span className="image-zoom-title">{label || 'Image'}</span>
