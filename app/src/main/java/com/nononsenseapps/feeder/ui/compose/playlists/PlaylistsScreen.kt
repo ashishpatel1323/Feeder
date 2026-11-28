@@ -687,8 +687,9 @@ private fun CarMode(
     var showQueue by remember { mutableStateOf(false) }
     val speech by viewModel.readAloudProgress.collectAsStateWithLifecycle()
     val config = LocalConfiguration.current
-    // Side by side needs ~600dp so each half fits the five buttons (260dp) plus padding
-    val sideBySide = config.screenWidthDp >= 600 && config.screenWidthDp > config.screenHeightDp && config.screenHeightDp < 500
+    val sideBySide = config.screenWidthDp > config.screenHeightDp && config.screenHeightDp < 500
+    // Each half of a narrow phone on its side (under 600dp) is ~250dp: tighter buttons still fit
+    val narrowSide = sideBySide && config.screenWidthDp < 600
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             val header: @Composable () -> Unit = {
@@ -745,8 +746,8 @@ private fun CarMode(
                 }
                 Row(horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     // Side by side the controls get half the width, so the buttons are smaller
-                    val small = if (sideBySide) 48 else 64
-                    val big = if (sideBySide) 68 else 96
+                    val small = if (narrowSide) 44 else if (sideBySide) 48 else 64
+                    val big = if (narrowSide) 60 else if (sideBySide) 68 else 96
                     BigButton(Icons.Default.SkipPrevious, stringResource(R.string.queue_previous), small) { viewModel.previous() }
                     BigButton(Icons.Default.Replay10, if (isArticle) stringResource(R.string.queue_back) else "10 s", small) { viewModel.seekBy(-10_000) }
                     BigButton(if (queue.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, null, big, primary = true) { viewModel.toggle() }
