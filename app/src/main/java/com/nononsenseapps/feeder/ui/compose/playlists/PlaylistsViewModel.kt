@@ -100,8 +100,14 @@ class PlaylistsViewModel(
         return items.size
     }
 
-    /** Read-aloud id for a playlist's brief: negative, so it never matches an article. */
-    fun briefSpeechId(playlistId: String): Long = -1_000_000L - (playlistId.hashCode().toLong() and 0x7fffffff)
+    /**
+     * Read-aloud id for one version of a playlist's brief: negative, so it never matches an article.
+     * The version ([ts]) is part of it, so a paused old brief isn't resumed after a new one arrives.
+     */
+    fun briefSpeechId(
+        playlistId: String,
+        ts: Long,
+    ): Long = -1_000_000L - ("$playlistId\n$ts".hashCode().toLong() and 0x7fffffff)
 
     /** True while this playlist's brief is being read aloud. */
     val briefSpeech: StateFlow<Long?> =
@@ -113,8 +119,9 @@ class PlaylistsViewModel(
     fun listenBrief(
         playlistId: String,
         brief: com.nononsenseapps.feeder.model.briefs.Brief,
+        ts: Long,
     ) {
-        val id = briefSpeechId(playlistId)
+        val id = briefSpeechId(playlistId, ts)
         val state = tts.ttsState.value
         if (tts.progress.value.articleId == id && state == com.nononsenseapps.feeder.model.PlaybackStatus.PLAYING) return tts.pause()
         if (tts.resumeIfPausedOn(id)) return

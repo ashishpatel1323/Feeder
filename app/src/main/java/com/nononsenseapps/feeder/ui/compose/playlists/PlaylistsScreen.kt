@@ -497,8 +497,8 @@ private fun PlaylistDetail(
                     onOpen = openArticle,
                     onAgain = { viewModel.askBrief(pl) },
                     onSync = viewModel::syncForBrief,
-                    speaking = briefSpeech == viewModel.briefSpeechId(pl.id),
-                    onListen = { viewModel.listenBrief(pl.id, b.v) },
+                    speaking = briefSpeech == viewModel.briefSpeechId(pl.id, b.ts),
+                    onListen = { viewModel.listenBrief(pl.id, b.v, b.ts) },
                 )
             }
             if (offline.playlistId == pl.id && offline.ids.isNotEmpty()) {

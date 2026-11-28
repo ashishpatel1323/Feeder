@@ -11334,6 +11334,9 @@ mark.sr-mark {
   gap: var(--sp-2);
   max-width: 72ch;
 }
+.pl-brief-body[hidden] {
+  display: none;
+}
 .pl-brief-label {
   margin: var(--sp-1) 0 0;
   color: var(--text-2);

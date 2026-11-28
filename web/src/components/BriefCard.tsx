@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { briefAsText, isPending, STALE_ASK_MS, type StoredBrief } from '../lib/briefs'
 import { agoText } from '../lib/device'
+import { audioFocus, playQueue } from '../lib/playqueue'
 import { readAloud } from '../lib/readaloud'
 import { Icon, IconButton } from './Icon'
 
@@ -30,8 +31,17 @@ export function BriefCard(p: {
   const speaking = ra.itemId === speechId && ra.status === 'playing'
   // Leaving the playlist stops the brief (it isn't in any queue to come back to)
   useEffect(() => () => void (readAloud.state.itemId === speechId && readAloud.stop()), [speechId])
+  // One player at a time: a podcast, video or audiobook pauses while the brief speaks
+  const pauseOthers = () => {
+    if (playQueue.state.kind !== 'article' && playQueue.state.status === 'playing') playQueue.toggle(false)
+    audioFocus.pauseAudiobook?.()
+  }
   const listen = () => {
-    if (ra.itemId === speechId && ra.status !== 'idle') return readAloud.toggle()
+    if (ra.itemId === speechId && ra.status !== 'idle') {
+      if (ra.status !== 'playing') pauseOthers()
+      return readAloud.toggle()
+    }
+    pauseOthers()
     if (!bodyRef.current) return
     setOpen(true)
     readAloud.attach(bodyRef.current, speechId)
