@@ -32,9 +32,9 @@ export function saveReaderPrefs(p: ReaderPrefs) {
 }
 
 const THEMES = {
-  light: { bg: '#ffffff', fg: '#1b1c1a', link: '#1f6f4a' },
+  light: { bg: '#ffffff', fg: '#1b1c1a', link: '#1f7a4d' },
   sepia: { bg: '#f4ecd8', fg: '#3b2f1e', link: '#7a4e1d' },
-  dark: { bg: '#111412', fg: '#e2e3df', link: '#8cd5ac' },
+  dark: { bg: '#0d110f', fg: '#e2e3df', link: '#5bd08f' },
 }
 
 export function resolvedTheme(theme: ReaderPrefs['theme'], appDark: boolean): keyof typeof THEMES {

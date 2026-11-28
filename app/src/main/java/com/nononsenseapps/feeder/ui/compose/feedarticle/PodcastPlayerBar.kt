@@ -83,6 +83,7 @@ import com.nononsenseapps.feeder.model.PodcastPlayerState
 import com.nononsenseapps.feeder.model.PodcastPlayerStateHolder
 import com.nononsenseapps.feeder.ui.compose.feed.PlainTooltipBox
 import com.nononsenseapps.feeder.ui.compose.theme.FeederTokens
+import com.nononsenseapps.feeder.ui.compose.theme.LocalPaperMode
 import com.nononsenseapps.feeder.ui.compose.transcript.TranscriptPanel
 import kotlinx.coroutines.flow.emptyFlow
 import org.kodein.di.compose.LocalDI
@@ -454,7 +455,7 @@ private fun SeekBar(
             },
             track = { state ->
                 val progress = state.coercedValueAsFraction
-                if (viewState.isPlaying && !isDragging) {
+                if (viewState.isPlaying && !isDragging && !LocalPaperMode.current) {
                     LinearWavyProgressIndicator(
                         progress = { progress },
                         modifier = Modifier.fillMaxWidth(),

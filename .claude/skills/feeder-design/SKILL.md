@@ -53,6 +53,21 @@ Follow the Material 3 media pattern, as Google Podcasts / YouTube Music do:
 - In-page episode blocks show artwork, progress and one full-width Play/Resume/Pause button only.
   No flat grey bars of small icon buttons, and no Stop button in the main controls.
 
+## Themes: Light, Dark and Paper (redesign, Nov 2026)
+
+- One palette on both platforms: Feeder green "Fern" (`#1F7A4D` light, `#5BD08F` dark), Night ramp
+  `#0D110F / #151A17 / #1D231F / #28302B`. Android sets every M3 surfaceContainer role explicitly so
+  Material's purple baseline never shows; wallpaper (dynamic) colours are off by default, still a setting.
+- **Paper** is the e-ink theme. Web: `data-theme='paper'` (Settings > Theme, or "System" on screens
+  matching `(update: slow), (monochrome)`). Android: `ThemeOptions.E_INK` ("Paper (e-ink)"), or "System"
+  on e-ink makers (`isEInkDevice()`), exposed as `LocalPaperMode`.
+- Every new screen must work in Paper: black on white, no tints or shadows, selection shown by
+  inverting (black fill, white text), no animation (check `LocalPaperMode` on Android before any
+  wavy/infinite animation; web Paper turns off all transitions), images greyscale, nothing that relies
+  on colour alone. Screenshot Paper alongside light and dark.
+- App icon: "Page and play" (web `public/icon.svg`, `icon-maskable.svg`, Mac `mac/assets/icon.icns`,
+  Android `drawable/ic_launcher_page_play_*`). Keep all four in step.
+
 ## Web tokens (`web/src/styles.css`, top of `:root`)
 
 | Use | Token |

@@ -35,11 +35,11 @@
   --text-2: #4f5a52;
   --text-3: #5c6760;
   --border: #d6ddd7;
-  --accent: #1f6f4a;
+  --accent: #1f7a4d;
   --accent-ink: #ffffff;
   --accent-soft: #cdeedb;
   --danger: #b3261e;
-  --hl-sentence: rgba(31, 111, 74, 0.14);
+  --hl-sentence: rgba(31, 122, 77, 0.14);
   --hl-word: rgba(31, 111, 74, 0.38);
   --hl-tap: #ffe066;
   --shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
@@ -50,21 +50,21 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --bg: #111412;
-    --surface: #191c1a;
-    --surface-2: #222724;
-    --surface-3: #2c332e;
-    --text: #e1e3df;
-    --text-2: #b9c3bb;
-    --text-3: #8b958e;
-    --border: #3a423c;
-    --accent: #8cd5ac;
-    --accent-ink: #00391f;
-    --accent-soft: #1f4a33;
+  :root:not([data-theme='light']):not([data-theme='paper']) {
+    --bg: #0d110f;
+    --surface: #151a17;
+    --surface-2: #1d231f;
+    --surface-3: #28302b;
+    --text: #f0f4f1;
+    --text-2: #b6c0ba;
+    --text-3: #8d9892;
+    --border: #2f3832;
+    --accent: #5bd08f;
+    --accent-ink: #062614;
+    --accent-soft: #1d3a2a;
     --danger: #f2b8b5;
-    --hl-sentence: rgba(140, 213, 172, 0.16);
-    --hl-word: rgba(140, 213, 172, 0.4);
+    --hl-sentence: rgba(91, 208, 143, 0.16);
+    --hl-word: rgba(91, 208, 143, 0.4);
     --hl-tap: #8a7300;
     --disabled-bg: #2a302c;
     --disabled-ink: #8b958e;
@@ -73,20 +73,20 @@
   }
 }
 :root[data-theme='dark'] {
-  --bg: #111412;
-  --surface: #191c1a;
-  --surface-2: #222724;
-  --surface-3: #2c332e;
-  --text: #e1e3df;
-  --text-2: #b9c3bb;
-  --text-3: #8b958e;
-  --border: #3a423c;
-  --accent: #8cd5ac;
-  --accent-ink: #00391f;
-  --accent-soft: #1f4a33;
+  --bg: #0d110f;
+  --surface: #151a17;
+  --surface-2: #1d231f;
+  --surface-3: #28302b;
+  --text: #f0f4f1;
+  --text-2: #b6c0ba;
+  --text-3: #8d9892;
+  --border: #2f3832;
+  --accent: #5bd08f;
+  --accent-ink: #062614;
+  --accent-soft: #1d3a2a;
   --danger: #f2b8b5;
-  --hl-sentence: rgba(140, 213, 172, 0.16);
-  --hl-word: rgba(140, 213, 172, 0.4);
+  --hl-sentence: rgba(91, 208, 143, 0.16);
+  --hl-word: rgba(91, 208, 143, 0.4);
   --hl-tap: #8a7300;
   --disabled-bg: #2a302c;
   --disabled-ink: #8b958e;
@@ -94,6 +94,32 @@
   color-scheme: dark;
 }
 /* Always-light surfaces (the paper page in Flip mode): the light palette whatever the theme */
+/* Paper: the e-ink theme. Black on white, no tints, no motion. Picked by Settings > Theme, or by
+   "System" on screens that report (update: slow) or (monochrome). Android: ThemeOptions.E_INK. */
+:root[data-theme='paper'] {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #ffffff;
+  --surface-3: #ffffff;
+  --text: #000000;
+  --text-2: #000000;
+  --text-3: #3d3d3d;
+  --border: #000000;
+  --accent: #000000;
+  --accent-ink: #ffffff;
+  --accent-soft: #e6e6e6;
+  --danger: #000000;
+  --hl-sentence: rgba(0, 0, 0, 0.1);
+  --hl-word: rgba(0, 0, 0, 0.28);
+  --hl-tap: #cccccc;
+  --shadow: none;
+  --shadow-lg: none;
+  --disabled-bg: #ffffff;
+  --disabled-ink: #5c5c5c;
+  --player-accent: #000000;
+  --paper-accent: #000000;
+  color-scheme: light;
+}
 .tokens-light {
   --surface: #ffffff;
   --surface-2: #eef4ee;
@@ -102,7 +128,7 @@
   --text-2: #4f5a52;
   --text-3: #5c6760;
   --border: #d6ddd7;
-  --accent: #1f6f4a;
+  --accent: #1f7a4d;
   --accent-ink: #ffffff;
   --accent-soft: #cdeedb;
   --danger: #b3261e;
@@ -1053,7 +1079,7 @@ a {
   --player-muted: rgba(239, 241, 237, 0.72);
   --player-button: rgba(239, 241, 237, 0.12);
   --player-track: rgba(239, 241, 237, 0.22);
-  --player-accent: #8cd5ac;
+  --player-accent: #5bd08f;
   --player-on-accent: #00391f;
   position: relative;
   z-index: 6;
@@ -1064,7 +1090,7 @@ a {
   box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.18);
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .player {
+  :root:not([data-theme='light']):not([data-theme='paper']) .player {
     --player-bg: #323633;
     --player-fg: #e1e3df;
     --player-muted: rgba(225, 227, 223, 0.72);
@@ -2325,7 +2351,7 @@ details summary {
   --sketch-paper: #fffdf6;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
+  :root:not([data-theme='light']):not([data-theme='paper']) {
     --hl-yellow: rgba(255, 212, 59, 0.42);
     --hl-green: rgba(92, 197, 131, 0.42);
     --hl-blue: rgba(90, 165, 240, 0.45);
@@ -3037,7 +3063,7 @@ label.check.inline {
 .flip-progress i {
   display: block;
   height: 100%;
-  background: #8cd5ac;
+  background: #5bd08f;
   transition: width 0.3s ease;
 }
 .flip-top {
@@ -3117,7 +3143,7 @@ label.check.inline {
   color: #e1e3df;
 }
 .flip-next.now small {
-  color: #8cd5ac;
+  color: #5bd08f;
 }
 .flip-next.done {
   opacity: 0.45;
@@ -3170,7 +3196,7 @@ label.check.inline {
   font-size: var(--fs-xs);
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #1f6f4a;
+  color: #1f7a4d;
   font-weight: 600;
 }
 .flip-meta {
@@ -3245,7 +3271,7 @@ label.check.inline {
   cursor: default;
 }
 .flip-btn.pri {
-  background: #1f6f4a;
+  background: #1f7a4d;
   color: #fff;
 }
 .flip-btn.on {
@@ -3413,7 +3439,7 @@ label.check.inline {
   transition: left 0.15s;
 }
 .flip-switch.on {
-  background: #1f6f4a;
+  background: #1f7a4d;
 }
 .flip-switch.on i {
   left: 19px;
@@ -3429,7 +3455,7 @@ label.check.inline {
 .flip-track i {
   display: block;
   height: 100%;
-  background: #8cd5ac;
+  background: #5bd08f;
   transition: width 0.3s;
 }
 .flip-player-btns {
@@ -3452,7 +3478,7 @@ label.check.inline {
 }
 .flip-chip.on {
   background: #1f4a33;
-  color: #8cd5ac;
+  color: #5bd08f;
 }
 @media (max-width: 1180px) {
   .flip {
@@ -3636,13 +3662,13 @@ label.check.inline {
   --paper-2: #ede8dc;
   --paper-3: #e2dccd;
   --paper-border: #ddd6c6;
-  --paper-accent: #1f6f4a;
+  --paper-accent: #1f7a4d;
   --paper-accent-ink: #ffffff;
   --paper-accent-soft: #cdeedb;
   --paper-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
+  :root:not([data-theme='light']):not([data-theme='paper']) {
     --desk: radial-gradient(ellipse at 55% 25%, #1c211e 0%, #0b0d0c 75%);
     --desk-chip: #171b19;
     --desk-chip-border: #2a312d;
@@ -3658,7 +3684,7 @@ label.check.inline {
     --paper-2: #262b27;
     --paper-3: #303631;
     --paper-border: #353c37;
-    --paper-accent: #8cd5ac;
+    --paper-accent: #5bd08f;
     --paper-accent-ink: #00391f;
     --paper-accent-soft: #1f4a33;
     --paper-scheme: dark;
@@ -3680,7 +3706,7 @@ label.check.inline {
   --paper-2: #262b27;
   --paper-3: #303631;
   --paper-border: #353c37;
-  --paper-accent: #8cd5ac;
+  --paper-accent: #5bd08f;
   --paper-accent-ink: #00391f;
   --paper-accent-soft: #1f4a33;
   --paper-scheme: dark;
@@ -5228,15 +5254,15 @@ label.check.inline {
   color: #b8dcff;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .ty.k-podcast {
+  :root:not([data-theme='light']):not([data-theme='paper']) .ty.k-podcast {
     background: #3b2d55;
     color: #d9c4ff;
   }
-  :root:not([data-theme='light']) .ty.k-youtube {
+  :root:not([data-theme='light']):not([data-theme='paper']) .ty.k-youtube {
     background: #4d2323;
     color: #ffb3b3;
   }
-  :root:not([data-theme='light']) .ty.k-article {
+  :root:not([data-theme='light']):not([data-theme='paper']) .ty.k-article {
     background: #20384d;
     color: #b8dcff;
   }
@@ -6875,7 +6901,7 @@ input:focus-visible {
   background: rgba(0, 0, 0, 0.5);
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .cp-backdrop {
+  :root:not([data-theme='light']):not([data-theme='paper']) .cp-backdrop {
     background: rgba(0, 0, 0, 0.5);
   }
 }
@@ -8034,15 +8060,15 @@ mark.sr-mark {
   color: #c4dbfb;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .avail-device {
+  :root:not([data-theme='light']):not([data-theme='paper']) .avail-device {
     background: #1f4a33;
     color: #b9efcf;
   }
-  :root:not([data-theme='light']) .avail-only {
+  :root:not([data-theme='light']):not([data-theme='paper']) .avail-only {
     background: #4d3a12;
     color: #f7dca3;
   }
-  :root:not([data-theme='light']) .avail-cloud {
+  :root:not([data-theme='light']):not([data-theme='paper']) .avail-cloud {
     background: #1d3657;
     color: #c4dbfb;
   }
@@ -10144,7 +10170,7 @@ mark.sr-mark {
   --text: #e1e3df;
   --text-2: #b9c3bb;
   --text-3: #8b958e;
-  --accent: #8cd5ac;
+  --accent: #5bd08f;
   --accent-ink: #00391f;
   --accent-soft: #1f4a33;
 }
@@ -11374,4 +11400,86 @@ mark.sr-mark {
 .ab-ra-ahead .book-audio-seg {
   flex: 1;
   margin: 0 16px 0 0;
+}
+
+/* ---- Paper (e-ink) overrides: every frame costs a refresh on e-ink, and tints read as dirt ---- */
+:root[data-theme='paper'] *,
+:root[data-theme='paper'] *::before,
+:root[data-theme='paper'] *::after {
+  animation: none !important;
+  transition: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  backdrop-filter: none !important;
+  scroll-behavior: auto !important;
+}
+:root[data-theme='paper'] img,
+:root[data-theme='paper'] video {
+  filter: grayscale(1) contrast(1.15);
+}
+:root[data-theme='paper'] body {
+  font-weight: 500;
+}
+/* Selection is shown by inverting, never by a tint */
+:root[data-theme='paper'] .chip.on,
+:root[data-theme='paper'] .home-chip.on,
+:root[data-theme='paper'] .segmented > .seg.on,
+:root[data-theme='paper'] .home-seg > button.on,
+:root[data-theme='paper'] .feeds-switch .on,
+:root[data-theme='paper'] .tabbar-item.selected .tabbar-pill,
+:root[data-theme='paper'] .rail-btn.selected,
+:root[data-theme='paper'] .nav-row.selected,
+:root[data-theme='paper'] .mf-btn.primary,
+:root[data-theme='paper'] [aria-checked='true'].seg {
+  background: #000 !important;
+  color: #fff !important;
+  border-color: #000 !important;
+}
+:root[data-theme='paper'] .chip,
+:root[data-theme='paper'] .home-chip,
+:root[data-theme='paper'] .mf-btn {
+  border: 1.5px solid #000;
+}
+:root[data-theme='paper'] :focus-visible {
+  outline: 2px solid #000 !important;
+  outline-offset: 2px;
+}
+/* The reading desk and paper card go plain white; generated letter tiles drop their colour */
+:root[data-theme='paper'] {
+  --desk: #ffffff;
+  --desk-chip: #ffffff;
+  --desk-chip-border: #000000;
+  --dock: #ffffff;
+  --dock-border: #000000;
+  --dock-btn: #ffffff;
+  --paper: #ffffff;
+  --paper-stack-1: #ffffff;
+  --paper-stack-2: #ffffff;
+  --paper-ink: #000000;
+  --paper-ink-2: #000000;
+  --paper-ink-3: #3d3d3d;
+  --paper-2: #ffffff;
+  --paper-3: #ffffff;
+  --paper-border: #000000;
+  --paper-accent-ink: #ffffff;
+  --paper-accent-soft: #e6e6e6;
+}
+:root[data-theme='paper'] .home-gen,
+:root[data-theme='paper'] .dc-gen {
+  background: #ffffff !important;
+  color: #000000 !important;
+  outline: 1.5px solid #000;
+  outline-offset: -1.5px;
+}
+:root[data-theme='paper'] .pl-tile,
+:root[data-theme='paper'] .pl-nav-dot {
+  background: #ffffff !important;
+  outline: 1.5px solid #000;
+  outline-offset: -1.5px;
+  filter: grayscale(1);
+}
+:root[data-theme='paper'] .ty {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border: 1px solid #000;
 }

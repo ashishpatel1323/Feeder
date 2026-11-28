@@ -129,6 +129,7 @@ import com.nononsenseapps.feeder.ui.compose.shelf.ShelfQuick
 import com.nononsenseapps.feeder.ui.compose.shelf.Where
 import com.nononsenseapps.feeder.ui.compose.shelf.rememberShelfPrefs
 import com.nononsenseapps.feeder.ui.compose.theme.FeederTokens
+import com.nononsenseapps.feeder.ui.compose.theme.LocalPaperMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -583,7 +584,7 @@ private fun NowPlaying(
                 )
             },
             track = { state ->
-                if (playing && !dragging) {
+                if (playing && !dragging && !LocalPaperMode.current) {
                     LinearWavyProgressIndicator(progress = { state.coercedValueAsFraction }, modifier = Modifier.fillMaxWidth(), trackColor = MaterialTheme.colorScheme.surfaceVariant)
                 } else {
                     LinearProgressIndicator(progress = { state.coercedValueAsFraction }, modifier = Modifier.fillMaxWidth().height(4.dp), trackColor = MaterialTheme.colorScheme.surfaceVariant)

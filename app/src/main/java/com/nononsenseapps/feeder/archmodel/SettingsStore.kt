@@ -377,9 +377,10 @@ class SettingsStore(
     private val _useDynamicTheme =
         MutableStateFlow(
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                // Off by default since the redesign: Feeder green on every phone. Still an option.
                 sp.getBoolean(
                     PREF_DYNAMIC_THEME,
-                    true,
+                    false,
                 ),
         )
     val useDynamicTheme = _useDynamicTheme.asStateFlow()

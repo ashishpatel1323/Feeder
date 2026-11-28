@@ -9,6 +9,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -129,6 +130,7 @@ import com.nononsenseapps.feeder.ui.compose.rsvp.RSVP_MAX_WPM
 import com.nononsenseapps.feeder.ui.compose.rsvp.RSVP_MIN_WPM
 import com.nononsenseapps.feeder.ui.compose.rsvp.RSVP_WPM_STEP
 import com.nononsenseapps.feeder.ui.compose.rsvp.RsvpWordDisplay
+import com.nononsenseapps.feeder.ui.compose.theme.LocalPaperMode
 import com.nononsenseapps.feeder.ui.compose.theme.PreviewTheme
 import com.nononsenseapps.feeder.ui.compose.utils.ImmutableHolder
 import com.nononsenseapps.feeder.ui.compose.utils.onKeyEventLikeEscape
@@ -953,7 +955,9 @@ private fun WavySeekBar(
     onScrub: (Float) -> Unit,
     onScrubFinished: () -> Unit,
 ) {
-    val amplitude by animateFloatAsState(if (playing) 1f else 0f, animationSpec = tween(400), label = "wave amplitude")
+    // Paper (e-ink): a flat line that never animates
+    val paper = LocalPaperMode.current
+    val amplitude by animateFloatAsState(if (playing && !paper) 1f else 0f, animationSpec = if (paper) snap() else tween(400), label = "wave amplitude")
     val phase by rememberInfiniteTransition(label = "wave").animateFloat(
         initialValue = 0f,
         targetValue = 1f,
