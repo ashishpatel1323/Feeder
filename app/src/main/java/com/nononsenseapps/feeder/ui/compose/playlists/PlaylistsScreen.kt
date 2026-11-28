@@ -150,6 +150,7 @@ fun PlaylistsScreen(
     var carMode by remember { mutableStateOf(false) }
     val flipId by viewModel.flipId.collectAsStateWithLifecycle()
     val flipItems by viewModel.flipItems.collectAsStateWithLifecycle()
+    val briefs by viewModel.briefs.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -221,6 +222,8 @@ fun PlaylistsScreen(
                                         ""
                                     }
                                 }
+                            val brief = briefs[open.id]?.v
+                            val briefCount = remember(open, state) { viewModel.briefArticles(open).size }
                             PlaylistTopBarActions(
                                 smart = open.smart,
                                 canFlip = items.isNotEmpty(),
@@ -234,6 +237,16 @@ fun PlaylistsScreen(
                                 onDelete = { confirmDelete = open },
                                 prepareCount = toPrepare.size,
                                 prepareSize = prepareSize,
+                                briefLabel =
+                                    when {
+                                        briefCount == 0 || brief?.isPending() == true -> null
+                                        brief?.s == com.nononsenseapps.feeder.model.briefs.Brief.DONE -> stringResource(R.string.playlist_brief_new)
+                                        else -> stringResource(R.string.playlist_brief)
+                                    },
+                                onBrief = {
+                                    val n = viewModel.askBrief(open)
+                                    scope.launch { snackbar.showSnackbar(context.getString(R.string.playlist_brief_asked, n)) }
+                                },
                                 onPrepare = {
                                     val n = viewModel.prepareArticles(open)
                                     scope.launch {
@@ -402,6 +415,10 @@ private fun PlaylistDetail(
     val playingId = if (queue.playlistId == pl.id) queue.currentId else null
     val addToPlaylist = rememberAddToPlaylist()
     val offline by viewModel.offlineAudio.collectAsStateWithLifecycle()
+    val briefs by viewModel.briefs.collectAsStateWithLifecycle()
+    val briefSpeech by viewModel.briefSpeech.collectAsStateWithLifecycle()
+    // Brief articles are keyed "feedUrl\nguid", as in sync
+    val idsByKey = remember(state.candidates) { state.candidates.associate { "${it.feedUrl}\n${it.guid}" to it.id } }
     // Swiping in the reader goes through the playlist as shown here
     val openArticle: (Long) -> Unit = { id ->
         viewModel.openingArticle(pl.id, items.map { it.id })
@@ -471,6 +488,17 @@ private fun PlaylistDetail(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                )
+            }
+            briefs[pl.id]?.let { b ->
+                BriefCard(
+                    brief = b.v,
+                    localId = { key -> idsByKey[key] },
+                    onOpen = openArticle,
+                    onAgain = { viewModel.askBrief(pl) },
+                    onSync = viewModel::syncForBrief,
+                    speaking = briefSpeech == viewModel.briefSpeechId(pl.id, b.ts),
+                    onListen = { viewModel.listenBrief(pl.id, b.v, b.ts) },
                 )
             }
             if (offline.playlistId == pl.id && offline.ids.isNotEmpty()) {

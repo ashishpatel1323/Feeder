@@ -5,6 +5,9 @@ import { getItem, itemText, kindOfRow, type ItemRow } from './content.js'
 import { getKv, type Db } from './db.js'
 import { BOOK_ITEM_PREFIX, chapterChunks, extOf, listBooks, openBook, pickChapters, READABLE, type BookRow, type TocEntry } from './ebooks.js'
 import { runOnce } from './indexer.js'
+import { briefArticles, briefInstructions, buildBrief, readerTaste, savedBrief } from './brief.js'
+import { loadSecret } from './config.js'
+import { push } from './sync.js'
 import { itemSeconds, kindOf, listPlaylists, playlistItems, playStatus, type PItem, type Playlist } from './playlists.js'
 import { search, type SearchFilters } from './search.js'
 import type { Source, StoredChunk } from './store.js'
@@ -478,6 +481,112 @@ export function buildServer(db: Db): McpServer {
     },
   )
 
+  // ---- Morning brief ----
+  server.registerTool(
+    'morning_brief',
+    {
+      title: 'Morning brief: read a playlist',
+      description:
+        'Step 1 of the Morning brief, the reader’s own morning radio show for a playlist. Gives the template, the reader’s taste and the full text of every article in the playlist ' +
+        '(paged: follow next_cursor). Then write the brief and save it with save_morning_brief. Reading never marks anything read.',
+      inputSchema: {
+        playlist: z.string().describe('Playlist id or name (loose match)'),
+        per_item_tokens: z.number().int().min(300).max(8000).optional().describe('Cap per article (default 3000)'),
+        max_tokens: z.number().int().min(1000).max(30_000).optional().describe('Most text in this call (default 12000)'),
+        cursor: z.string().optional(),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async (a) => {
+      const r = resolvePlaylist(db, a.playlist)
+      if (!('hit' in r)) return notFound(r, 'playlist', a.playlist)
+      const articles = briefArticles(db, r.hit)
+      if (!articles.length) return ok({ playlist: r.hit.name, note: 'This playlist has no articles (podcasts and videos aren’t part of the Morning brief).' })
+      const per = a.per_item_tokens ?? 3000
+      const budget = a.max_tokens ?? 12_000
+      const first = decCursor(a.cursor, 0)
+      let at = first
+      const sections: unknown[] = []
+      let used = 0
+      const prefetch = new Map<number, Promise<Awaited<ReturnType<typeof itemText>> | null>>()
+      const textAt = (n: number) => {
+        if (!prefetch.has(n)) {
+          const row = getItem(db, articles[n].id)
+          prefetch.set(n, row ? itemText(db, row, 'auto').catch(() => null) : Promise.resolve(null))
+        }
+        return prefetch.get(n)!
+      }
+      for (; at < articles.length; at++) {
+        for (let k = at; k < Math.min(articles.length, at + 4); k++) void textAt(k)
+        const i = articles[at]
+        const t = await textAt(at)
+        const page = toPage(t?.chunks ?? [], 0, per, (c) => citeFor(`${i.title} — ${i.feed_title}`, c))
+        if (sections.length && used + page.used > budget) break
+        sections.push({
+          n: at + 1,
+          item: itemRef(i.id),
+          title: i.title,
+          source: i.feed_title,
+          published: date(i.sort_time),
+          text_from: t?.origin ?? 'none',
+          text: page.out.map((c) => c.text).join('\n\n') || '(No text could be fetched: summarise from the title, and say so.)',
+          ...(page.next != null ? { truncated: true } : {}),
+        })
+        used += page.used
+      }
+      return ok({
+        playlist: r.hit.name,
+        ...(first === 0 ? { instructions: briefInstructions(r.hit.name, readerTaste(db), articles.length) } : {}),
+        articles: sections,
+        next_cursor: at < articles.length ? encCursor(at) : undefined,
+        remaining_articles: articles.length - at,
+      })
+    },
+  )
+
+  server.registerTool(
+    'save_morning_brief',
+    {
+      title: 'Morning brief: save it to the playlist',
+      description:
+        'Step 2 of the Morning brief: saves it as the playlist’s brief (replacing the last one). It syncs to Feeder on Android and the web, which show it at the top of the playlist with Listen. ' +
+        'Refer to articles by the item ids morning_brief gave. Nothing is marked read.',
+      inputSchema: {
+        playlist: z.string().describe('Playlist id or name'),
+        hello: z.string().min(1).describe('The opener: a warm good morning and what is on today'),
+        rundown: z
+          .array(z.object({ item: z.string(), say: z.string().min(1) }))
+          .min(1)
+          .describe('Every article once, in order: 2 to 3 friendly sentences each, naming its source'),
+        picks: z
+          .array(z.object({ item: z.string(), why: z.string().min(1) }))
+          .max(3)
+          .describe('1 to 3 to read in full for this reader, best first, with why'),
+        signoff: z.string().describe('A short, warm sign-off'),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async (a) => {
+      const r = resolvePlaylist(db, a.playlist)
+      if (!('hit' in r)) return notFound(r, 'playlist', a.playlist)
+      const secret = loadSecret()
+      if (!secret) return ok({ saved: false, note: 'Feeder sync isn’t set up for this server, so the brief can’t be saved. Turn on Settings › AI agents (MCP) in Feeder for Mac.' })
+      const { value, unknown, missing } = buildBrief(r.hit, briefArticles(db, r.hit), a, itemIdOf)
+      if (!value.segs.length) return ok({ saved: false, note: 'None of the rundown’s item ids are in this playlist. Use the item ids from morning_brief.', unknown_items: unknown })
+      const ts = Math.max(Date.now(), (savedBrief(db, r.hit.id)?.ts ?? 0) + 1)
+      await push(db, secret, [{ p: { k: 'brief', key: r.hit.id, v: value }, ts }])
+      return ok({
+        saved: true,
+        playlist: r.hit.name,
+        rundown: value.segs.length,
+        picks: value.picks.map((p) => value.items[p.i].t),
+        ...(unknown.length ? { unknown_items: unknown } : {}),
+        ...(missing.length ? { left_out_of_rundown: missing, note: 'These articles weren’t in your rundown, so only their titles are listed there.' } : {}),
+        tell_the_user: 'Saved. It shows at the top of the playlist in Feeder, with Listen to hear it.',
+      })
+    },
+  )
+
   // ---- ebooks ----
   server.registerTool(
     'list_books',
@@ -888,6 +997,22 @@ function registerPrompts(server: McpServer) {
           `3. If next_cursor is present, summarize what you have, then call again with that cursor until it's gone. Don't re-fetch items already summarized.\n` +
           `4. Finish with "Across the playlist": 3–5 bullets on shared themes, and which items are most worth my time.\n` +
           `If an item had no text (note says no transcript), say so in one line instead of guessing.`,
+      ),
+  )
+
+  server.registerPrompt(
+    'morning_brief',
+    {
+      title: 'Morning brief',
+      description: 'My morning radio show for a playlist: the rundown and what to read in full, saved to the playlist',
+      argsSchema: { playlist: z.string() },
+    },
+    ({ playlist }) =>
+      user(
+        `Make my Morning brief for the Feeder playlist "${playlist}".\n\n` +
+          `1. Call morning_brief with playlist="${playlist}" (ask me if it answers with candidates). Follow its instructions, and follow next_cursor until every article is read.\n` +
+          `2. Write the brief as the instructions say, then call save_morning_brief.\n` +
+          `3. Tell me it's saved and show only the opener and your picks here.`,
       ),
   )
 

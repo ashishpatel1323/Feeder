@@ -26,6 +26,8 @@
  *                                 { deleted: true } once removed from history. Key "*" =
  *                                 { before }: Clear history up to then. Not remembered in
  *                                 syncKnown (db.recent.synced)
+ *   brief    playlist id          BriefValue (briefs.ts): a playlist's brief, asked for on any device
+ *                                 and written by Claude on the Mac. Newest wins
  *
  * New kinds (Read later links, …) can be added later: devices keep records of kinds they
  * don't know and the server never looks inside.
@@ -40,6 +42,7 @@ import { b64encode, decodeKey, decryptString, encryptString, type SecretKeys } f
 import { applyDropboxLink, dropboxLink, DROPBOX_TS_KEY, type DropboxLink } from './dropbox'
 import { eventFromValue, historyValue } from './history'
 import { applyRecent, recentValue } from './recent'
+import { briefFromValue, BRIEFS_KEY, loadBriefs, type StoredBrief } from './briefs'
 import { fillCoverData, isStatus } from './shelfMarks'
 import { DELETED_PLAYLISTS_KEY, PLAYLISTS_KEY, STARTER_IDS, loadPlaylists, type Playlist } from './playlists'
 import {
@@ -70,7 +73,7 @@ export interface SyncState {
   lastError?: string | null
 }
 
-export type Kind = 'feed' | 'read' | 'saved' | 'hidden' | 'layout' | 'video' | 'playlist' | 'highlight' | 'bookpos' | 'audiopos' | 'shelfstatus' | 'bookcover' | 'dropbox' | 'history' | 'recent' | 'abtx'
+export type Kind = 'feed' | 'read' | 'saved' | 'hidden' | 'layout' | 'video' | 'playlist' | 'highlight' | 'bookpos' | 'audiopos' | 'shelfstatus' | 'bookcover' | 'dropbox' | 'history' | 'recent' | 'abtx' | 'brief'
 
 /** The plaintext inside a record. */
 export interface Payload {
@@ -625,6 +628,14 @@ export async function collectChanges(now = Date.now()): Promise<Pending[]> {
     out.push({ k: 'recent', key: e.key, v: recentValue(e), ts: Math.max(1, e.ts) })
   }
 
+  // Playlist briefs asked for or written here since they were last exchanged
+  const briefs = Object.entries(await loadBriefs())
+  const knownBriefs = await db.syncKnown.bulkGet(briefs.map(([id]) => knownKey('brief', id)))
+  briefs.forEach(([id, b], n) => {
+    const kn = knownBriefs[n]
+    if (!kn || (b.ts > kn.ts && !same(kn.v, b.v))) out.push({ k: 'brief', key: id, v: b.v, ts: Math.max(b.ts, (kn?.ts ?? 0) + 1) })
+  })
+
   // Audiobook transcript pieces made here and not sent yet
   for (const p of await (await abtx()).unsyncedPieces()) out.push({ k: 'abtx', key: p.key, v: p.v, ts: now })
   return out
@@ -804,6 +815,14 @@ export async function applyRemote(p: Payload, ts: number, result: ApplyResult): 
           dropbox = { link: { appKey: v.appKey, refreshToken: v.refreshToken, name: typeof v.name === 'string' ? v.name : '', email: typeof v.email === 'string' ? v.email : '' } }
         }
         if (dropbox) await setKv(DROPBOX_TS_KEY, ts)
+        break
+      }
+      case 'brief': {
+        const brief = briefFromValue(p.v)
+        if (brief) {
+          const all = await getKv<Record<string, StoredBrief>>(BRIEFS_KEY, {})
+          if ((all[p.key]?.ts ?? 0) < ts) await setKv(BRIEFS_KEY, { ...all, [p.key]: { v: brief, ts } })
+        }
         break
       }
       // Unknown kinds are only remembered (a newer version of the app will use them)

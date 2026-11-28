@@ -95,6 +95,13 @@ val networkModule =
                         }
                     }
             }
+        bind<com.nononsenseapps.feeder.model.briefs.PlaylistBriefs>() with
+            singleton {
+                val nudge = instance<SyncNudge>()
+                com.nononsenseapps.feeder.model.briefs.PlaylistBriefs
+                    .get(instance<android.app.Application>())
+                    .also { store -> store.onChanged = { nudge.changed(false) } }
+            }
         bind<com.nononsenseapps.feeder.model.audiobooks.AudioPositions>() with
             singleton {
                 val nudge = instance<SyncNudge>()
