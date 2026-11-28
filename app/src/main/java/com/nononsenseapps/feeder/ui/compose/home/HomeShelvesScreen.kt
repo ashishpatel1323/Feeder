@@ -275,7 +275,14 @@ private fun rememberLocalBookCover(e: RecentEntry): ImageBitmap? {
                 else -> null
             }
         } ?: return null
-    val cover by produceState(remember(file) { CoverBitmaps.peek(file) }, file) {
+    // A cover picked or found later changes the library's version: look again then
+    val version by remember(e.t) {
+        when (e.t) {
+            CentralHistory.EBOOK -> EbookLibrary.get(context).coverVersion
+            else -> AudiobookLibrary.get(context).version
+        }
+    }.collectAsState()
+    val cover by produceState(remember(file) { CoverBitmaps.peek(file) }, file, version) {
         value = withContext(Dispatchers.IO) { CoverBitmaps.load(file) }
     }
     return cover

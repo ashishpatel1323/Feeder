@@ -146,6 +146,8 @@ async function proxyFetch(request: Request): Promise<Response> {
     'x-original-content-type': upstream.headers.get('content-type') ?? '',
     'x-final-url': current.toString(),
     'cache-control': proxyCacheControl(upstream.status, contentType, request.headers.get('sec-fetch-dest')),
+    // The same address is kept longer for <img> than for the app's own fetches
+    vary: 'Sec-Fetch-Dest',
     // Fetched content must never run as this site, even if someone opens the URL directly
     'x-content-type-options': 'nosniff',
     'content-security-policy': "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'",
