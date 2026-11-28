@@ -5,20 +5,19 @@ import org.junit.Test
 
 class BottomBarTabsTest {
     @Test
-    fun defaultsToFeedsYouTubePlaylistsBooksLibrary() {
-        assertEquals(listOf(MainTab.FEEDS, MainTab.YOUTUBE, MainTab.PLAYLISTS, MainTab.BOOKS, MainTab.LIBRARY), BottomBarTabs.parse(null))
+    fun defaultsToHomeFeedsLibrarySearch() {
+        assertEquals(listOf(MainTab.HOME, MainTab.FEEDS, MainTab.LIBRARY, MainTab.SEARCH), BottomBarTabs.parse(null))
     }
 
     @Test
-    fun keepsTheChosenOrderAndAlwaysFeedsAndLibrary() {
-        assertEquals(
-            listOf(MainTab.HISTORY, MainTab.YOUTUBE, MainTab.FEEDS, MainTab.LIBRARY),
-            BottomBarTabs.parse("HISTORY,YOUTUBE,NOT_A_TAB"),
-        )
-        assertEquals(
-            listOf(MainTab.LIBRARY, MainTab.FEEDS),
-            BottomBarTabs.parse("LIBRARY,LIBRARY,FEEDS"),
-        )
+    fun keepsTheChosenOrderWithNoTabForced() {
+        assertEquals(listOf(MainTab.HISTORY, MainTab.YOUTUBE), BottomBarTabs.parse("HISTORY,YOUTUBE,NOT_A_TAB"))
+        assertEquals(listOf(MainTab.LIBRARY, MainTab.FEEDS), BottomBarTabs.parse("LIBRARY,LIBRARY,FEEDS"))
+    }
+
+    @Test
+    fun nothingPickedFallsBackToTheDefault() {
+        assertEquals(BottomBarTabs.DEFAULT, BottomBarTabs.parse("NOT_A_TAB"))
     }
 
     @Test
@@ -30,8 +29,23 @@ class BottomBarTabsTest {
     }
 
     @Test
-    fun keepsAtMostFiveDroppingOptionalOnes() {
-        val tabs = BottomBarTabs.normalize(listOf(MainTab.YOUTUBE, MainTab.PLAYLISTS, MainTab.BOOKS, MainTab.HISTORY))
-        assertEquals(listOf(MainTab.YOUTUBE, MainTab.PLAYLISTS, MainTab.BOOKS, MainTab.FEEDS, MainTab.LIBRARY), tabs)
+    fun withoutLibraryTheBarEndsWithMoreAndKeepsAtMostFiveItems() {
+        val picked = BottomBarTabs.normalize(listOf(MainTab.YOUTUBE, MainTab.PLAYLISTS, MainTab.BOOKS, MainTab.HISTORY, MainTab.HOME))
+        assertEquals(listOf(MainTab.YOUTUBE, MainTab.PLAYLISTS, MainTab.BOOKS, MainTab.HISTORY), picked)
+        assertEquals(picked + MainTab.LIBRARY, BottomBarTabs.shown(picked))
+    }
+
+    @Test
+    fun withLibraryFiveTabsFit() {
+        val picked = listOf(MainTab.YOUTUBE, MainTab.LIBRARY, MainTab.BOOKS, MainTab.HISTORY, MainTab.HOME)
+        assertEquals(picked, BottomBarTabs.normalize(picked))
+        assertEquals(picked, BottomBarTabs.shown(picked))
+    }
+
+    @Test
+    fun aLeftOutFeedsTabsScreensBelongToMore() {
+        val bar = BottomBarTabs.shown(listOf(MainTab.HOME, MainTab.PLAYLISTS))
+        assertEquals(MainTab.LIBRARY, mainTabOf(HomeDestination.route, null, bar))
+        assertEquals(MainTab.PLAYLISTS, mainTabOf(PlaylistsDestination.route, null, bar))
     }
 }

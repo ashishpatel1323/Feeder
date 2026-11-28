@@ -64,8 +64,8 @@ data object BottomBarTabsDestination : NavigationDestination(
 }
 
 /**
- * Picks up to [BottomBarTabs.MAX] tabs for the bottom bar and their order (drag the handle, or
- * TalkBack's move up/down). Feeds and Library can't be turned off, so everything stays reachable.
+ * Picks the bottom bar's tabs and their order (drag the handle, or TalkBack's move up/down). Any tab
+ * can be left out, but one stays picked. Without Library, the bar adds a More tab for the rest.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -121,24 +121,19 @@ fun BottomBarTabsScreen(
             LazyColumn(state = listState) {
                 itemsIndexed(order, key = { _, t -> t.name }) { index, tab ->
                     val (_, outlined, label) = tab.look()
-                    val always = tab in BottomBarTabs.ALWAYS
                     val checked = tab in on
-                    val full = on.size >= BottomBarTabs.MAX
+                    // Library takes More's place, so it can always be added
+                    val full = tab != MainTab.LIBRARY && on.size >= BottomBarTabs.limit(on)
                     val isDragged = dragging == tab
                     ListItem(
                         leadingContent = { Icon(outlined, contentDescription = null) },
                         headlineContent = { Text(stringResource(label)) },
-                        supportingContent =
-                            if (always) {
-                                { Text(stringResource(R.string.bottom_bar_always)) }
-                            } else {
-                                null
-                            },
                         trailingContent = {
                             androidx.compose.foundation.layout.Row {
                                 Checkbox(
                                     checked = checked,
-                                    enabled = !always && (checked || !full),
+                                    // One tab stays picked
+                                    enabled = if (checked) on.size > 1 else !full,
                                     onCheckedChange = { c ->
                                         on = if (c) on + tab else on - tab
                                         save()

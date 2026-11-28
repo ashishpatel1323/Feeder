@@ -32,8 +32,10 @@
   <string name="cover_cancel">Cancel</string>
   <string name="bottom_bar_tabs">Bottom bar tabs</string>
   <string name="bottom_bar_tabs_summary">Pick and order the tabs</string>
-  <string name="bottom_bar_tabs_help">Pick up to %1$d tabs and drag to reorder. Tabs left out open from Library.</string>
-  <string name="bottom_bar_always">Always in the bar</string>
+  <string name="bottom_bar_tabs_help">Pick up to %1$d tabs and drag to reorder. Without Library, a More tab holds the tabs left out and Settings.</string>
+  <string name="tab_more">More</string>
+  <string name="tab_home_desc">Jump back in, and your playlists as shelves</string>
+  <string name="tab_feeds_desc">Latest, By feed and Discover</string>
   <string name="bottom_bar_reorder">Drag to reorder</string>
   <string name="bottom_bar_move_up">Move up</string>
   <string name="bottom_bar_move_down">Move down</string>
