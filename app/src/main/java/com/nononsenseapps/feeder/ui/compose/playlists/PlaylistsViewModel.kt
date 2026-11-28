@@ -141,6 +141,9 @@ class PlaylistsViewModel(
 
     val queue: StateFlow<QueueState> = player.state
 
+    /** What read aloud is saying now, so car mode can show the article text. */
+    val readAloudProgress: StateFlow<com.nononsenseapps.feeder.model.ReadAloudProgress> = tts.progress
+
     /** Articles made ready offline on demand. */
     val offlineAudio: StateFlow<com.nononsenseapps.feeder.model.playlists.PlaylistAudioState> = playlistAudio.state
 

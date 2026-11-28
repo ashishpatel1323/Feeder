@@ -19,6 +19,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -85,6 +86,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -97,6 +99,7 @@ import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -369,8 +372,23 @@ fun CompactTTSPlayer(
             onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
         }
     }
+    // Swipe down (or tap the handle) for a one-line mini player, so more of the article shows
+    var minimized by rememberSaveable { mutableStateOf(false) }
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier =
+            modifier.fillMaxWidth().pointerInput(Unit) {
+                var dragged = 0f
+                detectVerticalDragGestures(
+                    onDragStart = { dragged = 0f },
+                    onDragEnd = {
+                        if (dragged > MINIMIZE_DRAG_PX) minimized = true
+                        if (dragged < -MINIMIZE_DRAG_PX) minimized = false
+                    },
+                ) { change, amount ->
+                    change.consume()
+                    dragged += amount
+                }
+            },
         color = colors.container,
         contentColor = colors.content,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
@@ -379,135 +397,122 @@ fun CompactTTSPlayer(
             modifier =
                 Modifier
                     .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom))
-                    .padding(start = 16.dp, end = 12.dp, top = 8.dp, bottom = 4.dp),
+                    .padding(start = 16.dp, end = 12.dp, bottom = 4.dp),
         ) {
-            TopLine(
-                colors = colors,
-                neighbors = neighbors,
-                showNowReading = showNowReading,
-                progress = progress,
-                displayedArticleId = displayedArticleId,
-                onSelectSpeed = onSelectSpeed,
-                onSkipNext = onSkipNext,
-                onGoToSpokenText = onGoToSpokenText,
-                languages = languages,
-                onSelectLanguage = onSelectLanguage,
-                autoContinue = autoContinue,
-                onSetAutoContinue = onSetAutoContinue,
-                onClose = onStop,
-                wordMode = wordMode,
-                onSetShowWord = onSetShowWord,
-                onSetMuted = onSetMuted,
-                onSetWpm = onSetWpm,
-            )
-            if (statusLine != null && !muted) StatusLineRow(statusLine, colors)
-            if (wordMode.showWord && onSetShowWord != null) {
-                RsvpWordDisplay(
-                    word = wordMode.word,
-                    textColor = colors.content,
-                    guideColor = colors.muted,
-                    focusColor = Color(0xFFFF8A80),
-                    modifier = Modifier.padding(end = 4.dp, bottom = 4.dp),
-                )
-            }
-            Column(Modifier.padding(end = 4.dp)) {
-                if (muted) {
-                    var scrubIndex by remember { mutableStateOf<Int?>(null) }
-                    val last = (wordMode.wordCount - 1).coerceAtLeast(1)
-                    val shownIndex = scrubIndex ?: wordMode.wordIndex
-                    WavySeekBar(
-                        fraction = (shownIndex.toFloat() / last).coerceIn(0f, 1f),
-                        playing = playing,
-                        enabled = seekable,
-                        colors = colors,
-                        onScrub = { scrubIndex = (it * last).roundToInt() },
-                        onScrubFinished = {
-                            scrubIndex?.let(onJumpToWord)
-                            scrubIndex = null
-                        },
-                    )
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(
-                            stringResource(R.string.read_aloud_word_number, shownIndex + 1),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = colors.muted,
-                        )
-                        Text(
-                            stringResource(R.string.read_aloud_word_count, wordMode.wordCount),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = colors.muted,
-                        )
-                    }
-                } else if (preparing) {
-                    val fraction = progress.preparationProgress ?: 0f
-                    Box(Modifier.height(24.dp), contentAlignment = Alignment.Center) {
-                        if (fraction > 0f) {
-                            LinearProgressIndicator(
-                                progress = { fraction },
-                                color = colors.accent,
-                                trackColor = colors.track,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
+            DragHandle(colors = colors, minimized = minimized, onClick = { minimized = !minimized })
+            if (minimized) {
+                MiniPlayerRow(
+                    colors = colors,
+                    playing = playing,
+                    preparing = preparing,
+                    title = neighbors.currentTitle,
+                    fraction =
+                        if (muted) {
+                            (wordMode.wordIndex.toFloat() / (wordMode.wordCount - 1).coerceAtLeast(1)).coerceIn(0f, 1f)
                         } else {
-                            LinearProgressIndicator(color = colors.accent, trackColor = colors.track, modifier = Modifier.fillMaxWidth())
-                        }
-                    }
-                    Text(
-                        stringResource(R.string.read_aloud_preparing),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = colors.muted,
-                    )
-                } else {
-                    var scrubMillis by remember(progress.articleId) { mutableStateOf<Long?>(null) }
-                    val duration = progress.durationMillis.coerceAtLeast(1)
-                    // While the length is still estimated, only the audio made so far can be reached
-                    val seekableMillis = if (progress.isDurationEstimated) progress.generatedMillis else progress.durationMillis
-                    val shownMillis = scrubMillis ?: progress.positionMillis
-                    WavySeekBar(
-                        fraction = (shownMillis.toFloat() / duration).coerceIn(0f, 1f),
-                        playing = playing,
-                        enabled = seekable,
-                        colors = colors,
-                        onScrub = { scrubMillis = (it * duration).toLong().coerceIn(0, seekableMillis) },
-                        onScrubFinished = {
-                            scrubMillis?.let(onSeekTo)
-                            scrubMillis = null
+                            (progress.positionMillis.toFloat() / progress.durationMillis.coerceAtLeast(1)).coerceIn(0f, 1f)
                         },
-                    )
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(formatSpeechTime(shownMillis), style = MaterialTheme.typography.labelSmall, color = colors.muted)
-                        Text(
-                            if (progress.isDurationEstimated) {
-                                stringResource(
-                                    R.string.read_aloud_estimated_time,
-                                    (progress.synthesisProgress * 100).toInt().coerceIn(0, 99),
-                                    formatSpeechTime(progress.durationMillis),
+                    hasNext = neighbors.nextId != null,
+                    onPlay = onPlay,
+                    onPause = onPause,
+                    onNext = { onSkipArticle(true) },
+                    onClose = onStop,
+                )
+            } else {
+                // Landscape on a phone: one row, so the article keeps most of the screen
+                val oneRow = LocalConfiguration.current.screenHeightDp < ONE_ROW_MAX_HEIGHT_DP && !wordMode.showWord
+                val seekArea: @Composable () -> Unit = {
+                    if (muted) {
+                        var scrubIndex by remember { mutableStateOf<Int?>(null) }
+                        val last = (wordMode.wordCount - 1).coerceAtLeast(1)
+                        val shownIndex = scrubIndex ?: wordMode.wordIndex
+                        WavySeekBar(
+                            fraction = (shownIndex.toFloat() / last).coerceIn(0f, 1f),
+                            playing = playing,
+                            enabled = seekable,
+                            colors = colors,
+                            onScrub = { scrubIndex = (it * last).roundToInt() },
+                            onScrubFinished = {
+                                scrubIndex?.let(onJumpToWord)
+                                scrubIndex = null
+                            },
+                        )
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(
+                                stringResource(R.string.read_aloud_word_number, shownIndex + 1),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = colors.muted,
+                            )
+                            Text(
+                                stringResource(R.string.read_aloud_word_count, wordMode.wordCount),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = colors.muted,
+                            )
+                        }
+                    } else if (preparing) {
+                        val fraction = progress.preparationProgress ?: 0f
+                        Box(Modifier.height(24.dp), contentAlignment = Alignment.Center) {
+                            if (fraction > 0f) {
+                                LinearProgressIndicator(
+                                    progress = { fraction },
+                                    color = colors.accent,
+                                    trackColor = colors.track,
+                                    modifier = Modifier.fillMaxWidth(),
                                 )
                             } else {
-                                formatSpeechTime(progress.durationMillis)
-                            },
-                            style = MaterialTheme.typography.labelSmall,
+                                LinearProgressIndicator(color = colors.accent, trackColor = colors.track, modifier = Modifier.fillMaxWidth())
+                            }
+                        }
+                        Text(
+                            stringResource(R.string.read_aloud_preparing),
+                            style = MaterialTheme.typography.labelMedium,
                             color = colors.muted,
+                        )
+                    } else {
+                        var scrubMillis by remember(progress.articleId) { mutableStateOf<Long?>(null) }
+                        val duration = progress.durationMillis.coerceAtLeast(1)
+                        // While the length is still estimated, only the audio made so far can be reached
+                        val seekableMillis = if (progress.isDurationEstimated) progress.generatedMillis else progress.durationMillis
+                        val shownMillis = scrubMillis ?: progress.positionMillis
+                        WavySeekBar(
+                            fraction = (shownMillis.toFloat() / duration).coerceIn(0f, 1f),
+                            playing = playing,
+                            enabled = seekable,
+                            colors = colors,
+                            onScrub = { scrubMillis = (it * duration).toLong().coerceIn(0, seekableMillis) },
+                            onScrubFinished = {
+                                scrubMillis?.let(onSeekTo)
+                                scrubMillis = null
+                            },
+                        )
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(formatSpeechTime(shownMillis), style = MaterialTheme.typography.labelSmall, color = colors.muted)
+                            Text(
+                                if (progress.isDurationEstimated) {
+                                    stringResource(
+                                        R.string.read_aloud_estimated_time,
+                                        (progress.synthesisProgress * 100).toInt().coerceIn(0, 99),
+                                        formatSpeechTime(progress.durationMillis),
+                                    )
+                                } else {
+                                    formatSpeechTime(progress.durationMillis)
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = colors.muted,
+                            )
+                        }
+                    }
+                    progress.error?.let {
+                        Text(
+                            it,
+                            // The panel is always dark, so a light error red
+                            color = Color(0xFFFFB4AB),
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.padding(top = 2.dp),
                         )
                     }
                 }
-                progress.error?.let {
-                    Text(
-                        it,
-                        // The panel is always dark, so a light error red
-                        color = Color(0xFFFFB4AB),
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
-                }
-                Row(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .height(76.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
+                val controls: @Composable () -> Unit = {
                     ArticleSkipButton(next = false, enabled = neighbors.previousId != null, colors = colors, onClick = { onSkipArticle(false) })
                     PlainTooltipBox(tooltip = { Text(stringResource(R.string.seek_back_10_seconds)) }) {
                         IconButton(
@@ -539,7 +544,161 @@ fun CompactTTSPlayer(
                     }
                     ArticleSkipButton(next = true, enabled = neighbors.nextId != null, colors = colors, onClick = { onSkipArticle(true) })
                 }
+                if (oneRow) {
+                    if (statusLine != null && !muted) StatusLineRow(statusLine, colors)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.fillMaxWidth().height(68.dp),
+                    ) {
+                        controls()
+                        Spacer(Modifier.width(8.dp))
+                        Column(Modifier.weight(1f)) { seekArea() }
+                        Spacer(Modifier.width(8.dp))
+                        TopActions(
+                            colors = colors,
+                            progress = progress,
+                            displayedArticleId = displayedArticleId,
+                            onSelectSpeed = onSelectSpeed,
+                            onSkipNext = onSkipNext,
+                            onGoToSpokenText = onGoToSpokenText,
+                            languages = languages,
+                            onSelectLanguage = onSelectLanguage,
+                            autoContinue = autoContinue,
+                            onSetAutoContinue = onSetAutoContinue,
+                            onClose = onStop,
+                            wordMode = wordMode,
+                            onSetShowWord = onSetShowWord,
+                            onSetMuted = onSetMuted,
+                            onSetWpm = onSetWpm,
+                        )
+                    }
+                } else {
+                    TopLine(
+                        colors = colors,
+                        neighbors = neighbors,
+                        showNowReading = showNowReading,
+                        progress = progress,
+                        displayedArticleId = displayedArticleId,
+                        onSelectSpeed = onSelectSpeed,
+                        onSkipNext = onSkipNext,
+                        onGoToSpokenText = onGoToSpokenText,
+                        languages = languages,
+                        onSelectLanguage = onSelectLanguage,
+                        autoContinue = autoContinue,
+                        onSetAutoContinue = onSetAutoContinue,
+                        onClose = onStop,
+                        wordMode = wordMode,
+                        onSetShowWord = onSetShowWord,
+                        onSetMuted = onSetMuted,
+                        onSetWpm = onSetWpm,
+                    )
+                    if (statusLine != null && !muted) StatusLineRow(statusLine, colors)
+                    if (wordMode.showWord && onSetShowWord != null) {
+                        RsvpWordDisplay(
+                            word = wordMode.word,
+                            textColor = colors.content,
+                            guideColor = colors.muted,
+                            focusColor = Color(0xFFFF8A80),
+                            modifier = Modifier.padding(end = 4.dp, bottom = 4.dp),
+                        )
+                    }
+                    Column(Modifier.padding(end = 4.dp)) {
+                        seekArea()
+                        Row(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(76.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            controls()
+                        }
+                    }
+                }
             }
+        }
+    }
+}
+
+/** The small bar on top of the panel; tap it to shrink or grow the player (or swipe the panel). */
+@Composable
+private fun DragHandle(
+    colors: PlayerColors,
+    minimized: Boolean,
+    onClick: () -> Unit,
+) {
+    val label = stringResource(if (minimized) R.string.read_aloud_expand_player else R.string.read_aloud_minimize_player)
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(16.dp)
+                .clickable(onClickLabel = label, role = Role.Button, onClick = onClick)
+                .safeSemantics { contentDescription = label },
+    ) {
+        Box(
+            Modifier
+                .size(width = 32.dp, height = 4.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(colors.muted),
+        )
+    }
+}
+
+/** Minimized player: play, what is being read with a thin progress line, next, close. */
+@Composable
+private fun MiniPlayerRow(
+    colors: PlayerColors,
+    playing: Boolean,
+    preparing: Boolean,
+    title: String,
+    fraction: Float,
+    hasNext: Boolean,
+    onPlay: () -> Unit,
+    onPause: () -> Unit,
+    onNext: () -> Unit,
+    onClose: () -> Unit,
+) {
+    val label = stringResource(if (playing) R.string.pause_reading else R.string.resume_reading)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.fillMaxWidth().height(52.dp),
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier =
+                Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(colors.accent)
+                    .clickable(onClickLabel = label, role = Role.Button, onClick = if (playing) onPause else onPlay),
+        ) {
+            if (preparing) CircularProgressIndicator(color = colors.onAccent, strokeWidth = 2.dp, modifier = Modifier.size(38.dp))
+            Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = label, tint = colors.onAccent)
+        }
+        Column(Modifier.weight(1f)) {
+            Text(
+                title.ifBlank { stringResource(R.string.read_aloud_now_reading) },
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(6.dp))
+            LinearProgressIndicator(
+                progress = { fraction },
+                color = colors.accent,
+                trackColor = colors.track,
+                drawStopIndicator = {},
+                modifier = Modifier.fillMaxWidth().height(3.dp),
+            )
+        }
+        ArticleSkipButton(next = true, enabled = hasNext, colors = colors, onClick = onNext)
+        SmallRoundButton(colors = colors, label = stringResource(R.string.read_aloud_close), onClick = onClose) {
+            Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(20.dp))
         }
     }
 }
@@ -610,44 +769,82 @@ private fun TopLine(
             modifier = Modifier.weight(1f),
         )
         Spacer(Modifier.width(8.dp))
-        if (wordMode.muted) {
-            WpmStepper(wpm = wordMode.wpm, onSetWpm = onSetWpm, colors = colors)
-        } else {
-            SpeedPill(speed = progress.speed, onSelectSpeed = onSelectSpeed, colors = colors)
-        }
-        if (onSetMuted != null) {
-            Spacer(Modifier.width(6.dp))
-            val label = stringResource(if (wordMode.muted) R.string.read_aloud_unmute else R.string.read_aloud_mute)
-            SmallRoundButton(colors = colors, label = label, onClick = { onSetMuted(!wordMode.muted) }) {
-                Icon(
-                    if (wordMode.muted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-        }
-        Spacer(Modifier.width(6.dp))
-        MoreMenu(
+        TopActions(
             colors = colors,
             progress = progress,
             displayedArticleId = displayedArticleId,
+            onSelectSpeed = onSelectSpeed,
             onSkipNext = onSkipNext,
             onGoToSpokenText = onGoToSpokenText,
             languages = languages,
             onSelectLanguage = onSelectLanguage,
             autoContinue = autoContinue,
             onSetAutoContinue = onSetAutoContinue,
-            showWord = wordMode.showWord,
+            onClose = onClose,
+            wordMode = wordMode,
             onSetShowWord = onSetShowWord,
+            onSetMuted = onSetMuted,
+            onSetWpm = onSetWpm,
         )
+    }
+}
+
+/** Speed (or words per minute when muted), mute, the menu with the less used actions, and close. */
+@Composable
+private fun TopActions(
+    colors: PlayerColors,
+    progress: ReadAloudProgress,
+    displayedArticleId: Long?,
+    onSelectSpeed: (Float) -> Unit,
+    onSkipNext: () -> Unit,
+    onGoToSpokenText: () -> Unit,
+    languages: ImmutableHolder<List<Locale>>,
+    onSelectLanguage: (LocaleOverride) -> Unit,
+    autoContinue: Boolean,
+    onSetAutoContinue: (Boolean) -> Unit,
+    onClose: () -> Unit,
+    wordMode: WordModeState,
+    onSetShowWord: ((Boolean) -> Unit)?,
+    onSetMuted: ((Boolean) -> Unit)?,
+    onSetWpm: (Int) -> Unit,
+) {
+    if (wordMode.muted) {
+        WpmStepper(wpm = wordMode.wpm, onSetWpm = onSetWpm, colors = colors)
+    } else {
+        SpeedPill(speed = progress.speed, onSelectSpeed = onSelectSpeed, colors = colors)
+    }
+    if (onSetMuted != null) {
         Spacer(Modifier.width(6.dp))
-        SmallRoundButton(
-            colors = colors,
-            label = stringResource(R.string.read_aloud_close),
-            onClick = onClose,
-        ) {
-            Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(20.dp))
+        val label = stringResource(if (wordMode.muted) R.string.read_aloud_unmute else R.string.read_aloud_mute)
+        SmallRoundButton(colors = colors, label = label, onClick = { onSetMuted(!wordMode.muted) }) {
+            Icon(
+                if (wordMode.muted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+            )
         }
+    }
+    Spacer(Modifier.width(6.dp))
+    MoreMenu(
+        colors = colors,
+        progress = progress,
+        displayedArticleId = displayedArticleId,
+        onSkipNext = onSkipNext,
+        onGoToSpokenText = onGoToSpokenText,
+        languages = languages,
+        onSelectLanguage = onSelectLanguage,
+        autoContinue = autoContinue,
+        onSetAutoContinue = onSetAutoContinue,
+        showWord = wordMode.showWord,
+        onSetShowWord = onSetShowWord,
+    )
+    Spacer(Modifier.width(6.dp))
+    SmallRoundButton(
+        colors = colors,
+        label = stringResource(R.string.read_aloud_close),
+        onClick = onClose,
+    ) {
+        Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(20.dp))
     }
 }
 
@@ -1037,6 +1234,11 @@ private fun WavySeekBar(
 }
 
 private const val SEEK_STEP_MILLIS = 10_000L
+
+// Below this screen height (a phone on its side) the player is one row
+private const val ONE_ROW_MAX_HEIGHT_DP = 500
+
+private const val MINIMIZE_DRAG_PX = 40f
 
 // Muted, the ±10 buttons move ten words
 private const val SKIP_WORDS = 10
