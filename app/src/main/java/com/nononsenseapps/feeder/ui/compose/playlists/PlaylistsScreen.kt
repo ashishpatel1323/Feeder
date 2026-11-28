@@ -687,7 +687,8 @@ private fun CarMode(
     var showQueue by remember { mutableStateOf(false) }
     val speech by viewModel.readAloudProgress.collectAsStateWithLifecycle()
     val config = LocalConfiguration.current
-    val sideBySide = config.screenWidthDp > config.screenHeightDp && config.screenHeightDp < 500
+    // Side by side needs ~600dp so each half fits the five buttons (260dp) plus padding
+    val sideBySide = config.screenWidthDp >= 600 && config.screenWidthDp > config.screenHeightDp && config.screenHeightDp < 500
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             val header: @Composable () -> Unit = {
