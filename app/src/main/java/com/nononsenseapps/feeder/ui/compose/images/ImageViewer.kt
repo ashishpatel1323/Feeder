@@ -46,6 +46,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -113,6 +114,7 @@ internal fun ImageViewer(
     imageUrl: String,
     description: String?,
     onDismiss: () -> Unit,
+    title: String? = null,
 ) {
     var transform by remember(imageUrl) { mutableStateOf(ImageTransform()) }
     var viewport by remember { mutableStateOf(Size.Zero) }
@@ -153,7 +155,7 @@ internal fun ImageViewer(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text(stringResource(R.string.article_image)) },
+                    title = { Text(title ?: stringResource(R.string.article_image), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     navigationIcon = {
                         IconButton(onClick = onDismiss) {
                             Icon(

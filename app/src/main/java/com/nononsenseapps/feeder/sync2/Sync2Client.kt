@@ -79,6 +79,8 @@ const val SYNC2_SERVER = "https://feeder-web-snowy.vercel.app"
  *     history, {"before": ms}. Newest ts wins; not kept in sync2_known ([RecentEntry.synced])
  *   abtx (key: audiobook id:start ms) { e, c: [[start ms, end ms, text]…] }: a piece of an
  *     audiobook's transcript, in book time ([AudiobookTranscripts]). Never changes; not kept in sync2_known
+ *   brief (key: playlist id)     [com.nononsenseapps.feeder.model.briefs.Brief]: a playlist's brief,
+ *     asked for on any device and written by Claude Code in Feeder for Mac (newest wins)
  *
  * The device remembers the last value exchanged for every record (sync2_known) and sends
  * whatever differs locally, then applies what other devices changed. Unknown kinds (Read later
@@ -102,6 +104,7 @@ class Sync2Client(
     private val history: ItemHistory by instance()
     private val recent: CentralHistory by instance()
     private val audiobookTranscripts: com.nononsenseapps.feeder.model.audiobooks.AudiobookTranscripts by instance()
+    private val briefs: com.nononsenseapps.feeder.model.briefs.PlaylistBriefs by instance()
     private val app: android.app.Application by instance()
     private val thisDevice by lazy { ThisDevice.get(app) }
 
@@ -559,6 +562,13 @@ class Sync2Client(
             if (kn == null || v.ts > kn.ts) out += Pending("bookcover", key, linkedMapOf<String, Any?>("url" to v.url), maxOf(v.ts, (kn?.ts ?: 0) + 1))
         }
 
+        // Playlist briefs asked for here since they were last exchanged
+        val knownBriefs = dao.getKnownWithPrefix("$BRIEF\n").associateBy { it.k.removePrefix("$BRIEF\n") }
+        for ((id, b) in briefs.all.value) {
+            val kn = knownBriefs[id]
+            if (kn == null || b.ts > kn.ts) out += Pending(BRIEF, id, b.v.toValue(), maxOf(b.ts, (kn?.ts ?: 0) + 1))
+        }
+
         // History events noted here and not sent yet
         for (e in history.unsynced()) out += Pending(HISTORY, e.id, e.toValue(), maxOf(1L, e.at))
 
@@ -789,6 +799,8 @@ class Sync2Client(
                     (v as? Map<*, *>)?.let { m -> (m["s"] as? String)?.let { shelfMarks.applyRemoteStatus(key, it, ts) } }
                 }
 
+                BRIEF -> briefs.applyRemote(key, v, ts)
+
                 "bookcover" -> {
                     (v as? Map<*, *>)?.let { m -> (m["url"] as? String)?.let { shelfMarks.applyRemoteCover(key, it, ts) } }
                 }
@@ -925,6 +937,7 @@ class Sync2Client(
         const val DROPBOX_KEY = "main"
         const val HISTORY = "history"
         const val ABTX = "abtx"
+        const val BRIEF = "brief"
         const val RECENT = "recent"
 
         /** The Dropbox sign-in as synced, in the same field order as the web app's DropboxLink. */

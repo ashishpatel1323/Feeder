@@ -1354,6 +1354,98 @@ a {
   overflow: hidden;
 }
 
+/* Handle on top of the panel: tap (or swipe the panel) to shrink it to one line */
+.player-handle {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 14px;
+  margin-top: -4px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.player-handle i {
+  width: 32px;
+  height: 4px;
+  border-radius: var(--r-xs);
+  background: var(--player-muted);
+}
+.player.mini {
+  padding-top: 6px;
+}
+.player-mini-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+}
+.player-play.small {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-pill);
+  flex: none;
+}
+.player-mini-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.player-mini-progress {
+  height: 3px;
+  border-radius: var(--r-xs);
+  background: var(--player-track);
+  overflow: hidden;
+}
+.player-mini-progress i {
+  display: block;
+  height: 100%;
+  background: var(--player-accent);
+}
+/* A phone on its side: the whole player is one row, so the article keeps the screen */
+@media (max-height: 500px) and (orientation: landscape) {
+  .player:not(.mini) .player-inner {
+    max-width: none;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    column-gap: 14px;
+    align-items: center;
+  }
+  .player:not(.mini) .player-inner > * {
+    grid-column: 1 / -1;
+  }
+  .player:not(.mini) .player-inner > .player-controls {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    height: 60px;
+    gap: 4px;
+  }
+  .player:not(.mini) .player-inner > .player-wave,
+  .player:not(.mini) .player-inner > .player-prepare {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .player:not(.mini) .player-inner > .player-times {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .player:not(.mini) .player-inner > .player-top {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    height: auto;
+  }
+  .player:not(.mini) .player-top .player-label,
+  .player:not(.mini) .player-top .player-title {
+    display: none;
+  }
+  .player:not(.mini) .player-play {
+    width: 52px;
+    height: 52px;
+  }
+}
 .player-wave {
   display: block;
   width: 100%;
@@ -5529,7 +5621,7 @@ label.check.inline {
   gap: 6px;
 }
 .qp-right .btn,
-.car-mode .btn {
+.car-head .btn {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -5674,17 +5766,6 @@ label.check.inline {
 }
 
 /* Car mode: big buttons, few words */
-.car-mode {
-  position: fixed;
-  inset: 0;
-  z-index: 70;
-  background: var(--bg);
-  color: var(--text);
-  display: flex;
-  flex-direction: column;
-  padding: 20px 28px;
-  gap: 18px;
-}
 .car-top {
   display: flex;
   justify-content: space-between;
@@ -5758,7 +5839,7 @@ label.check.inline {
   display: flex;
   justify-content: center;
 }
-.car-mode .btn.big {
+.car-head .btn.big {
   height: 54px;
   font-size: var(--fs-lg);
   padding: 0 24px;
@@ -5778,6 +5859,110 @@ label.check.inline {
     height: 96px !important;
   }
 }
+/* Car mode lives in the Now playing element itself, so the article text read aloud (with its
+   highlight and scrolling) shows under the big buttons */
+.queue-player.car,
+.app .queue-player.car {
+  top: 0;
+  bottom: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+  border-top: 0;
+  box-shadow: none;
+}
+.car-head {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 20px 28px 12px;
+}
+.queue-player.car .qp-bar,
+.queue-player.car .qp-queue {
+  display: none;
+}
+.queue-player.car .qp-panel {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  grid-template-columns: minmax(0, 760px);
+  justify-content: center;
+  border-top: 1px solid var(--border);
+  border-bottom: 0;
+  padding: 12px 28px 0;
+}
+/* Article in car mode: a compact header and smaller buttons, so the text gets the room */
+.car-article .car-head {
+  gap: 12px;
+}
+.car-article .car-title {
+  font-size: var(--fs-xl);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.car-article .car-kind {
+  display: none;
+}
+.car-article .qp-controls.big .qp-btn {
+  width: 80px;
+  height: 80px;
+}
+.car-article .qp-controls.big .qp-btn.play {
+  width: 110px;
+  height: 110px;
+}
+.car-article .car-next {
+  font-size: var(--fs-base);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 720px) {
+  .car-head {
+    padding: 14px 16px 8px;
+  }
+  .queue-player.car .qp-panel {
+    padding: 8px 16px 0;
+  }
+  .car-article .qp-controls.big .qp-btn {
+    width: 60px;
+    height: 60px;
+  }
+  .car-article .qp-controls.big .qp-btn.play {
+    width: 84px;
+    height: 84px;
+  }
+  .car-article .car-now .qp-thumb {
+    width: 56px !important;
+    height: 56px !important;
+  }
+}
+/* A phone on its side: buttons on the left, the text on the right */
+@media (max-height: 500px) and (orientation: landscape) {
+  .queue-player.car-article,
+  .app .queue-player.car-article {
+    flex-direction: row;
+  }
+  .car-article .car-head {
+    width: 46%;
+    overflow: auto;
+    padding: 12px 16px;
+  }
+  .car-article .car-now .qp-thumb {
+    width: 48px !important;
+    height: 48px !important;
+  }
+  .queue-player.car-article .qp-panel {
+    border-top: 0;
+    border-left: 1px solid var(--border);
+    padding: 12px 16px 0;
+  }
+}
+
 /* ---------------------------------------------------------------- podcast episode + transcript */
 
 .podcast-episode {
@@ -11320,6 +11505,96 @@ mark.sr-mark {
   color: var(--text);
   font-weight: 500;
 }
+/* Playlist brief by Claude on the Mac (BriefCard.tsx, briefs.ts) */
+.pl-brief .pl-offline-row {
+  flex-wrap: wrap;
+}
+.pl-brief-meta {
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+}
+.pl-brief-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  max-width: 72ch;
+}
+.pl-brief-body[hidden] {
+  display: none;
+}
+.pl-brief-label {
+  margin: var(--sp-1) 0 0;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+.pl-brief-ov,
+.pl-brief-items {
+  margin: 0;
+  padding-left: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  font-size: var(--fs-base);
+  line-height: 1.5;
+  color: var(--text);
+}
+.pl-brief-items p,
+.pl-brief-text {
+  margin: 2px 0 0;
+  color: var(--text-2);
+  font-size: var(--fs-md);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.pl-brief .pl-brief-title {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.pl-brief-title:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.pl-brief-hello {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-base);
+  line-height: 1.55;
+}
+.pl-brief-picks {
+  list-style: none;
+  padding-left: 0;
+}
+.pl-brief-picks li {
+  padding-left: var(--sp-3);
+  border-left: 3px solid var(--accent);
+}
+.pl-brief-listen {
+  gap: var(--sp-1);
+}
+.pl-brief-source {
+  white-space: nowrap;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+/* Phone: the buttons start their own row, from the left */
+@media (max-width: 600px) {
+  .pl-brief .mf-sp {
+    flex-basis: 100%;
+    height: 0;
+  }
+}
+span.pl-brief-title {
+  cursor: default;
+}
 .pl-offline-card small {
   color: var(--text-2);
   font-size: var(--fs-xs);
@@ -11467,6 +11742,7 @@ mark.sr-mark {
 }
 .feeder-ink-mark {
   cursor: pointer;
+}
 
 /* ---- Paper (e-ink) overrides: every frame costs a refresh on e-ink, and tints read as dirt ---- */
 :root[data-theme='paper'] *,
@@ -11703,4 +11979,54 @@ mark.sr-mark {
 }
 .pl-tile:has(img) {
   overflow: hidden;
+}
+
+/* Ebook pictures full screen with zoom (ImageZoom.tsx), like the Android image viewer */
+.image-zoom {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+}
+.image-zoom-bar,
+.image-zoom-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+}
+.image-zoom-tools {
+  justify-content: center;
+  padding-bottom: max(var(--sp-2), env(safe-area-inset-bottom));
+}
+.image-zoom-title {
+  font-size: var(--fs-lg);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.image-zoom-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  touch-action: none;
+  cursor: zoom-in;
+}
+.image-zoom-stage img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  transform-origin: center;
+  will-change: transform;
+}
+:root[data-theme='paper'] .image-zoom-stage img {
+  filter: grayscale(1);
 }

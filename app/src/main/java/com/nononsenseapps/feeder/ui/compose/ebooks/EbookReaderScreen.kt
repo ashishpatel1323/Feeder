@@ -243,6 +243,9 @@ fun EbookReaderScreen(
     // Handwriting on the page (Kobo style), tied to the text size, font and line spacing it was written with
     val pen = rememberPenState()
     var inkOpen by remember { mutableStateOf<String?>(null) }
+
+    // A picture from the book opened full screen to zoom: its file (in the cache) and caption
+    var zoomImage by remember { mutableStateOf<Pair<String, String>?>(null) }
     var sheet by remember { mutableStateOf<String?>(null) }
     var prefs by remember { mutableStateOf(loadPrefs(context)) }
     var webView by remember { mutableStateOf<WebView?>(null) }
@@ -492,6 +495,16 @@ fun EbookReaderScreen(
 
                 @JavascriptInterface
                 fun onTap(zone: String) = Unit
+
+                @JavascriptInterface
+                fun onImage(
+                    dataUrl: String,
+                    label: String,
+                ) {
+                    // Runs off the main thread: decode and save here, show it there
+                    val file = runCatching { saveBookImage(context, dataUrl) }.getOrNull() ?: return
+                    main.post { zoomImage = file.absolutePath to label }
+                }
 
                 @JavascriptInterface
                 fun onError(message: String) = main.post { error = message }
@@ -868,6 +881,14 @@ fun EbookReaderScreen(
             )
         }
     }
+    zoomImage?.let { (path, label) ->
+        com.nononsenseapps.feeder.ui.compose.images.ImageViewer(
+            imageUrl = path,
+            description = label.ifBlank { null },
+            title = label.ifBlank { stringResource(R.string.book_image) },
+            onDismiss = { zoomImage = null },
+        )
+    }
     sketchingNew?.let { sel ->
         SketchEditorDialog(
             quote = sel.text,
@@ -1118,4 +1139,30 @@ private fun LookSheet(
             Text(stringResource(R.string.ebook_publisher_font))
         }
     }
+}
+
+/**
+ * Saves a picture the reader page sent (a data: URL) to the cache for the image viewer, replacing
+ * the last one. A new name each time, so the image loader never shows the previous picture.
+ */
+private fun saveBookImage(
+    context: android.content.Context,
+    dataUrl: String,
+): java.io.File? {
+    val comma = dataUrl.indexOf(',')
+    if (!dataUrl.startsWith("data:") || comma < 0) return null
+    val type = dataUrl.substring(5, comma).substringBefore(';')
+    val ext =
+        when (type) {
+            "image/jpeg" -> "jpg"
+            "image/gif" -> "gif"
+            "image/webp" -> "webp"
+            "image/avif" -> "avif"
+            "image/bmp" -> "bmp"
+            else -> "png"
+        }
+    val bytes = android.util.Base64.decode(dataUrl.substring(comma + 1), android.util.Base64.DEFAULT)
+    val dir = java.io.File(context.cacheDir, "book-images").apply { mkdirs() }
+    dir.listFiles()?.forEach { it.delete() }
+    return java.io.File(dir, "image-${System.currentTimeMillis()}.$ext").apply { writeBytes(bytes) }
 }

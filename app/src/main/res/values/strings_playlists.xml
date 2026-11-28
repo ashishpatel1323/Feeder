@@ -48,6 +48,8 @@
   <string name="queue_up_next">Up next</string>
   <string name="queue_car_mode">Car mode</string>
   <string name="queue_exit_car_mode">Exit car mode</string>
+  <string name="queue_text_loading">Getting the article text ready…</string>
+  <string name="queue_back_to_spoken_text">Back to spoken text</string>
   <string name="queue_stop">Stop</string>
   <string name="queue_next">Next</string>
   <string name="queue_previous">Previous</string>

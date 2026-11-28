@@ -25,7 +25,7 @@ interface Props {
 /**
  * The Now playing bar for playlists, at the bottom of every page. It plays podcasts and saved
  * videos as audio and reads articles aloud from the text it holds. "Up next" opens the queue and
- * the article text; "Car mode" fills the screen with big buttons.
+ * the article text; "Car mode" fills the screen with big buttons above the article text.
  */
 export function QueuePlayer(p: Props) {
   const q = useQueue()
@@ -143,8 +143,47 @@ export function QueuePlayer(p: Props) {
 
   return (
     <>
-      <div className={`queue-player${open ? ' open' : ''}`} role="region" aria-label="Now playing">
-        <div className={`qp-panel${open ? '' : ' offscreen'}`} aria-hidden={!open}>
+      <div
+        className={`queue-player${open ? ' open' : ''}${car ? ` car${isArticle ? ' car-article' : ''}` : ''}`}
+        role={car ? 'dialog' : 'region'}
+        aria-modal={car || undefined}
+        aria-label={car ? 'Car mode' : 'Now playing'}
+      >
+        {car ? (
+          <div className="car-head">
+            <div className="car-top">
+              <span className="car-where">{where}</span>
+              <button className="btn" onClick={() => setCar(false)}>
+                <Icon name="close" size={20} /> Exit car mode
+              </button>
+            </div>
+            <div className="car-now">
+              {thumb(item, isArticle ? 72 : 160)}
+              <div>
+                <div className="car-kind">{kindLabel}</div>
+                <div className="car-title">{item?.title}</div>
+                <div className="car-feed">{feedDisplayTitle(feed)}</div>
+              </div>
+            </div>
+            <div className="car-time">
+              {bar}
+              <div className="car-time-row">
+                <span>{isArticle ? '' : formatClock(q.position)}</span>
+                <span>{left}</span>
+              </div>
+            </div>
+            {controls(true)}
+            <div className="car-next">{nextItem ? <>Next up: <b>{nextItem.title}</b></> : 'Last item in this playlist'}</div>
+            <div className="car-extra">
+              <button className="btn big" onClick={nextRate}>
+                Speed {formatSpeed(rate)}
+              </button>
+            </div>
+          </div>
+        ) : null}
+        {/* Car mode shows the article text under its big buttons; the text element stays the same
+            so read aloud keeps its highlight and scrolling */}
+        <div className={`qp-panel${open || (car && isArticle) ? '' : ' offscreen'}`} aria-hidden={!(open || (car && isArticle))}>
           <div className="qp-now">
             {isArticle ? (
               <div className="qp-text" ref={textRef} data-scroll>
@@ -219,38 +258,6 @@ export function QueuePlayer(p: Props) {
           </div>
         </div>
       </div>
-      {car ? (
-        <div className="car-mode" role="dialog" aria-modal="true" aria-label="Car mode">
-          <div className="car-top">
-            <span className="car-where">{where}</span>
-            <button className="btn" onClick={() => setCar(false)}>
-              <Icon name="close" size={20} /> Exit car mode
-            </button>
-          </div>
-          <div className="car-now">
-            {thumb(item, 160)}
-            <div>
-              <div className="car-kind">{kindLabel}</div>
-              <div className="car-title">{item?.title}</div>
-              <div className="car-feed">{feedDisplayTitle(feed)}</div>
-            </div>
-          </div>
-          <div className="car-time">
-            {bar}
-            <div className="car-time-row">
-              <span>{isArticle ? '' : formatClock(q.position)}</span>
-              <span>{left}</span>
-            </div>
-          </div>
-          {controls(true)}
-          <div className="car-next">{nextItem ? <>Next up: <b>{nextItem.title}</b></> : 'Last item in this playlist'}</div>
-          <div className="car-extra">
-            <button className="btn big" onClick={nextRate}>
-              Speed {formatSpeed(rate)}
-            </button>
-          </div>
-        </div>
-      ) : null}
     </>
   )
 }

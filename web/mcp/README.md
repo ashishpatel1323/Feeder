@@ -58,13 +58,28 @@ Try:
 - "Give me a summary of the items in my Morning drive playlist" (or the `summarize_playlist` prompt)
 - "Summarize the first three chapters of <book>" (or `summarize_book_chapters`)
 - "What have I highlighted about leadership?"
+- "Morning brief for my Daily playlist" (or the `morning_brief` prompt)
+
+## Morning brief
+
+Your own morning radio show for a playlist, fun but serious: an opener, the rundown (each article in
+2 to 3 friendly sentences, never the article itself), 1 to 3 picks worth reading in full chosen from
+your taste (the feeds you read most, recent Saved items and highlights), and a sign-off.
+
+- `morning_brief` gives the agent the template, your taste and the full text of every article in the
+  playlist (paged). Podcasts and videos are left out.
+- `save_morning_brief` is the one tool here that writes: it saves the brief as the playlist's note
+  (a synced `brief` record, replacing the last one). Feeder on Android and the web shows it at the
+  top of the playlist with **Listen**. Nothing is marked read.
+- Feeder for Mac can write the same brief on its own with Claude Code (the playlist's ⋮ › Morning
+  brief, see `web/mac/README.md`).
 
 ## Tools
 
 `search`, `list_feeds`, `list_items`, `get_item`, `list_playlists`, `get_playlist`,
-`get_playlist_content`, `list_books`, `get_book_toc`, `read_book`, `list_highlights`, `list_zims`,
+`get_playlist_content`, `morning_brief`, `save_morning_brief`, `list_books`, `get_book_toc`, `read_book`, `list_highlights`, `list_zims`,
 `zim_lookup`, `zim_read`, `status`, `refresh`. Prompts: `summarize_playlist`,
-`summarize_book_chapters`, `unread_digest`, `highlights_review`, `ask_my_library`. Resources under
+`morning_brief`, `summarize_book_chapters`, `unread_digest`, `highlights_review`, `ask_my_library`. Resources under
 `feeder://` (items, playlists, book TOC and chapters, highlights).
 
 Long text is paged (`max_tokens` + `next_cursor`), so a three-chapter read works in a normal
@@ -84,7 +99,7 @@ generated EPUB, then drives the real MCP server over stdio through every tool.
 - Semantic (embedding) search: keyword search (BM25) only for now
 - Whisper transcripts for podcasts whose feed has none
 - MOBI/AZW3 ebooks
-- Write-back (mark read, add highlight) and remote access
+- Write-back beyond the Morning brief (mark read, add highlight)
 
 ## Remote (HTTP)
 

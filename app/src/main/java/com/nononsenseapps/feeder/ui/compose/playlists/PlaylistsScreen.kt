@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -85,6 +86,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -150,6 +152,7 @@ fun PlaylistsScreen(
     var carMode by remember { mutableStateOf(false) }
     val flipId by viewModel.flipId.collectAsStateWithLifecycle()
     val flipItems by viewModel.flipItems.collectAsStateWithLifecycle()
+    val briefs by viewModel.briefs.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -221,6 +224,8 @@ fun PlaylistsScreen(
                                         ""
                                     }
                                 }
+                            val brief = briefs[open.id]?.v
+                            val briefCount = remember(open, state) { viewModel.briefArticles(open).size }
                             PlaylistTopBarActions(
                                 smart = open.smart,
                                 canFlip = items.isNotEmpty(),
@@ -234,6 +239,16 @@ fun PlaylistsScreen(
                                 onDelete = { confirmDelete = open },
                                 prepareCount = toPrepare.size,
                                 prepareSize = prepareSize,
+                                briefLabel =
+                                    when {
+                                        briefCount == 0 || brief?.isPending() == true -> null
+                                        brief?.s == com.nononsenseapps.feeder.model.briefs.Brief.DONE -> stringResource(R.string.playlist_brief_new)
+                                        else -> stringResource(R.string.playlist_brief)
+                                    },
+                                onBrief = {
+                                    val n = viewModel.askBrief(open)
+                                    scope.launch { snackbar.showSnackbar(context.getString(R.string.playlist_brief_asked, n)) }
+                                },
                                 onPrepare = {
                                     val n = viewModel.prepareArticles(open)
                                     scope.launch {
@@ -402,6 +417,10 @@ private fun PlaylistDetail(
     val playingId = if (queue.playlistId == pl.id) queue.currentId else null
     val addToPlaylist = rememberAddToPlaylist()
     val offline by viewModel.offlineAudio.collectAsStateWithLifecycle()
+    val briefs by viewModel.briefs.collectAsStateWithLifecycle()
+    val briefSpeech by viewModel.briefSpeech.collectAsStateWithLifecycle()
+    // Brief articles are keyed "feedUrl\nguid", as in sync
+    val idsByKey = remember(state.candidates) { state.candidates.associate { "${it.feedUrl}\n${it.guid}" to it.id } }
     // Swiping in the reader goes through the playlist as shown here
     val openArticle: (Long) -> Unit = { id ->
         viewModel.openingArticle(pl.id, items.map { it.id })
@@ -471,6 +490,17 @@ private fun PlaylistDetail(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                )
+            }
+            briefs[pl.id]?.let { b ->
+                BriefCard(
+                    brief = b.v,
+                    localId = { key -> idsByKey[key] },
+                    onOpen = openArticle,
+                    onAgain = { viewModel.askBrief(pl) },
+                    onSync = viewModel::syncForBrief,
+                    speaking = briefSpeech == viewModel.briefSpeechId(pl.id, b.ts),
+                    onListen = { viewModel.listenBrief(pl.id, b.v, b.ts) },
                 )
             }
             if (offline.playlistId == pl.id && offline.ids.isNotEmpty()) {
@@ -641,7 +671,11 @@ fun NowPlayingBar(
     }
 }
 
-/** Car mode: big buttons, few words, and what comes next. */
+/**
+ * Car mode: big buttons, few words, and what comes next. While an article is read aloud its text
+ * fills the rest of the screen, following the spoken sentence; on a phone on its side the
+ * controls sit on the left and the text on the right.
+ */
 @Composable
 private fun CarMode(
     queue: QueueState,
@@ -651,17 +685,14 @@ private fun CarMode(
 ) {
     val isArticle = queue.kind == ItemKind.ARTICLE
     var showQueue by remember { mutableStateOf(false) }
+    val speech by viewModel.readAloudProgress.collectAsStateWithLifecycle()
+    val config = LocalConfiguration.current
+    val sideBySide = config.screenWidthDp > config.screenHeightDp && config.screenHeightDp < 500
+    // Each half of a narrow phone on its side (under 600dp) is ~250dp: tighter buttons still fit
+    val narrowSide = sideBySide && config.screenWidthDp < 600
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .statusBarsPadding()
-                        .navigationBarsPadding()
-                        .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
+            val header: @Composable () -> Unit = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         "${queue.name} · ${queue.index + 1} of ${queue.ids.size}",
@@ -677,22 +708,35 @@ private fun CarMode(
                         Text(stringResource(R.string.queue_exit_car_mode))
                     }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(110.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
-                        Icon(if (isArticle) Icons.AutoMirrored.Filled.Article else Icons.Default.Headphones, contentDescription = null, modifier = Modifier.size(48.dp))
+                // Compact while the article text is on screen, so the text gets the room
+                val tile = if (isArticle) 56 else 110
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(tile.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
+                        Icon(if (isArticle) Icons.AutoMirrored.Filled.Article else Icons.Default.Headphones, contentDescription = null, modifier = Modifier.size((tile * 0.45).dp))
                         queue.artwork?.let { AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
                     }
                     Column {
+                        if (!isArticle) {
+                            Text(
+                                (queue.kind?.label ?: "").uppercase(),
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
                         Text(
-                            (if (isArticle) "Article · read aloud" else queue.kind?.label ?: "").uppercase(),
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.bodyMedium,
+                            queue.title,
+                            fontSize = if (isArticle) 19.sp else 22.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            lineHeight = if (isArticle) 23.sp else 26.sp,
+                            maxLines = if (isArticle) 2 else 3,
+                            overflow = TextOverflow.Ellipsis,
                         )
-                        Text(queue.title, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 26.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                        Text(queue.feedTitle, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
+                        Text(queue.feedTitle, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
                     }
                 }
+            }
+            val transport: @Composable () -> Unit = {
                 Column {
                     LinearProgressIndicator(progress = { queue.fraction() }, modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)))
                     Row(Modifier.fillMaxWidth().padding(top = 4.dp)) {
@@ -701,60 +745,113 @@ private fun CarMode(
                     }
                 }
                 Row(horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    BigButton(Icons.Default.SkipPrevious, stringResource(R.string.queue_previous), 64) { viewModel.previous() }
-                    BigButton(Icons.Default.Replay10, if (isArticle) stringResource(R.string.queue_back) else "10 s", 64) { viewModel.seekBy(-10_000) }
-                    BigButton(if (queue.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, null, 96, primary = true) { viewModel.toggle() }
-                    BigButton(Icons.Default.Forward10, if (isArticle) stringResource(R.string.queue_ahead) else "10 s", 64) { viewModel.seekBy(10_000) }
-                    BigButton(Icons.Default.SkipNext, stringResource(R.string.queue_next), 64, enabled = queue.hasNext) { viewModel.next() }
+                    // Side by side the controls get half the width, so the buttons are smaller
+                    val small = if (narrowSide) 44 else if (sideBySide) 48 else 64
+                    val big = if (narrowSide) 60 else if (sideBySide) 68 else 96
+                    BigButton(Icons.Default.SkipPrevious, stringResource(R.string.queue_previous), small) { viewModel.previous() }
+                    BigButton(Icons.Default.Replay10, if (isArticle) stringResource(R.string.queue_back) else "10 s", small) { viewModel.seekBy(-10_000) }
+                    BigButton(if (queue.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, null, big, primary = true) { viewModel.toggle() }
+                    BigButton(Icons.Default.Forward10, if (isArticle) stringResource(R.string.queue_ahead) else "10 s", small) { viewModel.seekBy(10_000) }
+                    BigButton(Icons.Default.SkipNext, stringResource(R.string.queue_next), small, enabled = queue.hasNext) { viewModel.next() }
                 }
                 val nextTitle = queue.ids.getOrNull(queue.index + 1)?.let { state.byId[it]?.title }
                 Text(
                     nextTitle?.let { stringResource(R.string.queue_next_up, it) } ?: stringResource(R.string.queue_last_item),
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
+                    maxLines = if (isArticle) 1 else 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                     val speed = if (isArticle) state.ctx.speed else queue.audioSpeed
                     OutlinedButton(onClick = { viewModel.setSpeed(nextSpeed(speed), isArticle) }, modifier = Modifier.weight(1f).height(52.dp)) {
-                        Text("${stringResource(R.string.queue_speed)} ${speedLabel(speed)}", style = MaterialTheme.typography.bodyLarge)
+                        Text("${stringResource(R.string.queue_speed)} ${speedLabel(speed)}", style = MaterialTheme.typography.bodyLarge, maxLines = 1)
                     }
                     OutlinedButton(onClick = { showQueue = !showQueue }, modifier = Modifier.weight(1f).height(52.dp)) {
                         Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.queue_up_next), style = MaterialTheme.typography.bodyLarge)
+                        Text(stringResource(R.string.queue_up_next), style = MaterialTheme.typography.bodyLarge, maxLines = 1)
                     }
                     OutlinedButton(onClick = {
                         viewModel.stop()
                         onClose()
                     }, modifier = Modifier.height(52.dp)) { Text(stringResource(R.string.queue_stop), style = MaterialTheme.typography.bodyLarge) }
                 }
+            }
+            // Below the controls: the queue when asked for, else the article being read
+            val below: @Composable (Modifier) -> Unit = { mod ->
                 if (showQueue) {
-                    LazyColumn(Modifier.weight(1f)) {
-                        itemsIndexed(queue.ids) { i, id ->
-                            val it = state.byId[id] ?: return@itemsIndexed
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(if (i == queue.index) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
-                                        .clickable { viewModel.jump(i) }
-                                        .padding(horizontal = 8.dp, vertical = 10.dp),
-                            ) {
-                                KindTag(it.kind)
-                                Text(it.title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                                if (i != queue.index) {
-                                    IconButton(onClick = { viewModel.removeFromQueue(i) }, modifier = Modifier.size(32.dp)) {
-                                        Icon(Icons.Default.Close, contentDescription = "Take out of the queue", modifier = Modifier.size(18.dp))
-                                    }
-                                }
-                            }
-                        }
+                    CarQueueList(queue, state, viewModel, mod)
+                } else if (isArticle) {
+                    SpokenArticleText(progress = speech, articleId = queue.currentId, modifier = mod)
+                }
+            }
+            if (sideBySide) {
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .statusBarsPadding()
+                            .navigationBarsPadding()
+                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(20.dp),
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        header()
+                        transport()
+                    }
+                    if (showQueue || isArticle) below(Modifier.weight(1f).fillMaxHeight())
+                }
+            } else {
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .statusBarsPadding()
+                            .navigationBarsPadding()
+                            .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    header()
+                    transport()
+                    if (showQueue || isArticle) below(Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+/** The queue in car mode: tap to jump, × to take an item out. */
+@Composable
+private fun CarQueueList(
+    queue: QueueState,
+    state: PlaylistsViewState,
+    viewModel: PlaylistsViewModel,
+    modifier: Modifier = Modifier,
+) {
+    LazyColumn(modifier) {
+        itemsIndexed(queue.ids) { i, id ->
+            val it = state.byId[id] ?: return@itemsIndexed
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (i == queue.index) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+                        .clickable { viewModel.jump(i) }
+                        .padding(horizontal = 8.dp, vertical = 10.dp),
+            ) {
+                KindTag(it.kind)
+                Text(it.title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                if (i != queue.index) {
+                    IconButton(onClick = { viewModel.removeFromQueue(i) }, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.Close, contentDescription = "Take out of the queue", modifier = Modifier.size(18.dp))
                     }
                 }
             }

@@ -40,6 +40,9 @@ import { articleVideoId } from '../lib/youtube'
 import { Icon, IconButton } from './Icon'
 import { deleteItemWithUndo, ItemRow, usePlaylistContext } from './ItemRow'
 import { MoreMenu } from './MoreMenu'
+import { BriefCard } from './BriefCard'
+import { briefItems, isPending, requestBrief, useBriefs } from '../lib/briefs'
+import { deviceName } from '../lib/device'
 import { confirmDelete } from '../lib/confirmDelete'
 
 export { usePlaylistContext }
@@ -265,6 +268,17 @@ function PlaylistDetail(p: {
   const toDownload = its.filter((i) => kindOf(i, p.ctx) === 'youtube' && !i.offlineVideo)
   const playingId = q.playlistId === pl.id ? q.ids[q.index] : null
   const offline = usePlaylistAudio()
+  const brief = useBriefs()[pl.id]
+  // A brief covers the text articles (podcasts and videos have no text to read)
+  const articles = its.filter((i) => kindOf(i, p.ctx) === 'article')
+  const askBrief = () => {
+    const items = briefItems(articles, (a) => {
+      const f = p.feeds.get(a.feedUrl)
+      return f ? feedDisplayTitle(f) : ''
+    })
+    void requestBrief(pl.id, pl.name, items, deviceName())
+    p.toast(`Asked your Mac for a morning brief of ${items.length} article${items.length === 1 ? '' : 's'}. It shows here when Claude is done.`)
+  }
   // The next text articles: after the one playing when this playlist plays, else from the top
   const toPrepare = (() => {
     const order = q.playlistId === pl.id && q.ids.length ? q.ids.slice(q.index + 1).map((id) => its.find((i) => i.id === id)).filter((i): i is Item => !!i) : its
@@ -325,6 +339,12 @@ function PlaylistDetail(p: {
                 hidden: !(canSave && toDownload.length),
               },
               {
+                icon: 'voice',
+                label: brief?.v.s === 'done' ? 'New morning brief' : 'Morning brief',
+                onClick: askBrief,
+                hidden: !articles.length || isPending(brief?.v),
+              },
+              {
                 icon: 'headphones',
                 label: `Get next ${toPrepare.length} article${toPrepare.length === 1 ? '' : 's'} ready offline`,
                 onClick: prepare,
@@ -357,6 +377,16 @@ function PlaylistDetail(p: {
       ) : (
         <p className="mf-note pl-hint">Drag rows (or use the arrows) to change the order. Items leave this playlist once they are played to the end.</p>
       )}
+      {brief ? (
+        <BriefCard
+          playlistId={pl.id}
+          brief={brief}
+          canOpen={(id) => p.byId.has(id)}
+          onOpen={(id) => p.onOpenArticle(id, brief.v.items.map((x) => x.id).filter((x) => p.byId.has(x)))}
+          onAgain={askBrief}
+          toast={p.toast}
+        />
+      ) : null}
       {offline.playlistId === pl.id && offline.ids.length ? <OfflineArticlesCard s={offline} /> : null}
       {!its.length ? (
         <div className="dl-empty">

@@ -251,6 +251,8 @@ export default function App() {
   // Mac app: the phone's next ebook chapters spoken here into Dropbox (does nothing in a browser)
   useEffect(() => {
     void import('./lib/macBookAudio').then((m) => m.macBookAudio.start())
+    // Mac app with Claude Code: playlist briefs asked for on any device
+    void import('./lib/macBrief').then((m) => m.macBrief.start())
   }, [])
   // Start on Home: give it its own address, so Back from the article list returns to it
   useEffect(() => {
