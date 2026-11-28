@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.BorderColor
+import androidx.compose.material.icons.outlined.Draw
 import androidx.compose.material.icons.outlined.ClosedCaption
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -77,6 +78,9 @@ class ArticleMenuActions(
     // The article's highlights: list, select all, share as image
     val highlightCount: Int = 0,
     val onHighlights: (() -> Unit)? = null,
+    // Handwriting on the page: fingers write too while on (a stylus always does)
+    val drawOnPage: Boolean = false,
+    val onToggleDraw: (() -> Unit)? = null,
     val onDelete: (() -> Unit)? = null,
 )
 
@@ -132,6 +136,9 @@ private fun ArticleMenuItems(
     menu.onPlaylist?.let { MenuEntry(PlaylistIcon, stringResource(R.string.add_to_playlist_menu), run(it)) }
     menu.onHighlights?.let {
         MenuEntry(Icons.Outlined.BorderColor, stringResource(R.string.highlights_in_article, menu.highlightCount), run(it))
+    }
+    menu.onToggleDraw?.let {
+        MenuEntry(Icons.Outlined.Draw, stringResource(R.string.draw_on_page), run(it), checked = menu.drawOnPage)
     }
     menu.onToggleTranscript?.let {
         MenuEntry(Icons.Outlined.ClosedCaption, stringResource(R.string.transcript), run(it), checked = menu.transcriptShown)

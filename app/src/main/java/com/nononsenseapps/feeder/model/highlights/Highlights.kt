@@ -296,6 +296,22 @@ class HighlightLocator(
     /** Where a highlight starts in this text, for reading order; null when it isn't in it. */
     fun positionOf(h: Highlight): Int? = find(h.text, h.prefix, h.start)?.let { fullIndex[it.first] }
 
+    /** The passage [start, end) of paragraph [paragraph], to save handwriting with its words. */
+    fun anchorIn(
+        paragraph: Int,
+        start: Int,
+        end: Int,
+    ): HighlightAnchor? {
+        val text = paragraphs.getOrNull(paragraph) ?: return null
+        val s = start.coerceIn(0, text.length)
+        val e = end.coerceIn(s, text.length)
+        if (e <= s) return null
+        var offset = 0
+        for (i in 0 until paragraph) offset += paragraphs[i].length + 1
+        val at = offset + s
+        return HighlightAnchor(text = text.substring(s, e), start = at, prefix = full.substring(maxOf(0, at - PREFIX_LEN), at))
+    }
+
     /** Where a selected passage is, to save it as a highlight. Null when it isn't in the article text. */
     fun anchorOf(selected: String): HighlightAnchor? {
         val text = selected.trim()

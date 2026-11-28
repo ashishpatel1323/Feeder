@@ -135,6 +135,16 @@ import com.nononsenseapps.feeder.ui.compose.highlights.HighlightTextColor
 import com.nononsenseapps.feeder.ui.compose.highlights.LocalHighlightMarks
 import com.nononsenseapps.feeder.ui.compose.highlights.LocalUserHighlights
 import com.nononsenseapps.feeder.ui.compose.highlights.SketchStrip
+import androidx.compose.ui.graphics.luminance
+import com.nononsenseapps.feeder.ui.compose.highlights.paragraphSig
+import com.nononsenseapps.feeder.ui.compose.highlights.highlightTexts
+import com.nononsenseapps.feeder.ui.compose.highlights.paragraphInks
+import com.nononsenseapps.feeder.ui.compose.highlights.markerRect
+import com.nononsenseapps.feeder.ui.compose.highlights.drawParagraphInks
+import com.nononsenseapps.feeder.ui.compose.highlights.articleInkCapture
+import com.nononsenseapps.feeder.ui.compose.highlights.LocalParagraphIndex
+import com.nononsenseapps.feeder.ui.compose.highlights.LocalParagraphInks
+import com.nononsenseapps.feeder.ui.compose.highlights.LocalArticleInk
 import com.nononsenseapps.feeder.ui.compose.highlights.background
 import com.nononsenseapps.feeder.ui.compose.highlights.highlightLocator
 import com.nononsenseapps.feeder.ui.compose.highlights.highlightMarks
@@ -242,6 +252,13 @@ fun ColumnArticleContent(
         remember(articleContent, locator, userHighlights?.list) {
             userHighlights?.let { sketchStrips(articleContent, locator, it.sketches) } ?: emptyMap()
         }
+    // Handwriting on the page (Kobo style)
+    val articleInk = LocalArticleInk.current
+    val paragraphInkMap =
+        remember(articleContent, locator, userHighlights?.list) {
+            userHighlights?.let { paragraphInks(articleContent, locator, it.inks) } ?: emptyMap()
+        }
+    SideEffect { articleInk?.let { LocalParagraphIndex.set(it, articleContent.highlightTexts()) } }
     val currentOnReadAloudFrom by rememberUpdatedState(onReadAloudFrom)
     val tapHandler =
         remember(articleContent, isReadingAloud, onReadAloudFrom != null) {
@@ -256,11 +273,13 @@ fun ColumnArticleContent(
     CompositionLocalProvider(
         LocalSpeechHighlights provides highlights,
         LocalHighlightMarks provides marks,
+        LocalParagraphInks provides paragraphInkMap,
         LocalSpeechWordHighlights provides wordHighlights,
         LocalSpeechFocusTarget provides focusTarget,
         LocalReadAloudTapHandler provides tapHandler,
         LocalFastReading provides fastReading,
     ) {
+        Column(Modifier.fillMaxWidth().articleInkCapture(articleInk)) {
         articleContent.elements.forEachIndexed { index, element ->
             ProvideTextStyle(
                 MaterialTheme.typography.bodyLarge.merge(
@@ -310,6 +329,7 @@ fun ColumnArticleContent(
                 }
             }
         }
+    }
     }
 }
 
@@ -779,6 +799,11 @@ fun LinearTextContent(
             val range = LocalSpeechHighlights.current[linearText]
             val marks = LocalHighlightMarks.current[linearText].orEmpty()
             val userHighlights = LocalUserHighlights.current
+            val paragraphInks = LocalParagraphInks.current[linearText].orEmpty()
+            val articleInk = LocalArticleInk.current
+            val inkDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+            val inkMarker = MaterialTheme.colorScheme.tertiary
+            val density = LocalDensity.current
             val wordRange = LocalSpeechWordHighlights.current[linearText]
             val following = LocalSpeechFocusTarget.current
             val focusTarget = following?.takeIf { it.text === linearText }
@@ -877,6 +902,17 @@ fun LinearTextContent(
             val onTextTap by rememberUpdatedState { position: Offset ->
                 val layout = layoutHolder[0]
                 val handler = tapHandler
+                // A [✎] marker: a note written with other reading settings
+                if (layout != null && articleInk != null) {
+                    val sig = articleInk.paras[linearText]?.sig
+                    val slop = 10f * density.density
+                    paragraphInks.firstOrNull { k ->
+                        k.data.sig != sig && markerRect(layout.getBoundingBox(k.range.first.coerceIn(0, maxOf(0, layout.layoutInput.text.length - 1))), density.density).inflate(slop).contains(position)
+                    }?.let {
+                        articleInk.onMark(it.id)
+                        return@rememberUpdatedState
+                    }
+                }
                 // Tapping a highlight opens it (color, note, share, delete)
                 val tappedMark =
                     layout?.let { l ->
@@ -912,6 +948,7 @@ fun LinearTextContent(
                     text = annotatedString,
                     onTextLayout = { layout ->
                         layoutHolder[0] = layout
+                        articleInk?.register(linearText, layout = layout, sig = paragraphSig(layout, density.density, if (typographySettings.justifyText) "justify" else "start"))
                         // Link listeners are recreated during composition. Retain geometry only,
                         // so changing listener identities cannot trigger a layout feedback loop.
                         speechLines =
@@ -932,7 +969,22 @@ fun LinearTextContent(
                             .indication(interactionSource, LocalIndication.current)
                             .focusableInNonTouchMode(interactionSource = interactionSource)
                             .then(
-                                if (tapHandler == null && marks.isEmpty()) {
+                                if (articleInk == null) {
+                                    Modifier
+                                } else {
+                                    Modifier
+                                        .onGloballyPositioned { articleInk.register(linearText, coords = it) }
+                                        .drawWithContent {
+                                            drawContent()
+                                            if (paragraphInks.isNotEmpty()) {
+                                                drawParagraphInks(paragraphInks, articleInk.paras[linearText]?.sig ?: "", layoutHolder[0], inkDark, inkMarker) { k, isShown ->
+                                                    if (isShown) articleInk.shown[k.id] = linearText to k.data else articleInk.shown.remove(k.id)
+                                                }
+                                            }
+                                        }
+                                },
+                            ).then(
+                                if (tapHandler == null && marks.isEmpty() && paragraphInks.isEmpty()) {
                                     Modifier
                                 } else {
                                     Modifier.readAloudTap { onTextTap(it) }
