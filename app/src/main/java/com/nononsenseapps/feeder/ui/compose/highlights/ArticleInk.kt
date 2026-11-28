@@ -1,7 +1,7 @@
 package com.nononsenseapps.feeder.ui.compose.highlights
 
 import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.runtime.Composable
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -12,6 +12,7 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -20,19 +21,16 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.ui.input.pointer.PointerInputChange
-import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
 import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.TextLayoutResult
-import com.nononsenseapps.feeder.model.highlights.Highlight
 import com.nononsenseapps.feeder.model.highlights.HighlightColor
 import com.nononsenseapps.feeder.model.highlights.InkData
 import com.nononsenseapps.feeder.model.highlights.SketchStroke
@@ -162,7 +160,12 @@ fun Modifier.articleInkCapture(ink: ArticleInk?): Modifier =
                     val c = p.coords ?: continue
                     if (!c.isAttached) continue
                     val topLeft = box.localPositionOf(c, Offset.Zero)
-                    val r = Rect(topLeft, androidx.compose.ui.geometry.Size(c.size.width.toFloat(), c.size.height.toFloat()))
+                    val r =
+                        Rect(
+                            topLeft,
+                            androidx.compose.ui.geometry
+                                .Size(c.size.width.toFloat(), c.size.height.toFloat()),
+                        )
                     val d =
                         when {
                             point.y < r.top -> r.top - point.y
@@ -206,7 +209,13 @@ fun Modifier.articleInkCapture(ink: ArticleInk?): Modifier =
                 var e = layout.getOffsetForPosition(localEnd)
                 if (e < s) s = e.also { e = s }
                 val len = layout.layoutInput.text.length
-                if (e <= s || layout.layoutInput.text.substring(s, e).isBlank()) e = minOf(len, s + 24)
+                if (e <= s ||
+                    layout.layoutInput.text
+                        .substring(s, e)
+                        .isBlank()
+                ) {
+                    e = minOf(len, s + 24)
+                }
                 if (e <= s) return
                 // Whole words: the note is about words, not the letters the pen started on
                 s = layout.getWordBoundary(s.coerceIn(0, maxOf(0, len - 1))).start.coerceAtMost(s)
@@ -224,7 +233,10 @@ fun Modifier.articleInkCapture(ink: ArticleInk?): Modifier =
                 ink.onNote(paragraphs, s, e, data)
             }
 
-            fun eraseAt(point: Offset, density: Float) {
+            fun eraseAt(
+                point: Offset,
+                density: Float,
+            ) {
                 pending.removeAll { st -> near(st.p, point.x, point.y, 10f * density + st.w) }
                 val box = container[0] ?: return
                 for ((id, pair) in ink.shown.toList()) {
@@ -273,8 +285,10 @@ fun Modifier.articleInkCapture(ink: ArticleInk?): Modifier =
                         stylus: Boolean,
                     ) {
                         job[0]?.cancel()
+
                         fun erasingNow() = ink.pen.erasing || down.type == PointerType.Eraser || (stylus && StylusButton.pressed)
                         var erase = erasingNow()
+
                         fun width(pressure: Float) = if (stylus && pressure > 0f) 2.2f * density * (0.5f + pressure) else 2.2f * density
                         if (erase) {
                             eraseAt(down.position, density)
@@ -423,7 +437,15 @@ internal fun DrawScope.drawParagraphInks(
             val at = k.range.first.coerceIn(0, maxOf(0, l.layoutInput.text.length - 1))
             val box = l.getBoundingBox(at)
             markerRect(box, density).let { r ->
-                drawRoundRect(markerColor, topLeft = r.topLeft, size = r.size, cornerRadius = androidx.compose.ui.geometry.CornerRadius(3 * density), style = Stroke(1.5f * density))
+                drawRoundRect(
+                    markerColor,
+                    topLeft = r.topLeft,
+                    size = r.size,
+                    cornerRadius =
+                        androidx.compose.ui.geometry
+                            .CornerRadius(3 * density),
+                    style = Stroke(1.5f * density),
+                )
                 // A small pen: a slanted line with a tip
                 val p = Path()
                 p.moveTo(r.left + r.width * 0.3f, r.bottom - r.height * 0.25f)
