@@ -5,7 +5,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -15,7 +19,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asComposeRenderEffect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import com.nononsenseapps.feeder.archmodel.DarkThemePreferences
 import com.nononsenseapps.feeder.archmodel.ThemeOptions
@@ -50,6 +58,14 @@ private val lightColors =
         inverseSurface = md_theme_light_inverseSurface,
         inversePrimary = md_theme_light_inversePrimary,
         surfaceTint = md_theme_light_surfaceTint,
+        surfaceContainerLowest = md_theme_light_surfaceContainerLowest,
+        surfaceContainerLow = md_theme_light_surfaceContainerLow,
+        surfaceContainer = md_theme_light_surfaceContainer,
+        surfaceContainerHigh = md_theme_light_surfaceContainerHigh,
+        surfaceContainerHighest = md_theme_light_surfaceContainerHighest,
+        surfaceDim = md_theme_light_surfaceDim,
+        surfaceBright = md_theme_light_surfaceBright,
+        outlineVariant = md_theme_light_outlineVariant,
     )
 
 /** The app's dark colours, also used by Flip mode (always dark) for the shared item view. */
@@ -82,6 +98,14 @@ val FeederDarkColors =
         inverseSurface = md_theme_dark_inverseSurface,
         inversePrimary = md_theme_dark_inversePrimary,
         surfaceTint = md_theme_dark_surfaceTint,
+        surfaceContainerLowest = md_theme_dark_surfaceContainerLowest,
+        surfaceContainerLow = md_theme_dark_surfaceContainerLow,
+        surfaceContainer = md_theme_dark_surfaceContainer,
+        surfaceContainerHigh = md_theme_dark_surfaceContainerHigh,
+        surfaceContainerHighest = md_theme_dark_surfaceContainerHighest,
+        surfaceDim = md_theme_dark_surfaceDim,
+        surfaceBright = md_theme_dark_surfaceBright,
+        outlineVariant = md_theme_dark_outlineVariant,
     )
 
 private val eInkColors =
@@ -113,7 +137,58 @@ private val eInkColors =
         inverseSurface = md_theme_eink_inverseSurface,
         inversePrimary = md_theme_eink_inversePrimary,
         surfaceTint = md_theme_eink_surfaceTint,
+        surfaceContainerLowest = Color.White,
+        surfaceContainerLow = Color.White,
+        surfaceContainer = Color.White,
+        surfaceContainerHigh = Color.White,
+        surfaceContainerHighest = Color.White,
+        surfaceDim = Color.White,
+        surfaceBright = Color.White,
+        outlineVariant = Color.Black,
     )
+
+/**
+ * True while the Paper (e-ink) theme shows: black on white, no ripples, no wavy progress bars.
+ * Components that animate should check it and show a still version instead.
+ */
+val LocalPaperMode = staticCompositionLocalOf { false }
+
+/** Device makers that only sell e-ink Android devices. "System" theme picks Paper on them. */
+private val eInkMakers = setOf("onyx", "boox", "kobo", "pocketbook", "bigme", "boyue", "likebook", "meebook", "remarkable")
+
+fun isEInkDevice(): Boolean =
+    Build.MANUFACTURER.lowercase() in eInkMakers || Build.BRAND.lowercase() in eInkMakers
+
+/** Paper is on when chosen, or when "System" runs on an e-ink device. */
+fun ThemeOptions.isPaper(): Boolean = this == ThemeOptions.E_INK || (this == ThemeOptions.SYSTEM && isEInkDevice())
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ProvidePaperMode(
+    paper: Boolean,
+    content: @Composable () -> Unit,
+) {
+    if (paper) {
+        // Ripples are a burst of frames: on e-ink they leave grey ghosts behind
+        CompositionLocalProvider(LocalPaperMode provides true, LocalRippleConfiguration provides null) {
+            // Everything in greyscale: covers and thumbnails turn muddy in colour on e-ink
+            val greyscale =
+                remember {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        android.graphics.RenderEffect
+                            .createColorFilterEffect(
+                                android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix().apply { setSaturation(0f) }),
+                            ).asComposeRenderEffect()
+                    } else {
+                        null
+                    }
+                }
+            Box(Modifier.fillMaxSize().graphicsLayer { renderEffect = greyscale }) { content() }
+        }
+    } else {
+        content()
+    }
+}
 
 @Composable
 fun PreviewTheme(
@@ -134,7 +209,7 @@ fun PreviewTheme(
             colorScheme = colorScheme,
             typography = feederTypography.typography,
         ) {
-            content()
+            ProvidePaperMode(currentTheme.isPaper()) { content() }
         }
     }
 }
@@ -185,10 +260,17 @@ fun ComponentActivity.FeederTheme(
                             )
 
                         ThemeOptions.SYSTEM ->
-                            SystemBarStyle.auto(
-                                android.graphics.Color.TRANSPARENT,
-                                android.graphics.Color.TRANSPARENT,
-                            )
+                            if (isEInkDevice()) {
+                                SystemBarStyle.light(
+                                    android.graphics.Color.TRANSPARENT,
+                                    android.graphics.Color.TRANSPARENT,
+                                )
+                            } else {
+                                SystemBarStyle.auto(
+                                    android.graphics.Color.TRANSPARENT,
+                                    android.graphics.Color.TRANSPARENT,
+                                )
+                            }
                     },
                 //            systemUiController.setStatusBarColor(
 //                surfaceColor,
@@ -214,10 +296,14 @@ fun ComponentActivity.FeederTheme(
                             )
 
                         ThemeOptions.SYSTEM ->
-                            SystemBarStyle.auto(
-                                lightScrim,
-                                darkScrim,
-                            )
+                            if (isEInkDevice()) {
+                                SystemBarStyle.light(lightScrim, darkScrim)
+                            } else {
+                                SystemBarStyle.auto(
+                                    lightScrim,
+                                    darkScrim,
+                                )
+                            }
                     },
                 //                    systemUiController.setNavigationBarColor(
 //                        navBarColor,
@@ -228,7 +314,7 @@ fun ComponentActivity.FeederTheme(
             onDispose {}
         }
         ProvideDimens {
-            content()
+            ProvidePaperMode(currentTheme.isPaper()) { content() }
         }
     }
 }
@@ -242,7 +328,7 @@ private fun ThemeOptions.isDarkSystemIcons(): Boolean {
             -> false
 
             ThemeOptions.NIGHT -> true
-            ThemeOptions.SYSTEM -> isSystemInDarkTheme()
+            ThemeOptions.SYSTEM -> !isEInkDevice() && isSystemInDarkTheme()
         }
 
     return !isDarkTheme
@@ -267,12 +353,14 @@ private fun ThemeOptions.getColorScheme(
 
             ThemeOptions.NIGHT -> true
             ThemeOptions.SYSTEM -> {
-                isSystemInDarkTheme()
+                !isEInkDevice() && isSystemInDarkTheme()
             }
         }
 
     val colorScheme =
         when {
+            isPaper() -> eInkColors
+
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && dynamicColors && dark -> {
                 dynamicDarkColorScheme(LocalContext.current)
             }
@@ -282,12 +370,7 @@ private fun ThemeOptions.getColorScheme(
             }
 
             dark -> FeederDarkColors
-            else ->
-                if (this == ThemeOptions.E_INK) {
-                    eInkColors
-                } else {
-                    lightColors
-                }
+            else -> lightColors
         }
 
     return if (dark && darkThemePreference == DarkThemePreferences.BLACK) {

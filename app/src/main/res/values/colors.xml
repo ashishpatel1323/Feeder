@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
   <color name="primary">#ff0b8043</color>
+  <!-- Feeder green ("Fern", light) behind the launcher icon; same as the web icon -->
+  <color name="ic_launcher_page_play_background">#FF1F7A4D</color>
 </resources>

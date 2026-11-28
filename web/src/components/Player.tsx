@@ -460,7 +460,7 @@ function WavySeekBar({
     ctx.clearRect(0, 0, w, h)
     const css = getComputedStyle(c)
     const track = css.getPropertyValue('--player-track').trim() || 'rgba(255,255,255,.22)'
-    const active = a.enabled ? css.getPropertyValue('--player-accent').trim() || '#8cd5ac' : track
+    const active = a.enabled ? css.getPropertyValue('--player-accent').trim() || '#5bd08f' : track
     const stroke = 4
     const thumb = 6
     const gap = 4

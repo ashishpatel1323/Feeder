@@ -56,6 +56,7 @@ import com.nononsenseapps.feeder.model.playlists.ItemProgress
 import com.nononsenseapps.feeder.model.playlists.clockText
 import com.nononsenseapps.feeder.model.playlists.lengthText
 import com.nononsenseapps.feeder.ui.compose.theme.FeederTokens
+import com.nononsenseapps.feeder.ui.compose.theme.LocalPaperMode
 import com.nononsenseapps.feeder.ui.compose.transcript.TranscriptPanel
 
 /**
@@ -267,7 +268,7 @@ fun PodcastMediaBlock(
                     when {
                         loaded && (state.isLoading || state.isBuffering) ->
                             LinearProgressIndicator(modifier = Modifier.fillMaxWidth().height(4.dp))
-                        playing ->
+                        playing && !LocalPaperMode.current ->
                             LinearWavyProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
                         else ->
                             LinearProgressIndicator(
