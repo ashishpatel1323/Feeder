@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="tab_home">Home</string>
+  <string name="tab_search">Search</string>
+  <string name="shelf_jump_back_in">Jump back in</string>
+  <string name="shelf_show_all">Show all</string>
+  <string name="shelves_empty">Things you open, and your playlists, show up here.</string>
+  <string name="shelf_open_playlist">Open %1$s</string>
+</resources>

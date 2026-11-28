@@ -184,7 +184,8 @@ export function Sidebar(p: Props) {
 
   // The sidebar shows the same tabs as the bottom bar; the rest open from Library
   const bar = useBarTabs()
-  const barTabs = bar.map((b) => TABS.find((t) => t.tab === b)!)
+  // Search has its own row at the top of the sidebar
+  const barTabs = bar.filter((b) => b !== 'search').map((b) => TABS.find((t) => t.tab === b)!)
   const current = shownTab(p.currentTab, bar)
 
   return (
