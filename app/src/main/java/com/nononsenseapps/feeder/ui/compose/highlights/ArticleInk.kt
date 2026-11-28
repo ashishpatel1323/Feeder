@@ -134,8 +134,8 @@ internal fun DrawScope.drawInkStrokes(
 
 /**
  * Lets a stylus write on the article (any pointer while Draw on page is on), drawing the strokes
- * live and finishing a note a moment after the pen lifts. The pen's eraser end, or the eraser in
- * the pen bar, removes strokes from notes on the page.
+ * live and finishing a note a moment after the pen lifts. The pen's eraser end, its side button
+ * held down (S Pen), or the eraser in the pen bar, removes strokes from notes on the page.
  */
 fun Modifier.articleInkCapture(ink: ArticleInk?): Modifier =
     if (ink == null) {
@@ -255,7 +255,8 @@ fun Modifier.articleInkCapture(ink: ArticleInk?): Modifier =
                         }
                         down.consume()
                         job[0]?.cancel()
-                        val erase = ink.pen.erasing || down.type == PointerType.Eraser
+                        fun erasingNow() = ink.pen.erasing || down.type == PointerType.Eraser || (stylus && StylusButton.pressed)
+                        var erase = erasingNow()
                         fun width(pressure: Float) = if (stylus && pressure > 0f) 2.2f * density * (0.5f + pressure) else 2.2f * density
                         if (erase) {
                             eraseAt(down.position, density)
@@ -266,6 +267,17 @@ fun Modifier.articleInkCapture(ink: ArticleInk?): Modifier =
                             val event = awaitPointerEvent(PointerEventPass.Initial)
                             val change = event.changes.firstOrNull { it.id == down.id } ?: break
                             val points = change.historical.map { it.position } + change.position
+                            // The side button pressed or let go mid-stroke: switch between writing and erasing
+                            val nowErase = erasingNow()
+                            if (nowErase != erase) {
+                                erase = nowErase
+                                if (erase) {
+                                    live.value?.let { pending += it }
+                                    live.value = null
+                                } else {
+                                    live.value = SketchStroke(ink.pen.color, width(change.pressure), floatArrayOf(change.position.x, change.position.y))
+                                }
+                            }
                             if (erase) {
                                 points.forEach { eraseAt(it, density) }
                             } else {

@@ -8,7 +8,7 @@ import { syncNow } from '../lib/sync2'
 import type { Toast } from '../lib/toast'
 import { copyText, HighlightBar, HighlightsRail } from './Highlights'
 import { SketchEditor } from './SketchEditor'
-import { InkPreview, PenBar, usePageInk, usePenState } from './PageInk'
+import { InkPreview, PenBar, usePageInk, usePageKeysWhileDrawing, usePenState } from './PageInk'
 import { encodeInk, inkMarkAt } from '../lib/pageink'
 import { locateRange, textOf } from '../lib/textanchor'
 import { rangeAt } from '../lib/zim/marks'
@@ -148,6 +148,11 @@ export function Reader(p: Props) {
   const inkNotes = useMemo(() => (highlights ?? []).filter((h) => h.ink), [highlights])
   const [inkOpen, setInkOpen] = useState<string | null>(null)
   const inkOpenNote = inkOpen ? (highlights?.find((h) => h.id === inkOpen) ?? null) : null
+  // Draw on page: the mouse or a finger writes, so Page Down / Space / arrows scroll a screen
+  usePageKeysWhileDrawing(pen.drawAll, (dir) => {
+    const el = scrollRef.current
+    el?.scrollBy({ top: dir * el.clientHeight * 0.9, behavior: 'smooth' })
+  })
   usePageInk({
     doc: bodyEl ? document : null,
     root: bodyEl,

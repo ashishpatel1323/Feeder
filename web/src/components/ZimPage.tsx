@@ -37,7 +37,7 @@ import { LibraryListing, ListingUnavailable, useShelfPrefs, type ShelfItem } fro
 import { autoStatus, effectiveStatus, markKey, setStatus } from '../lib/shelfMarks'
 import { HighlightBar } from './Highlights'
 import { SketchEditor } from './SketchEditor'
-import { InkPreview, PenBar, usePageInk, usePenState } from './PageInk'
+import { InkPreview, PenBar, usePageInk, usePageKeysWhileDrawing, usePenState } from './PageInk'
 import { encodeInk, inkMarkAt } from '../lib/pageink'
 import { anchorOf, locateRange, textOf } from '../lib/textanchor'
 import { rangeAt } from '../lib/zim/marks'
@@ -443,6 +443,15 @@ function ZimReader({ id, jump, settings, onBack, toast }: { id: string; jump: Zi
 
   const inkDoc = path !== null && loads > 0 ? doc() : null
   const inkNotes = useMemo(() => highlights.filter((h) => h.ink), [highlights])
+  // Draw on page: the mouse or a finger writes, so Page Down / Space / arrows scroll a screen
+  usePageKeysWhileDrawing(
+    pen.drawAll,
+    (dir) => {
+      const w = frame.current?.contentWindow
+      w?.scrollBy({ top: dir * w.innerHeight * 0.9, behavior: 'smooth' })
+    },
+    inkDoc,
+  )
   usePageInk({
     doc: inkDoc,
     root: inkDoc?.body ?? null,
