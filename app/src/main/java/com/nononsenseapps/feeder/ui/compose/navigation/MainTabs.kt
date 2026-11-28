@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Subscriptions
 import androidx.compose.material.icons.filled.VideoLibrary
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.DynamicFeed
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Subscriptions
 import androidx.compose.material.icons.outlined.VideoLibrary
@@ -93,16 +95,18 @@ enum class MainTab {
 private val OLD_BOOK_TABS = setOf("EBOOKS", "AUDIOBOOKS", "ZIM")
 
 /**
- * Which tabs the bottom bar shows, in order (Settings > Bottom bar tabs). Feeds and Library are
- * always there, so every screen stays reachable: tabs left out open from rows on Library.
+ * Which tabs the bottom bar shows, in order (Settings > Bottom bar tabs). Every tab is optional,
+ * but at least one is picked. Without Library, the bar ends with a More tab (Library's screen),
+ * which lists the tabs left out, Settings and Sync, so every screen stays reachable.
  */
 object BottomBarTabs {
     private const val PREFS = "main_tabs"
     // v2: the redesign starts everyone on Home, Feeds, Library, Search once (Settings > Bottom bar tabs changes it)
     private const val KEY = "bar_tabs_v2"
+
+    /** At most this many items in the bar, counting More. */
     const val MAX = 5
     val DEFAULT = listOf(MainTab.HOME, MainTab.FEEDS, MainTab.LIBRARY, MainTab.SEARCH)
-    val ALWAYS = setOf(MainTab.FEEDS, MainTab.LIBRARY)
 
     private val _tabs = MutableStateFlow<List<MainTab>?>(null)
 
@@ -123,7 +127,7 @@ object BottomBarTabs {
         _tabs.value = clean
     }
 
-    /** Saved order, without unknown names, with Feeds and Library added back, at most [MAX]. */
+    /** Saved order, without unknown names, at most [MAX] items in the bar. */
     fun parse(saved: String?): List<MainTab> =
         if (saved.isNullOrBlank()) {
             DEFAULT
@@ -137,15 +141,16 @@ object BottomBarTabs {
         }
 
     fun normalize(tabs: List<MainTab>): List<MainTab> {
-        val distinct = tabs.distinct().toMutableList()
-        ALWAYS.filter { it !in distinct }.forEach { distinct += it }
-        // Too many: drop the last optional ones
-        while (distinct.size > MAX) {
-            val drop = distinct.last { it !in ALWAYS }
-            distinct.remove(drop)
-        }
-        return distinct
+        val distinct = tabs.distinct()
+        if (distinct.isEmpty()) return DEFAULT
+        return distinct.take(limit(distinct))
     }
+
+    /** How many tabs can be picked: one less without Library, to leave room for More. */
+    fun limit(picked: Collection<MainTab>): Int = if (MainTab.LIBRARY in picked) MAX else MAX - 1
+
+    /** What the bar shows for [picked]: those tabs, then More (Library's screen) when Library isn't one of them. */
+    fun shown(picked: List<MainTab>): List<MainTab> = if (MainTab.LIBRARY in picked) picked else picked + MainTab.LIBRARY
 }
 
 /** The Feeds tab's views: Latest, By feed (the tiles) and Discover. */
@@ -153,7 +158,7 @@ enum class FeedsView { LATEST, BY_FEED, DISCOVER }
 
 /**
  * Which tab a screen belongs to, or null for screens that show no bottom bar (reader, settings,
- * search...). Books and History are their own tab when in [bar], else part of Library.
+ * search...). A tab's screens belong to it when it is in [bar], else to Library (More).
  */
 fun NavBackStackEntry.mainTab(bar: List<MainTab> = BottomBarTabs.DEFAULT): MainTab? = mainTabOf(destination.route, arguments?.getLong("id"), bar)
 
@@ -165,10 +170,10 @@ fun mainTabOf(
 ): MainTab? {
     fun own(tab: MainTab) = if (tab in bar) tab else MainTab.LIBRARY
     return when (route) {
-        HomeDestination.route -> MainTab.FEEDS
+        HomeDestination.route -> own(MainTab.FEEDS)
         FeedDestination.route ->
-            if (feedId == ID_SAVED_ARTICLES) MainTab.LIBRARY else MainTab.FEEDS
-        DiscoverDestination.route -> MainTab.FEEDS
+            if (feedId == ID_SAVED_ARTICLES) MainTab.LIBRARY else own(MainTab.FEEDS)
+        DiscoverDestination.route -> own(MainTab.FEEDS)
         PlaylistsDestination.route -> own(MainTab.PLAYLISTS)
         LibraryDestination.route, DownloadsDestination.route, HighlightsDestination.route -> MainTab.LIBRARY
         YouTubeDestination.route -> own(MainTab.YOUTUBE)
@@ -289,9 +294,9 @@ fun MainBottomBar(
     tabs: List<MainTab> = BottomBarTabs.DEFAULT,
 ) {
     NavigationBar(modifier) {
-        tabs.forEach { tab ->
+        BottomBarTabs.shown(tabs).forEach { tab ->
             val selected = tab == current
-            val (filled, outlined, label) = tab.look()
+            val (filled, outlined, label) = if (tab == MainTab.LIBRARY && tab !in tabs) moreLook() else tab.look()
             NavigationBarItem(
                 selected = selected,
                 onClick = { onSelect(tab) },
@@ -309,6 +314,9 @@ fun MainBottomBar(
         }
     }
 }
+
+/** Library's screen, when Library itself isn't picked: it holds the tabs left out and Settings. */
+private fun moreLook(): Triple<ImageVector, ImageVector, Int> = Triple(Icons.Filled.MoreHoriz, Icons.Outlined.MoreHoriz, R.string.tab_more)
 
 internal fun MainTab.look(): Triple<ImageVector, ImageVector, Int> =
     when (this) {

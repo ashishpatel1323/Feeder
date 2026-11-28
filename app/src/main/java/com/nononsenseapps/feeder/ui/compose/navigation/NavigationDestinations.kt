@@ -436,13 +436,16 @@ data object LibraryDestination : NavigationDestination(
         navDrawerListState: LazyListState,
         mainActivityViewModel: MainActivityViewModel,
     ) {
+        val context = LocalContext.current
         com.nononsenseapps.feeder.ui.compose.library.LibraryScreen(
             onOpenSaved = { FeedDestination.navigate(navController, feedId = ID_SAVED_ARTICLES, keepBackStack = true) },
             onHighlights = { HighlightsDestination.navigate(navController) },
             onDownloads = { DownloadsDestination.navigate(navController) },
             onBooks = { BooksDestination.navigate(navController) },
             onHistory = { HistoryDestination.navigate(navController) },
-            barTabs = BottomBarTabs.tabs(LocalContext.current).collectAsState().value ?: BottomBarTabs.DEFAULT,
+            onHome = { navController.navigate(ShelvesDestination.route) { launchSingleTop = true } },
+            onFeeds = { navController.openTab(context, MainTab.FEEDS, null) },
+            barTabs = BottomBarTabs.tabs(context).collectAsState().value ?: BottomBarTabs.DEFAULT,
             onYouTube = { navController.navigate(YouTubeDestination.route) { launchSingleTop = true } },
             onPlaylists = { navController.navigate("playlists") { launchSingleTop = true } },
             onSettings = { SettingsDestination.navigate(navController) },

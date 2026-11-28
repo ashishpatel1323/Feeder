@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { newFeed, type Item, type VideoPos, type YouTubeMeta } from '../db'
 import { ageText, buildTab, channelFeedUrl, channelInputToUrl, channelsShown, channelsOf, durationText, filterRows, isYouTubeFeed, loadPrefs, parseTakeoutCsv } from '../youtubeTab'
-import { normalizeBarTabs, shownTab } from '../../components/Tabs'
+import { normalizeBarTabs, shownBarTabs, shownTab } from '../../components/Tabs'
 
 const A = channelFeedUrl('UCaaaaaaaaaaaaaaaaaaaaaa')
 const B = channelFeedUrl('UCbbbbbbbbbbbbbbbbbbbbbb')
@@ -90,9 +90,19 @@ describe('YouTube tab (youtubeTab.ts)', () => {
 })
 
 describe('Bottom bar tabs (Tabs.tsx)', () => {
-  it('keeps Feeds and Library, drops unknown names and caps at five', () => {
-    expect(normalizeBarTabs(['youtube', 'nope'])).toEqual(['youtube', 'feeds', 'library'])
-    expect(normalizeBarTabs(['feeds', 'youtube', 'playlists', 'books', 'audiobooks', 'zim', 'library'])).toEqual(['feeds', 'youtube', 'playlists', 'books', 'library'])
+  it('forces no tab, drops unknown names and caps at five (four plus More without Library)', () => {
+    expect(normalizeBarTabs(['youtube', 'nope'])).toEqual(['youtube'])
+    expect(normalizeBarTabs(['nope'])).toEqual(['home', 'feeds', 'library', 'search'])
+    expect(normalizeBarTabs(['feeds', 'youtube', 'playlists', 'library', 'books', 'history'])).toEqual(['feeds', 'youtube', 'playlists', 'library', 'books'])
+    expect(normalizeBarTabs(['home', 'youtube', 'playlists', 'books', 'history'])).toEqual(['home', 'youtube', 'playlists', 'books'])
+  })
+  it('adds More (Library) at the end when Library is left out', () => {
+    expect(shownBarTabs(['home', 'books']).map((t) => [t.tab, t.label])).toEqual([['home', 'Home'], ['books', 'Books'], ['library', 'More']])
+    expect(shownBarTabs(['library', 'books']).map((t) => t.label)).toEqual(['Library', 'Books'])
+  })
+  it('lights up More for Feeds screens when Feeds is left out', () => {
+    expect(shownTab('discover', ['home', 'books'])).toBe('library')
+    expect(shownTab('feeds', ['home', 'feeds'])).toBe('feeds')
   })
   it('turns old Audiobooks and ZIM tabs into one Books tab in the first one’s place', () => {
     expect(normalizeBarTabs(['feeds', 'zim', 'playlists', 'audiobooks', 'library'])).toEqual(['feeds', 'books', 'playlists', 'library'])

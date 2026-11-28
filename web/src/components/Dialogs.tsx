@@ -14,7 +14,7 @@ import { isKokoroVoice, kokoro, KOKORO_PREFIX, KOKORO_VOICES, webGpuAvailable, t
 import { readAloud } from '../lib/readaloud'
 import { Icon, IconButton } from './Icon'
 import { confirmDelete } from '../lib/confirmDelete'
-import { ALWAYS_TABS, MAX_BAR_TABS, saveBarTabs, TABS, useBarTabs, type BarTab } from './Tabs'
+import { barTabLimit, MAX_BAR_TABS, saveBarTabs, TABS, useBarTabs, type BarTab } from './Tabs'
 
 export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   useEffect(() => {
@@ -597,14 +597,14 @@ export function SettingsDialog({
 }
 
 /**
- * Settings > Bottom bar tabs: pick and order up to five tabs for the bottom bar (and the sidebar),
- * kept per browser. Feeds and Library are always there; the others open from rows on Library.
+ * Settings > Bottom bar tabs: pick and order the bottom bar's (and the sidebar's) tabs, kept per
+ * browser. Any tab can be left out, but one stays picked; without Library, a More tab holds the rest.
  */
 export function BottomBarTabsSection() {
   const bar = useBarTabs()
   // Tabs in the bar first, in their order, then the rest
   const order: BarTab[] = [...bar, ...TABS.map((t) => t.tab).filter((t) => !bar.includes(t))]
-  const full = bar.length >= MAX_BAR_TABS
+  const full = bar.length >= barTabLimit(bar)
   const toggle = (t: BarTab) => saveBarTabs(bar.includes(t) ? bar.filter((x) => x !== t) : [...bar, t])
   const move = (t: BarTab, by: -1 | 1) => {
     const i = bar.indexOf(t)
@@ -617,20 +617,20 @@ export function BottomBarTabsSection() {
   return (
     <section className="settings-section bar-tabs" aria-labelledby="bar-tabs-h">
       <h3 id="bar-tabs-h">Bottom bar tabs</h3>
-      <p className="muted small">Up to {MAX_BAR_TABS} tabs, in this order, in the bottom bar and the sidebar. The others open from Library.</p>
+      <p className="muted small">Up to {MAX_BAR_TABS} tabs, in this order, in the bottom bar and the sidebar. Without Library, a More tab holds the tabs left out and Settings.</p>
       <ul className="bar-tabs-list">
         {order.map((tab) => {
           const t = TABS.find((x) => x.tab === tab)!
           const on = bar.includes(tab)
-          const always = ALWAYS_TABS.includes(tab)
+          // One tab stays picked; Library takes More's place, so it can always be added
+          const locked = on ? bar.length <= 1 : full && tab !== 'library'
           const i = bar.indexOf(tab)
           return (
             <li key={tab} className={on ? 'on' : ''}>
               <label className="check">
-                <input type="checkbox" checked={on} disabled={always || (!on && full)} onChange={() => toggle(tab)} />
+                <input type="checkbox" checked={on} disabled={locked} onChange={() => toggle(tab)} />
                 <Icon name={t.icon} size={20} />
                 <span className="bar-tab-name">{t.label}</span>
-                {always ? <span className="muted small">Always shown</span> : null}
               </label>
               {on ? (
                 <span className="bar-tab-move">

@@ -37,7 +37,8 @@ fun MainShell(
     val context = LocalContext.current
     val entry by navController.currentBackStackEntryAsState()
     val barTabs by BottomBarTabs.tabs(context).collectAsState()
-    val bar = barTabs ?: BottomBarTabs.DEFAULT
+    // The picked tabs, plus More when Library isn't one of them
+    val bar = BottomBarTabs.shown(barTabs ?: BottomBarTabs.DEFAULT)
     val tab = entry?.mainTab(bar)
     val nav =
         remember(navController) {
@@ -80,8 +81,8 @@ fun MainShell(
             navController.currentBackStack.value.count { it.destination.route != null } == 1 &&
                 navController.currentDestination?.route == HomeDestination.route
         when {
-            // Redesign: the app opens on the bar's first tab, Home's shelves
-            atStart && bar.firstOrNull() == MainTab.HOME -> navController.openTab(context, MainTab.HOME, null)
+            // The app opens on the bar's first tab (Home's shelves by default)
+            atStart && bar.first() != MainTab.FEEDS -> navController.openTab(context, bar.first(), null)
             atStart && FeedsViewPreference.isLatest(context) -> navController.showFeedsView(context, FeedsView.LATEST)
         }
     }
@@ -124,7 +125,7 @@ fun MainShell(
                                 onOpen = { if (audiobookState.media) MediaPlayerDestination.navigate(navController, it) else AudiobookPlayerDestination.navigate(navController, it) },
                             )
                         }
-                        MainBottomBar(current = tab, tabs = bar, onSelect = { navController.openTab(context, it, tab) })
+                        MainBottomBar(current = tab, tabs = barTabs ?: BottomBarTabs.DEFAULT, onSelect = { navController.openTab(context, it, tab) })
                     }
                 }
             },

@@ -15,7 +15,9 @@ import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.BorderColor
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.DynamicFeed
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Subscriptions
 import androidx.compose.material.icons.outlined.Sync
@@ -42,6 +44,8 @@ fun LibraryScreen(
     onDownloads: () -> Unit,
     onBooks: () -> Unit,
     onHistory: () -> Unit = {},
+    onHome: () -> Unit = {},
+    onFeeds: () -> Unit = {},
     onSettings: () -> Unit,
     // Tabs in the bottom bar get no row here; the others do, so every screen stays reachable
     barTabs: List<MainTab> = BottomBarTabs.DEFAULT,
@@ -56,6 +60,12 @@ fun LibraryScreen(
         topBar = { GlobalSearchTopBar() },
     ) { padding ->
         LazyColumn(Modifier.padding(padding).fillMaxSize()) {
+            if (MainTab.HOME !in barTabs) {
+                item { Row(Icons.Outlined.Home, stringResource(R.string.tab_home), stringResource(R.string.tab_home_desc), onHome) }
+            }
+            if (MainTab.FEEDS !in barTabs) {
+                item { Row(Icons.Outlined.DynamicFeed, stringResource(R.string.tab_feeds), stringResource(R.string.tab_feeds_desc), onFeeds) }
+            }
             item { Row(Icons.Outlined.BookmarkBorder, stringResource(R.string.saved_articles), stringResource(R.string.library_saved_desc), onOpenSaved) }
             item { Row(Icons.Outlined.BorderColor, stringResource(R.string.highlights), stringResource(R.string.library_highlights_desc), onHighlights) }
             item { Row(Icons.Outlined.Download, stringResource(R.string.downloads), stringResource(R.string.library_downloads_desc), onDownloads) }

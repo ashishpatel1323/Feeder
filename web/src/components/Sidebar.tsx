@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { FEED_ORDER_KEY, feedDisplayTitle, FOLDER_ORDER_KEY, getKv, sortFolder, sortFolders, type Feed, type Item } from '../lib/db'
 import type { Selection } from '../lib/listquery'
-import { shownTab, TABS, tabKeys, useBarTabs, type Tab } from './Tabs'
+import { shownBarTabs, shownTab, tabKeys, useBarTabs, type Tab } from './Tabs'
 import { Icon, IconButton } from './Icon'
 import { proxiedUrl } from '../lib/api'
 import { usePlaylists } from './Playlists'
@@ -182,10 +182,10 @@ export function Sidebar(p: Props) {
             </ul>
           ) : null
 
-  // The sidebar shows the same tabs as the bottom bar; the rest open from Library
+  // The sidebar shows the same tabs as the bottom bar (More included); the rest open from Library
   const bar = useBarTabs()
   // Search has its own row at the top of the sidebar
-  const barTabs = bar.filter((b) => b !== 'search').map((b) => TABS.find((t) => t.tab === b)!)
+  const barTabs = shownBarTabs(bar).filter((t) => t.tab !== 'search')
   const current = shownTab(p.currentTab, bar)
 
   return (

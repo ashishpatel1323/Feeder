@@ -1494,9 +1494,10 @@ export default function App() {
     else if (t === 'history') showHistory(true)
     else showLibrary(true)
   }
-  // The redesign opens on the bar's first tab, Home, when no page is in the address
+  // Opens on the bar's first tab (Home by default) when no page is in the address
   useEffect(() => {
-    if (!window.location.hash && loadBarTabs()[0] === 'home') showStart(true)
+    const first = loadBarTabs()[0]
+    if (!window.location.hash && first !== 'feeds' && first !== 'search') openTab(first)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const openTabRef = useRef(openTab)

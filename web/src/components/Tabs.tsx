@@ -7,7 +7,7 @@ import { Icon, IconButton, type IconName } from './Icon'
  * "Search everything" bars open it. Discover lives inside Feeds and the Books subtabs inside Books;
  * they are Tab values only for their G shortcuts.
  * Which tabs the bottom bar (and the sidebar) shows is picked in Settings > Bottom bar tabs;
- * the others open from rows on Library.
+ * the others open from rows on Library (shown as More when Library itself is left out).
  */
 export type Tab = 'home' | 'feeds' | 'discover' | 'youtube' | 'playlists' | 'library' | 'books' | BookTab | 'history' | 'search'
 export type BarTab = Exclude<Tab, 'discover' | BookTab>
@@ -105,25 +105,33 @@ export function rememberFeedsView(latest: boolean) {
 
 // v2: the redesign starts everyone on Home, Feeds, Library, Search once
 const BAR_KEY = 'feeder.barTabs.v2'
-/** At most this many tabs in the bottom bar. */
+/** At most this many items in the bottom bar, counting More. */
 export const MAX_BAR_TABS = 5
 export const DEFAULT_BAR_TABS: BarTab[] = ['home', 'feeds', 'library', 'search']
-/** Always in the bar, so every screen stays reachable: left-out tabs open from rows on Library. */
-export const ALWAYS_TABS: BarTab[] = ['feeds', 'library']
+
+/** How many tabs can be picked: one less without Library, to leave room for More. */
+export const barTabLimit = (picked: BarTab[]) => (picked.includes('library') ? MAX_BAR_TABS : MAX_BAR_TABS - 1)
 
 /**
- * Saved order without unknown names, Feeds and Library added back, at most MAX_BAR_TABS (as Android's
- * BottomBarTabs). Audiobooks and ZIM tabs saved before Books existed become Books, in the first one's place.
+ * Saved order without unknown names, at most the limit (as Android's BottomBarTabs). Every tab is
+ * optional, but nothing picked means the default. Audiobooks and ZIM tabs saved before Books existed
+ * become Books, in the first one's place.
  */
 export function normalizeBarTabs(tabs: string[]): BarTab[] {
   const known = new Set<string>(TABS.map((t) => t.tab))
   const out = [...new Set(tabs.map((t) => (t === 'audiobooks' || t === 'zim' ? 'books' : t)).filter((t) => known.has(t)))] as BarTab[]
-  for (const t of ALWAYS_TABS) if (!out.includes(t)) out.push(t)
-  while (out.length > MAX_BAR_TABS) {
-    const drop = [...out].reverse().find((t) => !ALWAYS_TABS.includes(t))!
-    out.splice(out.lastIndexOf(drop), 1)
-  }
-  return out
+  if (!out.length) return DEFAULT_BAR_TABS
+  return out.slice(0, barTabLimit(out))
+}
+
+/**
+ * What the bar (and the sidebar) shows for [picked]: those tabs, then More (Library's page, with the
+ * tabs left out, Settings and Manage feeds) when Library isn't one of them.
+ */
+export function shownBarTabs(picked: BarTab[]): { tab: BarTab; label: string; icon: IconName; key: string; hint: string }[] {
+  const tabs = picked.map((b) => TABS.find((t) => t.tab === b)!)
+  if (picked.includes('library')) return tabs
+  return [...tabs, { tab: 'library', label: 'More', icon: 'moreHoriz', key: 'l', hint: 'Your other tabs, Saved, Highlights and Settings' }]
 }
 
 let barTabs: BarTab[] | null = null
@@ -161,10 +169,10 @@ export function useBarTabs(): BarTab[] {
   )
 }
 
-/** The tab to light up: a screen whose tab isn't in the bar belongs to Library. */
+/** The tab to light up: a screen whose tab isn't in the bar belongs to Library (or More). */
 export function shownTab(current: Tab | null, bar: BarTab[]): Tab | null {
-  if (!current || current === 'discover') return current === 'discover' ? 'feeds' : null
-  const tab: BarTab = current === 'ebooks' || current === 'audiobooks' || current === 'zim' || current === 'player' ? 'books' : current
+  if (!current) return null
+  const tab: BarTab = current === 'discover' ? 'feeds' : current === 'ebooks' || current === 'audiobooks' || current === 'zim' || current === 'player' ? 'books' : current
   return bar.includes(tab) ? tab : 'library'
 }
 
@@ -174,7 +182,7 @@ export function TabBar({ current, onTab }: { current: Tab | null; onTab: (t: Tab
   const shown = shownTab(current, bar)
   return (
     <nav className="tabbar" aria-label="Main">
-      {bar.map((tab) => TABS.find((t) => t.tab === tab)!).map((t) => (
+      {shownBarTabs(bar).map((t) => (
         <button
           key={t.tab}
           type="button"
@@ -274,7 +282,7 @@ export function LibraryPage(p: {
   const bar = useBarTabs()
   // History always has its row; the other tabs only when they're not in the bottom bar
   const history = TABS.find((t) => t.tab === 'history')!
-  const elsewhere = TABS.filter((t) => !bar.includes(t.tab) && t.tab !== 'history')
+  const elsewhere = TABS.filter((t) => !bar.includes(t.tab) && t.tab !== 'history' && t.tab !== 'library')
   const row = (icon: IconName, title: string, desc: string, count: number | null, onClick: () => void) => (
     <button type="button" className="lib-row" onClick={onClick}>
       <Icon name={icon} size={22} />
@@ -292,7 +300,7 @@ export function LibraryPage(p: {
           <span className="only-narrow">
             <IconButton icon="menu" label="Feeds" onClick={p.onMenu} />
           </span>
-          <h1>Library</h1>
+          <h1>{bar.includes('library') ? 'Library' : 'More'}</h1>
         </div>
         <SearchEverything onSearch={p.onSearch} />
         <div className="lib-list">
