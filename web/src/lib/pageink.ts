@@ -197,6 +197,14 @@ export interface InkCapture {
  * Lets a pen write on the page. Strokes written within a moment of each other make one note,
  * saved about a second after the pen lifts. Returns a function that stops listening.
  */
+/** Event that saves a note still being written now, before the page scrolls or turns. */
+export const INK_FLUSH = 'feeder-ink-flush'
+
+/** Saves a note still being written on this page now (call before moving the page). */
+export function flushInk(doc: Document | null | undefined) {
+  doc?.dispatchEvent(new Event(INK_FLUSH))
+}
+
 export function attachInkCapture(doc: Document, o: InkCapture): () => void {
   injectInkStyles(doc)
   let live: SVGSVGElement | null = null
@@ -383,8 +391,14 @@ export function attachInkCapture(doc: Document, o: InkCapture): () => void {
     if (current) e.preventDefault()
   }
   doc.addEventListener('touchmove', touchStart, { capture: true, passive: false })
+  // Save a note still being written before the page moves (keys that scroll or turn pages)
+  const flush = () => {
+    if (!current) finish()
+  }
+  doc.addEventListener(INK_FLUSH, flush)
   return () => {
     finish()
+    doc.removeEventListener(INK_FLUSH, flush)
     doc.removeEventListener('pointerdown', touchOther, true)
     doc.removeEventListener('pointerdown', down, opts)
     doc.removeEventListener('pointermove', move, opts)

@@ -7,7 +7,7 @@
  * through `FeederZim` (a JavaScript interface) and is driven through `window.feederZim`.
  */
 import { indexText, rangeFor, type TextIndex } from '../ebook-android/textindex'
-import { attachInkCapture, encodeInk, inkMarkAt, paintInk, parseInk, type InkData, type PageInk } from '../lib/pageink'
+import { attachInkCapture, encodeInk, flushInk, inkMarkAt, paintInk, parseInk, type InkData, type PageInk } from '../lib/pageink'
 import { locateRange, textOf } from '../lib/textanchor'
 import type { SketchColor } from '../lib/sketch'
 import { anchorOf } from '../lib/textanchor'
@@ -130,6 +130,11 @@ if (!w.feederZim && document.body) {
     },
     setPen(json: string) {
       pen = { ...pen, ...(JSON.parse(json) as Partial<typeof pen>) }
+    },
+    /** About a screen down (1) or up (-1): the volume keys while drawing. A note being written is saved first. */
+    pageBy(dir: number) {
+      flushInk(document)
+      ;(document.scrollingElement ?? document.documentElement).scrollBy({ top: Math.sign(dir) * innerHeight * 0.9, behavior: 'smooth' })
     },
     clearSelection() {
       document.getSelection()?.removeAllRanges()

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Highlight } from '../lib/db'
 import { HIGHLIGHT_COLORS } from '../lib/highlights'
-import { attachInkCapture, inkSvg, paintInk, parseInk, type InkData, type InkMode, type PageInk } from '../lib/pageink'
+import { attachInkCapture, flushInk, inkSvg, paintInk, parseInk, type InkData, type InkMode, type PageInk } from '../lib/pageink'
 import type { SketchColor } from '../lib/sketch'
 import { Icon, IconButton } from './Icon'
 
@@ -173,10 +173,15 @@ export function usePageKeysWhileDrawing(on: boolean, scrollBy: (dir: 1 | -1) => 
       if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return
       const t = e.target as HTMLElement | null
       if (t && (/INPUT|TEXTAREA|SELECT/.test(t.tagName) || t.isContentEditable)) return
+      // Space and arrows keep working on focused controls (the pen bar, menus)
+      if (t?.closest?.('button, a[href], [role="button"], [role="menuitem"], [role="tab"], [role="slider"]')) return
       if (document.querySelector('.modal-backdrop')) return
       const dir = e.key === 'PageDown' || e.key === 'ArrowDown' || (e.key === ' ' && !e.shiftKey) ? 1 : e.key === 'PageUp' || e.key === 'ArrowUp' || (e.key === ' ' && e.shiftKey) ? -1 : 0
       if (!dir) return
       e.preventDefault()
+      // A note still being written is saved where it is before the page moves
+      flushInk(document)
+      if (doc) flushInk(doc)
       latest.current(dir)
     }
     const targets: (Window | Document)[] = [window]

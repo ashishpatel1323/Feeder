@@ -657,10 +657,7 @@ fun ZimReaderScreen(
     // The page script needs the pen settings, and the current ones after each page load
     LaunchedEffect(pen.drawAll, pen.color, pen.erasing, pageLoads) { js("window.feederZim&&feederZim.setPen&&feederZim.setPen(${q(pen.json())})") }
     // Draw on page: fingers write, so the volume keys scroll the page by a screen
-    VolumeKeysTurnPages(enabled = pen.drawAll) { forward ->
-        val sign = if (forward) "" else "-"
-        js("(document.scrollingElement||document.documentElement).scrollBy({top:${sign}innerHeight*0.9,behavior:'smooth'})")
-    }
+    VolumeKeysTurnPages(enabled = pen.drawAll) { forward -> js("window.feederZim&&feederZim.pageBy&&feederZim.pageBy(${if (forward) 1 else -1})") }
     inkOpen?.let { id ->
         val h = bookHighlights.firstOrNull { it.id == id }
         if (h == null) {

@@ -16,7 +16,7 @@ import type { FoliateView, Location, TocItem } from '../vendor/foliate-js/view.j
 import { Overlayer } from '../vendor/foliate-js/overlayer.js'
 import { authorString, bookCss, injectCsp, langString, type ReaderPrefs } from '../lib/ebooks/reader'
 import { indexText, rangeFor, type TextIndex } from './textindex'
-import { attachInkCapture, encodeInk, inkMarkAt, type InkData } from '../lib/pageink'
+import { attachInkCapture, encodeInk, flushInk, inkMarkAt, type InkData } from '../lib/pageink'
 import type { SketchColor } from '../lib/sketch'
 import { atEnd, atStart, drawFixedHighlights, markFixedPage, paintBookInk, placeBookSketches, readableContent, redrawFixedHighlights, replaceBookSketches, nextSection, pageNumbers, prevSection, reveal, setStyles } from '../lib/ebooks/nav'
 
@@ -72,6 +72,11 @@ function readHighlights(json: string) {
   inkNotes = all.filter((h) => h.ink).map((h) => ({ id: h.id ?? h.cfi, cfi: h.cfi, ink: h.ink! }))
   return new Map(all.filter((h) => !h.ink && (!h.sketch || fixed)).map((h) => [h.cfi, h.color]))
 }
+/** Saves a note still being written before the page turns (it is placed by where it is on screen). */
+function flushPageInk() {
+  for (const { doc } of view?.renderer.getContents() ?? []) flushInk(doc)
+}
+
 let tts: { index: TextIndex; doc: Document } | null = null
 
 function showMessage(text: string) {
@@ -358,8 +363,14 @@ function ttsClear() {
   next: () => void view?.goRight(),
   prev: () => void view?.goLeft(),
   /** Next / previous page in reading order (right-to-left books too): the volume keys while drawing. */
-  pageNext: () => void view?.next(),
-  pagePrev: () => void view?.prev(),
+  pageNext: () => {
+    flushPageInk()
+    void view?.next()
+  },
+  pagePrev: () => {
+    flushPageInk()
+    void view?.prev()
+  },
   nextSection: () => void nextSection(view),
   prevSection: () => void prevSection(view),
   clearSelection: () => view?.deselect(),
