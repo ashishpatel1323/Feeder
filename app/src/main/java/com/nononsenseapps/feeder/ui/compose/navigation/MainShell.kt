@@ -60,6 +60,20 @@ fun MainShell(
     val youtubeState by youtube.state.collectAsState()
     val showYouTube = showBar && youtubeState != null
 
+    // One player at a time (YouTube Music style): whatever starts last closes the others, so a
+    // YouTube video and a podcast never stack two mini players
+    val switcher = remember { PlayerSwitcher() }
+    LaunchedEffect(playerState.audioUrl.takeIf { playerState.isVisible }, youtubeState?.key, audiobookState.bookId) {
+        switcher.onChange(
+            podcast = playerState.audioUrl.takeIf { playerState.isVisible },
+            youtube = youtubeState?.key,
+            book = audiobookState.bookId,
+            stopPodcast = player::stop,
+            stopYouTube = youtube::stop,
+            closeBook = audiobook::close,
+        )
+    }
+
     // The Feeds tab opens on the view used last; Home is the start screen, so switch once to Latest
     LaunchedEffect(navController) {
         if (FeedsViewPreference.isLatest(context) &&
@@ -115,6 +129,48 @@ fun MainShell(
         ) { padding ->
             Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
                 content()
+            }
+        }
+    }
+}
+
+/** Remembers which players were open, to tell which one just started. */
+private class PlayerSwitcher {
+    private var started = false
+    private var podcast: Any? = null
+    private var youtube: Any? = null
+    private var book: Any? = null
+
+    fun onChange(
+        podcast: Any?,
+        youtube: Any?,
+        book: Any?,
+        stopPodcast: () -> Unit,
+        stopYouTube: () -> Unit,
+        closeBook: () -> Unit,
+    ) {
+        val newPodcast = podcast != null && podcast != this.podcast
+        val newYouTube = youtube != null && youtube != this.youtube
+        val newBook = book != null && book != this.book
+        val first = !started
+        started = true
+        this.podcast = podcast
+        this.youtube = youtube
+        this.book = book
+        // Players already open when the app comes up stay as they are
+        if (first) return
+        when {
+            newPodcast -> {
+                if (youtube != null) stopYouTube()
+                if (book != null) closeBook()
+            }
+            newYouTube -> {
+                if (podcast != null) stopPodcast()
+                if (book != null) closeBook()
+            }
+            newBook -> {
+                if (podcast != null) stopPodcast()
+                if (youtube != null) stopYouTube()
             }
         }
     }
